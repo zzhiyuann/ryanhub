@@ -146,11 +146,15 @@ final class ChatViewModel {
     }
 
     /// Handle photo picker selection.
+    /// Loads image data from the PhotosPickerItem, converts through UIImage
+    /// to normalize the format, then JPEG-compresses before sending.
     func handlePhotoSelection(_ item: PhotosPickerItem?) {
         guard let item else { return }
         Task {
-            if let data = try? await item.loadTransferable(type: Data.self) {
-                self.sendImageMessage(data: data)
+            if let data = try? await item.loadTransferable(type: Data.self),
+               let uiImage = UIImage(data: data),
+               let jpegData = uiImage.jpegData(compressionQuality: 0.7) {
+                self.sendImageMessage(data: jpegData)
             }
         }
     }

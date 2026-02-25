@@ -131,13 +131,7 @@ struct ChatInputBar: View {
     private var attachmentButton: some View {
         Menu {
             PhotosPicker(
-                selection: Binding(
-                    get: { selectedPhotoItem },
-                    set: { newValue in
-                        selectedPhotoItem = newValue
-                        onPhotoSelected(newValue)
-                    }
-                ),
+                selection: $selectedPhotoItem,
                 matching: .images
             ) {
                 Label("Photo Library", systemImage: "photo.on.rectangle")
@@ -158,6 +152,13 @@ struct ChatInputBar: View {
                 )
         }
         .disabled(!isConnected)
+        .onChange(of: selectedPhotoItem) { _, newValue in
+            if newValue != nil {
+                onPhotoSelected(newValue)
+                // Reset so the same photo can be re-selected
+                selectedPhotoItem = nil
+            }
+        }
     }
 
     private var sendButton: some View {
