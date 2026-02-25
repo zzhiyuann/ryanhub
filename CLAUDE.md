@@ -81,6 +81,19 @@ xcodebuild -scheme RyanHub -destination 'platform=iOS Simulator,name=iPhone 17 P
 open RyanHub.xcodeproj
 ```
 
+## Backend Services
+
+The app depends on three local services. All managed by a unified LaunchAgent:
+
+| Service | Port | Start Command |
+|---------|------|---------------|
+| Dispatcher (WebSocket) | 8765 | `cd /Users/zwang/projects/cortex/packages/dispatcher && node dist/index.js` |
+| Food Analysis Bridge | 18790 | `python3 scripts/food-analysis-server.py` (calls `claude` CLI) |
+| Book Factory Server | 3443 | `cd /Users/zwang/projects/bookfactory/server && node dist/index.js` |
+
+Master script: `scripts/start-all-services.sh [start|stop|status|restart]`
+LaunchAgent: `com.zwang.ryanhub-services` (runs at login)
+
 ## Technical Requirements
 - iOS 17.0+, Swift 5.9+, SwiftUI only
 - `@Observable` macro for ViewModels
@@ -88,3 +101,58 @@ open RyanHub.xcodeproj
 - NO external dependencies
 - All code and comments in English
 - Localization: `en.lproj` + `zh-Hans.lproj`, access via `L10n.keyName`
+
+## Toolkit Navigation
+
+The Toolkit tab uses a macOS-style menu bar (not NavigationStack push/pop) for switching between tools. `ToolkitHomeView` owns a `@State selectedPlugin: ToolkitPlugin?` — `nil` shows the desktop grid, non-nil renders the tool in-place below the menu bar. BookFactory is the ONLY tool NOT wrapped in NavigationStack (it manages its own internally).
+
+## Agent Dispatch Playbook (Lessons Learned 2026-02-25)
+
+### Critical Rules for Dispatching Sub-Agents
+
+1. **ALWAYS verify merge after agent completes.** Cherry-pick from worktree to main, then `git diff --stat HEAD` to confirm changes landed. Don't trust `git log` alone — the commit may be on a worktree branch, not main.
+
+2. **ALWAYS audit agent output before reporting success.** Read key files the agent changed, verify logic, build + run. Agents can claim "BUILD SUCCEEDED" while producing subtly broken code.
+
+3. **Give agents FULL context.** Agents start with zero knowledge. Every dispatch must include:
+   - Exact file paths to read first
+   - Design system rules (AdaptiveColors, HubLayout, Color.hubPrimary)
+   - @Observable patterns (NOT ObservableObject)
+   - Known crash patterns (sheets don't inherit @Observable env; navigationDestination needs explicit .environment())
+   - Build command with -project flag
+   - Bundle ID: `com.zwang.ryanhub.RyanHub`
+
+4. **Specify what NOT to do.** Common agent mistakes:
+   - Using `str | None` Python syntax (needs 3.9 compat)
+   - Using `@MainActor` inconsistently — should be on ALL ViewModels
+   - Using `name` as Identifiable `id` instead of UUID (causes SwiftUI duplicate ID bugs)
+   - Not adding `CodingKeys` or `keyDecodingStrategy` for JSON from LLM output (Claude may return snake_case randomly)
+   - Adding NotificationCenter observers without removeObserver in deinit
+   - Hardcoding "/5" for max reconnect attempts instead of reading from constant
+
+5. **Track worktree → main merge status.** After each agent completes:
+   ```
+   ✅ Agent done → Audit code → Cherry-pick/copy to main → Build → Install → Verify → Push
+   ```
+
+### Known Issues Backlog (from audits)
+
+**High Priority:**
+- [ ] Chat: User messages may appear to disappear (needs runtime debugging on device)
+- [ ] Food Analysis: JSON decoder needs `keyDecodingStrategy = .convertFromSnakeCase` (Claude Haiku may return snake_case)
+- [ ] Food Analysis: `AnalyzedFoodItem.id` uses `name` — duplicate ID collision risk
+- [ ] FluentView: NotificationCenter observers never removed (memory leak)
+
+**Medium Priority:**
+- [ ] ChatViewModel: Missing `@MainActor` annotation (thread safety)
+- [ ] WebSocketClient: `@Observable` mutated from non-MainActor methods
+- [ ] Voice messages: No playback (waveform is display-only)
+- [ ] ParkingViewModel: `date(bySetting:)` can cross month boundaries
+- [ ] CalendarViewModel: `syncEvents()` marks complete but events stay empty (no real backend integration yet)
+
+**Low Priority:**
+- [ ] Parking weekday headers: ambiguous single letters (T/T, S/S)
+- [ ] Calendar: DateFormatter created on every computed property access
+- [ ] Recording waveform: choppy 100ms discrete updates
+- [ ] Stale CortexApp.xcodeproj should be removed
+- [ ] Connection status strings duplicate between ChatView and SettingsView
