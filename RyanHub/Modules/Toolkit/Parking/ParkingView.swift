@@ -3,18 +3,23 @@ import SwiftUI
 // MARK: - Parking View
 
 /// Main parking management view.
-/// Shows today's status, quick actions to skip/restore dates,
-/// and a list of upcoming skip dates.
+/// Shows today's status with a progress ring, interactive calendar picker,
+/// cost tracker, quick actions, smart suggestions, and skip history.
 struct ParkingView: View {
     @Environment(\.colorScheme) private var colorScheme
     @State private var viewModel = ParkingViewModel()
+    @State private var showHistory = false
 
     var body: some View {
         ScrollView {
             VStack(spacing: HubLayout.sectionSpacing) {
-                todayStatusSection
+                statusAndStatsSection
+                smartSuggestionSection
                 quickActionsSection
+                calendarPickerSection
+                savingsSection
                 upcomingSkipsSection
+                skipHistorySection
             }
             .padding(HubLayout.standardPadding)
         }
@@ -28,22 +33,19 @@ struct ParkingView: View {
         }
     }
 
-    // MARK: - Today's Status
+    // MARK: - Status & Monthly Stats
 
-    private var todayStatusSection: some View {
+    private var statusAndStatsSection: some View {
         VStack(alignment: .leading, spacing: HubLayout.itemSpacing) {
-            SectionHeader(title: "Today's Parking")
+            SectionHeader(title: "This Month")
 
             HubCard {
-                HStack(spacing: 16) {
-                    statusIcon
-                        .frame(width: 48, height: 48)
-                        .background(
-                            Circle()
-                                .fill(statusIconBackgroundColor.opacity(0.15))
-                        )
+                HStack(spacing: 20) {
+                    // Progress ring
+                    progressRing
+                        .frame(width: 72, height: 72)
 
-                    VStack(alignment: .leading, spacing: 4) {
+                    VStack(alignment: .leading, spacing: 6) {
                         Text(statusTitle)
                             .font(.hubHeading)
                             .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
@@ -51,6 +53,26 @@ struct ParkingView: View {
                         Text(statusSubtitle)
                             .font(.hubCaption)
                             .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+
+                        // Mini stats row
+                        HStack(spacing: 12) {
+                            miniStat(
+                                value: "\(viewModel.currentMonthStats.activeDays)",
+                                label: "Active",
+                                color: .hubAccentGreen
+                            )
+                            miniStat(
+                                value: "\(viewModel.currentMonthStats.skippedDays)",
+                                label: "Skipped",
+                                color: .hubAccentYellow
+                            )
+                            miniStat(
+                                value: "\(viewModel.currentMonthStats.totalWeekdays)",
+                                label: "Total",
+                                color: AdaptiveColors.textSecondary(for: colorScheme)
+                            )
+                        }
+                        .padding(.top, 2)
                     }
 
                     Spacer()
@@ -60,10 +82,49 @@ struct ParkingView: View {
         }
     }
 
-    private var statusIcon: some View {
-        Image(systemName: viewModel.todayStatus.iconName)
-            .font(.system(size: 22, weight: .medium))
-            .foregroundStyle(statusIconColor)
+    private var progressRing: some View {
+        let stats = viewModel.currentMonthStats
+        let ratio = stats.usageRatio
+
+        return ZStack {
+            // Background track
+            Circle()
+                .stroke(
+                    AdaptiveColors.surfaceSecondary(for: colorScheme),
+                    lineWidth: 6
+                )
+
+            // Active portion (green)
+            Circle()
+                .trim(from: 0, to: CGFloat(ratio))
+                .stroke(
+                    Color.hubAccentGreen,
+                    style: StrokeStyle(lineWidth: 6, lineCap: .round)
+                )
+                .rotationEffect(.degrees(-90))
+
+            // Center icon
+            VStack(spacing: 2) {
+                Image(systemName: viewModel.todayStatus.iconName)
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(statusIconColor)
+
+                Text("\(Int(ratio * 100))%")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+            }
+        }
+    }
+
+    private func miniStat(value: String, label: String, color: Color) -> some View {
+        VStack(spacing: 1) {
+            Text(value)
+                .font(.system(size: 14, weight: .bold))
+                .foregroundStyle(color)
+            Text(label)
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+        }
     }
 
     private var statusTitle: String {
@@ -94,8 +155,48 @@ struct ParkingView: View {
         }
     }
 
-    private var statusIconBackgroundColor: Color {
-        statusIconColor
+    // MARK: - Smart Suggestion
+
+    @ViewBuilder
+    private var smartSuggestionSection: some View {
+        if let suggestion = viewModel.smartSuggestion {
+            Button {
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    viewModel.applySmartSuggestion()
+                }
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: suggestion.icon)
+                        .font(.system(size: 20, weight: .medium))
+                        .foregroundStyle(Color.hubPrimary)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(suggestion.title)
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+
+                        Text(suggestion.subtitle)
+                            .font(.hubCaption)
+                            .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                    }
+
+                    Spacer()
+
+                    Image(systemName: "plus.circle.fill")
+                        .font(.system(size: 20))
+                        .foregroundStyle(Color.hubPrimary)
+                }
+                .padding(HubLayout.cardInnerPadding)
+                .background(
+                    RoundedRectangle(cornerRadius: HubLayout.cardCornerRadius)
+                        .fill(Color.hubPrimary.opacity(0.08))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: HubLayout.cardCornerRadius)
+                                .stroke(Color.hubPrimary.opacity(0.2), lineWidth: 1)
+                        )
+                )
+            }
+        }
     }
 
     // MARK: - Quick Actions
@@ -212,6 +313,198 @@ struct ParkingView: View {
         }
     }
 
+    // MARK: - Calendar Picker
+
+    private var calendarPickerSection: some View {
+        VStack(alignment: .leading, spacing: HubLayout.itemSpacing) {
+            SectionHeader(title: "Skip Calendar")
+
+            HubCard {
+                VStack(spacing: 12) {
+                    // Month navigation
+                    HStack {
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                viewModel.previousMonth()
+                            }
+                        } label: {
+                            Image(systemName: "chevron.left")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(Color.hubPrimary)
+                                .frame(width: 32, height: 32)
+                        }
+
+                        Spacer()
+
+                        Text(viewModel.displayedMonthLabel)
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+
+                        Spacer()
+
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                viewModel.nextMonth()
+                            }
+                        } label: {
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(Color.hubPrimary)
+                                .frame(width: 32, height: 32)
+                        }
+                    }
+
+                    // Weekday headers (Mon-Sun)
+                    let weekdays = ["M", "T", "W", "T", "F", "S", "S"]
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 7), spacing: 4) {
+                        ForEach(weekdays.indices, id: \.self) { index in
+                            Text(weekdays[index])
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                                .frame(height: 24)
+                        }
+                    }
+
+                    // Day grid
+                    let days = viewModel.calendarDays
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 7), spacing: 4) {
+                        ForEach(days.indices, id: \.self) { index in
+                            if let date = days[index] {
+                                calendarDayCell(date: date)
+                            } else {
+                                Color.clear
+                                    .frame(height: 36)
+                            }
+                        }
+                    }
+
+                    // Legend
+                    HStack(spacing: 16) {
+                        legendItem(color: .hubPrimary, label: "Today")
+                        legendItem(color: .hubAccentYellow, label: "Skipped")
+                        legendItem(color: AdaptiveColors.textSecondary(for: colorScheme).opacity(0.3), label: "Weekend")
+                    }
+                    .padding(.top, 4)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+    }
+
+    private func calendarDayCell(date: Date) -> some View {
+        let calendar = Calendar.current
+        let isToday = calendar.isDateInToday(date)
+        let isSkipped = viewModel.isDateSkipped(date)
+        let isWeekend = calendar.isDateInWeekend(date)
+        let isPast = calendar.startOfDay(for: date) < calendar.startOfDay(for: Date())
+        let dayNumber = calendar.component(.day, from: date)
+
+        return Button {
+            withAnimation(.easeInOut(duration: 0.15)) {
+                viewModel.toggleDate(date)
+            }
+        } label: {
+            Text("\(dayNumber)")
+                .font(.system(size: 14, weight: isToday ? .bold : .regular))
+                .foregroundStyle(dayTextColor(isToday: isToday, isSkipped: isSkipped, isWeekend: isWeekend, isPast: isPast))
+                .frame(width: 36, height: 36)
+                .background(
+                    Circle()
+                        .fill(dayBackgroundColor(isToday: isToday, isSkipped: isSkipped))
+                )
+        }
+        .disabled(isWeekend || isPast)
+    }
+
+    private func dayTextColor(isToday: Bool, isSkipped: Bool, isWeekend: Bool, isPast: Bool) -> Color {
+        if isToday {
+            return .white
+        }
+        if isSkipped {
+            return .hubAccentYellow
+        }
+        if isWeekend || isPast {
+            return AdaptiveColors.textSecondary(for: colorScheme).opacity(0.4)
+        }
+        return AdaptiveColors.textPrimary(for: colorScheme)
+    }
+
+    private func dayBackgroundColor(isToday: Bool, isSkipped: Bool) -> Color {
+        if isToday {
+            return .hubPrimary
+        }
+        if isSkipped {
+            return Color.hubAccentYellow.opacity(0.15)
+        }
+        return .clear
+    }
+
+    private func legendItem(color: Color, label: String) -> some View {
+        HStack(spacing: 4) {
+            Circle()
+                .fill(color)
+                .frame(width: 8, height: 8)
+            Text(label)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+        }
+    }
+
+    // MARK: - Savings Tracker
+
+    private var savingsSection: some View {
+        VStack(alignment: .leading, spacing: HubLayout.itemSpacing) {
+            SectionHeader(title: "Cost Tracker")
+
+            HubCard {
+                VStack(spacing: 12) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Estimated Savings")
+                                .font(.hubCaption)
+                                .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+
+                            Text(String(format: "$%.2f", viewModel.totalSavings))
+                                .font(.system(size: 28, weight: .bold))
+                                .foregroundStyle(Color.hubAccentGreen)
+                        }
+
+                        Spacer()
+
+                        VStack(alignment: .trailing, spacing: 4) {
+                            Text("This Month")
+                                .font(.hubCaption)
+                                .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+
+                            Text(String(format: "$%.2f", viewModel.currentMonthStats.estimatedSavings))
+                                .font(.system(size: 20, weight: .semibold))
+                                .foregroundStyle(Color.hubAccentGreen)
+                        }
+                    }
+
+                    Divider()
+                        .foregroundStyle(AdaptiveColors.border(for: colorScheme))
+
+                    HStack {
+                        Label(
+                            "\(viewModel.skipDates.count) total days skipped",
+                            systemImage: "calendar.badge.minus"
+                        )
+                        .font(.hubCaption)
+                        .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+
+                        Spacer()
+
+                        Text("$\(String(format: "%.2f", ParkingViewModel.costPerDay))/day")
+                            .font(.hubCaption)
+                            .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+    }
+
     // MARK: - Upcoming Skips
 
     private var upcomingSkipsSection: some View {
@@ -286,6 +579,74 @@ struct ParkingView: View {
                     x: 0,
                     y: 2
                 )
+        )
+    }
+
+    // MARK: - Skip History
+
+    private var skipHistorySection: some View {
+        VStack(alignment: .leading, spacing: HubLayout.itemSpacing) {
+            if !viewModel.pastSkipDates.isEmpty {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        showHistory.toggle()
+                    }
+                } label: {
+                    HStack {
+                        SectionHeader(title: "Skip History")
+
+                        Spacer()
+
+                        HStack(spacing: 4) {
+                            Text("\(viewModel.pastSkipDates.count) past")
+                                .font(.system(size: 12, weight: .medium))
+                            Image(systemName: showHistory ? "chevron.up" : "chevron.down")
+                                .font(.system(size: 11, weight: .semibold))
+                        }
+                        .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                    }
+                }
+
+                if showHistory {
+                    VStack(spacing: 6) {
+                        ForEach(viewModel.pastSkipDates.prefix(10)) { entry in
+                            historyRow(entry: entry)
+                        }
+
+                        if viewModel.pastSkipDates.count > 10 {
+                            Text("and \(viewModel.pastSkipDates.count - 10) more...")
+                                .font(.hubCaption)
+                                .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                                .frame(maxWidth: .infinity)
+                                .padding(.top, 4)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func historyRow(entry: ParkingSkipEntry) -> some View {
+        HStack(spacing: 12) {
+            Circle()
+                .fill(AdaptiveColors.textSecondary(for: colorScheme).opacity(0.3))
+                .frame(width: 6, height: 6)
+
+            Text(entry.formattedDate)
+                .font(.system(size: 14, weight: .regular))
+                .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+
+            Spacer()
+
+            Text(String(format: "-$%.2f", ParkingViewModel.costPerDay))
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(Color.hubAccentGreen.opacity(0.7))
+        }
+        .padding(.horizontal, HubLayout.cardInnerPadding)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: HubLayout.cardCornerRadius)
+                .fill(AdaptiveColors.surface(for: colorScheme).opacity(0.5))
         )
     }
 
