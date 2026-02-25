@@ -149,13 +149,15 @@ struct ActivityEntry: Codable, Identifiable {
     let type: String
     let duration: Int // minutes
     let note: String?
+    let rawDescription: String?
 
-    init(id: UUID = UUID(), date: Date = Date(), type: String, duration: Int, note: String? = nil) {
+    init(id: UUID = UUID(), date: Date = Date(), type: String, duration: Int, note: String? = nil, rawDescription: String? = nil) {
         self.id = id
         self.date = date
         self.type = type
         self.duration = duration
         self.note = note
+        self.rawDescription = rawDescription
     }
 
     /// Formatted duration string.
@@ -200,5 +202,128 @@ enum HealthTab: String, CaseIterable, Identifiable {
         case .food: return "fork.knife"
         case .activity: return "figure.run"
         }
+    }
+}
+
+// MARK: - Activity Parser
+
+/// Parses natural language activity descriptions into structured type + duration.
+/// Examples: "Walked 20 minutes to campus", "Gym session for 1 hour", "30 min yoga"
+enum ActivityParser {
+    /// Result of parsing a natural language activity description.
+    struct ParseResult {
+        let type: String
+        let duration: Int? // minutes
+        let note: String?
+    }
+
+    /// Known activity types with their keyword variants.
+    private static let activityKeywords: [(type: String, keywords: [String], icon: String)] = [
+        ("Walking", ["walk", "walked", "walking", "stroll", "strolled", "strolling", "hike", "hiked", "hiking"], "figure.walk"),
+        ("Running", ["run", "ran", "running", "jog", "jogged", "jogging", "sprint", "sprinted", "sprinting"], "figure.run"),
+        ("Gym", ["gym", "lift", "lifted", "lifting", "weights", "weight training", "strength", "workout", "work out", "worked out"], "dumbbell.fill"),
+        ("Yoga", ["yoga", "stretch", "stretching", "stretched", "pilates"], "figure.yoga"),
+        ("Swimming", ["swim", "swam", "swimming", "pool"], "figure.pool.swim"),
+        ("Cycling", ["bike", "biked", "biking", "cycle", "cycled", "cycling", "bicycle"], "bicycle"),
+        ("Dancing", ["dance", "danced", "dancing", "zumba"], "figure.dance"),
+        ("Basketball", ["basketball", "hoops"], "basketball.fill"),
+        ("Soccer", ["soccer", "football", "futsal"], "soccerball"),
+        ("Tennis", ["tennis", "badminton", "racquet", "racket", "squash", "pickleball"], "tennis.racket"),
+        ("Climbing", ["climb", "climbed", "climbing", "boulder", "bouldering"], "figure.climbing"),
+        ("Rowing", ["row", "rowed", "rowing", "kayak", "kayaked", "kayaking", "canoe"], "figure.rowing"),
+        ("Martial Arts", ["boxing", "boxed", "kickboxing", "martial arts", "karate", "taekwondo", "judo", "mma"], "figure.martial.arts"),
+        ("Cardio", ["cardio", "elliptical", "treadmill", "stair", "stairs", "jump rope", "jumping"], "heart.fill"),
+        ("Exercise", ["exercise", "exercised", "exercising", "training", "trained", "practice", "practiced"], "figure.mixed.cardio"),
+    ]
+
+    /// Parse a natural language description into structured activity data.
+    static func parse(_ text: String) -> ParseResult {
+        let lowered = text.lowercased().trimmingCharacters(in: .whitespaces)
+
+        let activityType = detectActivityType(from: lowered)
+        let duration = detectDuration(from: lowered)
+
+        return ParseResult(
+            type: activityType ?? "Activity",
+            duration: duration,
+            note: text.trimmingCharacters(in: .whitespaces)
+        )
+    }
+
+    /// Detect activity type from text using keyword matching.
+    private static func detectActivityType(from text: String) -> String? {
+        for entry in activityKeywords {
+            for keyword in entry.keywords {
+                // Match whole words to avoid false positives (e.g., "swam" inside "swamp")
+                let pattern = "\\b\(NSRegularExpression.escapedPattern(for: keyword))\\b"
+                if let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) {
+                    let range = NSRange(text.startIndex..., in: text)
+                    if regex.firstMatch(in: text, range: range) != nil {
+                        return entry.type
+                    }
+                }
+            }
+        }
+        return nil
+    }
+
+    /// Detect duration in minutes from text.
+    /// Supports patterns like: "30 min", "1 hour", "1.5 hrs", "90 minutes", "1h 30m", "for 45 min"
+    private static func detectDuration(from text: String) -> Int? {
+        // Pattern: combined hours and minutes like "1h 30m", "1h30m", "2 hr 15 min"
+        let combinedPattern = #"(\d+(?:\.\d+)?)\s*(?:h|hr|hrs|hour|hours)\s*(?:and\s+)?(\d+)\s*(?:m|min|mins|minutes|minute)"#
+        if let regex = try? NSRegularExpression(pattern: combinedPattern, options: .caseInsensitive),
+           let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) {
+            if let hoursRange = Range(match.range(at: 1), in: text),
+               let minsRange = Range(match.range(at: 2), in: text),
+               let hours = Double(text[hoursRange]),
+               let mins = Int(text[minsRange]) {
+                return Int(hours * 60) + mins
+            }
+        }
+
+        // Pattern: hours only like "1 hour", "2.5 hrs", "1.5 hours"
+        let hoursPattern = #"(\d+(?:\.\d+)?)\s*(?:h|hr|hrs|hour|hours)\b"#
+        if let regex = try? NSRegularExpression(pattern: hoursPattern, options: .caseInsensitive),
+           let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) {
+            if let range = Range(match.range(at: 1), in: text),
+               let hours = Double(text[range]) {
+                return Int(hours * 60)
+            }
+        }
+
+        // Pattern: minutes like "30 min", "45 minutes", "20m"
+        let minutesPattern = #"(\d+)\s*(?:m|min|mins|minutes|minute)\b"#
+        if let regex = try? NSRegularExpression(pattern: minutesPattern, options: .caseInsensitive),
+           let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) {
+            if let range = Range(match.range(at: 1), in: text),
+               let minutes = Int(text[range]) {
+                return minutes
+            }
+        }
+
+        // Pattern: standalone number at the beginning or after "for" (assume minutes)
+        // e.g., "30 min run" or "ran for 30"
+        let standalonePattern = #"(?:^|for\s+)(\d+)\s*$|^(\d+)\s+(?:min|minute)"#
+        if let regex = try? NSRegularExpression(pattern: standalonePattern, options: .caseInsensitive),
+           let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) {
+            for i in 1...2 {
+                if match.range(at: i).location != NSNotFound,
+                   let range = Range(match.range(at: i), in: text),
+                   let minutes = Int(text[range]) {
+                    return minutes
+                }
+            }
+        }
+
+        return nil
+    }
+
+    /// Get the SF Symbol icon for a given activity type.
+    static func icon(for type: String) -> String {
+        for entry in activityKeywords where entry.type == type {
+            return entry.icon
+        }
+        return "figure.run"
     }
 }

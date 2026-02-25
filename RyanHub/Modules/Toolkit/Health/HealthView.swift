@@ -10,6 +10,11 @@ struct HealthView: View {
     @State private var showSmartFoodLog = false
     @State private var showActivityLog = false
 
+    // Quick activity natural language input
+    @State private var quickActivityText = ""
+    @State private var quickActivityParsed: ActivityParser.ParseResult?
+    @FocusState private var isQuickActivityFocused: Bool
+
     var body: some View {
         ScrollView {
             VStack(spacing: HubLayout.sectionSpacing) {
@@ -86,37 +91,38 @@ struct HealthView: View {
         VStack(spacing: HubLayout.sectionSpacing) {
             // Current weight card
             HubCard {
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Current Weight")
-                                .font(.hubCaption)
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Current Weight")
+                            .font(.hubCaption)
+                            .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+
+                        if let latest = viewModel.latestWeight {
+                            Text(latest.formattedWeight)
+                                .font(.system(size: 34, weight: .bold))
+                                .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                        } else {
+                            Text("No data")
+                                .font(.system(size: 34, weight: .bold))
                                 .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
-
-                            if let latest = viewModel.latestWeight {
-                                Text(latest.formattedWeight)
-                                    .font(.system(size: 34, weight: .bold))
-                                    .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
-                            } else {
-                                Text("No data")
-                                    .font(.system(size: 34, weight: .bold))
-                                    .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
-                            }
-                        }
-
-                        Spacer()
-
-                        if let change = viewModel.weeklyWeightChange {
-                            weightChangeBadge(change: change)
                         }
                     }
 
-                    // Mini chart
-                    if viewModel.weeklyWeights.count >= 2 {
-                        miniWeightChart
+                    Spacer()
+
+                    if let change = viewModel.weeklyWeightChange {
+                        weightChangeBadge(change: change)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            // Weight timeline chart
+            if viewModel.timelineWeights.count >= 2 {
+                WeightTimelineChart(
+                    entries: viewModel.timelineWeights,
+                    weightRange: viewModel.weightRange
+                )
             }
 
             // Log button
@@ -158,57 +164,6 @@ struct HealthView: View {
         .background(
             Capsule().fill(color.opacity(0.12))
         )
-    }
-
-    /// Simple mini weight chart using a geometric path.
-    private var miniWeightChart: some View {
-        let weights = viewModel.weeklyWeights.map(\.weight)
-        let minW = (weights.min() ?? 0) - 0.5
-        let maxW = (weights.max() ?? 100) + 0.5
-        let range = max(maxW - minW, 1)
-
-        return VStack(spacing: 4) {
-            GeometryReader { geometry in
-                let width = geometry.size.width
-                let height = geometry.size.height
-                let stepX = width / CGFloat(max(weights.count - 1, 1))
-
-                Path { path in
-                    for (index, weight) in weights.enumerated() {
-                        let x = stepX * CGFloat(index)
-                        let y = height - (CGFloat(weight - minW) / CGFloat(range)) * height
-                        if index == 0 {
-                            path.move(to: CGPoint(x: x, y: y))
-                        } else {
-                            path.addLine(to: CGPoint(x: x, y: y))
-                        }
-                    }
-                }
-                .stroke(Color.hubPrimary, style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
-
-                // Dots
-                ForEach(Array(weights.enumerated()), id: \.offset) { index, weight in
-                    let x = stepX * CGFloat(index)
-                    let y = height - (CGFloat(weight - minW) / CGFloat(range)) * height
-
-                    Circle()
-                        .fill(Color.hubPrimary)
-                        .frame(width: 6, height: 6)
-                        .position(x: x, y: y)
-                }
-            }
-            .frame(height: 80)
-
-            // Date labels
-            HStack {
-                ForEach(viewModel.weeklyWeights) { entry in
-                    Text(entry.shortDateLabel)
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
-                        .frame(maxWidth: .infinity)
-                }
-            }
-        }
     }
 
     private func weightEntryRow(_ entry: WeightEntry) -> some View {
@@ -392,8 +347,11 @@ struct HealthView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
 
-            // Log button
-            HubButton("Log Activity", icon: "plus.circle.fill") {
+            // Natural language quick log
+            quickActivityLogSection
+
+            // Structured log button (fallback)
+            HubSecondaryButton("Structured Log", icon: "list.bullet") {
                 showActivityLog = true
             }
 
@@ -415,9 +373,108 @@ struct HealthView: View {
         }
     }
 
+    /// Natural language activity input with live parsing preview.
+    private var quickActivityLogSection: some View {
+        VStack(spacing: HubLayout.itemSpacing) {
+            // Text input
+            HStack(spacing: 10) {
+                Image(systemName: "text.bubble.fill")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(Color.hubAccentGreen)
+
+                TextField("e.g., Walked 30 min to campus", text: $quickActivityText)
+                    .font(.hubBody)
+                    .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                    .focused($isQuickActivityFocused)
+                    .onSubmit {
+                        submitQuickActivity()
+                    }
+                    .onChange(of: quickActivityText) { _, newValue in
+                        if newValue.trimmingCharacters(in: .whitespaces).isEmpty {
+                            quickActivityParsed = nil
+                        } else {
+                            quickActivityParsed = ActivityParser.parse(newValue)
+                        }
+                    }
+
+                if !quickActivityText.isEmpty {
+                    Button {
+                        submitQuickActivity()
+                    } label: {
+                        Image(systemName: "arrow.up.circle.fill")
+                            .font(.system(size: 28))
+                            .foregroundStyle(Color.hubAccentGreen)
+                    }
+                }
+            }
+            .padding(HubLayout.cardInnerPadding)
+            .background(
+                RoundedRectangle(cornerRadius: HubLayout.cardCornerRadius)
+                    .fill(AdaptiveColors.surface(for: colorScheme))
+                    .shadow(
+                        color: colorScheme == .dark
+                            ? Color.black.opacity(0.3)
+                            : Color.black.opacity(0.06),
+                        radius: 8, x: 0, y: 2
+                    )
+            )
+
+            // Live parsing preview
+            if let parsed = quickActivityParsed {
+                HStack(spacing: 12) {
+                    Image(systemName: ActivityParser.icon(for: parsed.type))
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(Color.hubAccentGreen)
+
+                    Text(parsed.type)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+
+                    if let duration = parsed.duration {
+                        Text("\(duration) min")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(Color.hubPrimary)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(
+                                Capsule().fill(Color.hubPrimary.opacity(0.12))
+                            )
+                    } else {
+                        Text("30 min (default)")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(
+                                Capsule().fill(AdaptiveColors.surfaceSecondary(for: colorScheme))
+                            )
+                    }
+
+                    Spacer()
+                }
+                .padding(.horizontal, 4)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+                .animation(.easeOut(duration: 0.15), value: quickActivityParsed?.type)
+            }
+        }
+    }
+
+    private func submitQuickActivity() {
+        let trimmed = quickActivityText.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return }
+
+        viewModel.addActivityFromDescription(trimmed)
+
+        withAnimation(.easeOut(duration: 0.2)) {
+            quickActivityText = ""
+            quickActivityParsed = nil
+        }
+        isQuickActivityFocused = false
+    }
+
     private func activityEntryRow(_ entry: ActivityEntry) -> some View {
         HStack(spacing: 12) {
-            Image(systemName: "figure.run")
+            Image(systemName: ActivityParser.icon(for: entry.type))
                 .font(.system(size: 18, weight: .medium))
                 .foregroundStyle(Color.hubAccentGreen)
                 .frame(width: 36, height: 36)
@@ -426,11 +483,31 @@ struct HealthView: View {
                 )
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(entry.type)
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                // Show raw description if from natural language, otherwise show type
+                if let rawDesc = entry.rawDescription, !rawDesc.isEmpty {
+                    Text(rawDesc)
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                        .lineLimit(2)
+                } else {
+                    Text(entry.type)
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                }
 
                 HStack(spacing: 8) {
+                    // Show parsed type tag if from natural language
+                    if entry.rawDescription != nil {
+                        Text(entry.type)
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(Color.hubAccentGreen)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(
+                                Capsule().fill(Color.hubAccentGreen.opacity(0.12))
+                            )
+                    }
+
                     Text(entry.formattedDuration)
                         .font(.hubCaption)
                         .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
@@ -443,7 +520,8 @@ struct HealthView: View {
 
             Spacer()
 
-            if let note = entry.note, !note.isEmpty {
+            // Only show note for structured entries (non-NL)
+            if entry.rawDescription == nil, let note = entry.note, !note.isEmpty {
                 Text(note)
                     .font(.hubCaption)
                     .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
