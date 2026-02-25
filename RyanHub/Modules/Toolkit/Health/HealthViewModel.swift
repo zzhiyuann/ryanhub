@@ -25,6 +25,20 @@ final class HealthViewModel {
         Array(weightEntries.sorted { $0.date < $1.date }.suffix(7))
     }
 
+    /// Last 30 weight entries for the full timeline chart, sorted oldest to newest.
+    var timelineWeights: [WeightEntry] {
+        Array(weightEntries.sorted { $0.date < $1.date }.suffix(30))
+    }
+
+    /// Weight range for the timeline chart (min, max).
+    var weightRange: (min: Double, max: Double)? {
+        let weights = timelineWeights.map(\.weight)
+        guard let minW = weights.min(), let maxW = weights.max() else { return nil }
+        // Add padding for visual comfort
+        let padding = max((maxW - minW) * 0.1, 0.5)
+        return (min: minW - padding, max: maxW + padding)
+    }
+
     /// Weight change from the first to last entry in the weekly data.
     var weeklyWeightChange: Double? {
         guard let first = weeklyWeights.first,
@@ -146,8 +160,23 @@ final class HealthViewModel {
     // MARK: - Activity Actions
 
     /// Add a new activity entry.
-    func addActivity(type: String, duration: Int, date: Date = Date(), note: String? = nil) {
-        let entry = ActivityEntry(date: date, type: type, duration: duration, note: note)
+    func addActivity(type: String, duration: Int, date: Date = Date(), note: String? = nil, rawDescription: String? = nil) {
+        let entry = ActivityEntry(date: date, type: type, duration: duration, note: note, rawDescription: rawDescription)
+        activityEntries.append(entry)
+        save(activityEntries, forKey: StorageKeys.activityEntries)
+    }
+
+    /// Add an activity from a natural language description.
+    /// Parses the text to extract type and duration, then saves the entry.
+    func addActivityFromDescription(_ description: String, date: Date = Date()) {
+        let result = ActivityParser.parse(description)
+        let entry = ActivityEntry(
+            date: date,
+            type: result.type,
+            duration: result.duration ?? 30, // Default to 30 minutes if not detected
+            note: result.note,
+            rawDescription: description
+        )
         activityEntries.append(entry)
         save(activityEntries, forKey: StorageKeys.activityEntries)
     }
