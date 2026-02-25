@@ -10,10 +10,20 @@ final class FoodAnalysisService {
     var isAnalyzing = false
     var analysisError: String?
 
-    private let apiKey: String?
+    /// Computed property that reads from UserDefaults each time,
+    /// so it picks up newly saved keys immediately.
+    private var apiKey: String? {
+        UserDefaults.standard.string(forKey: StorageKeys.anthropicAPIKey)
+    }
 
-    init() {
-        self.apiKey = UserDefaults.standard.string(forKey: StorageKeys.anthropicAPIKey)
+    /// Whether the user needs to configure an API key before analysis can work.
+    var needsAPIKey: Bool {
+        guard let key = apiKey else { return true }
+        return key.isEmpty
+    }
+
+    var hasAPIKey: Bool {
+        !needsAPIKey
     }
 
     /// Analyze food from a text description.
@@ -29,8 +39,7 @@ final class FoodAnalysisService {
                 .init(role: "user", content: [.text(prompt)])
             ], apiKey: key)
         } else {
-            // Fallback: send through Dispatcher
-            sendThroughDispatcher(prompt)
+            analysisError = "Please configure your Anthropic API key to use AI food analysis."
             return nil
         }
     }
@@ -58,19 +67,19 @@ final class FoodAnalysisService {
                 ])
             ], apiKey: key)
         } else {
-            sendThroughDispatcher("Analyze this meal: \(textPart)")
+            analysisError = "Please configure your Anthropic API key to use AI food analysis."
             return nil
         }
     }
 
-    /// Save API key.
+    /// Save API key to UserDefaults.
     func saveAPIKey(_ key: String) {
         UserDefaults.standard.set(key, forKey: StorageKeys.anthropicAPIKey)
     }
 
-    var hasAPIKey: Bool {
-        guard let key = apiKey else { return false }
-        return !key.isEmpty
+    /// Remove API key from UserDefaults.
+    func clearAPIKey() {
+        UserDefaults.standard.removeObject(forKey: StorageKeys.anthropicAPIKey)
     }
 
     // MARK: - Anthropic API

@@ -16,6 +16,10 @@ struct SmartFoodLogView: View {
     @State private var analysisResult: FoodAnalysisResult?
     @State private var analysisService = FoodAnalysisService()
     @State private var showCamera = false
+    @State private var showAPIKeyAlert = false
+    @State private var showManualLog = false
+    @State private var apiKeyInput = ""
+    @State private var pendingAnalysisAfterKeyEntry = false
     @State private var date = Date()
     @FocusState private var isInputFocused: Bool
 
@@ -36,6 +40,9 @@ struct SmartFoodLogView: View {
                     if let result = analysisResult {
                         analysisResultView(result)
                     }
+
+                    // Manual fallback button
+                    manualFallbackSection
                 }
                 .padding(HubLayout.standardPadding)
             }
@@ -55,6 +62,31 @@ struct SmartFoodLogView: View {
             .fullScreenCover(isPresented: $showCamera) {
                 CameraView { image in
                     selectedImage = image
+                    Task { await analyzeCurrentInput() }
+                }
+            }
+            .sheet(isPresented: $showManualLog) {
+                FoodLogView(viewModel: viewModel)
+            }
+            .alert("Anthropic API Key", isPresented: $showAPIKeyAlert) {
+                TextField("sk-ant-...", text: $apiKeyInput)
+                    .autocorrectionDisabled()
+                    .textInputAutocapitalization(.never)
+                Button("Save & Analyze") {
+                    let trimmed = apiKeyInput.trimmingCharacters(in: .whitespaces)
+                    guard !trimmed.isEmpty else { return }
+                    analysisService.saveAPIKey(trimmed)
+                    pendingAnalysisAfterKeyEntry = true
+                }
+                Button("Cancel", role: .cancel) {
+                    apiKeyInput = ""
+                }
+            } message: {
+                Text("Enter your Anthropic API key to enable AI food analysis. You can get one at console.anthropic.com.")
+            }
+            .onChange(of: showAPIKeyAlert) { _, isShowing in
+                if !isShowing && pendingAnalysisAfterKeyEntry {
+                    pendingAnalysisAfterKeyEntry = false
                     Task { await analyzeCurrentInput() }
                 }
             }
@@ -78,6 +110,11 @@ struct SmartFoodLogView: View {
                     .padding(.horizontal, 16)
                     .padding(.top, 14)
                     .padding(.bottom, 8)
+                    .onSubmit {
+                        guard canAnalyze else { return }
+                        Task { await handleAnalyzeTap() }
+                    }
+                    .submitLabel(.send)
 
                 // Action bar
                 HStack(spacing: 12) {
@@ -106,21 +143,26 @@ struct SmartFoodLogView: View {
                         .tint(.hubPrimary)
                         .scaleEffect(0.85)
 
-                    // Analyze button
+                    // Analyze button — prominent with text label
                     Button {
-                        Task { await analyzeCurrentInput() }
+                        Task { await handleAnalyzeTap() }
                     } label: {
-                        Image(systemName: "sparkles")
-                            .font(.system(size: 16, weight: .bold))
-                            .foregroundStyle(.white)
-                            .frame(width: 36, height: 36)
-                            .background(
-                                Circle().fill(
-                                    canAnalyze
-                                        ? Color.hubPrimary
-                                        : AdaptiveColors.textSecondary(for: colorScheme).opacity(0.3)
-                                )
+                        HStack(spacing: 6) {
+                            Image(systemName: "sparkles")
+                                .font(.system(size: 14, weight: .bold))
+                            Text("Analyze")
+                                .font(.system(size: 14, weight: .semibold))
+                        }
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(
+                            Capsule().fill(
+                                canAnalyze
+                                    ? Color.hubPrimary
+                                    : AdaptiveColors.textSecondary(for: colorScheme).opacity(0.3)
                             )
+                        )
                     }
                     .disabled(!canAnalyze || analysisService.isAnalyzing)
                 }
@@ -146,6 +188,27 @@ struct SmartFoodLogView: View {
 
     private var canAnalyze: Bool {
         !foodDescription.trimmingCharacters(in: .whitespaces).isEmpty || selectedImage != nil
+    }
+
+    // MARK: - Manual Fallback
+
+    private var manualFallbackSection: some View {
+        VStack(spacing: 8) {
+            Divider()
+                .padding(.vertical, 4)
+
+            Button {
+                showManualLog = true
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "square.and.pencil")
+                        .font(.system(size: 14, weight: .medium))
+                    Text("Log manually instead")
+                        .font(.system(size: 14, weight: .medium))
+                }
+                .foregroundStyle(Color.hubPrimary)
+            }
+        }
     }
 
     // MARK: - Image Preview
@@ -315,6 +378,16 @@ struct SmartFoodLogView: View {
     }
 
     // MARK: - Actions
+
+    /// Handle the analyze button tap. If no API key is configured, prompt the user to enter one.
+    private func handleAnalyzeTap() async {
+        if analysisService.needsAPIKey {
+            apiKeyInput = ""
+            showAPIKeyAlert = true
+        } else {
+            await analyzeCurrentInput()
+        }
+    }
 
     private func analyzeCurrentInput() async {
         isInputFocused = false
