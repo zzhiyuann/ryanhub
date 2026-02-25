@@ -116,8 +116,30 @@ extension ChatMessage {
               let messages = try? JSONDecoder().decode([ChatMessage].self, from: data) else {
             return []
         }
-        // Ensure chronological order on load
-        return messages.sorted { $0.timestamp < $1.timestamp }
+        // Fix legacy data: ensure every message has a unique ID.
+        // Old code used the same Dispatcher message ID for both user and assistant
+        // messages, causing SwiftUI ForEach identity collisions.
+        var seenIds = Set<String>()
+        let deduped = messages.sorted { $0.timestamp < $1.timestamp }.map { msg -> ChatMessage in
+            if seenIds.contains(msg.id) {
+                // Duplicate ID — give the later message (typically the assistant reply) a new unique ID.
+                let newId = "resp-\(msg.id)"
+                return ChatMessage(
+                    id: seenIds.contains(newId) ? UUID().uuidString : newId,
+                    content: msg.content,
+                    role: msg.role,
+                    timestamp: msg.timestamp,
+                    isStreaming: msg.isStreaming,
+                    imageBase64: msg.imageBase64,
+                    voiceBase64: msg.voiceBase64,
+                    voiceDuration: msg.voiceDuration
+                )
+            } else {
+                seenIds.insert(msg.id)
+                return msg
+            }
+        }
+        return deduped
     }
 
     /// Clear all saved messages.

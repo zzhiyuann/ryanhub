@@ -329,10 +329,16 @@ final class ChatViewModel {
 
         let isStreaming = message.streaming ?? false
 
-        if let existingIndex = messages.firstIndex(where: { $0.id == id && $0.role == .assistant }) {
+        // The Dispatcher echoes back the same ID we sent with the user message.
+        // We must give the assistant message a DIFFERENT ID so that SwiftUI's
+        // ForEach (which uses ChatMessage.id as the identity) doesn't confuse
+        // the user bubble with the assistant bubble.
+        let assistantId = "resp-\(id)"
+
+        if let existingIndex = messages.firstIndex(where: { $0.id == assistantId && $0.role == .assistant }) {
             // Update existing streaming message in place
             messages[existingIndex] = ChatMessage(
-                id: id,
+                id: assistantId,
                 content: content,
                 role: .assistant,
                 timestamp: messages[existingIndex].timestamp,
@@ -342,7 +348,7 @@ final class ChatViewModel {
             messageUpdateTrigger += 1
         } else {
             // New assistant message — always appended at the end
-            let assistantMessage = ChatMessage.assistant(content, id: id, isStreaming: isStreaming)
+            let assistantMessage = ChatMessage.assistant(content, id: assistantId, isStreaming: isStreaming)
             messages.append(assistantMessage)
             messageUpdateTrigger += 1
         }
@@ -352,7 +358,7 @@ final class ChatViewModel {
             currentStreamingMessageId = nil
             saveMessages()
         } else {
-            currentStreamingMessageId = id
+            currentStreamingMessageId = assistantId
         }
     }
 
