@@ -1,21 +1,27 @@
 import SwiftUI
 
 /// Animated typing indicator (three bouncing dots) shown when waiting for a response.
+/// Matches the assistant bubble style with avatar.
 struct TypingIndicator: View {
     @Environment(\.colorScheme) private var colorScheme
     @State private var animating = false
 
-    private let dotSize: CGFloat = 8
+    private let dotSize: CGFloat = 7
     private let animationDuration: Double = 0.5
 
     var body: some View {
-        HStack(alignment: .top, spacing: 8) {
-            // Bot avatar
-            Text("🐱")
-                .font(.system(size: 24))
-                .frame(width: 32, height: 32)
+        HStack(alignment: .bottom, spacing: 6) {
+            // Bot avatar (matches MessageBubble style)
+            Text("\u{1F431}")
+                .font(.system(size: 22))
+                .frame(width: 30, height: 30)
+                .background(
+                    Circle()
+                        .fill(AdaptiveColors.surface(for: colorScheme))
+                )
+                .offset(y: -2)
 
-            // Dots
+            // Dots bubble
             HStack(spacing: 5) {
                 ForEach(0..<3, id: \.self) { index in
                     Circle()
@@ -33,15 +39,15 @@ struct TypingIndicator: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 14)
             .background(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                BubbleShape(isUser: false)
                     .fill(AdaptiveColors.surface(for: colorScheme))
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                BubbleShape(isUser: false)
                     .stroke(AdaptiveColors.border(for: colorScheme), lineWidth: 0.5)
             )
 
-            Spacer(minLength: 60)
+            Spacer(minLength: 48)
         }
         .onAppear {
             animating = true

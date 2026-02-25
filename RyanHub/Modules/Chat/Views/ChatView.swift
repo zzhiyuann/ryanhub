@@ -1,11 +1,13 @@
 import SwiftUI
+import PhotosUI
 
 /// Main chat screen — the primary interaction surface for Ryan Hub.
+/// Telegram-like chat with real-time WebSocket messaging, image, and voice input.
 struct ChatView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.colorScheme) private var colorScheme
     @State private var viewModel = ChatViewModel()
-    @State private var scrollProxy: ScrollViewProxy?
+    @State private var showCamera = false
 
     var body: some View {
         NavigationStack {
@@ -17,10 +19,30 @@ struct ChatView: View {
                 messagesArea
 
                 // Input bar
-                ChatInputBar(text: $viewModel.inputText, isConnected: viewModel.isConnected) {
-                    viewModel.sendMessage()
-                    scrollToBottom()
-                }
+                ChatInputBar(
+                    text: $viewModel.inputText,
+                    isConnected: viewModel.isConnected,
+                    isRecording: viewModel.isRecording,
+                    recordingDuration: viewModel.recordingDuration,
+                    onSend: {
+                        viewModel.sendMessage()
+                    },
+                    onStartRecording: {
+                        viewModel.startRecording()
+                    },
+                    onStopRecording: {
+                        viewModel.stopRecording()
+                    },
+                    onCancelRecording: {
+                        viewModel.cancelRecording()
+                    },
+                    onPhotoSelected: { item in
+                        viewModel.handlePhotoSelection(item)
+                    },
+                    onCameraTapped: {
+                        showCamera = true
+                    }
+                )
             }
             .background(AdaptiveColors.background(for: colorScheme))
             .navigationTitle(L10n.tabChat)
@@ -51,8 +73,10 @@ struct ChatView: View {
                 viewModel.disconnect()
                 viewModel.connect(to: newURL)
             }
-            .onChange(of: viewModel.messages.count) {
-                scrollToBottom()
+            .sheet(isPresented: $showCamera) {
+                CameraImagePicker { imageData in
+                    viewModel.sendImageMessage(data: imageData)
+                }
             }
         }
     }
@@ -137,9 +161,17 @@ struct ChatView: View {
                 .padding(.horizontal, HubLayout.standardPadding)
                 .padding(.vertical, HubLayout.itemSpacing)
             }
+            .scrollDismissesKeyboard(.interactively)
             .onAppear {
-                scrollProxy = proxy
-                scrollToBottom()
+                scrollToBottom(proxy: proxy)
+            }
+            // React to ALL message mutations via the trigger counter.
+            // This covers: new messages, streaming content updates, and deletions.
+            .onChange(of: viewModel.messageUpdateTrigger) {
+                scrollToBottom(proxy: proxy)
+            }
+            .onChange(of: viewModel.isTyping) {
+                scrollToBottom(proxy: proxy)
             }
         }
     }
@@ -149,7 +181,7 @@ struct ChatView: View {
     @ViewBuilder
     private var emptyState: some View {
         VStack(spacing: 16) {
-            Text("🐱")
+            Text("\u{1F431}")
                 .font(.system(size: 64))
 
             Text(L10n.chatWelcomeTitle)
@@ -167,9 +199,53 @@ struct ChatView: View {
 
     // MARK: - Helpers
 
-    private func scrollToBottom() {
-        withAnimation(.easeOut(duration: 0.2)) {
-            scrollProxy?.scrollTo("bottom-anchor", anchor: .bottom)
+    private func scrollToBottom(proxy: ScrollViewProxy) {
+        // Small delay to allow the layout to update before scrolling
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            withAnimation(.easeOut(duration: 0.2)) {
+                proxy.scrollTo("bottom-anchor", anchor: .bottom)
+            }
+        }
+    }
+}
+
+// MARK: - Camera Image Picker (UIKit wrapper)
+
+/// UIImagePickerController wrapper for camera capture.
+struct CameraImagePicker: UIViewControllerRepresentable {
+    @Environment(\.dismiss) private var dismiss
+    let onImageCaptured: (Data) -> Void
+
+    func makeUIViewController(context: Context) -> UIImagePickerController {
+        let picker = UIImagePickerController()
+        picker.sourceType = .camera
+        picker.delegate = context.coordinator
+        return picker
+    }
+
+    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+
+    class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
+        let parent: CameraImagePicker
+
+        init(_ parent: CameraImagePicker) {
+            self.parent = parent
+        }
+
+        func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
+            if let image = info[.originalImage] as? UIImage,
+               let data = image.jpegData(compressionQuality: 0.7) {
+                parent.onImageCaptured(data)
+            }
+            parent.dismiss()
+        }
+
+        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+            parent.dismiss()
         }
     }
 }

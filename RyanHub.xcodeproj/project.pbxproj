@@ -576,6 +576,9 @@
 				CODE_SIGN_IDENTITY = "";
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Ryan Hub needs camera access to capture photos for chat.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Ryan Hub needs microphone access to record voice messages.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Ryan Hub needs photo library access to send images in chat.";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -597,6 +600,9 @@
 				CODE_SIGN_IDENTITY = "";
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Ryan Hub needs camera access to capture photos for chat.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Ryan Hub needs microphone access to record voice messages.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Ryan Hub needs photo library access to send images in chat.";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
 				LD_RUNPATH_SEARCH_PATHS = (

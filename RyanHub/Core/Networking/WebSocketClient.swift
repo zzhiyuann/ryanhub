@@ -85,6 +85,45 @@ final class WebSocketClient {
         try await task.send(.string(jsonString))
     }
 
+    /// Send a message with an image attachment (base64-encoded).
+    func sendImageMessage(id: String, imageBase64: String, caption: String = "", project: String? = nil) async throws {
+        let payload = ClientImageMessage(
+            type: "message",
+            id: id,
+            content: caption.isEmpty ? "[Image]" : caption,
+            imageBase64: imageBase64,
+            project: project
+        )
+        let data = try JSONEncoder().encode(payload)
+        guard let jsonString = String(data: data, encoding: .utf8) else {
+            throw WebSocketError.encodingFailed
+        }
+        guard let task = webSocketTask, isConnected else {
+            throw WebSocketError.notConnected
+        }
+        try await task.send(.string(jsonString))
+    }
+
+    /// Send a voice message (base64-encoded audio).
+    func sendVoiceMessage(id: String, audioBase64: String, duration: TimeInterval, project: String? = nil) async throws {
+        let payload = ClientVoiceMessage(
+            type: "message",
+            id: id,
+            content: "[Voice message]",
+            audioBase64: audioBase64,
+            duration: duration,
+            project: project
+        )
+        let data = try JSONEncoder().encode(payload)
+        guard let jsonString = String(data: data, encoding: .utf8) else {
+            throw WebSocketError.encodingFailed
+        }
+        guard let task = webSocketTask, isConnected else {
+            throw WebSocketError.notConnected
+        }
+        try await task.send(.string(jsonString))
+    }
+
     func testConnection(to urlString: String) async -> Bool {
         guard let url = URL(string: urlString) else { return false }
         let testSession = URLSession(configuration: .default)
@@ -266,6 +305,33 @@ struct ClientMessage: Codable {
     let id: String
     let content: String
     let project: String?
+}
+
+struct ClientImageMessage: Codable {
+    let type: String
+    let id: String
+    let content: String
+    let imageBase64: String
+    let project: String?
+
+    enum CodingKeys: String, CodingKey {
+        case type, id, content, project
+        case imageBase64 = "image_base64"
+    }
+}
+
+struct ClientVoiceMessage: Codable {
+    let type: String
+    let id: String
+    let content: String
+    let audioBase64: String
+    let duration: TimeInterval
+    let project: String?
+
+    enum CodingKeys: String, CodingKey {
+        case type, id, content, duration, project
+        case audioBase64 = "audio_base64"
+    }
 }
 
 struct DispatcherMessage: Codable {

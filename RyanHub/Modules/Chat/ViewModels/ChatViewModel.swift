@@ -1,8 +1,10 @@
 import Foundation
 import SwiftUI
+import AVFoundation
+import PhotosUI
 
 /// ViewModel for the Chat module. Manages messages, WebSocket communication,
-/// and chat state.
+/// image/voice input, and chat state.
 @Observable
 final class ChatViewModel {
     // MARK: - State
@@ -14,11 +16,29 @@ final class ChatViewModel {
     var connectionState: WebSocketClient.ConnectionState = .disconnected
     var connectionError: String?
 
+    /// Trigger incremented on every message mutation to force view refresh.
+    var messageUpdateTrigger: Int = 0
+
+    // MARK: - Image Picker State
+
+    var showImagePicker: Bool = false
+    var showCamera: Bool = false
+    var selectedPhotoItem: PhotosPickerItem?
+
+    // MARK: - Voice Recording State
+
+    var isRecording: Bool = false
+    var recordingDuration: TimeInterval = 0
+
     // MARK: - Private
 
     private let webSocket = WebSocketClient()
     private var currentStreamingMessageId: String?
     private var serverURL: String?
+    private var audioRecorder: AVAudioRecorder?
+    private var recordingURL: URL?
+    private var recordingTimer: Timer?
+    private var recordingStartTime: Date?
 
     // MARK: - Init
 
@@ -52,7 +72,7 @@ final class ChatViewModel {
         guard !text.isEmpty else { return }
 
         let userMessage = ChatMessage.user(text)
-        messages.append(userMessage)
+        appendMessage(userMessage)
         inputText = ""
         isTyping = true
 
@@ -65,20 +85,162 @@ final class ChatViewModel {
                 await MainActor.run {
                     self.isTyping = false
                     let errorMessage = ChatMessage.assistant("Failed to send message: \(error.localizedDescription)")
-                    self.messages.append(errorMessage)
+                    self.appendMessage(errorMessage)
                     self.saveMessages()
                 }
             }
         }
     }
 
+    /// Send an image message from photo picker data.
+    func sendImageMessage(data: Data) {
+        let base64 = data.base64EncodedString()
+        let userMessage = ChatMessage.userImage(base64: base64)
+        appendMessage(userMessage)
+        isTyping = true
+
+        let messageId = userMessage.id
+
+        Task {
+            do {
+                try await webSocket.sendImageMessage(id: messageId, imageBase64: base64)
+            } catch {
+                await MainActor.run {
+                    self.isTyping = false
+                    let errorMessage = ChatMessage.assistant("Failed to send image: \(error.localizedDescription)")
+                    self.appendMessage(errorMessage)
+                    self.saveMessages()
+                }
+            }
+        }
+    }
+
+    /// Handle photo picker selection.
+    func handlePhotoSelection(_ item: PhotosPickerItem?) {
+        guard let item else { return }
+        Task {
+            if let data = try? await item.loadTransferable(type: Data.self) {
+                await MainActor.run {
+                    self.sendImageMessage(data: data)
+                }
+            }
+        }
+    }
+
+    // MARK: - Voice Recording
+
+    /// Start recording voice.
+    func startRecording() {
+        let session = AVAudioSession.sharedInstance()
+        do {
+            try session.setCategory(.playAndRecord, mode: .default)
+            try session.setActive(true)
+        } catch {
+            return
+        }
+
+        let tempDir = FileManager.default.temporaryDirectory
+        let fileName = "voice_\(UUID().uuidString).m4a"
+        let url = tempDir.appendingPathComponent(fileName)
+        recordingURL = url
+
+        let settings: [String: Any] = [
+            AVFormatIDKey: Int(kAudioFormatMPEG4AAC),
+            AVSampleRateKey: 44100,
+            AVNumberOfChannelsKey: 1,
+            AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue
+        ]
+
+        do {
+            audioRecorder = try AVAudioRecorder(url: url, settings: settings)
+            audioRecorder?.record()
+            isRecording = true
+            recordingStartTime = Date()
+            recordingDuration = 0
+
+            // Update duration periodically on the main actor
+            let timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+                guard let self, let start = self.recordingStartTime else { return }
+                self.recordingDuration = Date().timeIntervalSince(start)
+            }
+            recordingTimer = timer
+        } catch {
+            // Recording failed silently
+        }
+    }
+
+    /// Stop recording and send the voice message.
+    func stopRecording() {
+        recordingTimer?.invalidate()
+        recordingTimer = nil
+        audioRecorder?.stop()
+        isRecording = false
+
+        guard let url = recordingURL,
+              let data = try? Data(contentsOf: url) else {
+            return
+        }
+
+        let duration = recordingDuration
+        guard duration >= 0.5 else {
+            // Too short, discard
+            recordingDuration = 0
+            return
+        }
+
+        let base64 = data.base64EncodedString()
+        let userMessage = ChatMessage.userVoice(base64: base64, duration: duration)
+        appendMessage(userMessage)
+        isTyping = true
+        recordingDuration = 0
+
+        let messageId = userMessage.id
+
+        Task {
+            do {
+                try await webSocket.sendVoiceMessage(id: messageId, audioBase64: base64, duration: duration)
+            } catch {
+                await MainActor.run {
+                    self.isTyping = false
+                    let errorMessage = ChatMessage.assistant("Failed to send voice message: \(error.localizedDescription)")
+                    self.appendMessage(errorMessage)
+                    self.saveMessages()
+                }
+            }
+        }
+
+        // Clean up temp file
+        try? FileManager.default.removeItem(at: url)
+    }
+
+    /// Cancel recording without sending.
+    func cancelRecording() {
+        recordingTimer?.invalidate()
+        recordingTimer = nil
+        audioRecorder?.stop()
+        isRecording = false
+        recordingDuration = 0
+
+        if let url = recordingURL {
+            try? FileManager.default.removeItem(at: url)
+        }
+    }
+
     /// Clear all chat history.
     func clearHistory() {
         messages.removeAll()
+        messageUpdateTrigger += 1
         ChatMessage.clearSaved()
     }
 
     // MARK: - Private
+
+    /// Append a message and notify the view.
+    private func appendMessage(_ message: ChatMessage) {
+        messages.append(message)
+        messageUpdateTrigger += 1
+        saveMessages()
+    }
 
     private func setupWebSocketCallbacks() {
         webSocket.onConnectionChange = { [weak self] connected in
@@ -114,8 +276,7 @@ final class ChatViewModel {
             isTyping = false
             if let errorText = message.message {
                 let errorMessage = ChatMessage.assistant("Error: \(errorText)")
-                messages.append(errorMessage)
-                saveMessages()
+                appendMessage(errorMessage)
             }
         default:
             break
@@ -128,7 +289,7 @@ final class ChatViewModel {
         let isStreaming = message.streaming ?? false
 
         if let existingIndex = messages.firstIndex(where: { $0.id == id && $0.role == .assistant }) {
-            // Update existing streaming message
+            // Update existing streaming message in place
             messages[existingIndex] = ChatMessage(
                 id: id,
                 content: content,
@@ -136,10 +297,13 @@ final class ChatViewModel {
                 timestamp: messages[existingIndex].timestamp,
                 isStreaming: isStreaming
             )
+            // Force view update for streaming content changes
+            messageUpdateTrigger += 1
         } else {
-            // New assistant message
+            // New assistant message — always appended at the end
             let assistantMessage = ChatMessage.assistant(content, id: id, isStreaming: isStreaming)
             messages.append(assistantMessage)
+            messageUpdateTrigger += 1
         }
 
         if !isStreaming {
