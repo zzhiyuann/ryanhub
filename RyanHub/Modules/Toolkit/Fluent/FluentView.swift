@@ -97,12 +97,9 @@ struct FluentView: View {
     private var dashboardContent: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: HubLayout.sectionSpacing) {
-                // Header
-                dashboardHeader
-                    .padding(.top, 8)
-
-                // Daily goal ring
+                // Daily goal ring (with streak badge)
                 dailyGoalCard
+                    .padding(.top, 8)
 
                 // Word of the day
                 if let word = viewModel.wordOfTheDay {
@@ -117,52 +114,6 @@ struct FluentView: View {
             }
             .padding(.horizontal, HubLayout.standardPadding)
             .padding(.bottom, HubLayout.sectionSpacing)
-        }
-    }
-
-    // MARK: - Dashboard Header
-
-    private var dashboardHeader: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Fluent")
-                    .font(.hubTitle)
-                    .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
-
-                Text(greetingText)
-                    .font(.hubBody)
-                    .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
-            }
-
-            Spacer()
-
-            // Streak badge
-            if viewModel.progress.currentStreak > 0 {
-                HStack(spacing: 4) {
-                    Image(systemName: "flame.fill")
-                        .foregroundStyle(Color.hubAccentRed)
-                    Text("\(viewModel.progress.currentStreak)")
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(
-                    Capsule()
-                        .fill(AdaptiveColors.surfaceSecondary(for: colorScheme))
-                )
-            }
-        }
-    }
-
-    private var greetingText: String {
-        let hour = Calendar.current.component(.hour, from: Date())
-        if hour < 12 {
-            return "Good morning! Ready to learn?"
-        } else if hour < 18 {
-            return "Good afternoon! Time to practice."
-        } else {
-            return "Good evening! Let's review."
         }
     }
 
@@ -201,9 +152,31 @@ struct FluentView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Daily Goal")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                    HStack {
+                        Text("Daily Goal")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+
+                        Spacer()
+
+                        // Streak badge (compact, top-right of card)
+                        if viewModel.progress.currentStreak > 0 {
+                            HStack(spacing: 4) {
+                                Image(systemName: "flame.fill")
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(Color.hubAccentRed)
+                                Text("\(viewModel.progress.currentStreak)")
+                                    .font(.system(size: 13, weight: .bold))
+                                    .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(
+                                Capsule()
+                                    .fill(AdaptiveColors.surfaceSecondary(for: colorScheme))
+                            )
+                        }
+                    }
 
                     Text("\(viewModel.dueCardCount) cards due for review")
                         .font(.system(size: 13, weight: .regular))
@@ -225,7 +198,7 @@ struct FluentView: View {
                     }
                 }
 
-                Spacer()
+                Spacer(minLength: 0)
             }
         }
     }

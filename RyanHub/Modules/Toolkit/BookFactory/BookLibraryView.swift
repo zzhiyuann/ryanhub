@@ -24,6 +24,7 @@ struct BookLibraryView: View {
             }
             .background(AdaptiveColors.background(for: colorScheme))
             .navigationTitle("Library")
+            .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $vm.search, prompt: "Search books...")
             .refreshable {
                 await vm.loadBooks()

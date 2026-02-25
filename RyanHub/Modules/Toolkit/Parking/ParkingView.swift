@@ -4,7 +4,7 @@ import SwiftUI
 
 /// Main parking management view.
 /// Shows today's status with a progress ring, interactive calendar picker,
-/// cost tracker, quick actions, smart suggestions, and skip history.
+/// cost tracker, smart suggestions, and skip history.
 struct ParkingView: View {
     @Environment(\.colorScheme) private var colorScheme
     @State private var viewModel = ParkingViewModel()
@@ -15,7 +15,6 @@ struct ParkingView: View {
             VStack(spacing: HubLayout.sectionSpacing) {
                 statusAndStatsSection
                 smartSuggestionSection
-                quickActionsSection
                 calendarPickerSection
                 savingsSection
                 upcomingSkipsSection
@@ -194,120 +193,6 @@ struct ParkingView: View {
                         )
                 )
             }
-        }
-    }
-
-    // MARK: - Quick Actions
-
-    private var quickActionsSection: some View {
-        VStack(alignment: .leading, spacing: HubLayout.itemSpacing) {
-            SectionHeader(title: "Quick Actions")
-
-            HStack(spacing: HubLayout.itemSpacing) {
-                quickActionButton(
-                    title: "Skip Today",
-                    icon: "calendar.badge.minus",
-                    color: .hubAccentYellow,
-                    disabled: !viewModel.isTodayWeekday
-                ) {
-                    viewModel.skipToday()
-                }
-
-                quickActionButton(
-                    title: "Skip Tomorrow",
-                    icon: "arrow.right.circle",
-                    color: .hubAccentYellow,
-                    disabled: !viewModel.isTomorrowWeekday
-                ) {
-                    viewModel.skipTomorrow()
-                }
-            }
-
-            quickActionWideButton(
-                title: "Skip Next Week (Mon-Fri)",
-                icon: "calendar.badge.exclamationmark",
-                color: .hubAccentRed
-            ) {
-                viewModel.skipNextWeek()
-            }
-        }
-    }
-
-    private func quickActionButton(
-        title: String,
-        icon: String,
-        color: Color,
-        disabled: Bool = false,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            VStack(spacing: 8) {
-                Image(systemName: icon)
-                    .font(.system(size: 24, weight: .medium))
-                    .foregroundStyle(disabled ? AdaptiveColors.textSecondary(for: colorScheme) : color)
-
-                Text(title)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(disabled
-                        ? AdaptiveColors.textSecondary(for: colorScheme)
-                        : AdaptiveColors.textPrimary(for: colorScheme))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 16)
-            .padding(.horizontal, 12)
-            .background(
-                RoundedRectangle(cornerRadius: HubLayout.cardCornerRadius)
-                    .fill(AdaptiveColors.surface(for: colorScheme))
-                    .shadow(
-                        color: colorScheme == .dark
-                            ? Color.black.opacity(0.3)
-                            : Color.black.opacity(0.06),
-                        radius: 8,
-                        x: 0,
-                        y: 2
-                    )
-            )
-        }
-        .disabled(disabled)
-    }
-
-    private func quickActionWideButton(
-        title: String,
-        icon: String,
-        color: Color,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            HStack(spacing: 12) {
-                Image(systemName: icon)
-                    .font(.system(size: 20, weight: .medium))
-                    .foregroundStyle(color)
-
-                Text(title)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
-
-                Spacer()
-
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
-            }
-            .padding(HubLayout.cardInnerPadding)
-            .background(
-                RoundedRectangle(cornerRadius: HubLayout.cardCornerRadius)
-                    .fill(AdaptiveColors.surface(for: colorScheme))
-                    .shadow(
-                        color: colorScheme == .dark
-                            ? Color.black.opacity(0.3)
-                            : Color.black.opacity(0.06),
-                        radius: 8,
-                        x: 0,
-                        y: 2
-                    )
-            )
         }
     }
 
