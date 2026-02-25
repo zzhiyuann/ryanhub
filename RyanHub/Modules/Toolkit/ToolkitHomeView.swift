@@ -2,10 +2,212 @@ import SwiftUI
 
 // MARK: - Toolkit Home View
 
-/// Main toolkit grid displaying plugin cards in a 2-column layout.
-/// Each card navigates to a specific plugin module.
+/// Main toolkit view with a macOS-style menu bar at the top.
+/// The menu bar provides instant tool switching, while the content area below
+/// displays either the home grid ("desktop") or the selected tool's full view.
+/// This creates a "world within a world" experience inside the Toolkit tab.
 struct ToolkitHomeView: View {
     @Environment(\.colorScheme) private var colorScheme
+    @State private var selectedPlugin: ToolkitPlugin?
+    @State private var menuBarAppeared = false
+    @Namespace private var menuAnimation
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // macOS-style menu bar — always visible at top
+            ToolkitMenuBar(
+                selectedPlugin: $selectedPlugin,
+                namespace: menuAnimation,
+                appeared: menuBarAppeared
+            )
+
+            // Content area: selected tool or home grid
+            ZStack {
+                AdaptiveColors.background(for: colorScheme)
+                    .ignoresSafeArea(edges: .bottom)
+
+                if let plugin = selectedPlugin {
+                    toolContent(for: plugin)
+                        .id(plugin)
+                        .transition(.asymmetric(
+                            insertion: .opacity.combined(with: .move(edge: .trailing)),
+                            removal: .opacity.combined(with: .move(edge: .leading))
+                        ))
+                } else {
+                    ToolkitDesktopGrid(selectedPlugin: $selectedPlugin)
+                        .transition(.opacity.combined(with: .scale(scale: 0.98)))
+                }
+            }
+            .animation(.easeInOut(duration: 0.3), value: selectedPlugin)
+        }
+        .background(AdaptiveColors.background(for: colorScheme))
+        .onAppear {
+            withAnimation(.easeOut(duration: 0.5).delay(0.1)) {
+                menuBarAppeared = true
+            }
+        }
+    }
+
+    // MARK: - Tool Content
+
+    /// Wraps each tool view in a NavigationStack so that internal navigation
+    /// (e.g., NavigationLink, .navigationDestination) still works correctly.
+    @ViewBuilder
+    private func toolContent(for plugin: ToolkitPlugin) -> some View {
+        switch plugin {
+        case .bookFactory:
+            BookFactoryView()
+        case .fluent:
+            NavigationStack {
+                FluentView()
+            }
+        case .parking:
+            NavigationStack {
+                ParkingView()
+            }
+        case .calendar:
+            NavigationStack {
+                CalendarPluginView()
+            }
+        case .health:
+            NavigationStack {
+                HealthView()
+            }
+        }
+    }
+}
+
+// MARK: - Menu Bar
+
+/// A macOS-style menu bar that sits at the top of the Toolkit tab.
+/// Features: frosted glass background, horizontally scrollable tool items,
+/// a home/grid button on the left, and smooth selection indicators.
+struct ToolkitMenuBar: View {
+    @Environment(\.colorScheme) private var colorScheme
+    @Binding var selectedPlugin: ToolkitPlugin?
+    var namespace: Namespace.ID
+    var appeared: Bool
+
+    /// Height of the menu bar content area (excluding divider).
+    private let barHeight: CGFloat = 44
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 0) {
+                // Home / grid icon on the left
+                homeButton
+                    .padding(.leading, 12)
+
+                // Thin vertical divider
+                divider
+                    .padding(.horizontal, 8)
+
+                // Scrollable tool items
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 4) {
+                        ForEach(ToolkitPlugin.allCases) { plugin in
+                            menuItem(for: plugin)
+                        }
+                    }
+                    .padding(.trailing, 12)
+                }
+            }
+            .frame(height: barHeight)
+            .background(.ultraThinMaterial)
+            .overlay(alignment: .bottom) {
+                // Subtle bottom border
+                AdaptiveColors.border(for: colorScheme)
+                    .frame(height: 0.5)
+            }
+        }
+        .opacity(appeared ? 1 : 0)
+        .offset(y: appeared ? 0 : -10)
+    }
+
+    // MARK: - Home Button
+
+    private var homeButton: some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.25)) {
+                selectedPlugin = nil
+            }
+        } label: {
+            Image(systemName: "square.grid.2x2")
+                .font(.system(size: 16, weight: .medium))
+                .foregroundStyle(
+                    selectedPlugin == nil
+                        ? Color.hubPrimary
+                        : AdaptiveColors.textSecondary(for: colorScheme)
+                )
+                .frame(width: 36, height: 36)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(
+                            selectedPlugin == nil
+                                ? Color.hubPrimary.opacity(0.12)
+                                : Color.clear
+                        )
+                )
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - Vertical Divider
+
+    private var divider: some View {
+        Rectangle()
+            .fill(AdaptiveColors.border(for: colorScheme))
+            .frame(width: 1, height: 24)
+    }
+
+    // MARK: - Menu Item
+
+    private func menuItem(for plugin: ToolkitPlugin) -> some View {
+        let isSelected = selectedPlugin == plugin
+
+        return Button {
+            withAnimation(.easeInOut(duration: 0.25)) {
+                selectedPlugin = plugin
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: plugin.icon)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(
+                        isSelected ? plugin.iconColor : AdaptiveColors.textSecondary(for: colorScheme)
+                    )
+
+                Text(plugin.shortName)
+                    .font(.system(size: 13, weight: isSelected ? .semibold : .medium))
+                    .foregroundStyle(
+                        isSelected
+                            ? AdaptiveColors.textPrimary(for: colorScheme)
+                            : AdaptiveColors.textSecondary(for: colorScheme)
+                    )
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .background(
+                Group {
+                    if isSelected {
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(plugin.iconColor.opacity(0.12))
+                            .matchedGeometryEffect(id: "menuHighlight", in: namespace)
+                    }
+                }
+            )
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Desktop Grid
+
+/// The "desktop" view showing all toolkit plugins in a 2-column card grid.
+/// Tapping a card selects it in the menu bar and opens it in-place.
+struct ToolkitDesktopGrid: View {
+    @Environment(\.colorScheme) private var colorScheme
+    @Binding var selectedPlugin: ToolkitPlugin?
 
     private let columns = [
         GridItem(.flexible(), spacing: HubLayout.itemSpacing),
@@ -13,37 +215,58 @@ struct ToolkitHomeView: View {
     ]
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
+        ScrollView {
+            VStack(alignment: .leading, spacing: HubLayout.sectionSpacing) {
+                // Title header
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(L10n.toolkitTitle)
+                        .font(.hubTitle)
+                        .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+
+                    Text("Your personal toolkit")
+                        .font(.hubBody)
+                        .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                }
+                .padding(.top, 8)
+
+                // Plugin grid
                 LazyVGrid(columns: columns, spacing: HubLayout.itemSpacing) {
                     ForEach(ToolkitPlugin.allCases) { plugin in
-                        NavigationLink(destination: plugin.destination) {
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.25)) {
+                                selectedPlugin = plugin
+                            }
+                        } label: {
                             ToolkitPluginCard(plugin: plugin)
                         }
                         .buttonStyle(.plain)
                     }
                 }
-                .padding(HubLayout.standardPadding)
             }
-            .background(AdaptiveColors.background(for: colorScheme))
-            .navigationTitle(L10n.toolkitTitle)
+            .padding(HubLayout.standardPadding)
         }
     }
 }
 
 // MARK: - Plugin Card
 
-/// A single plugin card in the toolkit grid.
+/// A single plugin card in the toolkit desktop grid.
 private struct ToolkitPluginCard: View {
     @Environment(\.colorScheme) private var colorScheme
     let plugin: ToolkitPlugin
 
     var body: some View {
         VStack(spacing: 12) {
-            Image(systemName: plugin.icon)
-                .font(.system(size: 32, weight: .medium))
-                .foregroundStyle(plugin.iconColor)
-                .frame(height: 40)
+            // Icon with tinted background circle
+            ZStack {
+                Circle()
+                    .fill(plugin.iconColor.opacity(0.12))
+                    .frame(width: 52, height: 52)
+
+                Image(systemName: plugin.icon)
+                    .font(.system(size: 24, weight: .medium))
+                    .foregroundStyle(plugin.iconColor)
+            }
 
             VStack(spacing: 4) {
                 Text(plugin.title)
@@ -97,6 +320,17 @@ enum ToolkitPlugin: String, CaseIterable, Identifiable {
         }
     }
 
+    /// Short name for the menu bar (compact).
+    var shortName: String {
+        switch self {
+        case .bookFactory: return "Books"
+        case .fluent: return "Fluent"
+        case .parking: return "Parking"
+        case .calendar: return "Calendar"
+        case .health: return "Health"
+        }
+    }
+
     var subtitle: String {
         switch self {
         case .bookFactory: return L10n.toolkitBookFactoryDesc
@@ -124,17 +358,6 @@ enum ToolkitPlugin: String, CaseIterable, Identifiable {
         case .parking: return .hubAccentGreen
         case .calendar: return .hubAccentYellow
         case .health: return .hubAccentRed
-        }
-    }
-
-    @ViewBuilder
-    var destination: some View {
-        switch self {
-        case .bookFactory: BookFactoryView()
-        case .fluent: FluentView()
-        case .parking: ParkingView()
-        case .calendar: CalendarPluginView()
-        case .health: HealthView()
         }
     }
 }
