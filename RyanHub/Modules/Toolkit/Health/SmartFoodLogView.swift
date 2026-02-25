@@ -6,6 +6,7 @@ import PhotosUI
 /// AI-powered food logging — type what you ate in natural language or snap a photo.
 /// Claude analyzes the food and estimates calories + macros automatically.
 struct SmartFoodLogView: View {
+    @Environment(AppState.self) private var appState
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dismiss) private var dismiss
     let viewModel: HealthViewModel
@@ -52,7 +53,10 @@ struct SmartFoodLogView: View {
                         .foregroundStyle(Color.hubPrimary)
                 }
             }
-            .onAppear { isInputFocused = true }
+            .onAppear {
+                isInputFocused = true
+                analysisService.updateBaseURL(appState.foodAnalysisURL)
+            }
             .onChange(of: selectedPhoto) { _, newValue in
                 Task { await loadPhoto(newValue) }
             }

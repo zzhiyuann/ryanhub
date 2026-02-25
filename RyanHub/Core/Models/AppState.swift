@@ -6,7 +6,39 @@ final class AppState {
     // MARK: - Server Configuration
 
     var serverURL: String {
-        didSet { UserDefaults.standard.set(serverURL, forKey: Keys.serverURL) }
+        didSet {
+            UserDefaults.standard.set(serverURL, forKey: Keys.serverURL)
+            // Auto-update food analysis URL when server host changes (unless user overrode it)
+            if !isCustomFoodAnalysisURL {
+                foodAnalysisURL = Self.deriveFoodAnalysisURL(from: serverURL)
+            }
+        }
+    }
+
+    /// Base URL for the food analysis bridge server.
+    /// Defaults to the same host as the WebSocket server on port 18790.
+    var foodAnalysisURL: String {
+        didSet { UserDefaults.standard.set(foodAnalysisURL, forKey: Keys.foodAnalysisURL) }
+    }
+
+    /// Whether the user has manually customized the food analysis URL.
+    var isCustomFoodAnalysisURL: Bool {
+        didSet { UserDefaults.standard.set(isCustomFoodAnalysisURL, forKey: Keys.isCustomFoodAnalysisURL) }
+    }
+
+    /// Default WebSocket server URL.
+    static let defaultServerURL = "ws://localhost:8765"
+
+    /// Default food analysis bridge URL.
+    static let defaultFoodAnalysisURL = "http://localhost:18790"
+
+    /// Derive the food analysis URL from the WebSocket server URL.
+    /// Extracts the host from the WS URL and uses port 18790 with http://.
+    static func deriveFoodAnalysisURL(from serverURL: String) -> String {
+        guard let url = URL(string: serverURL), let host = url.host else {
+            return defaultFoodAnalysisURL
+        }
+        return "http://\(host):18790"
     }
 
     // MARK: - Appearance
@@ -44,17 +76,30 @@ final class AppState {
     // MARK: - Init
 
     init() {
-        self.serverURL = UserDefaults.standard.string(forKey: Keys.serverURL) ?? "ws://localhost:8765"
+        let savedServerURL = UserDefaults.standard.string(forKey: Keys.serverURL) ?? Self.defaultServerURL
+        self.serverURL = savedServerURL
+        self.isCustomFoodAnalysisURL = UserDefaults.standard.bool(forKey: Keys.isCustomFoodAnalysisURL)
+        self.foodAnalysisURL = UserDefaults.standard.string(forKey: Keys.foodAnalysisURL)
+            ?? Self.deriveFoodAnalysisURL(from: savedServerURL)
         let rawAppearance = UserDefaults.standard.string(forKey: Keys.appearanceMode) ?? AppearanceMode.system.rawValue
         self.appearanceMode = AppearanceMode(rawValue: rawAppearance) ?? .system
         let rawLanguage = UserDefaults.standard.string(forKey: Keys.language) ?? AppLanguage.english.rawValue
         self.language = AppLanguage(rawValue: rawLanguage) ?? .english
     }
 
+    /// Reset all server URLs to defaults.
+    func resetServerURLs() {
+        serverURL = Self.defaultServerURL
+        foodAnalysisURL = Self.defaultFoodAnalysisURL
+        isCustomFoodAnalysisURL = false
+    }
+
     // MARK: - Keys
 
     private enum Keys {
         static let serverURL = "ryanhub_server_url"
+        static let foodAnalysisURL = "ryanhub_food_analysis_url"
+        static let isCustomFoodAnalysisURL = "ryanhub_is_custom_food_analysis_url"
         static let appearanceMode = "ryanhub_appearance_mode"
         static let language = "ryanhub_language"
     }

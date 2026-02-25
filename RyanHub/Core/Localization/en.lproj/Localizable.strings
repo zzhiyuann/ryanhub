@@ -35,6 +35,10 @@
 "settings_appearance_system" = "System";
 "settings_appearance_light" = "Light";
 "settings_appearance_dark" = "Dark";
+"settings_reset_to_default" = "Reset to Default";
+"settings_food_analysis" = "Food Analysis Server";
+"settings_food_analysis_auto_sync" = "Auto-synced with WebSocket server host";
+"settings_food_analysis_sync_with_server" = "Sync with server host";
 "settings_about" = "About";
 "settings_version" = "Version";
 "settings_build" = "Build";

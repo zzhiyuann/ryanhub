@@ -21,16 +21,21 @@ targets:
       - path: RyanHub
         excludes:
           - "**/.DS_Store"
+    info:
+      path: RyanHub/Info.plist
+      properties:
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        LSApplicationCategoryType: public.app-category.productivity
+        NSMicrophoneUsageDescription: "Ryan Hub needs microphone access to record voice messages."
+        NSCameraUsageDescription: "Ryan Hub needs camera access to capture photos for chat."
+        NSPhotoLibraryUsageDescription: "Ryan Hub needs photo library access to send images in chat."
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
     settings:
       base:
-        GENERATE_INFOPLIST_FILE: YES
-        INFOPLIST_KEY_UILaunchScreen_Generation: true
-        INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait"
-        INFOPLIST_KEY_LSApplicationCategoryType: "public.app-category.productivity"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         CODE_SIGN_IDENTITY: ""
         CODE_SIGNING_REQUIRED: "NO"
         CODE_SIGNING_ALLOWED: "NO"
-        INFOPLIST_KEY_NSMicrophoneUsageDescription: "Ryan Hub needs microphone access to record voice messages."
-        INFOPLIST_KEY_NSCameraUsageDescription: "Ryan Hub needs camera access to capture photos for chat."
-        INFOPLIST_KEY_NSPhotoLibraryUsageDescription: "Ryan Hub needs photo library access to send images in chat."

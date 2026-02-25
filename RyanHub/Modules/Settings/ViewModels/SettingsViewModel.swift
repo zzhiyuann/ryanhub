@@ -1,12 +1,14 @@
 import Foundation
 
 /// ViewModel for the Settings module.
-@Observable
+@MainActor @Observable
 final class SettingsViewModel {
     // MARK: - State
 
     var isTesting: Bool = false
     var testResultIcon: String?
+    var serverURLWarning: String?
+    var foodAnalysisURLWarning: String?
 
     // MARK: - Computed
 
@@ -21,7 +23,40 @@ final class SettingsViewModel {
     // MARK: - Public API
 
     func loadFromAppState(_ appState: AppState) {
-        // Sync any initial state if needed
+        validateServerURL(appState.serverURL)
+        validateFoodAnalysisURL(appState.foodAnalysisURL)
+    }
+
+    /// Validate WebSocket URL format and update warning message.
+    func validateServerURL(_ url: String) {
+        let trimmed = url.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            serverURLWarning = nil
+            return
+        }
+        if !trimmed.hasPrefix("ws://") && !trimmed.hasPrefix("wss://") {
+            serverURLWarning = "URL must start with ws:// or wss://"
+        } else if URL(string: trimmed) == nil {
+            serverURLWarning = "Invalid URL format"
+        } else {
+            serverURLWarning = nil
+        }
+    }
+
+    /// Validate food analysis URL format and update warning message.
+    func validateFoodAnalysisURL(_ url: String) {
+        let trimmed = url.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            foodAnalysisURLWarning = nil
+            return
+        }
+        if !trimmed.hasPrefix("http://") && !trimmed.hasPrefix("https://") {
+            foodAnalysisURLWarning = "URL must start with http:// or https://"
+        } else if URL(string: trimmed) == nil {
+            foodAnalysisURLWarning = "Invalid URL format"
+        } else {
+            foodAnalysisURLWarning = nil
+        }
     }
 
     /// Test WebSocket connection to the given URL.
@@ -33,17 +68,13 @@ final class SettingsViewModel {
         let client = WebSocketClient()
         Task {
             let success = await client.testConnection(to: url)
-            await MainActor.run {
-                self.isTesting = false
-                self.testResultIcon = success ? "checkmark.circle.fill" : "xmark.circle.fill"
+            self.isTesting = false
+            self.testResultIcon = success ? "checkmark.circle.fill" : "xmark.circle.fill"
 
-                // Reset icon after 3 seconds
-                Task {
-                    try? await Task.sleep(for: .seconds(3))
-                    await MainActor.run {
-                        self.testResultIcon = nil
-                    }
-                }
+            // Reset icon after 3 seconds
+            Task {
+                try? await Task.sleep(for: .seconds(3))
+                self.testResultIcon = nil
             }
         }
     }

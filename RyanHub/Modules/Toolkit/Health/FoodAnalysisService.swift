@@ -7,14 +7,26 @@ import UIKit
 /// that shells out to the `claude` CLI. No API key required -- uses the host Mac's
 /// Claude Code subscription.
 ///
-/// The bridge server runs at `http://localhost:18790` (see `scripts/food-analysis-server.py`).
+/// The bridge server runs at `http://localhost:18790` by default (see `scripts/food-analysis-server.py`).
+/// The base URL is configurable via `AppState.foodAnalysisURL` to support connections
+/// from real devices on the local network.
 @MainActor @Observable
 final class FoodAnalysisService {
     var isAnalyzing = false
     var analysisError: String?
 
-    /// Base URL for the local food analysis bridge server.
-    private let bridgeBaseURL = "http://localhost:18790"
+    /// Base URL for the food analysis bridge server.
+    /// Configurable so it works over local network (e.g. http://192.168.1.100:18790).
+    private var bridgeBaseURL: String
+
+    init(baseURL: String = AppState.defaultFoodAnalysisURL) {
+        self.bridgeBaseURL = baseURL
+    }
+
+    /// Update the bridge server base URL (call when AppState changes).
+    func updateBaseURL(_ url: String) {
+        bridgeBaseURL = url
+    }
 
     /// Analyze food from a text description.
     func analyzeText(_ description: String) async -> FoodAnalysisResult? {
@@ -50,7 +62,7 @@ final class FoodAnalysisService {
 
     private func callBridgeServer(body: [String: Any]) async -> FoodAnalysisResult? {
         guard let url = URL(string: "\(bridgeBaseURL)/analyze") else {
-            analysisError = "Invalid bridge server URL"
+            analysisError = "Invalid bridge server URL: \(bridgeBaseURL)"
             return nil
         }
 
@@ -84,7 +96,9 @@ final class FoodAnalysisService {
             || error.code == .networkConnectionLost
             || error.code == .timedOut
         {
-            analysisError = "Cannot reach analysis server. Make sure food-analysis-server.py is running."
+            let host = URL(string: bridgeBaseURL)?.host ?? "unknown"
+            let port = URL(string: bridgeBaseURL)?.port.map { String($0) } ?? "18790"
+            analysisError = "Cannot reach analysis server at \(host):\(port). Make sure food-analysis-server.py is running."
             return nil
         } catch is DecodingError {
             analysisError = "Failed to parse nutritional data from analysis"

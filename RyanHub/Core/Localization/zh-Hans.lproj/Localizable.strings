@@ -35,6 +35,10 @@
 "settings_appearance_system" = "跟随系统";
 "settings_appearance_light" = "浅色";
 "settings_appearance_dark" = "深色";
+"settings_reset_to_default" = "恢复默认";
+"settings_food_analysis" = "食物分析服务器";
+"settings_food_analysis_auto_sync" = "自动与 WebSocket 服务器主机同步";
+"settings_food_analysis_sync_with_server" = "与服务器主机同步";
 "settings_about" = "关于";
 "settings_version" = "版本";
 "settings_build" = "构建号";
