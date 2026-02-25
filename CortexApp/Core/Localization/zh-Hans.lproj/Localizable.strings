@@ -1,0 +1,48 @@
+/* Tabs */
+"tab_chat" = "聊天";
+"tab_toolkit" = "工具箱";
+"tab_settings" = "设置";
+
+/* Chat */
+"chat_send" = "发送";
+"chat_placeholder" = "输入消息...";
+"chat_connected" = "已连接";
+"chat_disconnected" = "未连接";
+"chat_reconnecting" = "重连中...";
+"chat_welcome_title" = "嗨！我是发财";
+"chat_welcome_message" = "你的私人AI助手。问我任何问题，或使用工具箱来完成任务。";
+
+/* Toolkit */
+"toolkit_title" = "工具箱";
+"toolkit_book_factory" = "书工厂";
+"toolkit_book_factory_desc" = "生成和阅读书籍";
+"toolkit_fluent" = "Fluent";
+"toolkit_fluent_desc" = "语言学习";
+"toolkit_parking" = "停车";
+"toolkit_parking_desc" = "ParkMobile 管理";
+"toolkit_calendar" = "日历";
+"toolkit_calendar_desc" = "日程和事件";
+"toolkit_health" = "健康";
+"toolkit_health_desc" = "追踪健康与健身";
+
+/* Settings */
+"settings_title" = "设置";
+"settings_server" = "服务器";
+"settings_server_url" = "WebSocket 地址";
+"settings_test_connection" = "测试连接";
+"settings_language" = "语言";
+"settings_appearance" = "外观";
+"settings_appearance_system" = "跟随系统";
+"settings_appearance_light" = "浅色";
+"settings_appearance_dark" = "深色";
+"settings_about" = "关于";
+"settings_version" = "版本";
+"settings_build" = "构建号";
+
+/* Common */
+"common_cancel" = "取消";
+"common_done" = "完成";
+"common_save" = "保存";
+"common_delete" = "删除";
+"common_error" = "错误";
+"common_success" = "成功";

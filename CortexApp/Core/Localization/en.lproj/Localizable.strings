@@ -1,0 +1,48 @@
+/* Tabs */
+"tab_chat" = "Chat";
+"tab_toolkit" = "Toolkit";
+"tab_settings" = "Settings";
+
+/* Chat */
+"chat_send" = "Send";
+"chat_placeholder" = "Type a message...";
+"chat_connected" = "Connected";
+"chat_disconnected" = "Disconnected";
+"chat_reconnecting" = "Reconnecting...";
+"chat_welcome_title" = "Hey there! I'm Facai";
+"chat_welcome_message" = "Your personal AI assistant. Ask me anything or use the toolkit to get things done.";
+
+/* Toolkit */
+"toolkit_title" = "Toolkit";
+"toolkit_book_factory" = "Book Factory";
+"toolkit_book_factory_desc" = "Generate and read books";
+"toolkit_fluent" = "Fluent";
+"toolkit_fluent_desc" = "Language learning";
+"toolkit_parking" = "Parking";
+"toolkit_parking_desc" = "ParkMobile management";
+"toolkit_calendar" = "Calendar";
+"toolkit_calendar_desc" = "Schedule & events";
+"toolkit_health" = "Health";
+"toolkit_health_desc" = "Track wellness & fitness";
+
+/* Settings */
+"settings_title" = "Settings";
+"settings_server" = "Server";
+"settings_server_url" = "WebSocket URL";
+"settings_test_connection" = "Test Connection";
+"settings_language" = "Language";
+"settings_appearance" = "Appearance";
+"settings_appearance_system" = "System";
+"settings_appearance_light" = "Light";
+"settings_appearance_dark" = "Dark";
+"settings_about" = "About";
+"settings_version" = "Version";
+"settings_build" = "Build";
+
+/* Common */
+"common_cancel" = "Cancel";
+"common_done" = "Done";
+"common_save" = "Save";
+"common_delete" = "Delete";
+"common_error" = "Error";
+"common_success" = "Success";
