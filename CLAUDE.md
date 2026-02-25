@@ -138,13 +138,13 @@ The Toolkit tab uses a macOS-style menu bar (not NavigationStack push/pop) for s
 ### Known Issues Backlog (from audits)
 
 **High Priority:**
-- [ ] Chat: User messages may appear to disappear (needs runtime debugging on device)
+- [x] Chat: User messages disappear — FIXED: Dispatcher echoes same ID back; user+assistant shared SwiftUI identity. Added `resp-` prefix to assistant IDs.
 - [ ] Food Analysis: JSON decoder needs `keyDecodingStrategy = .convertFromSnakeCase` (Claude Haiku may return snake_case)
 - [ ] Food Analysis: `AnalyzedFoodItem.id` uses `name` — duplicate ID collision risk
-- [ ] FluentView: NotificationCenter observers never removed (memory leak)
+- [x] FluentView: NotificationCenter observers never removed — FIXED: Rebuilt Fluent as fully native SwiftUI (no more WebView/WKWebView)
 
 **Medium Priority:**
-- [ ] ChatViewModel: Missing `@MainActor` annotation (thread safety)
+- [x] ChatViewModel: Missing `@MainActor` annotation — FIXED: Added @MainActor to ChatViewModel
 - [ ] WebSocketClient: `@Observable` mutated from non-MainActor methods
 - [ ] Voice messages: No playback (waveform is display-only)
 - [ ] ParkingViewModel: `date(bySetting:)` can cross month boundaries
