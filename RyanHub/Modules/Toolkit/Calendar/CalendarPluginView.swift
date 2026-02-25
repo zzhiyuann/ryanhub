@@ -217,7 +217,7 @@ struct CalendarPluginView: View {
     }
 
     private var formattedTomorrow: String {
-        let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: Date())!
+        let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: Date()) ?? Date()
         let formatter = DateFormatter()
         formatter.dateFormat = "EEEE, MMM d"
         return formatter.string(from: tomorrow)

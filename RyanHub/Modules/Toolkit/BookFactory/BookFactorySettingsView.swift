@@ -108,6 +108,7 @@ struct BookFactorySettingsView: View {
                 BookFactoryAPIKeySheet(
                     title: "OpenAI API Key",
                     keyName: "openai_api_key",
+                    api: api,
                     onSaved: { Task { await loadSettings() } }
                 )
             }
@@ -115,6 +116,7 @@ struct BookFactorySettingsView: View {
                 BookFactoryAPIKeySheet(
                     title: "Anthropic API Key",
                     keyName: "anthropic_api_key",
+                    api: api,
                     onSaved: { Task { await loadSettings() } }
                 )
             }
@@ -231,9 +233,9 @@ struct BookFactoryServerConfigSheet: View {
 struct BookFactoryAPIKeySheet: View {
     let title: String
     let keyName: String
+    let api: BookFactoryAPI
     let onSaved: () -> Void
 
-    @Environment(BookFactoryAPI.self) private var api
     @Environment(\.dismiss) private var dismiss
     @State private var apiKey = ""
     @State private var isSaving = false

@@ -5,6 +5,7 @@ import SwiftUI
 struct BookLibraryView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(BookFactoryViewModel.self) private var vm
+    @Environment(BookFactoryAPI.self) private var api
     @Environment(AudioPlayerViewModel.self) private var audioPlayer
     @State private var selectedBook: Book?
     @State private var audioModeBook: Book?
@@ -29,6 +30,8 @@ struct BookLibraryView: View {
             }
             .navigationDestination(item: $selectedBook) { book in
                 BookReaderView(book: book)
+                    .environment(api)
+                    .environment(audioPlayer)
             }
             .confirmationDialog(
                 "Audio Version",
@@ -240,6 +243,7 @@ struct BookCardView: View {
     let audio = AudioPlayerViewModel(api: api)
 
     BookLibraryView()
+        .environment(api)
         .environment(vm)
         .environment(audio)
 }

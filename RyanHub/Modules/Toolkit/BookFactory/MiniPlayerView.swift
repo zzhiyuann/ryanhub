@@ -78,7 +78,7 @@ struct MiniPlayerView: View {
                 player.showFullPlayer = true
             }
             .sheet(isPresented: Bindable(player).showFullPlayer) {
-                AudioPlayerView()
+                AudioPlayerView(player: player)
             }
         }
     }

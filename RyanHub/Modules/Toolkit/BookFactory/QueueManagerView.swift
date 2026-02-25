@@ -67,10 +67,10 @@ struct QueueManagerView: View {
                 await vm.loadSchedule()
             }
             .sheet(isPresented: $showAddSheet) {
-                AddTopicSheet()
+                AddTopicSheet(vm: vm)
             }
             .sheet(item: $editingTopic) { topic in
-                EditTopicSheet(topic: topic)
+                EditTopicSheet(topic: topic, vm: vm)
             }
         }
     }
@@ -247,7 +247,7 @@ struct QueueManagerView: View {
 
 struct AddTopicSheet: View {
     @Environment(\.colorScheme) private var colorScheme
-    @Environment(QueueViewModel.self) private var vm
+    let vm: QueueViewModel
     @Environment(\.dismiss) private var dismiss
     @State private var title = ""
     @State private var tier = ""
@@ -306,17 +306,18 @@ struct AddTopicSheet: View {
 
 struct EditTopicSheet: View {
     let topic: QueueTopic
+    let vm: QueueViewModel
 
     @Environment(\.colorScheme) private var colorScheme
-    @Environment(QueueViewModel.self) private var vm
     @Environment(\.dismiss) private var dismiss
     @State private var title: String
     @State private var tier: String
     @State private var description: String
     @State private var status: String
 
-    init(topic: QueueTopic) {
+    init(topic: QueueTopic, vm: QueueViewModel) {
         self.topic = topic
+        self.vm = vm
         _title = State(initialValue: topic.title)
         _tier = State(initialValue: topic.tier ?? "")
         _description = State(initialValue: topic.description ?? "")

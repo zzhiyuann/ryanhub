@@ -304,11 +304,10 @@ struct ParkingView: View {
             )
             .padding(.bottom, 20)
             .transition(.move(edge: .bottom).combined(with: .opacity))
-            .onAppear {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-                    withAnimation(.easeInOut(duration: 0.3)) {
-                        viewModel.showConfirmation = false
-                    }
+            .task {
+                try? await Task.sleep(for: .seconds(2))
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    viewModel.showConfirmation = false
                 }
             }
     }

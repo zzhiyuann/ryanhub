@@ -11,12 +11,14 @@ final class ChatViewModel {
     var inputText: String = ""
     var isTyping: Bool = false
     var isConnected: Bool = false
+    var connectionState: WebSocketClient.ConnectionState = .disconnected
     var connectionError: String?
 
     // MARK: - Private
 
     private let webSocket = WebSocketClient()
     private var currentStreamingMessageId: String?
+    private var serverURL: String?
 
     // MARK: - Init
 
@@ -29,12 +31,19 @@ final class ChatViewModel {
 
     /// Connect to the Dispatcher WebSocket.
     func connect(to url: String) {
+        serverURL = url
         webSocket.connect(to: url)
     }
 
     /// Disconnect from the Dispatcher.
     func disconnect() {
         webSocket.disconnect()
+    }
+
+    /// Retry connection to the Dispatcher.
+    func retry() {
+        guard let url = serverURL else { return }
+        webSocket.connect(to: url)
     }
 
     /// Send the current input text as a message.
@@ -74,17 +83,21 @@ final class ChatViewModel {
     private func setupWebSocketCallbacks() {
         webSocket.onConnectionChange = { [weak self] connected in
             Task { @MainActor in
-                self?.isConnected = connected
+                guard let self else { return }
+                self.isConnected = connected
+                self.connectionState = self.webSocket.connectionState
                 if !connected {
-                    self?.connectionError = self?.webSocket.lastError
+                    self.connectionError = self.webSocket.lastError
                 } else {
-                    self?.connectionError = nil
+                    self.connectionError = nil
                 }
             }
         }
 
         webSocket.onMessage = { [weak self] message in
-            self?.handleDispatcherMessage(message)
+            Task { @MainActor in
+                self?.handleDispatcherMessage(message)
+            }
         }
     }
 

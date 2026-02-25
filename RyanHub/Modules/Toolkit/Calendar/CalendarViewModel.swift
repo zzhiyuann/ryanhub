@@ -100,52 +100,57 @@ final class CalendarViewModel {
         let calendar = Calendar.current
         let today = Date()
 
+        // Helper to safely create dates
+        func safeDate(hour: Int, minute: Int, of day: Date) -> Date {
+            calendar.date(bySettingHour: hour, minute: minute, second: 0, of: day) ?? day
+        }
+
         // Today's events
         todayEvents = [
             CalendarEvent(
                 title: "Team Standup",
-                startTime: calendar.date(bySettingHour: 9, minute: 0, second: 0, of: today)!,
-                endTime: calendar.date(bySettingHour: 9, minute: 30, second: 0, of: today)!,
+                startTime: safeDate(hour: 9, minute: 0, of: today),
+                endTime: safeDate(hour: 9, minute: 30, of: today),
                 location: "Zoom",
                 calendarColor: "6366F1"
             ),
             CalendarEvent(
                 title: "Lunch with Luyuan",
-                startTime: calendar.date(bySettingHour: 12, minute: 0, second: 0, of: today)!,
-                endTime: calendar.date(bySettingHour: 13, minute: 0, second: 0, of: today)!,
+                startTime: safeDate(hour: 12, minute: 0, of: today),
+                endTime: safeDate(hour: 13, minute: 0, of: today),
                 location: "The Corner",
                 calendarColor: "22C55E"
             ),
             CalendarEvent(
                 title: "Research Seminar",
-                startTime: calendar.date(bySettingHour: 15, minute: 0, second: 0, of: today)!,
-                endTime: calendar.date(bySettingHour: 16, minute: 30, second: 0, of: today)!,
+                startTime: safeDate(hour: 15, minute: 0, of: today),
+                endTime: safeDate(hour: 16, minute: 30, of: today),
                 location: "Rice Hall 340",
                 calendarColor: "F59E0B"
             ),
         ]
 
         // Tomorrow's events
-        let tomorrow = calendar.date(byAdding: .day, value: 1, to: today)!
+        let tomorrow = calendar.date(byAdding: .day, value: 1, to: today) ?? today
         tomorrowEvents = [
             CalendarEvent(
                 title: "Advisor Meeting",
-                startTime: calendar.date(bySettingHour: 10, minute: 0, second: 0, of: tomorrow)!,
-                endTime: calendar.date(bySettingHour: 11, minute: 0, second: 0, of: tomorrow)!,
+                startTime: safeDate(hour: 10, minute: 0, of: tomorrow),
+                endTime: safeDate(hour: 11, minute: 0, of: tomorrow),
                 location: "Rice Hall 512",
                 calendarColor: "EF4444"
             ),
             CalendarEvent(
                 title: "Gym Session",
-                startTime: calendar.date(bySettingHour: 17, minute: 30, second: 0, of: tomorrow)!,
-                endTime: calendar.date(bySettingHour: 19, minute: 0, second: 0, of: tomorrow)!,
+                startTime: safeDate(hour: 17, minute: 30, of: tomorrow),
+                endTime: safeDate(hour: 19, minute: 0, of: tomorrow),
                 calendarColor: "22C55E"
             ),
         ]
 
         // This week's remaining events
-        let dayAfterTomorrow = calendar.date(byAdding: .day, value: 2, to: today)!
-        let threeDaysOut = calendar.date(byAdding: .day, value: 3, to: today)!
+        let dayAfterTomorrow = calendar.date(byAdding: .day, value: 2, to: today) ?? today
+        let threeDaysOut = calendar.date(byAdding: .day, value: 3, to: today) ?? today
         weekEvents = [
             CalendarEvent(
                 title: "Paper Deadline",
@@ -156,8 +161,8 @@ final class CalendarViewModel {
             ),
             CalendarEvent(
                 title: "Lab Meeting",
-                startTime: calendar.date(bySettingHour: 14, minute: 0, second: 0, of: threeDaysOut)!,
-                endTime: calendar.date(bySettingHour: 15, minute: 0, second: 0, of: threeDaysOut)!,
+                startTime: safeDate(hour: 14, minute: 0, of: threeDaysOut),
+                endTime: safeDate(hour: 15, minute: 0, of: threeDaysOut),
                 location: "Online",
                 calendarColor: "6366F1"
             ),

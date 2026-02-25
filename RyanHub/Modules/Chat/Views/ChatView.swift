@@ -39,11 +39,17 @@ struct ChatView: View {
                     }
                 }
             }
-            .onAppear {
-                viewModel.connect(to: appState.serverURL)
+            .task {
+                // Connect once when the view first appears.
+                // Do NOT disconnect on disappear — the connection should persist
+                // across tab switches and navigation.
+                if !viewModel.isConnected {
+                    viewModel.connect(to: appState.serverURL)
+                }
             }
-            .onDisappear {
+            .onChange(of: appState.serverURL) { _, newURL in
                 viewModel.disconnect()
+                viewModel.connect(to: newURL)
             }
             .onChange(of: viewModel.messages.count) {
                 scrollToBottom()
@@ -53,18 +59,48 @@ struct ChatView: View {
 
     // MARK: - Connection Status Bar
 
+    private var statusColor: Color {
+        switch viewModel.connectionState {
+        case .connected: return Color.hubAccentGreen
+        case .connecting, .reconnecting: return Color.hubAccentYellow
+        case .disconnected, .failed: return Color.hubAccentRed
+        }
+    }
+
+    private var statusText: String {
+        switch viewModel.connectionState {
+        case .connected: return L10n.chatConnected
+        case .connecting: return "Connecting..."
+        case .reconnecting(let attempt): return "Reconnecting (\(attempt)/5)..."
+        case .disconnected: return L10n.chatDisconnected
+        case .failed(let reason):
+            if reason.contains("Max reconnect") {
+                return "Cannot reach Dispatcher"
+            }
+            return L10n.chatDisconnected
+        }
+    }
+
     @ViewBuilder
     private var connectionStatusBar: some View {
         HStack(spacing: 6) {
             Circle()
-                .fill(viewModel.isConnected ? Color.hubAccentGreen : Color.hubAccentRed)
+                .fill(statusColor)
                 .frame(width: 8, height: 8)
 
-            Text(viewModel.isConnected ? L10n.chatConnected : L10n.chatDisconnected)
+            Text(statusText)
                 .font(.hubCaption)
                 .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
 
             Spacer()
+
+            if case .failed = viewModel.connectionState {
+                Button("Retry") {
+                    viewModel.retry()
+                }
+                .font(.hubCaption)
+                .foregroundStyle(Color.hubPrimary)
+            }
         }
         .padding(.horizontal, HubLayout.standardPadding)
         .padding(.vertical, 6)

@@ -32,7 +32,7 @@ final class ParkingViewModel {
 
     /// Whether tomorrow is a weekday.
     var isTomorrowWeekday: Bool {
-        let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: Date())!
+        guard let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: Date()) else { return false }
         return !Calendar.current.isDateInWeekend(tomorrow)
     }
 
@@ -60,7 +60,7 @@ final class ParkingViewModel {
 
     /// Skip parking for tomorrow.
     func skipTomorrow() {
-        let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: Date())!
+        guard let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: Date()) else { return }
         let tomorrowStart = Calendar.current.startOfDay(for: tomorrow)
         guard !Calendar.current.isDateInWeekend(tomorrowStart) else { return }
         guard !isDateAlreadySkipped(tomorrowStart) else { return }
@@ -77,19 +77,21 @@ final class ParkingViewModel {
         // Find next Monday
         var nextMonday = Date()
         while calendar.component(.weekday, from: nextMonday) != 2 {
-            nextMonday = calendar.date(byAdding: .day, value: 1, to: nextMonday)!
+            guard let next = calendar.date(byAdding: .day, value: 1, to: nextMonday) else { return }
+            nextMonday = next
         }
         nextMonday = calendar.startOfDay(for: nextMonday)
 
         // If today is already next week's Monday, advance one more week
         if calendar.isDate(nextMonday, inSameDayAs: Date()) {
-            nextMonday = calendar.date(byAdding: .weekOfYear, value: 1, to: nextMonday)!
+            guard let next = calendar.date(byAdding: .weekOfYear, value: 1, to: nextMonday) else { return }
+            nextMonday = next
         }
 
         sendCommand("skip parking next week")
 
         for dayOffset in 0..<5 {
-            let date = calendar.date(byAdding: .day, value: dayOffset, to: nextMonday)!
+            guard let date = calendar.date(byAdding: .day, value: dayOffset, to: nextMonday) else { continue }
             if !isDateAlreadySkipped(date) {
                 skipDates.append(ParkingSkipEntry(date: date))
             }
@@ -97,7 +99,7 @@ final class ParkingViewModel {
 
         let formatter = DateFormatter()
         formatter.dateFormat = "MMM d"
-        let endDate = calendar.date(byAdding: .day, value: 4, to: nextMonday)!
+        let endDate = calendar.date(byAdding: .day, value: 4, to: nextMonday) ?? nextMonday
         showFeedback("Skipping next week (\(formatter.string(from: nextMonday)) - \(formatter.string(from: endDate)))")
         saveSkipDates()
     }

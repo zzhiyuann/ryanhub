@@ -4,7 +4,7 @@ import SwiftUI
 /// Presented as a sheet from the mini player.
 struct AudioPlayerView: View {
     @Environment(\.colorScheme) private var colorScheme
-    @Environment(AudioPlayerViewModel.self) private var player
+    let player: AudioPlayerViewModel
     @Environment(\.dismiss) private var dismiss
 
     private let speeds: [Float] = [0.75, 1.0, 1.25, 1.5, 2.0]
