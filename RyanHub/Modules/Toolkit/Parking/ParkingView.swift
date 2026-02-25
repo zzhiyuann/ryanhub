@@ -238,7 +238,7 @@ struct ParkingView: View {
                     }
 
                     // Weekday headers (Mon-Sun)
-                    let weekdays = ["M", "T", "W", "T", "F", "S", "S"]
+                    let weekdays = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"]
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 7), spacing: 4) {
                         ForEach(weekdays.indices, id: \.self) { index in
                             Text(weekdays[index])
@@ -378,7 +378,7 @@ struct ParkingView: View {
 
                         Spacer()
 
-                        Text("$\(String(format: "%.2f", ParkingViewModel.costPerDay))/day")
+                        Text("~$\(String(format: "%.2f", ParkingViewModel.costPerDay))/day")
                             .font(.hubCaption)
                             .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
                     }

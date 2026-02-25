@@ -6,6 +6,7 @@ import SwiftUI
 /// Manages parking skip dates, calendar picker, and cost tracking.
 /// Reads/writes skip dates directly to the parkmobile-auto skip-dates.txt file.
 @Observable
+@MainActor
 final class ParkingViewModel {
     // MARK: - Constants
 
@@ -231,8 +232,8 @@ final class ParkingViewModel {
 
         var days: [Date?] = Array(repeating: nil, count: leadingEmpties)
 
-        for day in monthRange {
-            if let date = calendar.date(bySetting: .day, value: day, of: firstDay) {
+        for dayOffset in 0..<monthRange.count {
+            if let date = calendar.date(byAdding: .day, value: dayOffset, to: firstDay) {
                 days.append(calendar.startOfDay(for: date))
             }
         }
@@ -275,7 +276,7 @@ final class ParkingViewModel {
             .map(\.date)
             .sorted()
             .map { formatter.string(from: $0) }
-        let content = lines.joined(separator: "\n")
+        let content = lines.isEmpty ? "" : lines.joined(separator: "\n") + "\n"
         try? content.write(toFile: skipDatesFilePath, atomically: true, encoding: .utf8)
     }
 
@@ -310,8 +311,8 @@ final class ParkingViewModel {
         var totalWeekdays = 0
         var skippedDays = 0
 
-        for day in monthRange {
-            guard let date = calendar.date(bySetting: .day, value: day, of: firstDay) else { continue }
+        for dayOffset in 0..<monthRange.count {
+            guard let date = calendar.date(byAdding: .day, value: dayOffset, to: firstDay) else { continue }
             let dayStart = calendar.startOfDay(for: date)
             if !calendar.isDateInWeekend(dayStart) {
                 totalWeekdays += 1
