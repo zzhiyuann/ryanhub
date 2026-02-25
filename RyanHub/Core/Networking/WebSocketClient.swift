@@ -244,13 +244,51 @@ final class WebSocketClient {
 
     private func handleDisconnection(error: Error) {
         updateConnected(false)
-        lastError = error.localizedDescription
-        connectionState = .failed(error.localizedDescription)
+        let friendlyError = Self.friendlyErrorMessage(for: error, serverURL: serverURL)
+        lastError = friendlyError
+        connectionState = .failed(friendlyError)
         pingTask?.cancel()
         receiveTask?.cancel()
 
         if !isIntentionalDisconnect {
             attemptReconnect()
+        }
+    }
+
+    /// Convert low-level network errors into human-readable messages.
+    private static func friendlyErrorMessage(for error: Error, serverURL: URL?) -> String {
+        let nsError = error as NSError
+
+        if error is WebSocketError {
+            return error.localizedDescription
+        }
+
+        // URLSession / POSIX error codes
+        switch nsError.code {
+        case NSURLErrorCannotConnectToHost, -61: // ECONNREFUSED
+            let host = serverURL?.host ?? "server"
+            let port = serverURL?.port.map { String($0) } ?? "?"
+            return "Connection refused — Dispatcher not running at \(host):\(port)"
+        case NSURLErrorTimedOut:
+            return "Connection timed out"
+        case NSURLErrorNotConnectedToInternet:
+            return "No internet connection"
+        case NSURLErrorNetworkConnectionLost:
+            return "Network connection lost"
+        case NSURLErrorSecureConnectionFailed:
+            return "SSL/TLS handshake failed — try ws:// instead of wss://"
+        case NSURLErrorServerCertificateUntrusted:
+            return "Server certificate not trusted"
+        case NSURLErrorCannotFindHost:
+            let host = serverURL?.host ?? "unknown"
+            return "Cannot resolve host: \(host)"
+        default:
+            // For WebSocket close codes (reported as POSIXError or similar)
+            let desc = error.localizedDescription
+            if desc.isEmpty || desc == "The operation couldn\u{2019}t be completed." {
+                return "Connection closed unexpectedly (code \(nsError.code))"
+            }
+            return desc
         }
     }
 

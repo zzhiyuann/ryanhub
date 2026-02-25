@@ -39,6 +39,8 @@ final class ChatViewModel {
     private var recordingURL: URL?
     private var recordingTimer: Timer?
     private var recordingStartTime: Date?
+    private weak var appState: AppState?
+    private var statePollingTask: Task<Void, Never>?
 
     // MARK: - Init
 
@@ -50,20 +52,26 @@ final class ChatViewModel {
     // MARK: - Public API
 
     /// Connect to the Dispatcher WebSocket.
-    func connect(to url: String) {
+    func connect(to url: String, appState: AppState? = nil) {
         serverURL = url
+        if let appState { self.appState = appState }
         webSocket.connect(to: url)
+        startStatePolling()
     }
 
     /// Disconnect from the Dispatcher.
     func disconnect() {
+        statePollingTask?.cancel()
+        statePollingTask = nil
         webSocket.disconnect()
+        syncStateToAppState()
     }
 
     /// Retry connection to the Dispatcher.
     func retry() {
         guard let url = serverURL else { return }
         webSocket.connect(to: url)
+        startStatePolling()
     }
 
     /// Send the current input text as a message.
@@ -253,12 +261,45 @@ final class ChatViewModel {
                 } else {
                     self.connectionError = nil
                 }
+                self.syncStateToAppState()
             }
         }
 
         webSocket.onMessage = { [weak self] message in
             Task { @MainActor in
                 self?.handleDispatcherMessage(message)
+            }
+        }
+    }
+
+    /// Sync local connection state to the shared AppState so Settings and other views see it.
+    private func syncStateToAppState() {
+        appState?.isConnected = isConnected
+        appState?.connectionState = connectionState
+        appState?.connectionError = connectionError
+    }
+
+    /// Poll WebSocketClient.connectionState to catch intermediate states
+    /// (.connecting, .reconnecting) that don't trigger onConnectionChange.
+    private func startStatePolling() {
+        statePollingTask?.cancel()
+        statePollingTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(500))
+                guard !Task.isCancelled, let self else { break }
+                await MainActor.run {
+                    let wsState = self.webSocket.connectionState
+                    if self.connectionState != wsState {
+                        self.connectionState = wsState
+                        self.connectionError = self.webSocket.lastError
+                        self.syncStateToAppState()
+                    }
+                }
+                // Stop polling once connection is stable (connected or failed past max retries)
+                let currentState = await MainActor.run { self.connectionState }
+                if case .connected = currentState { break }
+                if case .failed = currentState { break }
+                if case .disconnected = currentState { break }
             }
         }
     }

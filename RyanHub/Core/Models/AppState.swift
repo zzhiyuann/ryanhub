@@ -32,6 +32,8 @@ final class AppState {
     // MARK: - Connection State
 
     var isConnected: Bool = false
+    var connectionState: WebSocketClient.ConnectionState = .disconnected
+    var connectionError: String?
 
     // MARK: - Init
 

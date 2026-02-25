@@ -66,12 +66,12 @@ struct ChatView: View {
                 // Do NOT disconnect on disappear — the connection should persist
                 // across tab switches and navigation.
                 if !viewModel.isConnected {
-                    viewModel.connect(to: appState.serverURL)
+                    viewModel.connect(to: appState.serverURL, appState: appState)
                 }
             }
             .onChange(of: appState.serverURL) { _, newURL in
                 viewModel.disconnect()
-                viewModel.connect(to: newURL)
+                viewModel.connect(to: newURL, appState: appState)
             }
             .sheet(isPresented: $showCamera) {
                 CameraImagePicker { imageData in
@@ -98,10 +98,7 @@ struct ChatView: View {
         case .reconnecting(let attempt): return "Reconnecting (\(attempt)/5)..."
         case .disconnected: return L10n.chatDisconnected
         case .failed(let reason):
-            if reason.contains("Max reconnect") {
-                return "Cannot reach Dispatcher"
-            }
-            return L10n.chatDisconnected
+            return "Failed: \(reason)"
         }
     }
 

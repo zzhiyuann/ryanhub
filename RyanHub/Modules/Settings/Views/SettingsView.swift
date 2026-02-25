@@ -43,11 +43,12 @@ struct SettingsView: View {
                         // Connection status
                         HStack(spacing: 6) {
                             Circle()
-                                .fill(appState.isConnected ? Color.hubAccentGreen : Color.hubAccentRed)
+                                .fill(settingsStatusColor)
                                 .frame(width: 8, height: 8)
-                            Text(appState.isConnected ? L10n.chatConnected : L10n.chatDisconnected)
+                            Text(settingsStatusText)
                                 .font(.hubCaption)
                                 .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                                .lineLimit(1)
                         }
 
                         Spacer()
@@ -77,9 +78,37 @@ struct SettingsView: View {
                         }
                         .disabled(viewModel.isTesting)
                     }
+
+                    // Show error detail if there is one
+                    if let error = appState.connectionError, !appState.isConnected {
+                        Text(error)
+                            .font(.system(size: 11))
+                            .foregroundStyle(Color.hubAccentRed)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
                 }
                 .frame(maxWidth: .infinity)
             }
+        }
+    }
+
+    // MARK: - Settings Status Helpers
+
+    private var settingsStatusColor: Color {
+        switch appState.connectionState {
+        case .connected: return Color.hubAccentGreen
+        case .connecting, .reconnecting: return Color.hubAccentYellow
+        case .disconnected, .failed: return Color.hubAccentRed
+        }
+    }
+
+    private var settingsStatusText: String {
+        switch appState.connectionState {
+        case .connected: return L10n.chatConnected
+        case .connecting: return "Connecting..."
+        case .reconnecting(let attempt): return "Reconnecting (\(attempt)/5)..."
+        case .disconnected: return L10n.chatDisconnected
+        case .failed(let reason): return "Failed: \(reason)"
         }
     }
 
