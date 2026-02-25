@@ -71,7 +71,7 @@ All nutritional values are in grams except calories (kcal).
 """
 
 
-def build_prompt(text: str | None, has_image: bool) -> str:
+def build_prompt(text, has_image):
     """Build the analysis prompt from text and/or image context."""
     if text and has_image:
         description = (
