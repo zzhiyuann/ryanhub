@@ -74,11 +74,17 @@ struct ChatMessage: Identifiable, Codable, Equatable {
 // MARK: - Persistence
 
 extension ChatMessage {
-    private static let storageKey = "ryanhub_chat_messages"
+    private static let legacyStorageKey = "ryanhub_chat_messages"
     private static let maxStoredMessages = 200
 
-    /// Save messages to UserDefaults.
-    static func save(_ messages: [ChatMessage]) {
+    /// Build the UserDefaults key for a given session ID.
+    static func storageKey(for sessionId: String) -> String {
+        "ryanhub_chat_messages_\(sessionId)"
+    }
+
+    /// Save messages to UserDefaults for a specific session.
+    static func save(_ messages: [ChatMessage], sessionId: String? = nil) {
+        let key = sessionId.map { storageKey(for: $0) } ?? legacyStorageKey
         // Strip image/voice base64 data from saved messages to avoid UserDefaults bloat.
         // Keep the metadata (captions, durations) but clear the large binary payloads.
         let trimmed = Array(messages.suffix(maxStoredMessages)).map { msg -> ChatMessage in
@@ -106,13 +112,14 @@ extension ChatMessage {
             return stripped
         }
         if let data = try? JSONEncoder().encode(trimmed) {
-            UserDefaults.standard.set(data, forKey: storageKey)
+            UserDefaults.standard.set(data, forKey: key)
         }
     }
 
-    /// Load messages from UserDefaults.
-    static func loadSaved() -> [ChatMessage] {
-        guard let data = UserDefaults.standard.data(forKey: storageKey),
+    /// Load messages from UserDefaults for a specific session.
+    static func loadSaved(sessionId: String? = nil) -> [ChatMessage] {
+        let key = sessionId.map { storageKey(for: $0) } ?? legacyStorageKey
+        guard let data = UserDefaults.standard.data(forKey: key),
               let messages = try? JSONDecoder().decode([ChatMessage].self, from: data) else {
             return []
         }
@@ -142,8 +149,23 @@ extension ChatMessage {
         return deduped
     }
 
-    /// Clear all saved messages.
-    static func clearSaved() {
-        UserDefaults.standard.removeObject(forKey: storageKey)
+    /// Clear saved messages for a specific session (or legacy key).
+    static func clearSaved(sessionId: String? = nil) {
+        let key = sessionId.map { storageKey(for: $0) } ?? legacyStorageKey
+        UserDefaults.standard.removeObject(forKey: key)
+    }
+
+    /// Check if legacy (pre-session) messages exist for migration.
+    static var hasLegacyMessages: Bool {
+        UserDefaults.standard.data(forKey: legacyStorageKey) != nil
+    }
+
+    /// Load and remove legacy messages (used for one-time migration).
+    static func migrateLegacyMessages() -> [ChatMessage] {
+        let messages = loadSaved(sessionId: nil)
+        if !messages.isEmpty {
+            UserDefaults.standard.removeObject(forKey: legacyStorageKey)
+        }
+        return messages
     }
 }

@@ -4,7 +4,8 @@ import AVFoundation
 import PhotosUI
 
 /// ViewModel for the Chat module. Manages messages, WebSocket communication,
-/// image/voice input, and chat state.
+/// image/voice input, chat state, and multi-session management.
+@MainActor
 @Observable
 final class ChatViewModel {
     // MARK: - State
@@ -30,6 +31,14 @@ final class ChatViewModel {
     var isRecording: Bool = false
     var recordingDuration: TimeInterval = 0
 
+    // MARK: - Session State
+
+    /// The currently active session ID.
+    var currentSessionId: String?
+
+    /// All sessions for sidebar display, sorted by lastMessageAt descending.
+    var sessions: [ChatSession] = []
+
     // MARK: - Private
 
     private let webSocket = WebSocketClient()
@@ -45,7 +54,18 @@ final class ChatViewModel {
     // MARK: - Init
 
     init() {
-        messages = ChatMessage.loadSaved()
+        migrateIfNeeded()
+        sessions = ChatSession.loadSessions()
+
+        // If there are existing sessions, load the most recent one.
+        // Otherwise, create a fresh session.
+        if let firstSession = sessions.first {
+            currentSessionId = firstSession.id
+            messages = ChatMessage.loadSaved(sessionId: firstSession.id)
+        } else {
+            createNewSession()
+        }
+
         setupWebSocketCallbacks()
     }
 
@@ -84,18 +104,19 @@ final class ChatViewModel {
         inputText = ""
         isTyping = true
 
+        // Auto-title: if this is the first user message, set the session title
+        autoTitleCurrentSession(from: text)
+
         let messageId = userMessage.id
 
         Task {
             do {
                 try await webSocket.sendMessage(id: messageId, content: text)
             } catch {
-                await MainActor.run {
-                    self.isTyping = false
-                    let errorMessage = ChatMessage.assistant("Failed to send message: \(error.localizedDescription)")
-                    self.appendMessage(errorMessage)
-                    self.saveMessages()
-                }
+                self.isTyping = false
+                let errorMessage = ChatMessage.assistant("Failed to send message: \(error.localizedDescription)")
+                self.appendMessage(errorMessage)
+                self.saveMessages()
             }
         }
     }
@@ -107,18 +128,19 @@ final class ChatViewModel {
         appendMessage(userMessage)
         isTyping = true
 
+        // Auto-title for image messages
+        autoTitleCurrentSession(from: "[Image]")
+
         let messageId = userMessage.id
 
         Task {
             do {
                 try await webSocket.sendImageMessage(id: messageId, imageBase64: base64)
             } catch {
-                await MainActor.run {
-                    self.isTyping = false
-                    let errorMessage = ChatMessage.assistant("Failed to send image: \(error.localizedDescription)")
-                    self.appendMessage(errorMessage)
-                    self.saveMessages()
-                }
+                self.isTyping = false
+                let errorMessage = ChatMessage.assistant("Failed to send image: \(error.localizedDescription)")
+                self.appendMessage(errorMessage)
+                self.saveMessages()
             }
         }
     }
@@ -128,9 +150,7 @@ final class ChatViewModel {
         guard let item else { return }
         Task {
             if let data = try? await item.loadTransferable(type: Data.self) {
-                await MainActor.run {
-                    self.sendImageMessage(data: data)
-                }
+                self.sendImageMessage(data: data)
             }
         }
     }
@@ -202,18 +222,19 @@ final class ChatViewModel {
         isTyping = true
         recordingDuration = 0
 
+        // Auto-title for voice messages
+        autoTitleCurrentSession(from: "[Voice message]")
+
         let messageId = userMessage.id
 
         Task {
             do {
                 try await webSocket.sendVoiceMessage(id: messageId, audioBase64: base64, duration: duration)
             } catch {
-                await MainActor.run {
-                    self.isTyping = false
-                    let errorMessage = ChatMessage.assistant("Failed to send voice message: \(error.localizedDescription)")
-                    self.appendMessage(errorMessage)
-                    self.saveMessages()
-                }
+                self.isTyping = false
+                let errorMessage = ChatMessage.assistant("Failed to send voice message: \(error.localizedDescription)")
+                self.appendMessage(errorMessage)
+                self.saveMessages()
             }
         }
 
@@ -234,11 +255,60 @@ final class ChatViewModel {
         }
     }
 
-    /// Clear all chat history.
+    /// Clear all chat history for the current session.
     func clearHistory() {
         messages.removeAll()
         messageUpdateTrigger += 1
-        ChatMessage.clearSaved()
+
+        if let sessionId = currentSessionId {
+            ChatMessage.clearSaved(sessionId: sessionId)
+            // Update session metadata
+            updateCurrentSession(messageCount: 0, lastPreview: "", lastTimestamp: .now)
+        }
+    }
+
+    // MARK: - Session Management
+
+    /// Create a new chat session and switch to it.
+    func createNewSession() {
+        let session = ChatSession()
+        sessions.insert(session, at: 0)
+        currentSessionId = session.id
+        messages = []
+        messageUpdateTrigger += 1
+        isTyping = false
+        currentStreamingMessageId = nil
+        pruneOldSessions()
+        ChatSession.saveSessions(sessions)
+    }
+
+    /// Switch to an existing session by ID.
+    func switchSession(_ id: String) {
+        guard id != currentSessionId else { return }
+        guard sessions.contains(where: { $0.id == id }) else { return }
+
+        currentSessionId = id
+        messages = ChatMessage.loadSaved(sessionId: id)
+        messageUpdateTrigger += 1
+        isTyping = false
+        currentStreamingMessageId = nil
+    }
+
+    /// Delete a session by ID.
+    func deleteSession(_ id: String) {
+        sessions.removeAll { $0.id == id }
+        ChatSession.deleteSession(id: id)
+
+        // If we deleted the current session, switch to the first remaining or create new
+        if id == currentSessionId {
+            if let firstSession = sessions.first {
+                switchSession(firstSession.id)
+            } else {
+                createNewSession()
+            }
+        }
+
+        ChatSession.saveSessions(sessions)
     }
 
     // MARK: - Private
@@ -248,6 +318,79 @@ final class ChatViewModel {
         messages.append(message)
         messageUpdateTrigger += 1
         saveMessages()
+    }
+
+    /// Auto-set the session title from the first user message.
+    private func autoTitleCurrentSession(from text: String) {
+        guard let sessionId = currentSessionId,
+              let index = sessions.firstIndex(where: { $0.id == sessionId }) else { return }
+
+        // Only auto-title if the session still has the default title and this is the first message
+        let userMessages = messages.filter { $0.role == .user }
+        if sessions[index].title == "New Chat" && userMessages.count <= 1 {
+            let title = String(text.prefix(50))
+            sessions[index].title = title
+            ChatSession.saveSessions(sessions)
+        }
+    }
+
+    /// Update the current session's metadata after a message change.
+    private func updateCurrentSession(messageCount: Int, lastPreview: String, lastTimestamp: Date) {
+        guard let sessionId = currentSessionId,
+              let index = sessions.firstIndex(where: { $0.id == sessionId }) else { return }
+        sessions[index].messageCount = messageCount
+        sessions[index].lastMessagePreview = lastPreview
+        sessions[index].lastMessageAt = lastTimestamp
+        // Re-sort sessions so the most recent is first
+        sessions.sort { $0.lastMessageAt > $1.lastMessageAt }
+        ChatSession.saveSessions(sessions)
+    }
+
+    /// Prune sessions beyond the max limit.
+    private func pruneOldSessions() {
+        let maxSessions = 50
+        if sessions.count > maxSessions {
+            let removed = sessions.suffix(from: maxSessions)
+            for session in removed {
+                ChatMessage.clearSaved(sessionId: session.id)
+            }
+            sessions = Array(sessions.prefix(maxSessions))
+        }
+    }
+
+    /// Migrate legacy messages (pre-session system) into a new session.
+    private func migrateIfNeeded() {
+        guard ChatMessage.hasLegacyMessages else { return }
+
+        let legacyMessages = ChatMessage.migrateLegacyMessages()
+        guard !legacyMessages.isEmpty else { return }
+
+        // Create a session from the legacy messages
+        let firstTimestamp = legacyMessages.first?.timestamp ?? .now
+        let lastTimestamp = legacyMessages.last?.timestamp ?? .now
+        let firstUserMessage = legacyMessages.first(where: { $0.role == .user })
+        let title = firstUserMessage.map { String($0.content.prefix(50)) } ?? "Imported Chat"
+        let lastPreview = legacyMessages.last.map { msg -> String in
+            let preview = msg.content
+            return String(preview.prefix(100))
+        } ?? ""
+
+        let session = ChatSession(
+            id: UUID().uuidString,
+            title: title,
+            createdAt: firstTimestamp,
+            lastMessageAt: lastTimestamp,
+            messageCount: legacyMessages.count,
+            lastMessagePreview: lastPreview
+        )
+
+        // Save messages under the new session key
+        ChatMessage.save(legacyMessages, sessionId: session.id)
+
+        // Save the session
+        var existingSessions = ChatSession.loadSessions()
+        existingSessions.insert(session, at: 0)
+        ChatSession.saveSessions(existingSessions)
     }
 
     private func setupWebSocketCallbacks() {
@@ -287,16 +430,14 @@ final class ChatViewModel {
             while !Task.isCancelled {
                 try? await Task.sleep(for: .milliseconds(500))
                 guard !Task.isCancelled, let self else { break }
-                await MainActor.run {
-                    let wsState = self.webSocket.connectionState
-                    if self.connectionState != wsState {
-                        self.connectionState = wsState
-                        self.connectionError = self.webSocket.lastError
-                        self.syncStateToAppState()
-                    }
+                let wsState = self.webSocket.connectionState
+                if self.connectionState != wsState {
+                    self.connectionState = wsState
+                    self.connectionError = self.webSocket.lastError
+                    self.syncStateToAppState()
                 }
                 // Stop polling once connection is stable (connected or failed past max retries)
-                let currentState = await MainActor.run { self.connectionState }
+                let currentState = self.connectionState
                 if case .connected = currentState { break }
                 if case .failed = currentState { break }
                 if case .disconnected = currentState { break }
@@ -363,6 +504,16 @@ final class ChatViewModel {
     }
 
     private func saveMessages() {
-        ChatMessage.save(messages)
+        ChatMessage.save(messages, sessionId: currentSessionId)
+
+        // Update session metadata
+        if let lastMessage = messages.last {
+            let preview = String(lastMessage.content.prefix(100))
+            updateCurrentSession(
+                messageCount: messages.count,
+                lastPreview: preview,
+                lastTimestamp: lastMessage.timestamp
+            )
+        }
     }
 }

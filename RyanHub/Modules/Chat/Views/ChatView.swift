@@ -3,11 +3,13 @@ import PhotosUI
 
 /// Main chat screen — the primary interaction surface for Ryan Hub.
 /// Telegram-like chat with real-time WebSocket messaging, image, and voice input.
+/// Supports multi-session chat with a sidebar for session management.
 struct ChatView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.colorScheme) private var colorScheme
     @State private var viewModel = ChatViewModel()
     @State private var showCamera = false
+    @State private var showSidebar = false
 
     var body: some View {
         NavigationStack {
@@ -45,11 +47,27 @@ struct ChatView: View {
                 )
             }
             .background(AdaptiveColors.background(for: colorScheme))
-            .navigationTitle(L10n.tabChat)
+            .navigationTitle(currentSessionTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        showSidebar = true
+                    } label: {
+                        Image(systemName: "line.3.horizontal")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                    }
+                }
+
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
+                        Button {
+                            viewModel.createNewSession()
+                        } label: {
+                            Label("New Chat", systemImage: "square.and.pencil")
+                        }
+
                         Button(role: .destructive) {
                             viewModel.clearHistory()
                         } label: {
@@ -78,7 +96,35 @@ struct ChatView: View {
                     viewModel.sendImageMessage(data: imageData)
                 }
             }
+            .sheet(isPresented: $showSidebar) {
+                ChatSidebarView(
+                    sessions: viewModel.sessions,
+                    currentSessionId: viewModel.currentSessionId,
+                    onSelectSession: { id in
+                        viewModel.switchSession(id)
+                    },
+                    onNewChat: {
+                        viewModel.createNewSession()
+                    },
+                    onDeleteSession: { id in
+                        viewModel.deleteSession(id)
+                    }
+                )
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+            }
         }
+    }
+
+    // MARK: - Session Title
+
+    private var currentSessionTitle: String {
+        if let sessionId = viewModel.currentSessionId,
+           let session = viewModel.sessions.first(where: { $0.id == sessionId }),
+           session.title != "New Chat" {
+            return session.title
+        }
+        return L10n.tabChat
     }
 
     // MARK: - Connection Status Bar
