@@ -3,8 +3,8 @@ import SwiftUI
 
 // MARK: - Parking View Model
 
-/// Manages parking skip dates, calendar picker, cost tracking, and
-/// communicates with the Dispatcher via NotificationCenter commands.
+/// Manages parking skip dates, calendar picker, and cost tracking.
+/// Reads/writes skip dates directly to the parkmobile-auto skip-dates.txt file.
 @Observable
 final class ParkingViewModel {
     // MARK: - Constants
@@ -103,7 +103,6 @@ final class ParkingViewModel {
         let today = Calendar.current.startOfDay(for: Date())
         guard !isDateAlreadySkipped(today) else { return }
 
-        sendCommand("skip parking today")
         skipDates.append(ParkingSkipEntry(date: today))
         todayStatus = .skipped
         showFeedback("Skipping parking for today")
@@ -117,7 +116,6 @@ final class ParkingViewModel {
         guard !Calendar.current.isDateInWeekend(tomorrowStart) else { return }
         guard !isDateAlreadySkipped(tomorrowStart) else { return }
 
-        sendCommand("skip parking tomorrow")
         skipDates.append(ParkingSkipEntry(date: tomorrowStart))
         showFeedback("Skipping parking for tomorrow")
         saveSkipDates()
@@ -139,8 +137,6 @@ final class ParkingViewModel {
             guard let next = calendar.date(byAdding: .weekOfYear, value: 1, to: nextMonday) else { return }
             nextMonday = next
         }
-
-        sendCommand("skip parking next week")
 
         for dayOffset in 0..<5 {
             guard let date = calendar.date(byAdding: .day, value: dayOffset, to: nextMonday) else { continue }
@@ -167,10 +163,6 @@ final class ParkingViewModel {
 
         if isDateAlreadySkipped(dayStart) {
             // Restore
-            let formatter = DateFormatter()
-            formatter.dateFormat = "yyyy-MM-dd"
-            let dateString = formatter.string(from: dayStart)
-            sendCommand("restore parking \(dateString)")
             skipDates.removeAll { calendar.isDate($0.date, inSameDayAs: dayStart) }
             if calendar.isDateInToday(dayStart) {
                 todayStatus = .active
@@ -178,10 +170,6 @@ final class ParkingViewModel {
             showFeedback("Restored parking for \(ParkingSkipEntry(date: dayStart).relativeDateLabel)")
         } else {
             // Skip
-            let formatter = DateFormatter()
-            formatter.dateFormat = "yyyy-MM-dd"
-            let dateString = formatter.string(from: dayStart)
-            sendCommand("skip parking \(dateString)")
             skipDates.append(ParkingSkipEntry(date: dayStart))
             if calendar.isDateInToday(dayStart) {
                 todayStatus = .skipped
@@ -200,11 +188,6 @@ final class ParkingViewModel {
 
     /// Restore (un-skip) a specific date.
     func restoreDate(_ entry: ParkingSkipEntry) {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        let dateString = formatter.string(from: entry.date)
-        sendCommand("restore parking \(dateString)")
-
         skipDates.removeAll { Calendar.current.isDate($0.date, inSameDayAs: entry.date) }
         if Calendar.current.isDateInToday(entry.date) {
             todayStatus = .unknown
@@ -264,23 +247,36 @@ final class ParkingViewModel {
         return formatter.string(from: calendarDisplayedMonth)
     }
 
-    // MARK: - Data Persistence (MVP: UserDefaults)
+    // MARK: - Data Persistence (File I/O)
 
-    /// Load skip dates from local storage.
+    /// Path to the skip-dates file used by the parkmobile-auto system.
+    private let skipDatesFilePath = "/Users/zwang/projects/parkmobile-auto/skip-dates.txt"
+
+    /// Load skip dates from the skip-dates.txt file.
     func loadSkipDates() {
-        guard let data = UserDefaults.standard.data(forKey: StorageKeys.skipDates),
-              let dates = try? JSONDecoder().decode([Date].self, from: data) else {
+        guard let content = try? String(contentsOfFile: skipDatesFilePath, encoding: .utf8) else {
+            skipDates = []
             return
         }
-        skipDates = dates.map { ParkingSkipEntry(date: $0) }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        skipDates = content.components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+            .compactMap { formatter.date(from: $0) }
+            .map { ParkingSkipEntry(date: $0) }
     }
 
-    /// Save skip dates to local storage.
+    /// Write all skip dates back to the skip-dates.txt file, sorted chronologically.
     private func saveSkipDates() {
-        let dates = skipDates.map(\.date)
-        if let data = try? JSONEncoder().encode(dates) {
-            UserDefaults.standard.set(data, forKey: StorageKeys.skipDates)
-        }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        let lines = skipDates
+            .map(\.date)
+            .sorted()
+            .map { formatter.string(from: $0) }
+        let content = lines.joined(separator: "\n")
+        try? content.write(toFile: skipDatesFilePath, atomically: true, encoding: .utf8)
     }
 
     // MARK: - Private
@@ -334,25 +330,10 @@ final class ParkingViewModel {
         )
     }
 
-    /// Send a command to the Dispatcher through the chat system.
-    private func sendCommand(_ command: String) {
-        NotificationCenter.default.post(
-            name: .sendChatCommand,
-            object: nil,
-            userInfo: ["command": command]
-        )
-    }
-
     /// Show a brief feedback message.
     private func showFeedback(_ message: String) {
         lastActionMessage = message
         showConfirmation = true
-    }
-
-    // MARK: - Storage Keys
-
-    private enum StorageKeys {
-        static let skipDates = "ryanhub_parking_skip_dates"
     }
 }
 
