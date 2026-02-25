@@ -37,6 +37,7 @@
 		6AF4F264C091E20D414F281D /* FluentViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F14ECFE406153DFEAD4BB330 /* FluentViewModel.swift */; };
 		6EC8F25FB74E5F42BB6FB7FD /* HubCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9ED59A92AE6021B648A1D666 /* HubCard.swift */; };
 		77288B93E50EBEE415E95007 /* CalendarModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75BD223A2DD8D357BDBA7F54 /* CalendarModels.swift */; };
+		7A3B8C1BD49A7E4B52E43565 /* HealthDataProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6AC78DD349D07BBC0ABC36A /* HealthDataProvider.swift */; };
 		7E4C051C9B7868EDDA5AE93B /* BookFactoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB537DF37440FEF82FAEF5D4 /* BookFactoryView.swift */; };
 		87CD4523F1720206F91E3EE8 /* HealthModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AD0CBF73B859088687163F3 /* HealthModels.swift */; };
 		8C7237A5CFAEB6F34BB85EE9 /* ParkingModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D5B11EECA4F5D375FAC8DF3 /* ParkingModels.swift */; };
@@ -110,6 +111,7 @@
 		9ED59A92AE6021B648A1D666 /* HubCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubCard.swift; sourceTree = "<group>"; };
 		A39F147D2BBC1B842E26979E /* BookFactoryAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookFactoryAPI.swift; sourceTree = "<group>"; };
 		A69D457FFC342C44FD9AC5A8 /* SettingsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsViewModel.swift; sourceTree = "<group>"; };
+		A6AC78DD349D07BBC0ABC36A /* HealthDataProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthDataProvider.swift; sourceTree = "<group>"; };
 		AAD61D9A181F72ABF2EED38C /* FluentSeedData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FluentSeedData.swift; sourceTree = "<group>"; };
 		AD94D3E0824640F6802F86A4 /* RyanHubApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RyanHubApp.swift; sourceTree = "<group>"; };
 		AE159CAB3E17CFF110C6A594 /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/Localizable.strings"; sourceTree = "<group>"; };
@@ -378,6 +380,7 @@
 				8324A0F5B9279548ED9454E9 /* DailySummaryView.swift */,
 				34BC44409C203DC902136BB1 /* FoodAnalysisService.swift */,
 				D0D33059E71D62E60205E236 /* FoodLogView.swift */,
+				A6AC78DD349D07BBC0ABC36A /* HealthDataProvider.swift */,
 				4AD0CBF73B859088687163F3 /* HealthModels.swift */,
 				D06AEB0354C4C85106A24AE1 /* HealthView.swift */,
 				0ECA4BEE320B57F9B1EBD6EF /* HealthViewModel.swift */,
@@ -504,6 +507,7 @@
 				19A40196DB4A648973051BD3 /* FluentVocabularyView.swift in Sources */,
 				5E9E114C645A3B1312CD6EE5 /* FoodAnalysisService.swift in Sources */,
 				DD735C8183D7C54C5EFD098C /* FoodLogView.swift in Sources */,
+				7A3B8C1BD49A7E4B52E43565 /* HealthDataProvider.swift in Sources */,
 				87CD4523F1720206F91E3EE8 /* HealthModels.swift in Sources */,
 				9F010855B1B3ECEA2AFEE416 /* HealthView.swift in Sources */,
 				C5DBB468111E8AACD01EE10B /* HealthViewModel.swift in Sources */,

@@ -109,9 +109,14 @@ final class ChatViewModel {
 
         let messageId = userMessage.id
 
+        // Build the content to send over the wire. If the message is health-related,
+        // prepend a structured health data context so the AI can answer questions
+        // about weight, food, activity, etc. without backend changes.
+        let contentToSend = Self.buildContentWithHealthContext(userText: text)
+
         Task {
             do {
-                try await webSocket.sendMessage(id: messageId, content: text)
+                try await webSocket.sendMessage(id: messageId, content: contentToSend)
             } catch {
                 self.isTyping = false
                 let errorMessage = ChatMessage.assistant("Failed to send message: \(error.localizedDescription)")
@@ -309,6 +314,21 @@ final class ChatViewModel {
         }
 
         ChatSession.saveSessions(sessions)
+    }
+
+    // MARK: - Health Context Injection
+
+    /// If the user's message is health-related, prepend a structured summary of
+    /// their recent health data (weight, food, activity) so the AI can answer
+    /// questions like "What were my calories today?" without backend changes.
+    /// The context is only added to the wire content — the local ChatMessage
+    /// stored in the UI always shows the original user text.
+    static func buildContentWithHealthContext(userText: String) -> String {
+        guard HealthDataProvider.isHealthRelated(userText),
+              let context = HealthDataProvider.buildContextSummary() else {
+            return userText
+        }
+        return "\(context)\n\n\(userText)"
     }
 
     // MARK: - Private
