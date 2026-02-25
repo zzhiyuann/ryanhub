@@ -4,11 +4,11 @@ import WebKit
 // MARK: - Fluent View
 
 /// WebView wrapper that loads the Fluent PWA for English learning.
-/// Supports back navigation, reload, open in Safari, and offline error handling.
+/// Features: progress bar, back/forward navigation, pull-to-refresh,
+/// dark mode support, error handling with retry, and overflow menu.
 struct FluentView: View {
     @Environment(\.colorScheme) private var colorScheme
     @State private var viewModel = FluentViewModel()
-    @State private var webView: WKWebView?
 
     var body: some View {
         ZStack {
@@ -24,31 +24,66 @@ struct FluentView: View {
         .navigationTitle(viewModel.pageTitle ?? L10n.toolkitFluent)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            // Leading: back/forward navigation
+            ToolbarItemGroup(placement: .topBarLeading) {
+                HStack(spacing: 4) {
+                    Button {
+                        viewModel.shouldReload = false
+                        // Go back via JavaScript — simpler than holding a webview ref
+                        goBackAction()
+                    } label: {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(
+                                viewModel.canGoBack
+                                    ? Color.hubPrimary
+                                    : AdaptiveColors.textSecondary(for: colorScheme).opacity(0.4)
+                            )
+                    }
+                    .disabled(!viewModel.canGoBack)
+
+                    Button {
+                        goForwardAction()
+                    } label: {
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(
+                                viewModel.canGoForward
+                                    ? Color.hubPrimary
+                                    : AdaptiveColors.textSecondary(for: colorScheme).opacity(0.4)
+                            )
+                    }
+                    .disabled(!viewModel.canGoForward)
+                }
+            }
+
+            // Trailing: reload + overflow menu
             ToolbarItemGroup(placement: .topBarTrailing) {
-                // Reload button
                 Button {
-                    webView?.reload()
+                    viewModel.reload()
                 } label: {
                     Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 15, weight: .medium))
                         .foregroundStyle(Color.hubPrimary)
                 }
 
-                // Open in Safari
                 Menu {
+                    Button {
+                        viewModel.resetToHome()
+                    } label: {
+                        Label("Go to Home", systemImage: "house")
+                    }
+
+                    Divider()
+
                     Button {
                         viewModel.openInSafari()
                     } label: {
                         Label("Open in Safari", systemImage: "safari")
                     }
-
-                    Button {
-                        viewModel.resetToHome()
-                        webView?.load(URLRequest(url: viewModel.baseURL))
-                    } label: {
-                        Label("Go to Home", systemImage: "house")
-                    }
                 } label: {
                     Image(systemName: "ellipsis.circle")
+                        .font(.system(size: 15, weight: .medium))
                         .foregroundStyle(Color.hubPrimary)
                 }
             }
@@ -59,22 +94,19 @@ struct FluentView: View {
 
     private var webViewContent: some View {
         ZStack(alignment: .top) {
-            FluentWebView(url: viewModel.baseURL, viewModel: viewModel)
-                .ignoresSafeArea(edges: .bottom)
-                .overlay {
-                    // Capture the webview reference for toolbar actions
-                    WebViewFinder { foundWebView in
-                        self.webView = foundWebView
-                    }
-                }
+            FluentWebView(
+                url: viewModel.baseURL,
+                viewModel: viewModel,
+                colorScheme: colorScheme
+            )
+            .ignoresSafeArea(edges: .bottom)
 
-            // Loading progress bar
+            // Loading progress bar at the top
             if viewModel.isLoading {
-                VStack(spacing: 0) {
-                    ProgressView(value: viewModel.loadingProgress)
-                        .progressViewStyle(.linear)
-                        .tint(.hubPrimary)
-                }
+                ProgressView(value: viewModel.loadingProgress)
+                    .progressViewStyle(.linear)
+                    .tint(Color.hubPrimary)
+                    .animation(.easeInOut(duration: 0.2), value: viewModel.loadingProgress)
             }
         }
     }
@@ -82,12 +114,26 @@ struct FluentView: View {
     // MARK: - Error View
 
     private var errorView: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "wifi.slash")
-                .font(.system(size: 48, weight: .light))
-                .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+        VStack(spacing: HubLayout.sectionSpacing) {
+            Spacer()
 
-            VStack(spacing: 8) {
+            // Error icon
+            ZStack {
+                Circle()
+                    .fill(AdaptiveColors.surface(for: colorScheme))
+                    .frame(width: 96, height: 96)
+                    .shadow(
+                        color: Color.hubPrimary.opacity(0.1),
+                        radius: 20, x: 0, y: 8
+                    )
+
+                Image(systemName: "wifi.exclamationmark")
+                    .font(.system(size: 36, weight: .light))
+                    .foregroundStyle(Color.hubPrimary)
+            }
+
+            // Error text
+            VStack(spacing: HubLayout.itemSpacing) {
                 Text("Unable to Load")
                     .font(.hubHeading)
                     .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
@@ -96,59 +142,72 @@ struct FluentView: View {
                     .font(.hubBody)
                     .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
                     .multilineTextAlignment(.center)
-                    .padding(.horizontal, 32)
+                    .padding(.horizontal, HubLayout.standardPadding * 2)
             }
 
-            HubButton("Try Again", icon: "arrow.clockwise") {
-                viewModel.hasError = false
-                viewModel.errorMessage = nil
-                webView?.load(URLRequest(url: viewModel.baseURL))
+            // Retry + Home buttons
+            VStack(spacing: HubLayout.itemSpacing) {
+                HubButton("Try Again", icon: "arrow.clockwise") {
+                    viewModel.retry()
+                }
+
+                HubSecondaryButton("Go to Home", icon: "house") {
+                    viewModel.resetToHome()
+                }
             }
-            .padding(.horizontal, 48)
+            .padding(.horizontal, HubLayout.standardPadding * 3)
+
+            Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
+
+    // MARK: - Navigation Helpers
+
+    /// Trigger back navigation via the coordinator's stored webview reference.
+    private func goBackAction() {
+        // Post a notification that the coordinator will handle
+        NotificationCenter.default.post(name: .fluentGoBack, object: nil)
+    }
+
+    /// Trigger forward navigation via the coordinator's stored webview reference.
+    private func goForwardAction() {
+        NotificationCenter.default.post(name: .fluentGoForward, object: nil)
+    }
 }
 
-// MARK: - WebView Finder
+// MARK: - Navigation Notifications
 
-/// Helper to find the WKWebView in the view hierarchy for toolbar actions.
-/// This bridges between SwiftUI toolbar buttons and the UIKit webview.
-private struct WebViewFinder: UIViewRepresentable {
-    let onFound: (WKWebView) -> Void
+extension Notification.Name {
+    static let fluentGoBack = Notification.Name("FluentGoBack")
+    static let fluentGoForward = Notification.Name("FluentGoForward")
+}
 
-    func makeUIView(context: Context) -> UIView {
-        let view = UIView(frame: .zero)
-        view.isHidden = true
-        view.isUserInteractionEnabled = false
-        return view
+// MARK: - Extended Coordinator for Navigation Notifications
+
+extension FluentWebView.Coordinator {
+    /// Subscribe to back/forward navigation notifications from the toolbar.
+    func subscribeToNavigationNotifications() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleGoBack),
+            name: .fluentGoBack,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleGoForward),
+            name: .fluentGoForward,
+            object: nil
+        )
     }
 
-    func updateUIView(_ uiView: UIView, context: Context) {
-        // Walk up the view hierarchy to find the WKWebView
-        DispatchQueue.main.async {
-            if let webView = findWebView(in: uiView) {
-                onFound(webView)
-            }
-        }
+    @objc private func handleGoBack() {
+        webView?.goBack()
     }
 
-    private func findWebView(in view: UIView) -> WKWebView? {
-        // Search siblings and parent's children
-        guard let superview = view.superview else { return nil }
-        return findWebViewRecursive(in: superview)
-    }
-
-    private func findWebViewRecursive(in view: UIView) -> WKWebView? {
-        if let webView = view as? WKWebView {
-            return webView
-        }
-        for subview in view.subviews {
-            if let found = findWebViewRecursive(in: subview) {
-                return found
-            }
-        }
-        return nil
+    @objc private func handleGoForward() {
+        webView?.goForward()
     }
 }
 

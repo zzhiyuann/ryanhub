@@ -1,10 +1,13 @@
 import Foundation
 import UIKit
 import WebKit
+import SwiftUI
 
 // MARK: - Fluent View Model
 
 /// Manages the state of the Fluent PWA WebView.
+/// Tracks loading progress, navigation state, errors, and provides actions
+/// for reload, back/forward navigation, and opening in Safari.
 @Observable
 final class FluentViewModel {
     // MARK: - State
@@ -18,10 +21,16 @@ final class FluentViewModel {
     var hasError = false
     var errorMessage: String?
 
+    /// Whether a reload was triggered (used to coordinate with the WebView representable).
+    var shouldReload = false
+
+    /// Whether we should navigate to home (used to coordinate with the WebView representable).
+    var shouldNavigateHome = false
+
     // MARK: - Configuration
 
     /// The base URL of the Fluent PWA.
-    let baseURL = URL(string: "https://fluent-gilt.vercel.app/")!
+    let baseURL = URL(string: "https://fluent-eta.vercel.app/")!
 
     /// Whether the webview has finished initial load at least once.
     var hasLoadedOnce = false
@@ -30,9 +39,23 @@ final class FluentViewModel {
 
     /// Reset the webview to the base URL.
     func resetToHome() {
-        currentURL = baseURL
         hasError = false
         errorMessage = nil
+        shouldNavigateHome = true
+    }
+
+    /// Reload the current page.
+    func reload() {
+        hasError = false
+        errorMessage = nil
+        shouldReload = true
+    }
+
+    /// Retry after an error by loading the base URL.
+    func retry() {
+        hasError = false
+        errorMessage = nil
+        shouldNavigateHome = true
     }
 
     /// Open the current URL in Safari.
@@ -44,12 +67,13 @@ final class FluentViewModel {
 
 // MARK: - Fluent WebView (UIViewRepresentable)
 
-import SwiftUI
-
 /// WKWebView wrapper for loading the Fluent PWA.
+/// Supports pull-to-refresh, dark mode background adaptation, KVO-based progress tracking,
+/// and coordinated navigation actions from the parent SwiftUI view.
 struct FluentWebView: UIViewRepresentable {
     let url: URL
     let viewModel: FluentViewModel
+    let colorScheme: ColorScheme
 
     func makeCoordinator() -> Coordinator {
         Coordinator(viewModel: viewModel)
@@ -67,11 +91,28 @@ struct FluentWebView: UIViewRepresentable {
         webView.navigationDelegate = context.coordinator
         webView.allowsBackForwardNavigationGestures = true
         webView.isOpaque = false
-        webView.backgroundColor = .clear
-        webView.scrollView.backgroundColor = .clear
+        webView.underPageBackgroundColor = uiBackgroundColor(for: colorScheme)
+        webView.backgroundColor = uiBackgroundColor(for: colorScheme)
+        webView.scrollView.backgroundColor = uiBackgroundColor(for: colorScheme)
 
-        // Observe loading progress
+        // Enable pull-to-refresh on the scroll view
+        let refreshControl = UIRefreshControl()
+        refreshControl.tintColor = UIColor(Color.hubPrimary)
+        refreshControl.addTarget(
+            context.coordinator,
+            action: #selector(Coordinator.handlePullToRefresh(_:)),
+            for: .valueChanged
+        )
+        webView.scrollView.refreshControl = refreshControl
+
+        // Store reference in coordinator for later actions
+        context.coordinator.webView = webView
+
+        // Observe loading progress and navigation state
         context.coordinator.observeWebView(webView)
+
+        // Subscribe to back/forward notifications from the toolbar
+        context.coordinator.subscribeToNavigationNotifications()
 
         // Load the URL
         let request = URLRequest(url: url, cachePolicy: .returnCacheDataElseLoad)
@@ -81,19 +122,38 @@ struct FluentWebView: UIViewRepresentable {
     }
 
     func updateUIView(_ webView: WKWebView, context: Context) {
-        // If the URL changed externally (e.g., reset to home), reload
-        if let currentURL = viewModel.currentURL,
-           currentURL != webView.url,
-           currentURL == viewModel.baseURL {
-            let request = URLRequest(url: currentURL)
+        // Update background color when color scheme changes
+        let bgColor = uiBackgroundColor(for: colorScheme)
+        webView.underPageBackgroundColor = bgColor
+        webView.backgroundColor = bgColor
+        webView.scrollView.backgroundColor = bgColor
+
+        // Handle reload request from view model
+        if viewModel.shouldReload {
+            viewModel.shouldReload = false
+            webView.reload()
+        }
+
+        // Handle navigate-to-home request from view model
+        if viewModel.shouldNavigateHome {
+            viewModel.shouldNavigateHome = false
+            let request = URLRequest(url: viewModel.baseURL)
             webView.load(request)
         }
+    }
+
+    /// Returns the appropriate UIColor for the WebView background based on color scheme.
+    private func uiBackgroundColor(for scheme: ColorScheme) -> UIColor {
+        scheme == .dark
+            ? UIColor(red: 0x0A / 255.0, green: 0x0A / 255.0, blue: 0x0F / 255.0, alpha: 1)
+            : UIColor(red: 0xF5 / 255.0, green: 0xF5 / 255.0, blue: 0xF7 / 255.0, alpha: 1)
     }
 
     // MARK: - Coordinator
 
     final class Coordinator: NSObject, WKNavigationDelegate {
         let viewModel: FluentViewModel
+        weak var webView: WKWebView?
         private var progressObservation: NSKeyValueObservation?
         private var titleObservation: NSKeyValueObservation?
         private var canGoBackObservation: NSKeyValueObservation?
@@ -133,6 +193,15 @@ struct FluentWebView: UIViewRepresentable {
                 Task { @MainActor in
                     self?.viewModel.currentURL = webView.url
                 }
+            }
+        }
+
+        /// Handle pull-to-refresh gesture.
+        @objc func handlePullToRefresh(_ sender: UIRefreshControl) {
+            webView?.reload()
+            // End refreshing after a short delay to allow navigation delegate to take over
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                sender.endRefreshing()
             }
         }
 
