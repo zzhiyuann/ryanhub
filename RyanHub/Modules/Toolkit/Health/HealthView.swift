@@ -7,7 +7,7 @@ struct HealthView: View {
     @Environment(\.colorScheme) private var colorScheme
     @State private var viewModel = HealthViewModel()
     @State private var showWeightLog = false
-    @State private var showFoodLog = false
+    @State private var showSmartFoodLog = false
     @State private var showActivityLog = false
 
     var body: some View {
@@ -24,8 +24,8 @@ struct HealthView: View {
         .sheet(isPresented: $showWeightLog) {
             WeightLogView(viewModel: viewModel)
         }
-        .sheet(isPresented: $showFoodLog) {
-            FoodLogView(viewModel: viewModel)
+        .sheet(isPresented: $showSmartFoodLog) {
+            SmartFoodLogView(viewModel: viewModel)
         }
         .sheet(isPresented: $showActivityLog) {
             ActivityLogSheet(viewModel: viewModel)
@@ -254,48 +254,57 @@ struct HealthView: View {
 
     private var foodContent: some View {
         VStack(spacing: HubLayout.sectionSpacing) {
-            // Today's summary
-            HubCard {
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Today's Intake")
-                            .font(.hubCaption)
-                            .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+            // AI-powered daily summary
+            DailySummaryView(viewModel: viewModel)
 
-                        HStack(alignment: .firstTextBaseline, spacing: 4) {
-                            Text("\(viewModel.todayCalories)")
-                                .font(.system(size: 34, weight: .bold))
-                                .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
-                            Text("cal")
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
-                        }
+            // Smart log button
+            Button {
+                showSmartFoodLog = true
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 18, weight: .medium))
+                        .foregroundStyle(.white)
+                        .frame(width: 40, height: 40)
+                        .background(
+                            LinearGradient(
+                                colors: [Color.hubPrimary, Color.hubPrimaryLight],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            in: Circle()
+                        )
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Log a Meal")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                        Text("Describe or snap a photo — AI handles the rest")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
                     }
 
                     Spacer()
 
-                    Text("\(viewModel.todayFoodEntries.count) meals")
-                        .font(.hubCaption)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 14, weight: .medium))
                         .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(HubLayout.cardInnerPadding)
+                .background(
+                    RoundedRectangle(cornerRadius: HubLayout.cardCornerRadius)
+                        .fill(AdaptiveColors.surface(for: colorScheme))
+                        .shadow(
+                            color: colorScheme == .dark
+                                ? Color.black.opacity(0.3)
+                                : Color.black.opacity(0.06),
+                            radius: 8, x: 0, y: 2
+                        )
+                )
             }
+            .buttonStyle(.plain)
 
-            // Log button
-            HubButton("Log Meal", icon: "plus.circle.fill") {
-                showFoodLog = true
-            }
-
-            // Today's meals
-            if !viewModel.todayFoodEntries.isEmpty {
-                VStack(alignment: .leading, spacing: HubLayout.itemSpacing) {
-                    SectionHeader(title: "Today's Meals")
-
-                    ForEach(viewModel.todayFoodEntries) { entry in
-                        foodEntryRow(entry)
-                    }
-                }
-            } else {
+            if viewModel.todayFoodEntries.isEmpty {
                 emptyStateCard(
                     icon: "fork.knife",
                     message: "No meals logged today"

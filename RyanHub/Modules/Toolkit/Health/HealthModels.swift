@@ -39,20 +39,44 @@ struct WeightEntry: Codable, Identifiable {
 
 // MARK: - Food Entry
 
-/// A single food/meal log entry.
+/// A single food/meal log entry with optional AI-analyzed nutritional data.
 struct FoodEntry: Codable, Identifiable {
     let id: UUID
     let date: Date
     let mealType: MealType
     let description: String
     let calories: Int?
+    let protein: Int?
+    let carbs: Int?
+    let fat: Int?
+    let items: [FoodItem]?
+    let aiSummary: String?
+    let isAIAnalyzed: Bool
 
-    init(id: UUID = UUID(), date: Date = Date(), mealType: MealType, description: String, calories: Int? = nil) {
+    init(
+        id: UUID = UUID(),
+        date: Date = Date(),
+        mealType: MealType,
+        description: String,
+        calories: Int? = nil,
+        protein: Int? = nil,
+        carbs: Int? = nil,
+        fat: Int? = nil,
+        items: [FoodItem]? = nil,
+        aiSummary: String? = nil,
+        isAIAnalyzed: Bool = false
+    ) {
         self.id = id
         self.date = date
         self.mealType = mealType
         self.description = description
         self.calories = calories
+        self.protein = protein
+        self.carbs = carbs
+        self.fat = fat
+        self.items = items
+        self.aiSummary = aiSummary
+        self.isAIAnalyzed = isAIAnalyzed
     }
 
     /// Formatted time string.
@@ -60,6 +84,29 @@ struct FoodEntry: Codable, Identifiable {
         let formatter = DateFormatter()
         formatter.dateFormat = "h:mm a"
         return formatter.string(from: date)
+    }
+}
+
+// MARK: - Food Item (sub-item within a meal)
+
+/// Individual food item within a meal, typically from AI analysis.
+struct FoodItem: Codable, Identifiable {
+    let id: UUID
+    let name: String
+    let calories: Int
+    let protein: Int
+    let carbs: Int
+    let fat: Int
+    let portion: String?
+
+    init(id: UUID = UUID(), name: String, calories: Int, protein: Int = 0, carbs: Int = 0, fat: Int = 0, portion: String? = nil) {
+        self.id = id
+        self.name = name
+        self.calories = calories
+        self.protein = protein
+        self.carbs = carbs
+        self.fat = fat
+        self.portion = portion
     }
 }
 

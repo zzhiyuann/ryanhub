@@ -82,6 +82,19 @@ final class HealthViewModel {
         save(weightEntries, forKey: StorageKeys.weightEntries)
     }
 
+    /// Today's macros totals.
+    var todayProtein: Int {
+        todayFoodEntries.compactMap(\.protein).reduce(0, +)
+    }
+
+    var todayCarbs: Int {
+        todayFoodEntries.compactMap(\.carbs).reduce(0, +)
+    }
+
+    var todayFat: Int {
+        todayFoodEntries.compactMap(\.fat).reduce(0, +)
+    }
+
     // MARK: - Food Actions
 
     /// Add a new food entry.
@@ -89,6 +102,39 @@ final class HealthViewModel {
         let entry = FoodEntry(date: date, mealType: mealType, description: description, calories: calories)
         foodEntries.append(entry)
         save(foodEntries, forKey: StorageKeys.foodEntries)
+    }
+
+    /// Add a food entry from AI analysis result.
+    func addFoodFromAnalysis(_ result: FoodAnalysisResult, description: String, date: Date = Date()) {
+        let mealType = MealType(rawValue: result.mealType) ?? suggestedMealType()
+        let items = result.items.map {
+            FoodItem(name: $0.name, calories: $0.calories, protein: $0.protein, carbs: $0.carbs, fat: $0.fat, portion: $0.portion)
+        }
+        let entry = FoodEntry(
+            date: date,
+            mealType: mealType,
+            description: description,
+            calories: result.totalCalories,
+            protein: result.totalProtein,
+            carbs: result.totalCarbs,
+            fat: result.totalFat,
+            items: items,
+            aiSummary: result.summary,
+            isAIAnalyzed: true
+        )
+        foodEntries.append(entry)
+        save(foodEntries, forKey: StorageKeys.foodEntries)
+    }
+
+    /// Suggest a meal type based on the current hour.
+    func suggestedMealType() -> MealType {
+        let hour = Calendar.current.component(.hour, from: Date())
+        switch hour {
+        case 5..<11: return .breakfast
+        case 11..<14: return .lunch
+        case 14..<17: return .snack
+        default: return .dinner
+        }
     }
 
     /// Delete a food entry.
