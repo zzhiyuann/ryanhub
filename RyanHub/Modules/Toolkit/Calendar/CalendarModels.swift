@@ -9,6 +9,7 @@ struct CalendarEvent: Codable, Identifiable {
     let startTime: Date
     let endTime: Date
     let location: String?
+    let notes: String?
     let calendarColor: String? // hex color
     let isAllDay: Bool
 
@@ -18,6 +19,7 @@ struct CalendarEvent: Codable, Identifiable {
         startTime: Date,
         endTime: Date,
         location: String? = nil,
+        notes: String? = nil,
         calendarColor: String? = nil,
         isAllDay: Bool = false
     ) {
@@ -26,6 +28,7 @@ struct CalendarEvent: Codable, Identifiable {
         self.startTime = startTime
         self.endTime = endTime
         self.location = location
+        self.notes = notes
         self.calendarColor = calendarColor
         self.isAllDay = isAllDay
     }
@@ -46,15 +49,54 @@ struct CalendarEvent: Codable, Identifiable {
         return formatter.string(from: startTime)
     }
 
+    /// Formatted full date string (e.g., "Wednesday, Feb 26").
+    var formattedFullDate: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "EEEE, MMM d"
+        return formatter.string(from: startTime)
+    }
+
     /// Duration in minutes.
     var durationMinutes: Int {
         Int(endTime.timeIntervalSince(startTime) / 60)
+    }
+
+    /// Formatted duration string (e.g., "1h 30m").
+    var formattedDuration: String {
+        if isAllDay { return "All Day" }
+        let hours = durationMinutes / 60
+        let minutes = durationMinutes % 60
+        if hours > 0 && minutes > 0 {
+            return "\(hours)h \(minutes)m"
+        } else if hours > 0 {
+            return "\(hours)h"
+        } else {
+            return "\(minutes)m"
+        }
     }
 
     /// Resolved calendar color for display.
     var resolvedColor: Color {
         guard let hex = calendarColor else { return .hubPrimary }
         return Color(hex: hex)
+    }
+
+    /// Whether this event has already ended.
+    var hasEnded: Bool {
+        endTime < Date()
+    }
+
+    /// Whether this event is currently happening.
+    var isOngoing: Bool {
+        let now = Date()
+        return startTime <= now && endTime >= now
+    }
+
+    /// Apple Maps URL for the location, if available.
+    var mapsURL: URL? {
+        guard let location = location, !location.isEmpty else { return nil }
+        let encoded = location.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+        return URL(string: "https://maps.apple.com/?q=\(encoded)")
     }
 }
 
@@ -74,6 +116,50 @@ enum CalendarSection: String, CaseIterable, Identifiable {
         case .tomorrow: return "Tomorrow"
         case .thisWeek: return "This Week"
         }
+    }
+}
+
+// MARK: - Calendar Sync State
+
+/// Represents the sync state of the calendar.
+enum CalendarSyncState: Equatable {
+    case idle
+    case syncing
+    case synced
+    case error(String)
+}
+
+// MARK: - Week Day Block
+
+/// Represents a time block in the week overview.
+struct WeekDayBlock: Identifiable {
+    let id = UUID()
+    let date: Date
+    let events: [CalendarEvent]
+
+    /// Day-of-week abbreviation (e.g., "Mon").
+    var dayLabel: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "EEE"
+        return formatter.string(from: date)
+    }
+
+    /// Day number (e.g., "25").
+    var dayNumber: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "d"
+        return formatter.string(from: date)
+    }
+
+    /// Whether this day is today.
+    var isToday: Bool {
+        Calendar.current.isDateInToday(date)
+    }
+
+    /// Total busy hours for this day.
+    var busyHours: Double {
+        let totalMinutes = events.filter { !$0.isAllDay }.reduce(0) { $0 + $1.durationMinutes }
+        return Double(totalMinutes) / 60.0
     }
 }
 

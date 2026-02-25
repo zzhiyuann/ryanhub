@@ -39,6 +39,11 @@ struct ParkingSkipEntry: Identifiable, Hashable {
         Calendar.current.isDateInWeekend(date)
     }
 
+    /// Whether this skip date is in the past (before today).
+    var isPast: Bool {
+        Calendar.current.startOfDay(for: date) < Calendar.current.startOfDay(for: Date())
+    }
+
     var formattedDate: String {
         let formatter = DateFormatter()
         formatter.dateFormat = "EEEE, MMM d"
@@ -54,6 +59,39 @@ struct ParkingSkipEntry: Identifiable, Hashable {
         } else {
             return formattedDate
         }
+    }
+
+    /// Short day number for calendar grid display (e.g., "25").
+    var dayNumber: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "d"
+        return formatter.string(from: date)
+    }
+}
+
+// MARK: - Monthly Parking Stats
+
+/// Tracks parking usage statistics for a given month.
+struct MonthlyParkingStats {
+    let totalWeekdays: Int
+    let skippedDays: Int
+    let activeDays: Int
+    let costPerDay: Double
+
+    /// Fraction of the month's weekdays that have been active (0.0 to 1.0).
+    var usageRatio: Double {
+        guard totalWeekdays > 0 else { return 0 }
+        return Double(activeDays) / Double(totalWeekdays)
+    }
+
+    /// Total estimated savings from skipping.
+    var estimatedSavings: Double {
+        Double(skippedDays) * costPerDay
+    }
+
+    /// Total estimated cost for active days.
+    var estimatedCost: Double {
+        Double(activeDays) * costPerDay
     }
 }
 
