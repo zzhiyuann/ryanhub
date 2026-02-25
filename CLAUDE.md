@@ -138,21 +138,32 @@ The Toolkit tab uses a macOS-style menu bar (not NavigationStack push/pop) for s
 ### Known Issues Backlog (from audits)
 
 **High Priority:**
-- [x] Chat: User messages disappear — FIXED: Dispatcher echoes same ID back; user+assistant shared SwiftUI identity. Added `resp-` prefix to assistant IDs.
+- [x] Chat: User messages disappear — FIXED: `resp-` prefix to assistant IDs
+- [x] FluentView: NotificationCenter observers — FIXED: Rebuilt as native SwiftUI
 - [ ] Food Analysis: JSON decoder needs `keyDecodingStrategy = .convertFromSnakeCase` (Claude Haiku may return snake_case)
 - [ ] Food Analysis: `AnalyzedFoodItem.id` uses `name` — duplicate ID collision risk
-- [x] FluentView: NotificationCenter observers never removed — FIXED: Rebuilt Fluent as fully native SwiftUI (no more WebView/WKWebView)
 
 **Medium Priority:**
-- [x] ChatViewModel: Missing `@MainActor` annotation — FIXED: Added @MainActor to ChatViewModel
+- [x] ChatViewModel: Missing `@MainActor` — FIXED
+- [x] ParkingViewModel: `date(bySetting:)` month boundary bug — FIXED: Use `date(byAdding:)` instead
+- [x] Parking weekday headers: T/T, S/S ambiguity — FIXED: Two-letter abbreviations (Mo/Tu/We/Th/Fr/Sa/Su)
+- [x] ParkingViewModel: Missing `@MainActor` — FIXED
+- [x] SettingsViewModel: Missing `@MainActor` — FIXED
+- [x] Chat photo library: PhotosPicker re-selection broken — FIXED: `.onChange(of:)` + reset to nil
 - [ ] WebSocketClient: `@Observable` mutated from non-MainActor methods
 - [ ] Voice messages: No playback (waveform is display-only)
-- [ ] ParkingViewModel: `date(bySetting:)` can cross month boundaries
 - [ ] CalendarViewModel: `syncEvents()` marks complete but events stay empty (no real backend integration yet)
 
 **Low Priority:**
-- [ ] Parking weekday headers: ambiguous single letters (T/T, S/S)
 - [ ] Calendar: DateFormatter created on every computed property access
 - [ ] Recording waveform: choppy 100ms discrete updates
 - [ ] Stale CortexApp.xcodeproj should be removed
-- [ ] Connection status strings duplicate between ChatView and SettingsView
+
+### Agent Dispatch Log (2026-02-25, Session 2)
+
+Dispatched 7 agents in parallel for UI/UX improvements. Key lessons:
+- **Agents that push directly to remote** can fast-forward main — always `git pull` before merging other agents
+- **AppState.swift is a merge hotspot** — multiple agents modify it (tab bar, settings). Manual merge required.
+- **Worktrees with xcodegen**: Agents in worktrees can't run `xcodegen generate` if `project.yml` paths are relative. Some agents create their own test Xcode projects as workaround.
+- **project.yml changes**: When agent adds Info.plist or modifies project.yml, must copy BOTH files to main.
+- **7 parallel agents worked well**: No destructive conflicts because modules are well-separated. Only AppState.swift needed manual merge.
