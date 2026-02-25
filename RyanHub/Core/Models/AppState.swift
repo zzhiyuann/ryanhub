@@ -29,6 +29,12 @@ final class AppState {
         didSet { UserDefaults.standard.set(language.rawValue, forKey: Keys.language) }
     }
 
+    // MARK: - Navigation State
+
+    /// True when the user is inside a toolkit module (selectedPlugin != nil).
+    /// Used by the custom tab bar to switch to compact (icon-only) mode.
+    var isInToolkitModule: Bool = false
+
     // MARK: - Connection State
 
     var isConnected: Bool = false

@@ -8,6 +8,7 @@ import SwiftUI
 /// This creates a "world within a world" experience inside the Toolkit tab.
 struct ToolkitHomeView: View {
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(AppState.self) private var appState
     @State private var selectedPlugin: ToolkitPlugin?
     @State private var menuBarAppeared = false
     @Namespace private var menuAnimation
@@ -45,6 +46,9 @@ struct ToolkitHomeView: View {
             withAnimation(.easeOut(duration: 0.5).delay(0.1)) {
                 menuBarAppeared = true
             }
+        }
+        .onChange(of: selectedPlugin) { _, newValue in
+            appState.isInToolkitModule = newValue != nil
         }
     }
 
