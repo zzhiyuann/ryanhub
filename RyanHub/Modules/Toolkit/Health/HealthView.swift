@@ -19,8 +19,6 @@ struct HealthView: View {
             .padding(HubLayout.standardPadding)
         }
         .background(AdaptiveColors.background(for: colorScheme))
-        .navigationTitle(L10n.toolkitHealth)
-        .navigationBarTitleDisplayMode(.large)
         .sheet(isPresented: $showWeightLog) {
             WeightLogView(viewModel: viewModel)
         }

@@ -25,8 +25,6 @@ struct CalendarPluginView: View {
             .padding(HubLayout.standardPadding)
         }
         .background(AdaptiveColors.background(for: colorScheme))
-        .navigationTitle(L10n.toolkitCalendar)
-        .navigationBarTitleDisplayMode(.large)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {

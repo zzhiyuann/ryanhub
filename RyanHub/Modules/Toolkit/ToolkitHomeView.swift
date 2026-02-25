@@ -50,8 +50,9 @@ struct ToolkitHomeView: View {
 
     // MARK: - Tool Content
 
-    /// Wraps each tool view in a NavigationStack so that internal navigation
-    /// (e.g., NavigationLink, .navigationDestination) still works correctly.
+    /// Returns the content view for each tool. Only tools that use `.toolbar`
+    /// items are wrapped in NavigationStack (Fluent, Calendar). Others render
+    /// directly to avoid redundant navigation chrome.
     @ViewBuilder
     private func toolContent(for plugin: ToolkitPlugin) -> some View {
         switch plugin {
@@ -62,17 +63,13 @@ struct ToolkitHomeView: View {
                 FluentView()
             }
         case .parking:
-            NavigationStack {
-                ParkingView()
-            }
+            ParkingView()
         case .calendar:
             NavigationStack {
                 CalendarPluginView()
             }
         case .health:
-            NavigationStack {
-                HealthView()
-            }
+            HealthView()
         }
     }
 }

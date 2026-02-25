@@ -21,8 +21,6 @@ struct FluentView: View {
                 webViewContent
             }
         }
-        .navigationTitle(viewModel.pageTitle ?? L10n.toolkitFluent)
-        .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             // Leading: back/forward navigation
             ToolbarItemGroup(placement: .topBarLeading) {

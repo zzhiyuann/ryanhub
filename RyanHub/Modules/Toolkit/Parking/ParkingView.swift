@@ -24,8 +24,6 @@ struct ParkingView: View {
             .padding(HubLayout.standardPadding)
         }
         .background(AdaptiveColors.background(for: colorScheme))
-        .navigationTitle(L10n.toolkitParking)
-        .navigationBarTitleDisplayMode(.large)
         .overlay(alignment: .bottom) {
             if viewModel.showConfirmation, let message = viewModel.lastActionMessage {
                 confirmationBanner(message: message)
