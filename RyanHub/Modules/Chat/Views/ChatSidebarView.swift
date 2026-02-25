@@ -1,11 +1,11 @@
 import SwiftUI
 
 /// Sidebar showing all chat sessions, grouped by date.
-/// Presented as a sheet from the chat view, mimicking ChatGPT/Claude iOS sidebar.
+/// Presented as a left-edge drawer from the chat view, mimicking ChatGPT's mobile sidebar.
 struct ChatSidebarView: View {
     @Environment(\.colorScheme) private var colorScheme
-    @Environment(\.dismiss) private var dismiss
 
+    @Binding var isPresented: Bool
     var sessions: [ChatSession]
     var currentSessionId: String?
     var onSelectSession: (String) -> Void
@@ -13,42 +13,47 @@ struct ChatSidebarView: View {
     var onDeleteSession: (String) -> Void
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                AdaptiveColors.background(for: colorScheme)
-                    .ignoresSafeArea()
+        VStack(spacing: 0) {
+            // Header
+            drawerHeader
 
-                if sessions.isEmpty {
-                    emptyState
-                } else {
-                    sessionList
-                }
-            }
-            .navigationTitle("Chats")
-            .navigationBarTitleDisplayMode(.large)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        dismiss()
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
-                    }
-                }
+            Divider()
+                .overlay(AdaptiveColors.border(for: colorScheme))
 
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        onNewChat()
-                        dismiss()
-                    } label: {
-                        Image(systemName: "square.and.pencil")
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundStyle(Color.hubPrimary)
-                    }
-                }
+            // Content
+            if sessions.isEmpty {
+                emptyState
+            } else {
+                sessionList
             }
         }
+        .background(AdaptiveColors.background(for: colorScheme))
+    }
+
+    // MARK: - Drawer Header
+
+    @ViewBuilder
+    private var drawerHeader: some View {
+        HStack {
+            Text("Chats")
+                .font(.hubHeading)
+                .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+
+            Spacer()
+
+            Button {
+                onNewChat()
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    isPresented = false
+                }
+            } label: {
+                Image(systemName: "square.and.pencil")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(Color.hubPrimary)
+            }
+        }
+        .padding(.horizontal, HubLayout.standardPadding)
+        .padding(.vertical, HubLayout.itemSpacing)
     }
 
     // MARK: - Session List
@@ -89,7 +94,9 @@ struct ChatSidebarView: View {
     private func sessionRow(_ session: ChatSession) -> some View {
         Button {
             onSelectSession(session.id)
-            dismiss()
+            withAnimation(.easeInOut(duration: 0.25)) {
+                isPresented = false
+            }
         } label: {
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
@@ -131,7 +138,9 @@ struct ChatSidebarView: View {
 
             Button {
                 onNewChat()
-                dismiss()
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    isPresented = false
+                }
             } label: {
                 Label("New Chat", systemImage: "plus")
                     .font(.system(size: 16, weight: .medium))
