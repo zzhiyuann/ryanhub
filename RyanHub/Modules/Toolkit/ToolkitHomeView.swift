@@ -51,7 +51,7 @@ struct ToolkitHomeView: View {
     // MARK: - Tool Content
 
     /// Returns the content view for each tool. Only tools that use `.toolbar`
-    /// items are wrapped in NavigationStack (Fluent, Calendar). Others render
+    /// items are wrapped in NavigationStack (Calendar). Others render
     /// directly to avoid redundant navigation chrome.
     @ViewBuilder
     private func toolContent(for plugin: ToolkitPlugin) -> some View {
@@ -59,9 +59,7 @@ struct ToolkitHomeView: View {
         case .bookFactory:
             BookFactoryView()
         case .fluent:
-            NavigationStack {
-                FluentView()
-            }
+            FluentView()
         case .parking:
             ParkingView()
         case .calendar:

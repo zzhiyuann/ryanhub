@@ -1,248 +1,242 @@
 import Foundation
-import UIKit
-import WebKit
-import SwiftUI
+import AVFoundation
+
+// MARK: - Fluent Tab
+
+/// Internal navigation tabs for the Fluent module.
+enum FluentTab: String, CaseIterable {
+    case dashboard
+    case vocabulary
+    case review
+}
 
 // MARK: - Fluent View Model
 
-/// Manages the state of the Fluent PWA WebView.
-/// Tracks loading progress, navigation state, errors, and provides actions
-/// for reload, back/forward navigation, and opening in Safari.
+/// Manages all state for the native Fluent module.
+/// Handles vocabulary browsing, flashcard review sessions with FSRS scheduling,
+/// TTS pronunciation, and user settings.
+@MainActor
 @Observable
 final class FluentViewModel {
-    // MARK: - State
 
-    var isLoading = true
-    var currentURL: URL?
-    var canGoBack = false
-    var canGoForward = false
-    var pageTitle: String?
-    var loadingProgress: Double = 0
-    var hasError = false
-    var errorMessage: String?
+    // MARK: - Navigation
 
-    /// Whether a reload was triggered (used to coordinate with the WebView representable).
-    var shouldReload = false
+    var selectedTab: FluentTab = .dashboard
+    var showSettings = false
+    var showVocabularyDetail = false
+    var selectedVocabItem: VocabularyItem?
 
-    /// Whether we should navigate to home (used to coordinate with the WebView representable).
-    var shouldNavigateHome = false
+    // MARK: - Dashboard
 
-    // MARK: - Configuration
+    var wordOfTheDay: VocabularyItem?
+    var dueCardCount: Int = 0
+    var todayStats: DailyStats = DailyStats(id: "", cardsReviewed: 0, correctCount: 0, totalTime: 0, newCardsStudied: 0)
+    var progress: FluentUserProgress = FluentUserProgress(currentStreak: 0, longestStreak: 0, lastStudyDate: nil, totalCardsReviewed: 0, totalCorrect: 0)
 
-    /// The base URL of the Fluent PWA.
-    let baseURL = URL(string: "https://fluent-eta.vercel.app/")!
+    // MARK: - Vocabulary
 
-    /// Whether the webview has finished initial load at least once.
-    var hasLoadedOnce = false
+    var allVocabulary: [VocabularyItem] = []
+    var searchText: String = ""
+    var selectedCategory: VocabCategory?
 
-    // MARK: - Actions
-
-    /// Reset the webview to the base URL.
-    func resetToHome() {
-        hasError = false
-        errorMessage = nil
-        shouldNavigateHome = true
+    var filteredVocabulary: [VocabularyItem] {
+        var items = allVocabulary
+        if let category = selectedCategory {
+            items = items.filter { $0.category == category }
+        }
+        if !searchText.isEmpty {
+            let query = searchText.lowercased()
+            items = items.filter {
+                $0.term.lowercased().contains(query)
+                || $0.definition.lowercased().contains(query)
+                || ($0.chineseDefinition?.contains(query) ?? false)
+            }
+        }
+        return items
     }
 
-    /// Reload the current page.
-    func reload() {
-        hasError = false
-        errorMessage = nil
-        shouldReload = true
+    // MARK: - Review
+
+    var reviewCards: [FlashCard] = []
+    var currentCardIndex: Int = 0
+    var isFlipped: Bool = false
+    var isReviewComplete: Bool = false
+    var isAnimating: Bool = false
+    var sessionReviewed: Int = 0
+    var sessionCorrect: Int = 0
+    var sessionStartTime: Date?
+    var previewIntervals: [FSRSRating: Int] = [:]
+
+    var currentCard: FlashCard? {
+        guard currentCardIndex < reviewCards.count else { return nil }
+        return reviewCards[currentCardIndex]
     }
 
-    /// Retry after an error by loading the base URL.
-    func retry() {
-        hasError = false
-        errorMessage = nil
-        shouldNavigateHome = true
+    var reviewProgress: Double {
+        guard !reviewCards.isEmpty else { return 0 }
+        return Double(currentCardIndex) / Double(reviewCards.count)
     }
 
-    /// Open the current URL in Safari.
-    func openInSafari() {
-        guard let url = currentURL ?? Optional(baseURL) else { return }
-        UIApplication.shared.open(url)
+    // MARK: - Settings
+
+    var settings: FluentSettings = .default
+
+    // MARK: - TTS
+
+    private let synthesizer = AVSpeechSynthesizer()
+
+    // MARK: - Store
+
+    private let store = FluentStore.shared
+
+    // MARK: - Initialization
+
+    func loadData() {
+        let seeded = store.seedIfNeeded()
+        allVocabulary = store.loadVocabulary()
+        settings = store.loadSettings()
+        progress = store.loadProgress()
+        todayStats = store.getTodayStats()
+        dueCardCount = store.getDueCards().count
+        wordOfTheDay = pickWordOfTheDay()
+
+        if seeded {
+            // Re-count after seeding
+            dueCardCount = store.getDueCards().count
+        }
     }
-}
 
-// MARK: - Fluent WebView (UIViewRepresentable)
+    // MARK: - Word of the Day
 
-/// WKWebView wrapper for loading the Fluent PWA.
-/// Supports pull-to-refresh, dark mode background adaptation, KVO-based progress tracking,
-/// and coordinated navigation actions from the parent SwiftUI view.
-struct FluentWebView: UIViewRepresentable {
-    let url: URL
-    let viewModel: FluentViewModel
-    let colorScheme: ColorScheme
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(viewModel: viewModel)
+    /// Pick a deterministic word of the day based on the current date.
+    private func pickWordOfTheDay() -> VocabularyItem? {
+        guard !allVocabulary.isEmpty else { return nil }
+        let calendar = Calendar.current
+        let day = calendar.ordinality(of: .day, in: .era, for: Date()) ?? 0
+        let index = day % allVocabulary.count
+        return allVocabulary[index]
     }
 
-    func makeUIView(context: Context) -> WKWebView {
-        let config = WKWebViewConfiguration()
-        config.websiteDataStore = .default()
-        config.defaultWebpagePreferences.allowsContentJavaScript = true
+    // MARK: - Review Session
 
-        // Allow media playback without user gesture (for potential audio features)
-        config.mediaTypesRequiringUserActionForPlayback = []
+    func startReviewSession() {
+        let dueCards = store.getDueCards(limit: 50)
+        reviewCards = dueCards
+        currentCardIndex = 0
+        isFlipped = false
+        isReviewComplete = false
+        sessionReviewed = 0
+        sessionCorrect = 0
+        sessionStartTime = Date()
+        previewIntervals = [:]
 
-        let webView = WKWebView(frame: .zero, configuration: config)
-        webView.navigationDelegate = context.coordinator
-        webView.allowsBackForwardNavigationGestures = true
-        webView.isOpaque = false
-        webView.underPageBackgroundColor = uiBackgroundColor(for: colorScheme)
-        webView.backgroundColor = uiBackgroundColor(for: colorScheme)
-        webView.scrollView.backgroundColor = uiBackgroundColor(for: colorScheme)
+        if let card = currentCard {
+            previewIntervals = FSRSEngine.previewIntervals(for: card.fsrs)
+        }
+    }
 
-        // Enable pull-to-refresh on the scroll view
-        let refreshControl = UIRefreshControl()
-        refreshControl.tintColor = UIColor(Color.hubPrimary)
-        refreshControl.addTarget(
-            context.coordinator,
-            action: #selector(Coordinator.handlePullToRefresh(_:)),
-            for: .valueChanged
+    func restartReview() {
+        isReviewComplete = false
+        startReviewSession()
+    }
+
+    func flipCard() {
+        guard !isAnimating else { return }
+        isFlipped = true
+    }
+
+    func rateCard(_ rating: FSRSRating) {
+        guard !isAnimating, let card = currentCard else { return }
+        isAnimating = true
+
+        // Apply FSRS scheduling
+        let updated = FSRSEngine.review(card: card.fsrs, rating: rating)
+        var updatedCard = card
+        updatedCard.fsrs = updated
+        updatedCard.updatedAt = Date()
+
+        // Save updated card
+        store.updateFlashcard(updatedCard)
+
+        // Track session stats
+        sessionReviewed += 1
+        if rating != .again {
+            sessionCorrect += 1
+        }
+
+        // Save review record
+        let record = ReviewRecord(
+            id: UUID().uuidString,
+            cardId: card.id,
+            rating: rating,
+            reviewedAt: Date(),
+            elapsed: 0
         )
-        webView.scrollView.refreshControl = refreshControl
+        store.saveReview(record)
 
-        // Store reference in coordinator for later actions
-        context.coordinator.webView = webView
-
-        // Observe loading progress and navigation state
-        context.coordinator.observeWebView(webView)
-
-        // Subscribe to back/forward notifications from the toolbar
-        context.coordinator.subscribeToNavigationNotifications()
-
-        // Load the URL
-        let request = URLRequest(url: url, cachePolicy: .returnCacheDataElseLoad)
-        webView.load(request)
-
-        return webView
-    }
-
-    func updateUIView(_ webView: WKWebView, context: Context) {
-        // Update background color when color scheme changes
-        let bgColor = uiBackgroundColor(for: colorScheme)
-        webView.underPageBackgroundColor = bgColor
-        webView.backgroundColor = bgColor
-        webView.scrollView.backgroundColor = bgColor
-
-        // Handle reload request from view model
-        if viewModel.shouldReload {
-            viewModel.shouldReload = false
-            webView.reload()
+        // Move to next card or finish
+        let nextIndex = currentCardIndex + 1
+        if nextIndex >= reviewCards.count {
+            // Session complete
+            finishReviewSession()
+        } else {
+            // Advance to next card
+            currentCardIndex = nextIndex
+            isFlipped = false
+            if let nextCard = currentCard {
+                previewIntervals = FSRSEngine.previewIntervals(for: nextCard.fsrs)
+            }
         }
 
-        // Handle navigate-to-home request from view model
-        if viewModel.shouldNavigateHome {
-            viewModel.shouldNavigateHome = false
-            let request = URLRequest(url: viewModel.baseURL)
-            webView.load(request)
+        // Brief animation delay
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+            self?.isAnimating = false
         }
     }
 
-    /// Returns the appropriate UIColor for the WebView background based on color scheme.
-    private func uiBackgroundColor(for scheme: ColorScheme) -> UIColor {
-        scheme == .dark
-            ? UIColor(red: 0x0A / 255.0, green: 0x0A / 255.0, blue: 0x0F / 255.0, alpha: 1)
-            : UIColor(red: 0xF5 / 255.0, green: 0xF5 / 255.0, blue: 0xF7 / 255.0, alpha: 1)
+    private func finishReviewSession() {
+        isReviewComplete = true
+
+        let timeSpent = sessionStartTime.map { Date().timeIntervalSince($0) } ?? 0
+
+        // Update progress
+        store.updateProgressAfterReview(reviewed: sessionReviewed, correct: sessionCorrect)
+        store.updateTodayStats(
+            reviewed: sessionReviewed,
+            correct: sessionCorrect,
+            timeSpent: timeSpent,
+            newCards: 0
+        )
+
+        // Refresh dashboard data
+        progress = store.loadProgress()
+        todayStats = store.getTodayStats()
+        dueCardCount = store.getDueCards().count
     }
 
-    // MARK: - Coordinator
+    // MARK: - TTS
 
-    final class Coordinator: NSObject, WKNavigationDelegate {
-        let viewModel: FluentViewModel
-        weak var webView: WKWebView?
-        private var progressObservation: NSKeyValueObservation?
-        private var titleObservation: NSKeyValueObservation?
-        private var canGoBackObservation: NSKeyValueObservation?
-        private var canGoForwardObservation: NSKeyValueObservation?
-        private var urlObservation: NSKeyValueObservation?
+    func speak(_ text: String) {
+        synthesizer.stopSpeaking(at: .immediate)
 
-        init(viewModel: FluentViewModel) {
-            self.viewModel = viewModel
-        }
+        let utterance = AVSpeechUtterance(string: text)
+        utterance.voice = AVSpeechSynthesisVoice(language: "en-US")
+        utterance.rate = Float(settings.ttsSpeed) * AVSpeechUtteranceDefaultSpeechRate
+        utterance.pitchMultiplier = 1.0
 
-        func observeWebView(_ webView: WKWebView) {
-            progressObservation = webView.observe(\.estimatedProgress) { [weak self] webView, _ in
-                Task { @MainActor in
-                    self?.viewModel.loadingProgress = webView.estimatedProgress
-                }
-            }
+        synthesizer.speak(utterance)
+    }
 
-            titleObservation = webView.observe(\.title) { [weak self] webView, _ in
-                Task { @MainActor in
-                    self?.viewModel.pageTitle = webView.title
-                }
-            }
+    // MARK: - Settings
 
-            canGoBackObservation = webView.observe(\.canGoBack) { [weak self] webView, _ in
-                Task { @MainActor in
-                    self?.viewModel.canGoBack = webView.canGoBack
-                }
-            }
+    func saveSettings() {
+        store.saveSettings(settings)
+    }
 
-            canGoForwardObservation = webView.observe(\.canGoForward) { [weak self] webView, _ in
-                Task { @MainActor in
-                    self?.viewModel.canGoForward = webView.canGoForward
-                }
-            }
+    // MARK: - Vocabulary Detail
 
-            urlObservation = webView.observe(\.url) { [weak self] webView, _ in
-                Task { @MainActor in
-                    self?.viewModel.currentURL = webView.url
-                }
-            }
-        }
-
-        /// Handle pull-to-refresh gesture.
-        @objc func handlePullToRefresh(_ sender: UIRefreshControl) {
-            webView?.reload()
-            // End refreshing after a short delay to allow navigation delegate to take over
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                sender.endRefreshing()
-            }
-        }
-
-        // MARK: - WKNavigationDelegate
-
-        func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
-            Task { @MainActor in
-                viewModel.isLoading = true
-                viewModel.hasError = false
-                viewModel.errorMessage = nil
-            }
-        }
-
-        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-            Task { @MainActor in
-                viewModel.isLoading = false
-                viewModel.hasLoadedOnce = true
-            }
-        }
-
-        func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
-            Task { @MainActor in
-                viewModel.isLoading = false
-                // Ignore cancelled navigations
-                let nsError = error as NSError
-                if nsError.code != NSURLErrorCancelled {
-                    viewModel.hasError = true
-                    viewModel.errorMessage = error.localizedDescription
-                }
-            }
-        }
-
-        func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
-            Task { @MainActor in
-                viewModel.isLoading = false
-                let nsError = error as NSError
-                if nsError.code != NSURLErrorCancelled {
-                    viewModel.hasError = true
-                    viewModel.errorMessage = error.localizedDescription
-                }
-            }
-        }
+    func showDetail(for item: VocabularyItem) {
+        selectedVocabItem = item
+        showVocabularyDetail = true
     }
 }

@@ -1,218 +1,424 @@
 import SwiftUI
-import WebKit
 
 // MARK: - Fluent View
 
-/// WebView wrapper that loads the Fluent PWA for English learning.
-/// Features: progress bar, back/forward navigation, pull-to-refresh,
-/// dark mode support, error handling with retry, and overflow menu.
+/// Native Fluent language learning module.
+/// Replaces the previous WebView wrapper with a fully native SwiftUI implementation.
+/// Features: vocabulary browsing, FSRS-based flashcard review, TTS pronunciation,
+/// daily goal tracking, and word of the day.
 struct FluentView: View {
     @Environment(\.colorScheme) private var colorScheme
     @State private var viewModel = FluentViewModel()
 
     var body: some View {
-        ZStack {
-            AdaptiveColors.background(for: colorScheme)
-                .ignoresSafeArea()
+        VStack(spacing: 0) {
+            // Content area
+            switch viewModel.selectedTab {
+            case .dashboard:
+                dashboardContent
+            case .vocabulary:
+                FluentVocabularyView(viewModel: viewModel)
+            case .review:
+                FluentReviewView(viewModel: viewModel)
+            }
 
-            if viewModel.hasError {
-                errorView
-            } else {
-                webViewContent
+            // Bottom tab bar
+            bottomTabBar
+        }
+        .background(AdaptiveColors.background(for: colorScheme))
+        .sheet(isPresented: $viewModel.showSettings) {
+            FluentSettingsView(viewModel: viewModel)
+        }
+        .sheet(isPresented: $viewModel.showVocabularyDetail) {
+            if let item = viewModel.selectedVocabItem {
+                FluentVocabularyDetailView(item: item, viewModel: viewModel)
             }
         }
-        .toolbar {
-            // Leading: back/forward navigation
-            ToolbarItemGroup(placement: .topBarLeading) {
-                HStack(spacing: 4) {
-                    Button {
-                        viewModel.shouldReload = false
-                        // Go back via JavaScript — simpler than holding a webview ref
-                        goBackAction()
-                    } label: {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(
-                                viewModel.canGoBack
-                                    ? Color.hubPrimary
-                                    : AdaptiveColors.textSecondary(for: colorScheme).opacity(0.4)
-                            )
-                    }
-                    .disabled(!viewModel.canGoBack)
-
-                    Button {
-                        goForwardAction()
-                    } label: {
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(
-                                viewModel.canGoForward
-                                    ? Color.hubPrimary
-                                    : AdaptiveColors.textSecondary(for: colorScheme).opacity(0.4)
-                            )
-                    }
-                    .disabled(!viewModel.canGoForward)
-                }
-            }
-
-            // Trailing: reload + overflow menu
-            ToolbarItemGroup(placement: .topBarTrailing) {
-                Button {
-                    viewModel.reload()
-                } label: {
-                    Image(systemName: "arrow.clockwise")
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundStyle(Color.hubPrimary)
-                }
-
-                Menu {
-                    Button {
-                        viewModel.resetToHome()
-                    } label: {
-                        Label("Go to Home", systemImage: "house")
-                    }
-
-                    Divider()
-
-                    Button {
-                        viewModel.openInSafari()
-                    } label: {
-                        Label("Open in Safari", systemImage: "safari")
-                    }
-                } label: {
-                    Image(systemName: "ellipsis.circle")
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundStyle(Color.hubPrimary)
-                }
-            }
+        .onAppear {
+            viewModel.loadData()
         }
     }
 
-    // MARK: - WebView Content
+    // MARK: - Bottom Tab Bar
 
-    private var webViewContent: some View {
-        ZStack(alignment: .top) {
-            FluentWebView(
-                url: viewModel.baseURL,
-                viewModel: viewModel,
-                colorScheme: colorScheme
-            )
-            .ignoresSafeArea(edges: .bottom)
+    private var bottomTabBar: some View {
+        HStack(spacing: 0) {
+            tabButton(.dashboard, icon: "house.fill", label: "Home")
+            tabButton(.vocabulary, icon: "text.book.closed.fill", label: "Vocab")
+            tabButton(.review, icon: "rectangle.stack.fill", label: "Review")
 
-            // Loading progress bar at the top
-            if viewModel.isLoading {
-                ProgressView(value: viewModel.loadingProgress)
-                    .progressViewStyle(.linear)
-                    .tint(Color.hubPrimary)
-                    .animation(.easeInOut(duration: 0.2), value: viewModel.loadingProgress)
+            // Settings button (separate from tabs)
+            Button {
+                viewModel.showSettings = true
+            } label: {
+                VStack(spacing: 4) {
+                    Image(systemName: "gearshape.fill")
+                        .font(.system(size: 20, weight: .medium))
+                    Text("Settings")
+                        .font(.system(size: 10, weight: .medium))
+                }
+                .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                .frame(maxWidth: .infinity)
             }
+        }
+        .padding(.top, 8)
+        .padding(.bottom, 4)
+        .background(
+            AdaptiveColors.surface(for: colorScheme)
+                .shadow(
+                    color: colorScheme == .dark
+                        ? Color.black.opacity(0.3)
+                        : Color.black.opacity(0.06),
+                    radius: 8, x: 0, y: -2
+                )
+        )
+    }
+
+    private func tabButton(_ tab: FluentTab, icon: String, label: String) -> some View {
+        let isSelected = viewModel.selectedTab == tab
+        return Button {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                viewModel.selectedTab = tab
+            }
+        } label: {
+            VStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.system(size: 20, weight: .medium))
+                Text(label)
+                    .font(.system(size: 10, weight: .medium))
+            }
+            .foregroundStyle(isSelected ? Color.hubPrimary : AdaptiveColors.textSecondary(for: colorScheme))
+            .frame(maxWidth: .infinity)
         }
     }
 
-    // MARK: - Error View
+    // MARK: - Dashboard
 
-    private var errorView: some View {
-        VStack(spacing: HubLayout.sectionSpacing) {
-            Spacer()
+    private var dashboardContent: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: HubLayout.sectionSpacing) {
+                // Header
+                dashboardHeader
+                    .padding(.top, 8)
 
-            // Error icon
-            ZStack {
-                Circle()
-                    .fill(AdaptiveColors.surface(for: colorScheme))
-                    .frame(width: 96, height: 96)
-                    .shadow(
-                        color: Color.hubPrimary.opacity(0.1),
-                        radius: 20, x: 0, y: 8
-                    )
+                // Daily goal ring
+                dailyGoalCard
 
-                Image(systemName: "wifi.exclamationmark")
-                    .font(.system(size: 36, weight: .light))
-                    .foregroundStyle(Color.hubPrimary)
+                // Word of the day
+                if let word = viewModel.wordOfTheDay {
+                    wordOfTheDayCard(word)
+                }
+
+                // Stats row
+                statsRow
+
+                // Quick actions
+                quickActions
             }
+            .padding(.horizontal, HubLayout.standardPadding)
+            .padding(.bottom, HubLayout.sectionSpacing)
+        }
+    }
 
-            // Error text
-            VStack(spacing: HubLayout.itemSpacing) {
-                Text("Unable to Load")
-                    .font(.hubHeading)
+    // MARK: - Dashboard Header
+
+    private var dashboardHeader: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Fluent")
+                    .font(.hubTitle)
                     .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
 
-                Text(viewModel.errorMessage ?? "Check your internet connection and try again.")
+                Text(greetingText)
                     .font(.hubBody)
                     .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, HubLayout.standardPadding * 2)
             }
-
-            // Retry + Home buttons
-            VStack(spacing: HubLayout.itemSpacing) {
-                HubButton("Try Again", icon: "arrow.clockwise") {
-                    viewModel.retry()
-                }
-
-                HubSecondaryButton("Go to Home", icon: "house") {
-                    viewModel.resetToHome()
-                }
-            }
-            .padding(.horizontal, HubLayout.standardPadding * 3)
 
             Spacer()
+
+            // Streak badge
+            if viewModel.progress.currentStreak > 0 {
+                HStack(spacing: 4) {
+                    Image(systemName: "flame.fill")
+                        .foregroundStyle(Color.hubAccentRed)
+                    Text("\(viewModel.progress.currentStreak)")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(
+                    Capsule()
+                        .fill(AdaptiveColors.surfaceSecondary(for: colorScheme))
+                )
+            }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    // MARK: - Navigation Helpers
-
-    /// Trigger back navigation via the coordinator's stored webview reference.
-    private func goBackAction() {
-        // Post a notification that the coordinator will handle
-        NotificationCenter.default.post(name: .fluentGoBack, object: nil)
+    private var greetingText: String {
+        let hour = Calendar.current.component(.hour, from: Date())
+        if hour < 12 {
+            return "Good morning! Ready to learn?"
+        } else if hour < 18 {
+            return "Good afternoon! Time to practice."
+        } else {
+            return "Good evening! Let's review."
+        }
     }
 
-    /// Trigger forward navigation via the coordinator's stored webview reference.
-    private func goForwardAction() {
-        NotificationCenter.default.post(name: .fluentGoForward, object: nil)
+    // MARK: - Daily Goal Card
+
+    private var dailyGoalCard: some View {
+        HubCard {
+            HStack(spacing: HubLayout.standardPadding) {
+                // Progress ring
+                ZStack {
+                    Circle()
+                        .stroke(
+                            AdaptiveColors.surfaceSecondary(for: colorScheme),
+                            lineWidth: 8
+                        )
+                        .frame(width: 72, height: 72)
+
+                    Circle()
+                        .trim(from: 0, to: goalProgress)
+                        .stroke(
+                            Color.hubPrimary,
+                            style: StrokeStyle(lineWidth: 8, lineCap: .round)
+                        )
+                        .frame(width: 72, height: 72)
+                        .rotationEffect(.degrees(-90))
+                        .animation(.easeInOut(duration: 0.8), value: goalProgress)
+
+                    VStack(spacing: 0) {
+                        Text("\(viewModel.todayStats.cardsReviewed)")
+                            .font(.system(size: 20, weight: .bold))
+                            .foregroundStyle(Color.hubPrimary)
+                        Text("/\(viewModel.settings.dailyGoal)")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Daily Goal")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+
+                    Text("\(viewModel.dueCardCount) cards due for review")
+                        .font(.system(size: 13, weight: .regular))
+                        .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+
+                    if viewModel.dueCardCount > 0 {
+                        Button {
+                            viewModel.selectedTab = .review
+                        } label: {
+                            Text("Start Review")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 8)
+                                .background(
+                                    Capsule().fill(Color.hubPrimary)
+                                )
+                        }
+                    }
+                }
+
+                Spacer()
+            }
+        }
     }
-}
 
-// MARK: - Navigation Notifications
-
-extension Notification.Name {
-    static let fluentGoBack = Notification.Name("FluentGoBack")
-    static let fluentGoForward = Notification.Name("FluentGoForward")
-}
-
-// MARK: - Extended Coordinator for Navigation Notifications
-
-extension FluentWebView.Coordinator {
-    /// Subscribe to back/forward navigation notifications from the toolbar.
-    func subscribeToNavigationNotifications() {
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(handleGoBack),
-            name: .fluentGoBack,
-            object: nil
-        )
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(handleGoForward),
-            name: .fluentGoForward,
-            object: nil
-        )
+    private var goalProgress: Double {
+        guard viewModel.settings.dailyGoal > 0 else { return 0 }
+        return min(1.0, Double(viewModel.todayStats.cardsReviewed) / Double(viewModel.settings.dailyGoal))
     }
 
-    @objc private func handleGoBack() {
-        webView?.goBack()
+    // MARK: - Word of the Day
+
+    private func wordOfTheDayCard(_ word: VocabularyItem) -> some View {
+        HubCard {
+            VStack(alignment: .leading, spacing: HubLayout.itemSpacing) {
+                HStack {
+                    SectionHeader(title: "Word of the Day")
+                    Spacer()
+                    Button {
+                        viewModel.speak(word.term)
+                    } label: {
+                        Image(systemName: "speaker.wave.2.fill")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundStyle(Color.hubPrimary)
+                            .frame(width: 36, height: 36)
+                            .background(
+                                Circle().fill(Color.hubPrimary.opacity(0.12))
+                            )
+                    }
+                }
+
+                Text(word.term)
+                    .font(.system(size: 22, weight: .bold))
+                    .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+
+                Text(word.definition)
+                    .font(.hubBody)
+                    .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                    .lineSpacing(2)
+
+                if let chinese = word.chineseDefinition, viewModel.settings.showChinese {
+                    Text(chinese)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(Color.hubPrimary.opacity(0.8))
+                }
+
+                if let example = word.examples.first {
+                    HStack(alignment: .top, spacing: 8) {
+                        Image(systemName: "text.quote")
+                            .font(.system(size: 12))
+                            .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                            .padding(.top, 2)
+
+                        Text(example)
+                            .font(.system(size: 14, weight: .regular))
+                            .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                            .italic()
+                            .lineSpacing(2)
+                    }
+                }
+
+                // Category badge
+                HStack {
+                    Spacer()
+                    Text(word.category.rawValue)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(Color.hubPrimary)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(
+                            Capsule()
+                                .fill(Color.hubPrimary.opacity(0.12))
+                        )
+                }
+            }
+        }
+        .onTapGesture {
+            viewModel.showDetail(for: word)
+        }
     }
 
-    @objc private func handleGoForward() {
-        webView?.goForward()
+    // MARK: - Stats Row
+
+    private var statsRow: some View {
+        HStack(spacing: HubLayout.itemSpacing) {
+            statCard(
+                value: "\(viewModel.progress.totalCardsReviewed)",
+                label: "Total Reviews",
+                icon: "rectangle.stack.fill",
+                color: Color.hubPrimary
+            )
+            statCard(
+                value: viewModel.progress.totalCardsReviewed > 0
+                    ? "\(viewModel.progress.totalCorrect * 100 / viewModel.progress.totalCardsReviewed)%"
+                    : "—",
+                label: "Accuracy",
+                icon: "checkmark.circle.fill",
+                color: Color.hubAccentGreen
+            )
+            statCard(
+                value: "\(viewModel.progress.longestStreak)",
+                label: "Best Streak",
+                icon: "flame.fill",
+                color: Color.hubAccentRed
+            )
+        }
+    }
+
+    private func statCard(value: String, label: String, icon: String, color: Color) -> some View {
+        HubCard {
+            VStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundStyle(color)
+
+                Text(value)
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+
+                Text(label)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity)
+        }
+    }
+
+    // MARK: - Quick Actions
+
+    private var quickActions: some View {
+        VStack(alignment: .leading, spacing: HubLayout.itemSpacing) {
+            SectionHeader(title: "Quick Actions")
+
+            HStack(spacing: HubLayout.itemSpacing) {
+                quickActionButton(
+                    title: "Browse Words",
+                    icon: "text.book.closed.fill",
+                    color: Color.hubPrimaryLight
+                ) {
+                    viewModel.selectedTab = .vocabulary
+                }
+
+                quickActionButton(
+                    title: "Review Cards",
+                    icon: "rectangle.stack.fill",
+                    color: Color.hubAccentGreen
+                ) {
+                    viewModel.selectedTab = .review
+                }
+            }
+        }
+    }
+
+    private func quickActionButton(title: String, icon: String, color: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                Image(systemName: icon)
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundStyle(color)
+                    .frame(width: 36, height: 36)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(color.opacity(0.12))
+                    )
+
+                Text(title)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+            }
+            .padding(HubLayout.cardInnerPadding)
+            .background(
+                RoundedRectangle(cornerRadius: HubLayout.cardCornerRadius)
+                    .fill(AdaptiveColors.surface(for: colorScheme))
+                    .shadow(
+                        color: colorScheme == .dark
+                            ? Color.black.opacity(0.3)
+                            : Color.black.opacity(0.06),
+                        radius: 8, x: 0, y: 2
+                    )
+            )
+        }
+        .buttonStyle(.plain)
     }
 }
 
 // MARK: - Preview
 
 #Preview {
-    NavigationStack {
-        FluentView()
-    }
+    FluentView()
 }
