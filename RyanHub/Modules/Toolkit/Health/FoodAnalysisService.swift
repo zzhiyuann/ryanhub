@@ -3,28 +3,18 @@ import UIKit
 
 // MARK: - Food Analysis Service
 
-/// Analyzes food from natural language descriptions or images using the Anthropic API.
-/// Falls back to the Dispatcher chat system if API key is not configured.
+/// Analyzes food from natural language descriptions or images via a local bridge server
+/// that shells out to the `claude` CLI. No API key required -- uses the host Mac's
+/// Claude Code subscription.
+///
+/// The bridge server runs at `http://localhost:18790` (see `scripts/food-analysis-server.py`).
 @MainActor @Observable
 final class FoodAnalysisService {
     var isAnalyzing = false
     var analysisError: String?
 
-    /// Computed property that reads from UserDefaults each time,
-    /// so it picks up newly saved keys immediately.
-    private var apiKey: String? {
-        UserDefaults.standard.string(forKey: StorageKeys.anthropicAPIKey)
-    }
-
-    /// Whether the user needs to configure an API key before analysis can work.
-    var needsAPIKey: Bool {
-        guard let key = apiKey else { return true }
-        return key.isEmpty
-    }
-
-    var hasAPIKey: Bool {
-        !needsAPIKey
-    }
+    /// Base URL for the local food analysis bridge server.
+    private let bridgeBaseURL = "http://localhost:18790"
 
     /// Analyze food from a text description.
     func analyzeText(_ description: String) async -> FoodAnalysisResult? {
@@ -32,16 +22,8 @@ final class FoodAnalysisService {
         analysisError = nil
         defer { isAnalyzing = false }
 
-        let prompt = buildTextPrompt(description)
-
-        if let key = apiKey, !key.isEmpty {
-            return await callAnthropicAPI(messages: [
-                .init(role: "user", content: [.text(prompt)])
-            ], apiKey: key)
-        } else {
-            analysisError = "Please configure your Anthropic API key to use AI food analysis."
-            return nil
-        }
+        let body: [String: Any] = ["text": description]
+        return await callBridgeServer(body: body)
     }
 
     /// Analyze food from an image (photo of a meal).
@@ -56,180 +38,75 @@ final class FoodAnalysisService {
         }
 
         let base64 = imageData.base64EncodedString()
-        let textPart = context ?? "What food is in this image?"
-        let prompt = buildImagePrompt(textPart)
+        var body: [String: Any] = ["image_base64": base64]
+        if let context, !context.isEmpty {
+            body["text"] = context
+        }
 
-        if let key = apiKey, !key.isEmpty {
-            return await callAnthropicAPI(messages: [
-                .init(role: "user", content: [
-                    .image(mediaType: "image/jpeg", data: base64),
-                    .text(prompt)
-                ])
-            ], apiKey: key)
-        } else {
-            analysisError = "Please configure your Anthropic API key to use AI food analysis."
+        return await callBridgeServer(body: body)
+    }
+
+    // MARK: - Bridge Server Communication
+
+    private func callBridgeServer(body: [String: Any]) async -> FoodAnalysisResult? {
+        guard let url = URL(string: "\(bridgeBaseURL)/analyze") else {
+            analysisError = "Invalid bridge server URL"
             return nil
         }
-    }
 
-    /// Save API key to UserDefaults.
-    func saveAPIKey(_ key: String) {
-        UserDefaults.standard.set(key, forKey: StorageKeys.anthropicAPIKey)
-    }
-
-    /// Remove API key from UserDefaults.
-    func clearAPIKey() {
-        UserDefaults.standard.removeObject(forKey: StorageKeys.anthropicAPIKey)
-    }
-
-    // MARK: - Anthropic API
-
-    private func callAnthropicAPI(messages: [APIMessage], apiKey: String) async -> FoodAnalysisResult? {
-        let url = URL(string: "https://api.anthropic.com/v1/messages")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
-        request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
-        request.timeoutInterval = 30
-
-        let body = APIRequestBody(
-            model: "claude-haiku-4-5-20251001",
-            maxTokens: 1024,
-            messages: messages
-        )
+        request.timeoutInterval = 90 // claude CLI can take a while
 
         do {
-            request.httpBody = try JSONEncoder().encode(body)
+            request.httpBody = try JSONSerialization.data(withJSONObject: body)
             let (data, response) = try await URLSession.shared.data(for: request)
 
-            guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-                let http = response as? HTTPURLResponse
-                analysisError = "API error (\(http?.statusCode ?? 0))"
+            guard let http = response as? HTTPURLResponse else {
+                analysisError = "Invalid response from analysis server"
                 return nil
             }
 
-            let apiResponse = try JSONDecoder().decode(APIResponse.self, from: data)
-            guard let text = apiResponse.content.first?.text else {
-                analysisError = "Empty response from AI"
+            guard http.statusCode == 200 else {
+                // Try to extract error message from response
+                if let errorResponse = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let errorMsg = errorResponse["error"] as? String {
+                    analysisError = errorMsg
+                } else {
+                    analysisError = "Analysis server error (\(http.statusCode))"
+                }
                 return nil
             }
 
-            return parseAnalysisResponse(text)
+            return try JSONDecoder().decode(FoodAnalysisResult.self, from: data)
+        } catch let error as URLError where error.code == .cannotConnectToHost
+            || error.code == .networkConnectionLost
+            || error.code == .timedOut
+        {
+            analysisError = "Cannot reach analysis server. Make sure food-analysis-server.py is running."
+            return nil
+        } catch is DecodingError {
+            analysisError = "Failed to parse nutritional data from analysis"
+            return nil
         } catch {
             analysisError = error.localizedDescription
             return nil
         }
     }
 
-    // MARK: - Prompt Building
-
-    private func buildTextPrompt(_ description: String) -> String {
-        """
-        Analyze this meal/food description and return a JSON object with nutritional estimates. \
-        The user might describe food in any language (Chinese, English, etc). \
-        Be practical and estimate realistic calorie counts.
-
-        Description: "\(description)"
-
-        Return ONLY a JSON object in this exact format, no other text:
-        {
-          "items": [
-            {
-              "name": "food item name in English",
-              "calories": 350,
-              "protein": 25,
-              "carbs": 30,
-              "fat": 12,
-              "portion": "1 bowl"
-            }
-          ],
-          "totalCalories": 350,
-          "totalProtein": 25,
-          "totalCarbs": 30,
-          "totalFat": 12,
-          "mealType": "lunch",
-          "summary": "A brief one-line summary of the meal"
-        }
-
-        mealType must be one of: breakfast, lunch, dinner, snack.
-        All nutritional values are in grams except calories (kcal).
-        """
-    }
-
-    private func buildImagePrompt(_ context: String) -> String {
-        """
-        Look at this food image and analyze what's being eaten. \
-        Estimate nutritional content based on typical portion sizes. \
-        Additional context from user: "\(context)"
-
-        Return ONLY a JSON object in this exact format, no other text:
-        {
-          "items": [
-            {
-              "name": "food item name in English",
-              "calories": 350,
-              "protein": 25,
-              "carbs": 30,
-              "fat": 12,
-              "portion": "1 plate"
-            }
-          ],
-          "totalCalories": 350,
-          "totalProtein": 25,
-          "totalCarbs": 30,
-          "totalFat": 12,
-          "mealType": "lunch",
-          "summary": "A brief one-line summary of the meal"
-        }
-
-        mealType must be one of: breakfast, lunch, dinner, snack.
-        All nutritional values are in grams except calories (kcal).
-        """
-    }
-
-    // MARK: - Response Parsing
-
-    private func parseAnalysisResponse(_ text: String) -> FoodAnalysisResult? {
-        // Extract JSON from the response (handle markdown code blocks)
-        var jsonString = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        if jsonString.hasPrefix("```json") {
-            jsonString = String(jsonString.dropFirst(7))
-        } else if jsonString.hasPrefix("```") {
-            jsonString = String(jsonString.dropFirst(3))
-        }
-        if jsonString.hasSuffix("```") {
-            jsonString = String(jsonString.dropLast(3))
-        }
-        jsonString = jsonString.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        guard let data = jsonString.data(using: .utf8) else {
-            analysisError = "Failed to parse AI response"
-            return nil
-        }
+    /// Check if the bridge server is reachable.
+    func checkServerHealth() async -> Bool {
+        guard let url = URL(string: "\(bridgeBaseURL)/health") else { return false }
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 5
 
         do {
-            return try JSONDecoder().decode(FoodAnalysisResult.self, from: data)
+            let (_, response) = try await URLSession.shared.data(for: request)
+            return (response as? HTTPURLResponse)?.statusCode == 200
         } catch {
-            analysisError = "Failed to parse nutritional data"
-            return nil
+            return false
         }
-    }
-
-    // MARK: - Dispatcher Fallback
-
-    private func sendThroughDispatcher(_ message: String) {
-        NotificationCenter.default.post(
-            name: .sendChatCommand,
-            object: nil,
-            userInfo: ["command": message]
-        )
-    }
-
-    // MARK: - Storage Keys
-
-    private enum StorageKeys {
-        static let anthropicAPIKey = "ryanhub_anthropic_api_key"
     }
 }
 
@@ -253,72 +130,4 @@ struct AnalyzedFoodItem: Codable, Identifiable {
     let carbs: Int
     let fat: Int
     let portion: String?
-}
-
-// MARK: - Anthropic API Types
-
-private struct APIRequestBody: Encodable {
-    let model: String
-    let maxTokens: Int
-    let messages: [APIMessage]
-
-    enum CodingKeys: String, CodingKey {
-        case model
-        case maxTokens = "max_tokens"
-        case messages
-    }
-}
-
-struct APIMessage: Encodable {
-    let role: String
-    let content: [APIContent]
-}
-
-enum APIContent: Encodable {
-    case text(String)
-    case image(mediaType: String, data: String)
-
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.singleValueContainer()
-        switch self {
-        case .text(let text):
-            try container.encode(TextContent(type: "text", text: text))
-        case .image(let mediaType, let data):
-            try container.encode(ImageContent(
-                type: "image",
-                source: ImageSource(type: "base64", mediaType: mediaType, data: data)
-            ))
-        }
-    }
-
-    private struct TextContent: Encodable {
-        let type: String
-        let text: String
-    }
-
-    private struct ImageContent: Encodable {
-        let type: String
-        let source: ImageSource
-    }
-
-    private struct ImageSource: Encodable {
-        let type: String
-        let mediaType: String
-        let data: String
-
-        enum CodingKeys: String, CodingKey {
-            case type
-            case mediaType = "media_type"
-            case data
-        }
-    }
-}
-
-private struct APIResponse: Decodable {
-    let content: [ResponseContent]
-
-    struct ResponseContent: Decodable {
-        let type: String
-        let text: String?
-    }
 }

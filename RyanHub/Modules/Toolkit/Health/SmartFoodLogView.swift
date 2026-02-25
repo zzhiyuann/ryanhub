@@ -16,10 +16,7 @@ struct SmartFoodLogView: View {
     @State private var analysisResult: FoodAnalysisResult?
     @State private var analysisService = FoodAnalysisService()
     @State private var showCamera = false
-    @State private var showAPIKeyAlert = false
     @State private var showManualLog = false
-    @State private var apiKeyInput = ""
-    @State private var pendingAnalysisAfterKeyEntry = false
     @State private var date = Date()
     @FocusState private var isInputFocused: Bool
 
@@ -67,28 +64,6 @@ struct SmartFoodLogView: View {
             }
             .sheet(isPresented: $showManualLog) {
                 FoodLogView(viewModel: viewModel)
-            }
-            .alert("Anthropic API Key", isPresented: $showAPIKeyAlert) {
-                TextField("sk-ant-...", text: $apiKeyInput)
-                    .autocorrectionDisabled()
-                    .textInputAutocapitalization(.never)
-                Button("Save & Analyze") {
-                    let trimmed = apiKeyInput.trimmingCharacters(in: .whitespaces)
-                    guard !trimmed.isEmpty else { return }
-                    analysisService.saveAPIKey(trimmed)
-                    pendingAnalysisAfterKeyEntry = true
-                }
-                Button("Cancel", role: .cancel) {
-                    apiKeyInput = ""
-                }
-            } message: {
-                Text("Enter your Anthropic API key to enable AI food analysis. You can get one at console.anthropic.com.")
-            }
-            .onChange(of: showAPIKeyAlert) { _, isShowing in
-                if !isShowing && pendingAnalysisAfterKeyEntry {
-                    pendingAnalysisAfterKeyEntry = false
-                    Task { await analyzeCurrentInput() }
-                }
             }
         }
     }
@@ -379,14 +354,9 @@ struct SmartFoodLogView: View {
 
     // MARK: - Actions
 
-    /// Handle the analyze button tap. If no API key is configured, prompt the user to enter one.
+    /// Handle the analyze button tap — sends request to the local bridge server.
     private func handleAnalyzeTap() async {
-        if analysisService.needsAPIKey {
-            apiKeyInput = ""
-            showAPIKeyAlert = true
-        } else {
-            await analyzeCurrentInput()
-        }
+        await analyzeCurrentInput()
     }
 
     private func analyzeCurrentInput() async {
