@@ -95,6 +95,69 @@ struct MonthlyParkingStats {
     }
 }
 
+// MARK: - Cron Purchase Status
+
+/// Status of the last cron job execution, read from last-status.json.
+struct CronPurchaseStatus: Codable {
+    let timestamp: String
+    let date: String
+    let status: String  // "purchased", "skipped", "price_too_high", "error", "login_failed"
+    let price: Double?
+    let duration: String?
+    let zone: String?
+    let vehicle: String?
+    let reason: String?
+    let limit: Double?
+
+    /// Whether this status is from today.
+    var isToday: Bool {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        let today = formatter.string(from: Date())
+        return date == today
+    }
+
+    /// Human-readable summary.
+    var summary: String {
+        switch status {
+        case "purchased":
+            return "Purchased at $\(String(format: "%.2f", price ?? 0))"
+        case "skipped":
+            return "Skipped (in skip list)"
+        case "price_too_high":
+            return "Not bought — $\(String(format: "%.2f", price ?? 0)) >= $\(String(format: "%.0f", limit ?? 4)) limit"
+        case "login_failed":
+            return "Login failed: \(reason ?? "unknown")"
+        case "error":
+            return "Error: \(reason ?? "unknown")"
+        default:
+            return status
+        }
+    }
+
+    /// SF Symbol icon name.
+    var iconName: String {
+        switch status {
+        case "purchased": return "checkmark.circle.fill"
+        case "skipped": return "arrow.right.circle.fill"
+        case "price_too_high": return "exclamationmark.triangle.fill"
+        case "login_failed", "error": return "xmark.circle.fill"
+        default: return "questionmark.circle"
+        }
+    }
+
+    /// Icon color.
+    var iconColorName: String {
+        switch status {
+        case "purchased": return "green"
+        case "skipped": return "yellow"
+        case "price_too_high": return "orange"
+        case "login_failed", "error": return "red"
+        default: return "gray"
+        }
+    }
+}
+
 // MARK: - Notification Name
 
 extension Notification.Name {

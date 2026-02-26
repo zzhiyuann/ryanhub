@@ -21,6 +21,9 @@ final class ParkingViewModel {
     var lastActionMessage: String?
     var showConfirmation = false
 
+    /// Last purchase/skip status from the parkmobile-auto cron job.
+    var lastCronStatus: CronPurchaseStatus?
+
     /// The month currently displayed in the calendar picker.
     var calendarDisplayedMonth: Date = Date()
 
@@ -94,6 +97,7 @@ final class ParkingViewModel {
     init() {
         loadSkipDates()
         updateTodayStatus()
+        loadCronStatus()
     }
 
     // MARK: - Actions
@@ -253,6 +257,9 @@ final class ParkingViewModel {
     /// Path to the skip-dates file used by the parkmobile-auto system.
     private let skipDatesFilePath = "/Users/zwang/projects/parkmobile-auto/skip-dates.txt"
 
+    /// Path to the last status file written by buy.js / run.sh.
+    private let statusFilePath = "/Users/zwang/projects/parkmobile-auto/last-status.json"
+
     /// Load skip dates from the skip-dates.txt file.
     func loadSkipDates() {
         guard let content = try? String(contentsOfFile: skipDatesFilePath, encoding: .utf8) else {
@@ -329,6 +336,16 @@ final class ParkingViewModel {
             activeDays: activeDays,
             costPerDay: Self.costPerDay
         )
+    }
+
+    /// Load the last cron job status from last-status.json.
+    func loadCronStatus() {
+        guard let data = try? Data(contentsOf: URL(fileURLWithPath: statusFilePath)),
+              let status = try? JSONDecoder().decode(CronPurchaseStatus.self, from: data) else {
+            lastCronStatus = nil
+            return
+        }
+        lastCronStatus = status
     }
 
     /// Show a brief feedback message.

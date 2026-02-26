@@ -13,6 +13,7 @@ struct ParkingView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: HubLayout.sectionSpacing) {
+                cronStatusBanner
                 statusAndStatsSection
                 smartSuggestionSection
                 calendarPickerSection
@@ -26,6 +27,39 @@ struct ParkingView: View {
         .overlay(alignment: .bottom) {
             if viewModel.showConfirmation, let message = viewModel.lastActionMessage {
                 confirmationBanner(message: message)
+            }
+        }
+    }
+
+    // MARK: - Cron Status Banner
+
+    /// Shows the last purchase result from the cron job (today only).
+    @ViewBuilder
+    private var cronStatusBanner: some View {
+        if let status = viewModel.lastCronStatus, status.isToday {
+            let iconColor: Color = switch status.iconColorName {
+            case "green": .hubAccentGreen
+            case "yellow": .hubAccentYellow
+            case "orange": .hubAccentYellow
+            case "red": .hubAccentRed
+            default: AdaptiveColors.textSecondary(for: colorScheme)
+            }
+
+            HubCard {
+                HStack(spacing: 10) {
+                    Image(systemName: status.iconName)
+                        .font(.system(size: 18))
+                        .foregroundStyle(iconColor)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Today's Purchase")
+                            .font(.hubCaption)
+                            .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                        Text(status.summary)
+                            .font(.hubBody)
+                            .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                    }
+                    Spacer()
+                }
             }
         }
     }
