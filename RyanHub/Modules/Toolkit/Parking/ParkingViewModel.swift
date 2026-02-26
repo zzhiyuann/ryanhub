@@ -265,6 +265,14 @@ final class ParkingViewModel {
         isDateAlreadySkipped(date)
     }
 
+    /// Check if a specific date has a successful purchase in the history.
+    func isDatePurchased(_ date: Date) -> Bool {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        let dateStr = formatter.string(from: date)
+        return purchaseHistory.contains { $0.date == dateStr && $0.status == "purchased" }
+    }
+
     /// Get all days of the displayed month arranged as a grid (with leading empty slots).
     var calendarDays: [Date?] {
         let calendar = Calendar.current

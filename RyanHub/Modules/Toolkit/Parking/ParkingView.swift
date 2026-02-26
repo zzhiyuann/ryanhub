@@ -240,6 +240,7 @@ struct ParkingView: View {
                     // Legend
                     HStack(spacing: 16) {
                         legendItem(color: .hubPrimary, label: "Today")
+                        legendItem(color: .hubAccentGreen, label: "Purchased")
                         legendItem(color: .hubAccentYellow, label: "Skipped")
                     }
                     .padding(.top, 4)
@@ -253,6 +254,7 @@ struct ParkingView: View {
         let calendar = Calendar.current
         let isToday = calendar.isDateInToday(date)
         let isSkipped = viewModel.isDateSkipped(date)
+        let isPurchased = viewModel.isDatePurchased(date)
         let isWeekend = calendar.isDateInWeekend(date)
         let isPast = calendar.startOfDay(for: date) < calendar.startOfDay(for: Date())
         let dayNumber = calendar.component(.day, from: date)
@@ -264,22 +266,25 @@ struct ParkingView: View {
         } label: {
             Text("\(dayNumber)")
                 .font(.system(size: 14, weight: isToday ? .bold : .regular))
-                .foregroundStyle(dayTextColor(isToday: isToday, isSkipped: isSkipped, isWeekend: isWeekend, isPast: isPast))
+                .foregroundStyle(dayTextColor(isToday: isToday, isSkipped: isSkipped, isPurchased: isPurchased, isWeekend: isWeekend, isPast: isPast))
                 .frame(width: 36, height: 36)
                 .background(
                     Circle()
-                        .fill(dayBackgroundColor(isToday: isToday, isSkipped: isSkipped))
+                        .fill(dayBackgroundColor(isToday: isToday, isSkipped: isSkipped, isPurchased: isPurchased))
                 )
         }
         .disabled(isWeekend || isPast)
     }
 
-    private func dayTextColor(isToday: Bool, isSkipped: Bool, isWeekend: Bool, isPast: Bool) -> Color {
+    private func dayTextColor(isToday: Bool, isSkipped: Bool, isPurchased: Bool, isWeekend: Bool, isPast: Bool) -> Color {
         if isToday {
             return .white
         }
         if isSkipped {
             return .hubAccentYellow
+        }
+        if isPurchased {
+            return .hubAccentGreen
         }
         if isWeekend || isPast {
             return AdaptiveColors.textSecondary(for: colorScheme).opacity(0.4)
@@ -287,12 +292,15 @@ struct ParkingView: View {
         return AdaptiveColors.textPrimary(for: colorScheme)
     }
 
-    private func dayBackgroundColor(isToday: Bool, isSkipped: Bool) -> Color {
+    private func dayBackgroundColor(isToday: Bool, isSkipped: Bool, isPurchased: Bool) -> Color {
         if isToday {
             return .hubPrimary
         }
         if isSkipped {
             return Color.hubAccentYellow.opacity(0.15)
+        }
+        if isPurchased {
+            return Color.hubAccentGreen.opacity(0.15)
         }
         return .clear
     }
