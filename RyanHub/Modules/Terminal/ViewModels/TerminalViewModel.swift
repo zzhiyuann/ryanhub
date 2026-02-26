@@ -78,6 +78,13 @@ final class TerminalViewModel {
         currentTmuxSession = nil
     }
 
+    /// Auto-enter tmux after SSH connects. Creates or re-attaches to a persistent "main" session.
+    func autoEnterTmux() {
+        guard ssh.isConnected else { return }
+        ssh.sendString("tmux new-session -A -s main\n")
+        currentTmuxSession = "main"
+    }
+
     /// List tmux sessions on the remote host via a separate exec channel (no terminal echo).
     func refreshTmuxSessions() {
         guard ssh.isConnected else { return }
@@ -95,10 +102,14 @@ final class TerminalViewModel {
         }
     }
 
-    /// Attach to a tmux session.
+    /// Switch to a tmux session using tmux prefix key (works regardless of running program).
     func attachTmuxSession(_ name: String) {
         currentTmuxSession = name
-        ssh.sendString("tmux attach -t '\(name)'\n")
+        // Ctrl+B (tmux prefix) → : (command mode) → switch-client -t 'name' → Enter
+        ssh.send(Data([0x02]))  // Ctrl+B
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+            self?.ssh.sendString(":switch-client -t '\(name)'\n")
+        }
     }
 
     /// Detach from current tmux session (Ctrl+B, d).
@@ -111,17 +122,20 @@ final class TerminalViewModel {
         }
     }
 
-    /// Create a new tmux session and run claude inside it.
+    /// Create a new tmux session with Claude and switch to it.
     func newClaudeSession() {
         let shortId = UUID().uuidString.prefix(4).lowercased()
         let name = "new-\(shortId)"
 
-        // Create detached session via exec channel (no echo in terminal)
+        // Create detached session via exec channel (silent)
         ssh.execCommand("tmux new-session -d -s '\(name)' 'claude; zsh'") { [weak self] _ in
             DispatchQueue.main.async {
-                // Attach via interactive shell
-                self?.ssh.sendString("tmux attach -t '\(name)'\n")
                 self?.currentTmuxSession = name
+                // Switch via tmux prefix key (works inside tmux regardless of running program)
+                self?.ssh.send(Data([0x02]))  // Ctrl+B
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                    self?.ssh.sendString(":switch-client -t '\(name)'\n")
+                }
             }
         }
     }

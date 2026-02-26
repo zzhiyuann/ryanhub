@@ -32,6 +32,15 @@ struct SSHTerminalView: View {
                 sessionPickerOverlay
             }
         }
+        .onChange(of: viewModel.ssh.isConnected) { _, isConnected in
+            if isConnected {
+                // Auto-enter tmux after shell is ready
+                Task {
+                    try? await Task.sleep(for: .seconds(0.8))
+                    viewModel.autoEnterTmux()
+                }
+            }
+        }
     }
 
     // MARK: - Session Bar
