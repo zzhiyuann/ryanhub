@@ -14,7 +14,7 @@ enum ParkingStatus: String, Codable {
         case .active: return "Active"
         case .skipped: return "Skipped"
         case .notPurchased: return "Not Purchased"
-        case .unknown: return "Unknown"
+        case .unknown: return "Pending"
         }
     }
 

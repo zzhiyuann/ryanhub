@@ -68,9 +68,16 @@ struct MessageBubble: View {
                 .padding(.vertical, 10)
                 .textSelection(.enabled)
         } else {
-            MarkdownContent(text: message.content)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
+            VStack(alignment: .leading, spacing: 4) {
+                if !message.content.isEmpty {
+                    MarkdownContent(text: message.content)
+                }
+                if message.isStreaming {
+                    InlineTypingDots()
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
         }
     }
 
@@ -251,6 +258,35 @@ struct BubbleShape: Shape {
 
         path.closeSubpath()
         return path
+    }
+}
+
+// MARK: - Inline Typing Dots
+
+/// Small bouncing dots shown inside a streaming message bubble.
+private struct InlineTypingDots: View {
+    @Environment(\.colorScheme) private var colorScheme
+    @State private var animating = false
+
+    private let dotSize: CGFloat = 5
+
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(0..<3, id: \.self) { index in
+                Circle()
+                    .fill(AdaptiveColors.textSecondary(for: colorScheme))
+                    .frame(width: dotSize, height: dotSize)
+                    .offset(y: animating ? -3 : 3)
+                    .animation(
+                        .easeInOut(duration: 0.45)
+                        .repeatForever(autoreverses: true)
+                        .delay(Double(index) * 0.15),
+                        value: animating
+                    )
+            }
+        }
+        .padding(.top, 2)
+        .onAppear { animating = true }
     }
 }
 

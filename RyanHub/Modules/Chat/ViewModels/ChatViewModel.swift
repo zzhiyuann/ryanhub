@@ -42,7 +42,10 @@ final class ChatViewModel {
     // MARK: - Private
 
     private let webSocket = WebSocketClient()
-    private var currentStreamingMessageId: String?
+    /// The ID of the currently streaming assistant message, if any.
+    /// Used by the view to suppress the standalone TypingIndicator when
+    /// a streaming message bubble is already visible.
+    private(set) var currentStreamingMessageId: String?
     private var serverURL: String?
     private var audioRecorder: AVAudioRecorder?
     private var recordingURL: URL?

@@ -96,8 +96,8 @@ final class ParkingViewModel {
 
     init() {
         loadSkipDates()
-        updateTodayStatus()
         loadCronStatus()
+        updateTodayStatus()
     }
 
     // MARK: - Actions
@@ -294,15 +294,28 @@ final class ParkingViewModel {
         skipDates.contains { Calendar.current.isDate($0.date, inSameDayAs: date) }
     }
 
-    /// Update today's status based on skip dates.
+    /// Update today's status based on skip dates and actual cron purchase result.
     private func updateTodayStatus() {
         let today = Calendar.current.startOfDay(for: Date())
         if !isTodayWeekday {
             todayStatus = .notPurchased
         } else if isDateAlreadySkipped(today) {
             todayStatus = .skipped
+        } else if let cron = lastCronStatus, cron.isToday {
+            // Use actual cron job result to determine status
+            switch cron.status {
+            case "purchased":
+                todayStatus = .active
+            case "skipped":
+                todayStatus = .skipped
+            case "price_too_high", "error", "login_failed":
+                todayStatus = .notPurchased
+            default:
+                todayStatus = .unknown
+            }
         } else {
-            todayStatus = .active
+            // Weekday, not skipped, but cron hasn't run yet today
+            todayStatus = .unknown
         }
     }
 
