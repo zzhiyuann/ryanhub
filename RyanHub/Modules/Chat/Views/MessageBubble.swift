@@ -6,12 +6,24 @@ import SwiftUI
 struct MessageBubble: View {
     @Environment(\.colorScheme) private var colorScheme
     let message: ChatMessage
+    /// All messages in the conversation, used to look up quoted messages for scroll.
+    var allMessages: [ChatMessage] = []
+    var onReply: ((ChatMessage) -> Void)?
+    var onScrollToMessage: ((String) -> Void)?
 
     private var isUser: Bool { message.role == .user }
+    @State private var swipeOffset: CGFloat = 0
 
     var body: some View {
         HStack(alignment: .bottom, spacing: 6) {
             if isUser {
+                // Reply icon appears on swipe
+                if swipeOffset < -30 {
+                    Image(systemName: "arrowshape.turn.up.left.fill")
+                        .font(.system(size: 16))
+                        .foregroundStyle(Color.hubPrimary.opacity(0.7))
+                        .transition(.scale.combined(with: .opacity))
+                }
                 Spacer(minLength: 48)
             } else {
                 // Bot avatar
@@ -26,6 +38,11 @@ struct MessageBubble: View {
             }
 
             VStack(alignment: isUser ? .trailing : .leading, spacing: 2) {
+                // Quoted message preview
+                if let replyPreview = message.replyToPreview {
+                    quotedPreview(replyPreview)
+                }
+
                 // Message content bubble
                 bubbleContent
                     .background(bubbleBackground)
@@ -37,11 +54,79 @@ struct MessageBubble: View {
                     .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme).opacity(0.7))
                     .padding(.horizontal, 4)
             }
+            .offset(x: swipeOffset)
 
             if !isUser {
                 Spacer(minLength: 48)
+                // Reply icon appears on swipe
+                if swipeOffset > 30 {
+                    Image(systemName: "arrowshape.turn.up.left.fill")
+                        .font(.system(size: 16))
+                        .foregroundStyle(Color.hubPrimary.opacity(0.7))
+                        .transition(.scale.combined(with: .opacity))
+                }
             }
         }
+        .gesture(
+            DragGesture(minimumDistance: 20)
+                .onChanged { value in
+                    let drag = value.translation.width
+                    // User messages: swipe left (negative). Assistant: swipe right (positive).
+                    if isUser && drag < 0 {
+                        swipeOffset = max(drag, -60)
+                    } else if !isUser && drag > 0 {
+                        swipeOffset = min(drag, 60)
+                    }
+                }
+                .onEnded { value in
+                    let threshold: CGFloat = 40
+                    if (isUser && value.translation.width < -threshold) ||
+                       (!isUser && value.translation.width > threshold) {
+                        onReply?(message)
+                    }
+                    withAnimation(.spring(response: 0.3)) {
+                        swipeOffset = 0
+                    }
+                }
+        )
+        .animation(.interactiveSpring, value: swipeOffset)
+    }
+
+    // MARK: - Quoted Preview
+
+    @ViewBuilder
+    private func quotedPreview(_ preview: String) -> some View {
+        Button {
+            if let replyId = message.replyToId {
+                onScrollToMessage?(replyId)
+            }
+        } label: {
+            HStack(spacing: 6) {
+                RoundedRectangle(cornerRadius: 1.5)
+                    .fill(Color.hubPrimary)
+                    .frame(width: 3)
+
+                Text(preview)
+                    .font(.system(size: 12))
+                    .foregroundStyle(
+                        isUser
+                            ? Color.white.opacity(0.7)
+                            : AdaptiveColors.textSecondary(for: colorScheme)
+                    )
+                    .lineLimit(1)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(
+                        isUser
+                            ? Color.white.opacity(0.15)
+                            : AdaptiveColors.surfaceSecondary(for: colorScheme)
+                    )
+            )
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Bubble Content

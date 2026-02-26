@@ -11,6 +11,8 @@ struct ChatView: View {
     @State private var showCamera = false
     @State private var showSidebar = false
     @GestureState private var drawerDragOffset: CGFloat = 0
+    /// The message the user is replying to (swipe-to-reply).
+    @State private var replyingTo: ChatMessage?
 
     /// Width of the sidebar drawer (80% of screen).
     private var drawerWidth: CGFloat {
@@ -28,6 +30,11 @@ struct ChatView: View {
                     // Messages area
                     messagesArea
 
+                    // Reply bar (shown when replying to a message)
+                    if let replying = replyingTo {
+                        replyBar(for: replying)
+                    }
+
                     // Input bar
                     ChatInputBar(
                         text: $viewModel.inputText,
@@ -36,7 +43,12 @@ struct ChatView: View {
                         recordingDuration: viewModel.recordingDuration,
                         pendingImageData: viewModel.pendingImageData,
                         onSend: {
-                            viewModel.sendMessage()
+                            if let replying = replyingTo {
+                                viewModel.sendMessage(replyingTo: replying)
+                                replyingTo = nil
+                            } else {
+                                viewModel.sendMessage()
+                            }
                         },
                         onStartRecording: {
                             viewModel.startRecording()
@@ -245,8 +257,21 @@ struct ChatView: View {
                             .padding(.top, 80)
                     } else {
                         ForEach(viewModel.messages) { message in
-                            MessageBubble(message: message)
-                                .id(message.id)
+                            MessageBubble(
+                                message: message,
+                                allMessages: viewModel.messages,
+                                onReply: { msg in
+                                    withAnimation(.easeOut(duration: 0.15)) {
+                                        replyingTo = msg
+                                    }
+                                },
+                                onScrollToMessage: { targetId in
+                                    withAnimation {
+                                        proxy.scrollTo(targetId, anchor: .center)
+                                    }
+                                }
+                            )
+                            .id(message.id)
                         }
                     }
 
@@ -302,6 +327,42 @@ struct ChatView: View {
     }
 
     // MARK: - Helpers
+
+    @ViewBuilder
+    private func replyBar(for message: ChatMessage) -> some View {
+        HStack(spacing: 8) {
+            RoundedRectangle(cornerRadius: 1.5)
+                .fill(Color.hubPrimary)
+                .frame(width: 3, height: 28)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(message.role == .user ? "You" : "Assistant")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Color.hubPrimary)
+
+                Text(message.content.isEmpty ? "[Media]" : String(message.content.prefix(80)))
+                    .font(.system(size: 12))
+                    .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                    .lineLimit(1)
+            }
+
+            Spacer()
+
+            Button {
+                withAnimation(.easeOut(duration: 0.15)) {
+                    replyingTo = nil
+                }
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 18))
+                    .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme).opacity(0.6))
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 6)
+        .background(AdaptiveColors.surface(for: colorScheme).opacity(0.95))
+        .transition(.move(edge: .bottom).combined(with: .opacity))
+    }
 
     private func scrollToBottom(proxy: ScrollViewProxy) {
         // Small delay to allow the layout to update before scrolling

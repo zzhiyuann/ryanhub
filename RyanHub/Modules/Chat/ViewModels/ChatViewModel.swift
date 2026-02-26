@@ -102,12 +102,13 @@ final class ChatViewModel {
     }
 
     /// Send the current input text (and any pending image) as a message.
-    func sendMessage() {
+    /// Optionally include a reference to a message being replied to.
+    func sendMessage(replyingTo: ChatMessage? = nil) {
         let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
 
         // If there's a pending image, send it with the optional caption text.
         if let imageData = pendingImageData {
-            sendImageMessage(data: imageData, caption: text)
+            sendImageMessage(data: imageData, caption: text, replyingTo: replyingTo)
             inputText = ""
             pendingImageData = nil
             return
@@ -115,7 +116,13 @@ final class ChatViewModel {
 
         guard !text.isEmpty else { return }
 
-        let userMessage = ChatMessage.user(text)
+        let replyPreview = replyingTo.map { String($0.content.prefix(80)) }
+        let userMessage = ChatMessage(
+            content: text,
+            role: .user,
+            replyToId: replyingTo?.id,
+            replyToPreview: replyPreview
+        )
         appendMessage(userMessage)
         inputText = ""
         isTyping = true
@@ -149,9 +156,16 @@ final class ChatViewModel {
     }
 
     /// Send an image message from photo picker data, with an optional user caption.
-    func sendImageMessage(data: Data, caption: String = "") {
+    func sendImageMessage(data: Data, caption: String = "", replyingTo: ChatMessage? = nil) {
         let base64 = data.base64EncodedString()
-        let userMessage = ChatMessage.userImage(base64: base64, caption: caption)
+        let replyPreview = replyingTo.map { String($0.content.prefix(80)) }
+        let userMessage = ChatMessage(
+            content: caption,
+            role: .user,
+            imageBase64: base64,
+            replyToId: replyingTo?.id,
+            replyToPreview: replyPreview
+        )
         appendMessage(userMessage)
         isTyping = true
 
@@ -552,6 +566,10 @@ final class ChatViewModel {
         // the user bubble with the assistant bubble.
         let assistantId = "resp-\(id)"
 
+        // Find the original user message to auto-link the reply
+        let userMessage = messages.first(where: { $0.id == id && $0.role == .user })
+        let replyPreview = userMessage.map { String($0.content.prefix(60)) }
+
         if let existingIndex = messages.firstIndex(where: { $0.id == assistantId && $0.role == .assistant }) {
             // Update existing streaming message in place
             messages[existingIndex] = ChatMessage(
@@ -559,13 +577,22 @@ final class ChatViewModel {
                 content: content,
                 role: .assistant,
                 timestamp: messages[existingIndex].timestamp,
-                isStreaming: isStreaming
+                isStreaming: isStreaming,
+                replyToId: id,
+                replyToPreview: replyPreview
             )
             // Force view update for streaming content changes
             messageUpdateTrigger += 1
         } else {
             // New assistant message — always appended at the end
-            let assistantMessage = ChatMessage.assistant(content, id: assistantId, isStreaming: isStreaming)
+            let assistantMessage = ChatMessage(
+                id: assistantId,
+                content: content,
+                role: .assistant,
+                isStreaming: isStreaming,
+                replyToId: id,
+                replyToPreview: replyPreview
+            )
             messages.append(assistantMessage)
             messageUpdateTrigger += 1
         }

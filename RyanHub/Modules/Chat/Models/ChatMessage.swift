@@ -14,6 +14,10 @@ struct ChatMessage: Identifiable, Codable, Equatable {
     /// True when the image was saved to disk (survives persistence even after
     /// imageBase64 is stripped from UserDefaults).
     var hasImageOnDisk: Bool
+    /// ID of the message being replied to (quote-reply feature).
+    var replyToId: String?
+    /// Short preview of the quoted message for display.
+    var replyToPreview: String?
 
     enum Role: String, Codable {
         case user
@@ -42,7 +46,9 @@ struct ChatMessage: Identifiable, Codable, Equatable {
         imageBase64: String? = nil,
         voiceBase64: String? = nil,
         voiceDuration: TimeInterval? = nil,
-        hasImageOnDisk: Bool = false
+        hasImageOnDisk: Bool = false,
+        replyToId: String? = nil,
+        replyToPreview: String? = nil
     ) {
         self.id = id
         self.content = content
@@ -53,9 +59,11 @@ struct ChatMessage: Identifiable, Codable, Equatable {
         self.voiceBase64 = voiceBase64
         self.voiceDuration = voiceDuration
         self.hasImageOnDisk = hasImageOnDisk
+        self.replyToId = replyToId
+        self.replyToPreview = replyToPreview
     }
 
-    // Custom decoder so old messages without hasImageOnDisk decode as false
+    // Custom decoder for backward compatibility with older stored messages
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(String.self, forKey: .id)
@@ -67,11 +75,14 @@ struct ChatMessage: Identifiable, Codable, Equatable {
         voiceBase64 = try container.decodeIfPresent(String.self, forKey: .voiceBase64)
         voiceDuration = try container.decodeIfPresent(TimeInterval.self, forKey: .voiceDuration)
         hasImageOnDisk = try container.decodeIfPresent(Bool.self, forKey: .hasImageOnDisk) ?? false
+        replyToId = try container.decodeIfPresent(String.self, forKey: .replyToId)
+        replyToPreview = try container.decodeIfPresent(String.self, forKey: .replyToPreview)
     }
 
     private enum CodingKeys: String, CodingKey {
         case id, content, role, timestamp, isStreaming
         case imageBase64, voiceBase64, voiceDuration, hasImageOnDisk
+        case replyToId, replyToPreview
     }
 
     /// Create a user text message.
