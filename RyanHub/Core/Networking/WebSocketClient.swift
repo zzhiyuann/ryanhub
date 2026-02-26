@@ -73,8 +73,8 @@ final class WebSocketClient {
         connectionState = .disconnected
     }
 
-    func sendMessage(id: String, content: String, project: String? = nil) async throws {
-        let payload = ClientMessage(type: "message", id: id, content: content, project: project)
+    func sendMessage(id: String, content: String, project: String? = nil, language: String? = nil) async throws {
+        let payload = ClientMessage(type: "message", id: id, content: content, project: project, language: language)
         let data = try JSONEncoder().encode(payload)
         guard let jsonString = String(data: data, encoding: .utf8) else {
             throw WebSocketError.encodingFailed
@@ -86,13 +86,14 @@ final class WebSocketClient {
     }
 
     /// Send a message with an image attachment (base64-encoded).
-    func sendImageMessage(id: String, imageBase64: String, caption: String = "", project: String? = nil) async throws {
+    func sendImageMessage(id: String, imageBase64: String, caption: String = "", project: String? = nil, language: String? = nil) async throws {
         let payload = ClientImageMessage(
             type: "message",
             id: id,
             content: caption.isEmpty ? "[Image]" : caption,
             imageBase64: imageBase64,
-            project: project
+            project: project,
+            language: language
         )
         let data = try JSONEncoder().encode(payload)
         guard let jsonString = String(data: data, encoding: .utf8) else {
@@ -105,14 +106,15 @@ final class WebSocketClient {
     }
 
     /// Send a voice message (base64-encoded audio).
-    func sendVoiceMessage(id: String, audioBase64: String, duration: TimeInterval, project: String? = nil) async throws {
+    func sendVoiceMessage(id: String, audioBase64: String, duration: TimeInterval, project: String? = nil, language: String? = nil) async throws {
         let payload = ClientVoiceMessage(
             type: "message",
             id: id,
             content: "[Voice message]",
             audioBase64: audioBase64,
             duration: duration,
-            project: project
+            project: project,
+            language: language
         )
         let data = try JSONEncoder().encode(payload)
         guard let jsonString = String(data: data, encoding: .utf8) else {
@@ -322,7 +324,7 @@ final class WebSocketClient {
                 try? await Task.sleep(for: .seconds(30))
                 guard !Task.isCancelled, let self, let task = self.webSocketTask else { break }
                 // Send application-level ping (not WebSocket ping frame)
-                let pingData = try? JSONEncoder().encode(ClientMessage(type: "ping", id: "", content: "", project: nil))
+                let pingData = try? JSONEncoder().encode(ClientMessage(type: "ping", id: "", content: "", project: nil, language: nil))
                 if let data = pingData, let str = String(data: data, encoding: .utf8) {
                     try? await task.send(.string(str))
                 }
@@ -343,6 +345,9 @@ struct ClientMessage: Codable {
     let id: String
     let content: String
     let project: String?
+    /// ISO language code (e.g. "en", "zh-Hans") indicating the user's preferred
+    /// response language. The dispatcher/AI can use this to localize replies.
+    let language: String?
 }
 
 struct ClientImageMessage: Codable {
@@ -351,9 +356,10 @@ struct ClientImageMessage: Codable {
     let content: String
     let imageBase64: String
     let project: String?
+    let language: String?
 
     enum CodingKeys: String, CodingKey {
-        case type, id, content, project
+        case type, id, content, project, language
         case imageBase64 = "image_base64"
     }
 }
@@ -365,9 +371,10 @@ struct ClientVoiceMessage: Codable {
     let audioBase64: String
     let duration: TimeInterval
     let project: String?
+    let language: String?
 
     enum CodingKeys: String, CodingKey {
-        case type, id, content, duration, project
+        case type, id, content, duration, project, language
         case audioBase64 = "audio_base64"
     }
 }

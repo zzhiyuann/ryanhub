@@ -26,6 +26,10 @@ final class ChatViewModel {
     var showCamera: Bool = false
     var selectedPhotoItem: PhotosPickerItem?
 
+    /// Image data waiting to be sent alongside a text message.
+    /// Set when the user picks a photo; cleared after sending or dismissal.
+    var pendingImageData: Data?
+
     // MARK: - Voice Recording State
 
     var isRecording: Bool = false
@@ -97,9 +101,18 @@ final class ChatViewModel {
         startStatePolling()
     }
 
-    /// Send the current input text as a message.
+    /// Send the current input text (and any pending image) as a message.
     func sendMessage() {
         let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // If there's a pending image, send it with the optional caption text.
+        if let imageData = pendingImageData {
+            sendImageMessage(data: imageData, caption: text)
+            inputText = ""
+            pendingImageData = nil
+            return
+        }
+
         guard !text.isEmpty else { return }
 
         let userMessage = ChatMessage.user(text)
@@ -115,11 +128,17 @@ final class ChatViewModel {
         // Build the content to send over the wire. If the message is health-related,
         // prepend a structured health data context so the AI can answer questions
         // about weight, food, activity, etc. without backend changes.
-        let contentToSend = Self.buildContentWithHealthContext(userText: text)
+        var contentToSend = Self.buildContentWithHealthContext(userText: text)
+
+        // Prepend language instruction so the AI responds in the user's chosen language.
+        let language = appState?.language ?? .english
+        contentToSend = "\(language.responseLanguageInstruction)\n\n\(contentToSend)"
+
+        let languageCode = language.rawValue
 
         Task {
             do {
-                try await webSocket.sendMessage(id: messageId, content: contentToSend)
+                try await webSocket.sendMessage(id: messageId, content: contentToSend, language: languageCode)
             } catch {
                 self.isTyping = false
                 let errorMessage = ChatMessage.assistant("Failed to send message: \(error.localizedDescription)")
@@ -140,10 +159,17 @@ final class ChatViewModel {
         autoTitleCurrentSession(from: "[Image]")
 
         let messageId = userMessage.id
+        let language = appState?.language ?? .english
+        let languageCode = language.rawValue
 
         Task {
             do {
-                try await webSocket.sendImageMessage(id: messageId, imageBase64: base64)
+                try await webSocket.sendImageMessage(
+                    id: messageId,
+                    imageBase64: base64,
+                    caption: language.responseLanguageInstruction,
+                    language: languageCode
+                )
             } catch {
                 self.isTyping = false
                 let errorMessage = ChatMessage.assistant("Failed to send image: \(error.localizedDescription)")
@@ -238,10 +264,17 @@ final class ChatViewModel {
         autoTitleCurrentSession(from: "[Voice message]")
 
         let messageId = userMessage.id
+        let language = appState?.language ?? .english
+        let languageCode = language.rawValue
 
         Task {
             do {
-                try await webSocket.sendVoiceMessage(id: messageId, audioBase64: base64, duration: duration)
+                try await webSocket.sendVoiceMessage(
+                    id: messageId,
+                    audioBase64: base64,
+                    duration: duration,
+                    language: languageCode
+                )
             } catch {
                 self.isTyping = false
                 let errorMessage = ChatMessage.assistant("Failed to send voice message: \(error.localizedDescription)")
