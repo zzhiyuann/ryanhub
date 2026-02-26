@@ -8,6 +8,8 @@ struct MessageBubble: View {
     let message: ChatMessage
     /// All messages in the conversation, used to look up quoted messages for scroll.
     var allMessages: [ChatMessage] = []
+    /// Per-message status (sending → acknowledged → processing → done).
+    var messageStatus: ChatViewModel.MessageStatus?
     var onReply: ((ChatMessage) -> Void)?
     var onScrollToMessage: ((String) -> Void)?
 
@@ -49,11 +51,17 @@ struct MessageBubble: View {
                     .background(bubbleBackground)
                     .clipShape(BubbleShape(isUser: isUser))
 
-                // Timestamp
-                Text(message.timestamp, style: .time)
-                    .font(.system(size: 10, weight: .regular))
-                    .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme).opacity(0.7))
-                    .padding(.horizontal, 4)
+                // Timestamp + status
+                HStack(spacing: 4) {
+                    Text(message.timestamp, style: .time)
+                        .font(.system(size: 10, weight: .regular))
+                        .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme).opacity(0.7))
+
+                    if isUser, let status = messageStatus {
+                        messageStatusIcon(status)
+                    }
+                }
+                .padding(.horizontal, 4)
             }
             .offset(x: swipeOffset)
 
@@ -238,6 +246,34 @@ struct MessageBubble: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
+    }
+
+    // MARK: - Message Status Icon
+
+    @ViewBuilder
+    private func messageStatusIcon(_ status: ChatViewModel.MessageStatus) -> some View {
+        switch status {
+        case .sending:
+            Image(systemName: "clock")
+                .font(.system(size: 9))
+                .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme).opacity(0.5))
+        case .acknowledged:
+            Text("\u{1F440}")
+                .font(.system(size: 10))
+        case .processing:
+            Image(systemName: "ellipsis")
+                .font(.system(size: 9))
+                .foregroundStyle(Color.hubPrimary.opacity(0.7))
+                .symbolEffect(.variableColor.iterative, isActive: true)
+        case .done:
+            Image(systemName: "checkmark")
+                .font(.system(size: 9, weight: .bold))
+                .foregroundStyle(Color.hubAccentGreen.opacity(0.8))
+        case .failed:
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 9))
+                .foregroundStyle(Color.hubAccentRed)
+        }
     }
 
     // MARK: - Background

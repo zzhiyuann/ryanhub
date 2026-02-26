@@ -261,6 +261,7 @@ struct ChatView: View {
                             MessageBubble(
                                 message: message,
                                 allMessages: viewModel.messages,
+                                messageStatus: viewModel.messageStatuses[message.id],
                                 onReply: { msg in
                                     withAnimation(.easeOut(duration: 0.15)) {
                                         replyingTo = msg

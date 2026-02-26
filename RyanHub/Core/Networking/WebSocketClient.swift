@@ -380,7 +380,7 @@ struct ClientVoiceMessage: Codable {
 }
 
 struct DispatcherMessage: Codable {
-    let type: String        // "response", "status", "error", "pong"
+    let type: String        // "response", "status", "error", "pong", "ack"
     let id: String?
     let content: String?
     let streaming: Bool?

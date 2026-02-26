@@ -20,6 +20,19 @@ final class ChatViewModel {
     /// Trigger incremented on every message mutation to force view refresh.
     var messageUpdateTrigger: Int = 0
 
+    /// Per-message status tracking for concurrent message handling.
+    /// Maps user message ID → current status.
+    var messageStatuses: [String: MessageStatus] = [:]
+
+    /// Status of an individual message in the pipeline.
+    enum MessageStatus: Equatable {
+        case sending           // Message sent, waiting for ack
+        case acknowledged      // Server received (👀)
+        case processing        // Server is generating response
+        case done              // Final response received
+        case failed(String)    // Error
+    }
+
     // MARK: - Image Picker State
 
     var showImagePicker: Bool = false
@@ -125,12 +138,13 @@ final class ChatViewModel {
         )
         appendMessage(userMessage)
         inputText = ""
-        isTyping = true
 
         // Auto-title: if this is the first user message, set the session title
         autoTitleCurrentSession(from: text)
 
         let messageId = userMessage.id
+        messageStatuses[messageId] = .sending
+        isTyping = true
 
         // Build the content to send over the wire. If the message is health-related,
         // prepend a structured health data context so the AI can answer questions
@@ -147,7 +161,8 @@ final class ChatViewModel {
             do {
                 try await webSocket.sendMessage(id: messageId, content: contentToSend, language: languageCode)
             } catch {
-                self.isTyping = false
+                self.messageStatuses[messageId] = .failed(error.localizedDescription)
+                self.updateGlobalTypingState()
                 let errorMessage = ChatMessage.assistant("Failed to send message: \(error.localizedDescription)")
                 self.appendMessage(errorMessage)
                 self.saveMessages()
@@ -167,13 +182,15 @@ final class ChatViewModel {
             replyToPreview: replyPreview
         )
         appendMessage(userMessage)
-        isTyping = true
 
         // Auto-title for image messages
         let titleText = caption.isEmpty ? "[Image]" : caption
         autoTitleCurrentSession(from: titleText)
 
         let messageId = userMessage.id
+        messageStatuses[messageId] = .sending
+        isTyping = true
+
         let language = appState?.language ?? .english
         let languageCode = language.rawValue
 
@@ -195,7 +212,8 @@ final class ChatViewModel {
                     language: languageCode
                 )
             } catch {
-                self.isTyping = false
+                self.messageStatuses[messageId] = .failed(error.localizedDescription)
+                self.updateGlobalTypingState()
                 let errorMessage = ChatMessage.assistant("Failed to send image: \(error.localizedDescription)")
                 self.appendMessage(errorMessage)
                 self.saveMessages()
@@ -287,13 +305,15 @@ final class ChatViewModel {
         let base64 = data.base64EncodedString()
         let userMessage = ChatMessage.userVoice(base64: base64, duration: duration)
         appendMessage(userMessage)
-        isTyping = true
         recordingDuration = 0
 
         // Auto-title for voice messages
         autoTitleCurrentSession(from: "[Voice message]")
 
         let messageId = userMessage.id
+        messageStatuses[messageId] = .sending
+        isTyping = true
+
         let language = appState?.language ?? .english
         let languageCode = language.rawValue
 
@@ -306,7 +326,8 @@ final class ChatViewModel {
                     language: languageCode
                 )
             } catch {
-                self.isTyping = false
+                self.messageStatuses[messageId] = .failed(error.localizedDescription)
+                self.updateGlobalTypingState()
                 let errorMessage = ChatMessage.assistant("Failed to send voice message: \(error.localizedDescription)")
                 self.appendMessage(errorMessage)
                 self.saveMessages()
@@ -537,6 +558,12 @@ final class ChatViewModel {
 
     private func handleDispatcherMessage(_ message: DispatcherMessage) {
         switch message.type {
+        case "ack":
+            // Server acknowledged receipt of our message (👀)
+            if let id = message.id {
+                messageStatuses[id] = .acknowledged
+                messageUpdateTrigger += 1
+            }
         case "response":
             handleResponseMessage(message)
         case "status":
@@ -545,9 +572,14 @@ final class ChatViewModel {
                 isConnected = connected
             }
         case "error":
-            isTyping = false
-            if let errorText = message.message {
-                let errorMessage = ChatMessage.assistant("Error: \(errorText)")
+            if let id = message.id {
+                let errText = message.message ?? "Unknown error"
+                messageStatuses[id] = .failed(errText)
+            }
+            // Only clear global typing if no messages are still processing
+            updateGlobalTypingState()
+            if let errorText = message.message, let id = message.id {
+                let errorMessage = ChatMessage.assistant("Error: \(errorText)", id: "resp-\(id)")
                 appendMessage(errorMessage)
             }
         default:
@@ -565,6 +597,9 @@ final class ChatViewModel {
         // ForEach (which uses ChatMessage.id as the identity) doesn't confuse
         // the user bubble with the assistant bubble.
         let assistantId = "resp-\(id)"
+
+        // Update per-message status
+        messageStatuses[id] = isStreaming ? .processing : .done
 
         // Find the original user message to auto-link the reply
         let userMessage = messages.first(where: { $0.id == id && $0.role == .user })
@@ -598,12 +633,21 @@ final class ChatViewModel {
         }
 
         if !isStreaming {
-            isTyping = false
             currentStreamingMessageId = nil
             saveMessages()
         } else {
             currentStreamingMessageId = assistantId
         }
+
+        // Update global typing state based on all pending messages
+        updateGlobalTypingState()
+    }
+
+    /// Update global isTyping based on whether any messages are still pending.
+    private func updateGlobalTypingState() {
+        isTyping = messageStatuses.values.contains(where: {
+            $0 == .sending || $0 == .acknowledged || $0 == .processing
+        })
     }
 
     private func saveMessages() {

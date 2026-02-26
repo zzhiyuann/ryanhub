@@ -94,10 +94,9 @@ struct CustomTabBar: View {
 
     // MARK: - Tab Button
 
+    @ViewBuilder
     private func tabButton(for tab: MainTab) -> some View {
-        let isSelected = selectedTab == tab
-
-        return Button {
+        Button {
             selectedTab = tab
         } label: {
             VStack(spacing: isCompact ? 0 : 3) {
@@ -111,12 +110,11 @@ struct CustomTabBar: View {
                         .transition(.opacity.combined(with: .scale(scale: 0.8)))
                 }
             }
-            .foregroundStyle(isSelected ? Color.hubPrimary : AdaptiveColors.textSecondary(for: colorScheme))
+            .foregroundStyle(selectedTab == tab ? Color.hubPrimary : AdaptiveColors.textSecondary(for: colorScheme))
             .frame(maxWidth: .infinity)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .animation(.easeInOut(duration: 0.15), value: selectedTab)
     }
 
     // MARK: - Safe Area
