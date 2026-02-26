@@ -25,14 +25,23 @@ enum MainTab: String, CaseIterable {
     }
 }
 
+/// Sub-mode within the Chat tab: Chat or Terminal.
+enum ChatMode: String {
+    case chat
+    case terminal
+}
+
 // MARK: - Content View
 
 struct ContentView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.colorScheme) private var colorScheme
     @State private var selectedTab: MainTab = .chat
+    @State private var chatMode: ChatMode = .chat
     /// ChatViewModel is owned here so it survives tab switches.
     @State private var chatViewModel = ChatViewModel()
+    /// TerminalViewModel is owned here so it survives tab/mode switches.
+    @State private var terminalViewModel = TerminalViewModel()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -40,7 +49,7 @@ struct ContentView: View {
             ZStack {
                 switch selectedTab {
                 case .chat:
-                    ChatView(viewModel: chatViewModel)
+                    chatOrTerminalContent
                 case .toolkit:
                     ToolkitHomeView()
                 case .settings:
@@ -60,6 +69,77 @@ struct ContentView: View {
             )
         }
         .background(AdaptiveColors.background(for: colorScheme))
+    }
+
+    // MARK: - Chat / Terminal Content
+
+    @ViewBuilder
+    private var chatOrTerminalContent: some View {
+        VStack(spacing: 0) {
+            // Mode toggle bubble
+            chatModeToggle
+
+            // Content
+            ZStack {
+                if chatMode == .chat {
+                    ChatView(viewModel: chatViewModel)
+                        .transition(.opacity)
+                } else {
+                    SSHTerminalView(viewModel: terminalViewModel)
+                        .transition(.opacity)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .animation(.easeInOut(duration: 0.2), value: chatMode)
+        }
+    }
+
+    @ViewBuilder
+    private var chatModeToggle: some View {
+        HStack(spacing: 0) {
+            modeButton(
+                icon: "bubble.left.and.bubble.right.fill",
+                label: "Chat",
+                mode: .chat
+            )
+            modeButton(
+                icon: "terminal.fill",
+                label: "Terminal",
+                mode: .terminal
+            )
+        }
+        .padding(3)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(AdaptiveColors.surfaceSecondary(for: colorScheme))
+        )
+        .padding(.horizontal, 100)
+        .padding(.vertical, 6)
+    }
+
+    @ViewBuilder
+    private func modeButton(icon: String, label: String, mode: ChatMode) -> some View {
+        let isSelected = chatMode == mode
+        Button {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                chatMode = mode
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.system(size: 11, weight: .semibold))
+                Text(label)
+                    .font(.system(size: 12, weight: .semibold))
+            }
+            .foregroundStyle(isSelected ? .white : AdaptiveColors.textSecondary(for: colorScheme))
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 6)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(isSelected ? Color.hubPrimary : Color.clear)
+            )
+        }
+        .buttonStyle(.plain)
     }
 }
 

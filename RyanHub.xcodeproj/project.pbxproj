@@ -22,6 +22,7 @@
 		1B7F833C1C817EED819CB44E /* FluentStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21DAA3F09BEB33DF0B836FFF /* FluentStore.swift */; };
 		1DB52E90E6CB0CDB510B31EA /* SmartFoodLogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B97135A287819FDC740700E /* SmartFoodLogView.swift */; };
 		26463C7B7CDCD1B15AD42709 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33CAB4BF0FA7C79E224110B1 /* Theme.swift */; };
+		2DC64949E9D9CDA532DBFB16 /* SwiftTerm in Frameworks */ = {isa = PBXBuildFile; productRef = 05EF287CF861CA9F565EEEFD /* SwiftTerm */; };
 		2F12B1E3D1F5BAB4E37AC793 /* AudioService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0856DD8E6429E9B1179A082 /* AudioService.swift */; };
 		3073F84628D8C5AA6D2A4F30 /* DailySummaryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8324A0F5B9279548ED9454E9 /* DailySummaryView.swift */; };
 		38F5CB5339702AC59E0870D6 /* FSRSEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E4A5CD0A7843CDB46CDAD37 /* FSRSEngine.swift */; };
@@ -34,11 +35,13 @@
 		5E9E114C645A3B1312CD6EE5 /* FoodAnalysisService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34BC44409C203DC902136BB1 /* FoodAnalysisService.swift */; };
 		5EE4ED675A17DC7AC6D9BD92 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9C923C9AB5D8E6D4D5D079B /* ContentView.swift */; };
 		5FD7730168DF713A1D55546E /* CalendarViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87648D721BF30026B9914553 /* CalendarViewModel.swift */; };
+		6073B03F55243B3E6E723E00 /* SwiftTermView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E908A0DA905304B83016364C /* SwiftTermView.swift */; };
 		6AF4F264C091E20D414F281D /* FluentViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F14ECFE406153DFEAD4BB330 /* FluentViewModel.swift */; };
 		6EC8F25FB74E5F42BB6FB7FD /* HubCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9ED59A92AE6021B648A1D666 /* HubCard.swift */; };
 		77288B93E50EBEE415E95007 /* CalendarModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75BD223A2DD8D357BDBA7F54 /* CalendarModels.swift */; };
 		7A3B8C1BD49A7E4B52E43565 /* HealthDataProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6AC78DD349D07BBC0ABC36A /* HealthDataProvider.swift */; };
 		7E4C051C9B7868EDDA5AE93B /* BookFactoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB537DF37440FEF82FAEF5D4 /* BookFactoryView.swift */; };
+		81F1409EBE3971344F74F2F5 /* NIOSSH in Frameworks */ = {isa = PBXBuildFile; productRef = 5B169081B2ADA1F2222DCEC3 /* NIOSSH */; };
 		87CD4523F1720206F91E3EE8 /* HealthModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AD0CBF73B859088687163F3 /* HealthModels.swift */; };
 		8C7237A5CFAEB6F34BB85EE9 /* ParkingModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D5B11EECA4F5D375FAC8DF3 /* ParkingModels.swift */; };
 		92BBAE3CC8E7627980533EF9 /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8910F5210CD277F57B58223 /* AppState.swift */; };
@@ -46,6 +49,7 @@
 		98B81A155F9E70956CDA31BA /* RyanHubApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD94D3E0824640F6802F86A4 /* RyanHubApp.swift */; };
 		9F010855B1B3ECEA2AFEE416 /* HealthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D06AEB0354C4C85106A24AE1 /* HealthView.swift */; };
 		A440D502E05A68D109AF8BC9 /* HubTextField.swift in Sources */ = {isa = PBXBuildFile; fileRef = E65564252C7D5721D9784435 /* HubTextField.swift */; };
+		A67D87D9ECA15A068F404093 /* SSHConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 451A5D81323FC8ABDC20C701 /* SSHConnection.swift */; };
 		B3CB4EA04A8ED2E6B0F445EE /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 925B470E17A407A342F947A5 /* ChatView.swift */; };
 		B3DA11875470725BE119C406 /* ChatViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16AA3B6CD78A2A3E597642C3 /* ChatViewModel.swift */; };
 		B6989682EC1AC53E552E4517 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D083DD2A5B38D1F4C3A9A64 /* SettingsView.swift */; };
@@ -61,9 +65,11 @@
 		E08BA7D6AB8FEA99B9E8CF5D /* LocalizationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4E8144CB5135172B2DC2F7E /* LocalizationManager.swift */; };
 		E6B383A34C266240B795CAC3 /* ChatMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD86AE08D1796BF465BC38E2 /* ChatMessage.swift */; };
 		E7E291D4BE573049A202E9BA /* ToolkitHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C96E54E2891BD4600075855 /* ToolkitHomeView.swift */; };
+		E8118E935475B47A7822A814 /* TerminalViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD7704742E67AD44D943A435 /* TerminalViewModel.swift */; };
 		E88867AC68FF45A6A6A139D4 /* AudioPlayerViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80B7A5ED5723E5600FD94677 /* AudioPlayerViewModel.swift */; };
 		E8C577056653D2EF8F96A30D /* FluentVocabularyDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D6087AA32C74C9457AD7687 /* FluentVocabularyDetailView.swift */; };
 		E9544173000F3EA84613FAF2 /* ChatInputBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = C079DC0CA6EA286023C68D24 /* ChatInputBar.swift */; };
+		EEABA9A1DDBF6F9612295792 /* TerminalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 645114CF479B9006F7C2B90F /* TerminalView.swift */; };
 		F336238395BFA892A3ACD299 /* FluentReviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E5DFE94BFC993641FAAE8FB /* FluentReviewView.swift */; };
 		F44DF37E2E4D1C5BD5A73F73 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 335BA591A35FB41B6FD8EEC1 /* Localizable.strings */; };
 		F69C522701B2FFBE3A78C36A /* SectionHeader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9AE49953418A97242254CFD7 /* SectionHeader.swift */; };
@@ -85,12 +91,14 @@
 		2E5DFE94BFC993641FAAE8FB /* FluentReviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FluentReviewView.swift; sourceTree = "<group>"; };
 		33CAB4BF0FA7C79E224110B1 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		34BC44409C203DC902136BB1 /* FoodAnalysisService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FoodAnalysisService.swift; sourceTree = "<group>"; };
+		451A5D81323FC8ABDC20C701 /* SSHConnection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSHConnection.swift; sourceTree = "<group>"; };
 		45981F3DD312C51871008ACC /* WeightLogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeightLogView.swift; sourceTree = "<group>"; };
 		459EF3910E2F8897601D5792 /* ParkingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParkingView.swift; sourceTree = "<group>"; };
 		4AD0CBF73B859088687163F3 /* HealthModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthModels.swift; sourceTree = "<group>"; };
 		5A8BAE87477C77371E777370 /* FluentModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FluentModels.swift; sourceTree = "<group>"; };
 		5D5B11EECA4F5D375FAC8DF3 /* ParkingModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParkingModels.swift; sourceTree = "<group>"; };
 		5FC6F16E27429DFEA760C170 /* RyanHub.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = RyanHub.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		645114CF479B9006F7C2B90F /* TerminalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalView.swift; sourceTree = "<group>"; };
 		67A6E494EFD12F06C3C783F1 /* CalendarPluginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarPluginView.swift; sourceTree = "<group>"; };
 		6D083DD2A5B38D1F4C3A9A64 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		6D81FD1D4462E12FF6BD418D /* AudioPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPlayerView.swift; sourceTree = "<group>"; };
@@ -115,6 +123,7 @@
 		AD94D3E0824640F6802F86A4 /* RyanHubApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RyanHubApp.swift; sourceTree = "<group>"; };
 		AE159CAB3E17CFF110C6A594 /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/Localizable.strings"; sourceTree = "<group>"; };
 		BB537DF37440FEF82FAEF5D4 /* BookFactoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookFactoryView.swift; sourceTree = "<group>"; };
+		BD7704742E67AD44D943A435 /* TerminalViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalViewModel.swift; sourceTree = "<group>"; };
 		C0563D9301CFC9B123A77F6B /* MiniPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiniPlayerView.swift; sourceTree = "<group>"; };
 		C079DC0CA6EA286023C68D24 /* ChatInputBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatInputBar.swift; sourceTree = "<group>"; };
 		C4D40B06DEE0FABF0F9F66E6 /* BookModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookModels.swift; sourceTree = "<group>"; };
@@ -131,11 +140,24 @@
 		E2C14B8742D7D4759E188351 /* MessageBubble.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageBubble.swift; sourceTree = "<group>"; };
 		E65564252C7D5721D9784435 /* HubTextField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubTextField.swift; sourceTree = "<group>"; };
 		E8910F5210CD277F57B58223 /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
+		E908A0DA905304B83016364C /* SwiftTermView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftTermView.swift; sourceTree = "<group>"; };
 		EA43F407F77E3EA89CBB0F10 /* BookLibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookLibraryView.swift; sourceTree = "<group>"; };
 		F14ECFE406153DFEAD4BB330 /* FluentViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FluentViewModel.swift; sourceTree = "<group>"; };
 		F4E8144CB5135172B2DC2F7E /* LocalizationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalizationManager.swift; sourceTree = "<group>"; };
 		FBB4632AD98A761C6891EDFC /* FluentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FluentView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		BFB7D8A3CE46CE7BEAFFAAA2 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				2DC64949E9D9CDA532DBFB16 /* SwiftTerm in Frameworks */,
+				81F1409EBE3971344F74F2F5 /* NIOSSH in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
 		130B25ABC7868919556C0A60 /* Fluent */ = {
@@ -246,6 +268,15 @@
 			path = Views;
 			sourceTree = "<group>";
 		};
+		7DD1D5D060F2AE55654CC25C /* Terminal */ = {
+			isa = PBXGroup;
+			children = (
+				D796A4EEBDC2604DF33A9A76 /* ViewModels */,
+				E6AB6A7B42326FEBDAD37493 /* Views */,
+			);
+			path = Terminal;
+			sourceTree = "<group>";
+		};
 		91499C240728B537229E0982 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
@@ -280,6 +311,7 @@
 			children = (
 				1B2E09EA2E6B2CF5E505E770 /* Chat */,
 				1A59027BDDCE8C61DA0E8AD8 /* Settings */,
+				7DD1D5D060F2AE55654CC25C /* Terminal */,
 				A42B52F71D441ED536E658F9 /* Toolkit */,
 			);
 			path = Modules;
@@ -343,6 +375,15 @@
 			);
 			sourceTree = "<group>";
 		};
+		D796A4EEBDC2604DF33A9A76 /* ViewModels */ = {
+			isa = PBXGroup;
+			children = (
+				451A5D81323FC8ABDC20C701 /* SSHConnection.swift */,
+				BD7704742E67AD44D943A435 /* TerminalViewModel.swift */,
+			);
+			path = ViewModels;
+			sourceTree = "<group>";
+		};
 		E5BCA578BAF6067EF8AFB917 /* Networking */ = {
 			isa = PBXGroup;
 			children = (
@@ -362,6 +403,15 @@
 				91499C240728B537229E0982 /* Resources */,
 			);
 			path = RyanHub;
+			sourceTree = "<group>";
+		};
+		E6AB6A7B42326FEBDAD37493 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				E908A0DA905304B83016364C /* SwiftTermView.swift */,
+				645114CF479B9006F7C2B90F /* TerminalView.swift */,
+			);
+			path = Views;
 			sourceTree = "<group>";
 		};
 		E7C062BCC29B1D39BC7BB004 /* ViewModels */ = {
@@ -408,6 +458,7 @@
 			buildPhases = (
 				30349F2EC2C465E16167BF34 /* Sources */,
 				6BC2C8095DF3E2194F9B59F0 /* Resources */,
+				BFB7D8A3CE46CE7BEAFFAAA2 /* Frameworks */,
 			);
 			buildRules = (
 			);
@@ -415,6 +466,8 @@
 			);
 			name = RyanHub;
 			packageProductDependencies = (
+				05EF287CF861CA9F565EEEFD /* SwiftTerm */,
+				5B169081B2ADA1F2222DCEC3 /* NIOSSH */,
 			);
 			productName = RyanHub;
 			productReference = 5FC6F16E27429DFEA760C170 /* RyanHub.app */;
@@ -445,6 +498,10 @@
 			);
 			mainGroup = D44A34788177DA1563EA6932;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				EACE64B3E3B5C1CC7C299A54 /* XCRemoteSwiftPackageReference "SwiftTerm" */,
+				508A5875AEFC89F96B4C8371 /* XCRemoteSwiftPackageReference "swift-nio-ssh" */,
+			);
 			preferredProjectObjectVersion = 77;
 			projectDirPath = "";
 			projectRoot = "";
@@ -520,10 +577,14 @@
 				F8D8E97DE66120A10A1D9EE1 /* QueueManagerView.swift in Sources */,
 				4D96295338EAC5B7FD4610A7 /* QueueViewModel.swift in Sources */,
 				98B81A155F9E70956CDA31BA /* RyanHubApp.swift in Sources */,
+				A67D87D9ECA15A068F404093 /* SSHConnection.swift in Sources */,
 				F69C522701B2FFBE3A78C36A /* SectionHeader.swift in Sources */,
 				B6989682EC1AC53E552E4517 /* SettingsView.swift in Sources */,
 				4E03D04048BEB3D5621E4279 /* SettingsViewModel.swift in Sources */,
 				1DB52E90E6CB0CDB510B31EA /* SmartFoodLogView.swift in Sources */,
+				6073B03F55243B3E6E723E00 /* SwiftTermView.swift in Sources */,
+				EEABA9A1DDBF6F9612295792 /* TerminalView.swift in Sources */,
+				E8118E935475B47A7822A814 /* TerminalViewModel.swift in Sources */,
 				26463C7B7CDCD1B15AD42709 /* Theme.swift in Sources */,
 				E7E291D4BE573049A202E9BA /* ToolkitHomeView.swift in Sources */,
 				CACAAC73720212D53EBB98DA /* TypingIndicator.swift in Sources */,
@@ -735,6 +796,38 @@
 			defaultConfigurationName = Debug;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		508A5875AEFC89F96B4C8371 /* XCRemoteSwiftPackageReference "swift-nio-ssh" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/apple/swift-nio-ssh.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.9.0;
+			};
+		};
+		EACE64B3E3B5C1CC7C299A54 /* XCRemoteSwiftPackageReference "SwiftTerm" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/migueldeicaza/SwiftTerm.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.11.2;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		05EF287CF861CA9F565EEEFD /* SwiftTerm */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = EACE64B3E3B5C1CC7C299A54 /* XCRemoteSwiftPackageReference "SwiftTerm" */;
+			productName = SwiftTerm;
+		};
+		5B169081B2ADA1F2222DCEC3 /* NIOSSH */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 508A5875AEFC89F96B4C8371 /* XCRemoteSwiftPackageReference "swift-nio-ssh" */;
+			productName = NIOSSH;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 752FE972FFC3AE333778E61F /* Project object */;
 }

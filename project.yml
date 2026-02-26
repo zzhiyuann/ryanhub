@@ -5,6 +5,13 @@ options:
     iOS: "17.0"
   xcodeVersion: "16.0"
   generateEmptyDirectories: true
+packages:
+  SwiftTerm:
+    url: https://github.com/migueldeicaza/SwiftTerm.git
+    from: "1.11.2"
+  swift-nio-ssh:
+    url: https://github.com/apple/swift-nio-ssh.git
+    from: "0.9.0"
 settings:
   base:
     SWIFT_VERSION: "5.9"
@@ -21,6 +28,10 @@ targets:
       - path: RyanHub
         excludes:
           - "**/.DS_Store"
+    dependencies:
+      - package: SwiftTerm
+      - package: swift-nio-ssh
+        product: NIOSSH
     info:
       path: RyanHub/Info.plist
       properties:

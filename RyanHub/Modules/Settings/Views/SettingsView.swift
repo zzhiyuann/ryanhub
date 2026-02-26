@@ -11,6 +11,7 @@ struct SettingsView: View {
             ScrollView {
                 VStack(spacing: HubLayout.sectionSpacing) {
                     serverSection
+                    terminalSection
                     appearanceSection
                     languageSection
                     aboutSection
@@ -179,6 +180,75 @@ struct SettingsView: View {
         case .reconnecting(let attempt): return "Reconnecting (\(attempt)/5)..."
         case .disconnected: return L10n.chatDisconnected
         case .failed(let reason): return "Failed: \(reason)"
+        }
+    }
+
+    // MARK: - Terminal (SSH) Section
+
+    @ViewBuilder
+    private var terminalSection: some View {
+        VStack(alignment: .leading, spacing: HubLayout.itemSpacing) {
+            SectionHeader(title: "Terminal (SSH)")
+
+            HubCard {
+                VStack(spacing: HubLayout.itemSpacing) {
+                    // Host
+                    settingsInput(
+                        placeholder: "172.29.39.82",
+                        text: Binding(
+                            get: { UserDefaults.standard.string(forKey: "ryanhub_ssh_host") ?? "" },
+                            set: { UserDefaults.standard.set($0, forKey: "ryanhub_ssh_host") }
+                        ),
+                        label: "Host"
+                    )
+
+                    // Username
+                    settingsInput(
+                        placeholder: "zhiyuan",
+                        text: Binding(
+                            get: { UserDefaults.standard.string(forKey: "ryanhub_ssh_username") ?? "" },
+                            set: { UserDefaults.standard.set($0, forKey: "ryanhub_ssh_username") }
+                        ),
+                        label: "Username"
+                    )
+
+                    // Key path (optional)
+                    settingsInput(
+                        placeholder: "~/.ssh/id_ed25519 (default)",
+                        text: Binding(
+                            get: { UserDefaults.standard.string(forKey: "ryanhub_ssh_key_path") ?? "" },
+                            set: { UserDefaults.standard.set($0, forKey: "ryanhub_ssh_key_path") }
+                        ),
+                        label: "Key Path"
+                    )
+                }
+                .frame(maxWidth: .infinity)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func settingsInput(placeholder: String, text: Binding<String>, label: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(label)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+
+            TextField(placeholder, text: text)
+                .font(.system(size: 14, design: .monospaced))
+                .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .padding(.horizontal, 12)
+                .frame(height: 40)
+                .background(
+                    RoundedRectangle(cornerRadius: HubLayout.inputCornerRadius)
+                        .fill(AdaptiveColors.surfaceSecondary(for: colorScheme))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: HubLayout.inputCornerRadius)
+                        .stroke(AdaptiveColors.border(for: colorScheme), lineWidth: 1)
+                )
         }
     }
 
