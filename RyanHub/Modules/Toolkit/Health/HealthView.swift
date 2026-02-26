@@ -27,6 +27,7 @@ struct HealthView: View {
             }
             .padding(HubLayout.standardPadding)
         }
+        .scrollDismissesKeyboard(.interactively)
         .background(AdaptiveColors.background(for: colorScheme))
         .sheet(isPresented: $showWeightLog) {
             WeightLogView(viewModel: viewModel)
@@ -45,6 +46,9 @@ struct HealthView: View {
         HStack(spacing: 4) {
             ForEach(HealthTab.allCases) { tab in
                 Button {
+                    // Dismiss keyboard when switching tabs
+                    isQuickMealFocused = false
+                    isQuickActivityFocused = false
                     withAnimation(.easeInOut(duration: 0.2)) {
                         viewModel.selectedTab = tab
                     }

@@ -2,6 +2,24 @@ import Foundation
 import NIOCore
 import NIOPosix
 import NIOSSH
+import os.log
+
+private let sshLog = Logger(subsystem: "com.zwang.ryanhub", category: "SSH")
+
+/// Append debug line to a shared log file readable from the host.
+func debugLog(_ msg: String) {
+    let line = "[\(ISO8601DateFormatter().string(from: Date()))] \(msg)\n"
+    NSLog("RYANHUB_DEBUG: %@", msg)
+    guard let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else { return }
+    let url = docs.appendingPathComponent("debug.log")
+    if let handle = try? FileHandle(forWritingTo: url) {
+        handle.seekToEndOfFile()
+        handle.write(line.data(using: .utf8)!)
+        handle.closeFile()
+    } else {
+        try? line.data(using: .utf8)?.write(to: url)
+    }
+}
 
 /// Manages an SSH connection with PTY shell to a remote host.
 /// Based on SwiftTerm's iOS SSH example, using password auth.
@@ -22,6 +40,11 @@ final class SSHConnection {
     /// Callback when data arrives from the remote shell.
     var onDataReceived: ((Data) -> Void)?
 
+    /// One-shot callback fired when the shell sends its first data (prompt ready).
+    /// Set before connecting; cleared after first invocation.
+    var onShellReady: (() -> Void)?
+    private(set) var shellReadyFired = false
+
     // MARK: - Private
 
     private var group: EventLoopGroup?
@@ -35,6 +58,7 @@ final class SSHConnection {
     func connect(host: String, port: Int = 22, username: String, password: String) {
         guard state != .connecting else { return }
         state = .connecting
+        debugLog("SSH connect: \(host):\(port) user=\(username) pwd=\(password.isEmpty ? "EMPTY" : "SET")")
 
         // Overall connection timeout (covers TCP + SSH handshake + auth)
         connectionTimeoutTask?.cancel()
@@ -87,12 +111,14 @@ final class SSHConnection {
             guard let self else { return }
             switch result {
             case .failure(let error):
+                debugLog("TCP connect FAILED: \(error.localizedDescription)")
                 DispatchQueue.main.async {
                     self.connectionTimeoutTask?.cancel()
                     self.state = .failed("Connect failed: \(error.localizedDescription)")
                     self.shutdownGroup()
                 }
             case .success(let channel):
+                debugLog("TCP connected, creating SSH session channel...")
                 DispatchQueue.main.async {
                     self.channel = channel
                 }
@@ -175,6 +201,8 @@ final class SSHConnection {
             shutdownGroup()
         }
         state = .disconnected
+        shellReadyFired = false
+        onShellReady = nil
     }
 
     // MARK: - Private
@@ -201,6 +229,13 @@ final class SSHConnection {
                             onData: { [weak self] data in
                                 DispatchQueue.main.async {
                                     self?.onDataReceived?(data)
+                                    // Fire shell-ready callback on first data (shell prompt arrived)
+                                    if let self, !self.shellReadyFired {
+                                        self.shellReadyFired = true
+                                        debugLog("Shell ready (first data received, \(data.count) bytes)")
+                                        self.onShellReady?()
+                                        self.onShellReady = nil
+                                    }
                                 }
                             },
                             onExit: { [weak self] status in
@@ -226,8 +261,10 @@ final class SSHConnection {
                         self.connectionTimeoutTask?.cancel()
                         switch result {
                         case .failure(let error):
+                            debugLog("Session channel FAILED: \(error.localizedDescription)")
                             self.state = .failed("Channel failed: \(error.localizedDescription)")
                         case .success(let childChannel):
+                            debugLog("SSH connected! Session channel ready.")
                             self.sessionChannel = childChannel
                             self.state = .connected
                         }

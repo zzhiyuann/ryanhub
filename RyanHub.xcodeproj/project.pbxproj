@@ -49,6 +49,7 @@
 		7DC72C2B550DD2CC30DE5D75 /* BookFactoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDA7223EFC10C281D46964EB /* BookFactoryTests.swift */; };
 		7E4C051C9B7868EDDA5AE93B /* BookFactoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB537DF37440FEF82FAEF5D4 /* BookFactoryView.swift */; };
 		81F1409EBE3971344F74F2F5 /* NIOSSH in Frameworks */ = {isa = PBXBuildFile; productRef = 5B169081B2ADA1F2222DCEC3 /* NIOSSH */; };
+		8353967BAD6B00B6286171FC /* AgenticExplorer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B48D812DEA834E3D69D19FF /* AgenticExplorer.swift */; };
 		87CD4523F1720206F91E3EE8 /* HealthModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AD0CBF73B859088687163F3 /* HealthModels.swift */; };
 		89E13509E7778599B77DA12A /* TerminalTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2BD9A50AFEFA22CD60FADBF /* TerminalTests.swift */; };
 		8C7237A5CFAEB6F34BB85EE9 /* ParkingModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D5B11EECA4F5D375FAC8DF3 /* ParkingModels.swift */; };
@@ -120,6 +121,7 @@
 		4AD0CBF73B859088687163F3 /* HealthModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthModels.swift; sourceTree = "<group>"; };
 		544DEFE89CD15A88D94AFAA8 /* RyanHubUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = RyanHubUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		5A8BAE87477C77371E777370 /* FluentModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FluentModels.swift; sourceTree = "<group>"; };
+		5B48D812DEA834E3D69D19FF /* AgenticExplorer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgenticExplorer.swift; sourceTree = "<group>"; };
 		5D007D7410A51D7175402589 /* SettingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsTests.swift; sourceTree = "<group>"; };
 		5D5B11EECA4F5D375FAC8DF3 /* ParkingModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParkingModels.swift; sourceTree = "<group>"; };
 		5E40972F08206EADAFF0227E /* ParkingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParkingTests.swift; sourceTree = "<group>"; };
@@ -309,6 +311,7 @@
 		7C593548F04C05E94E2AFA83 /* RyanHubUITests */ = {
 			isa = PBXGroup;
 			children = (
+				5B48D812DEA834E3D69D19FF /* AgenticExplorer.swift */,
 				FDA7223EFC10C281D46964EB /* BookFactoryTests.swift */,
 				E5AC6E4C1F353A83F301D80A /* CalendarTests.swift */,
 				6ECC6AFCDE8904CCEAD9EBBE /* ChatTests.swift */,
@@ -681,6 +684,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				8353967BAD6B00B6286171FC /* AgenticExplorer.swift in Sources */,
 				7DC72C2B550DD2CC30DE5D75 /* BookFactoryTests.swift in Sources */,
 				5DF447B30CF7C0C0A2C305C6 /* CalendarTests.swift in Sources */,
 				23A7028770DC5CFB2E22DBA1 /* ChatTests.swift in Sources */,

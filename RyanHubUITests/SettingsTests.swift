@@ -1,80 +1,84 @@
 import XCTest
 
+/// Tests the Settings page — server config, SSH, appearance, language, about.
 final class SettingsTests: RyanHubUITestBase {
 
-    override func setUpWithError() throws {
-        try super.setUpWithError()
+    func testSettingsFullFlow() throws {
+        step("Navigate to Settings tab")
         tapTab("tab_settings")
-    }
 
-    func testSettingsPageLoads() throws {
+        // STEP 1: Server URL field
+        step("Verify server URL field")
         let serverURL = app.textFields["settings_server_url"]
-        XCTAssertTrue(waitForElement(serverURL), "Server URL field should exist")
-    }
+        waitFor(serverURL, message: "Server URL field should exist")
 
-    func testServerURLFieldEditable() throws {
-        let field = app.textFields["settings_server_url"]
-        XCTAssertTrue(waitForElement(field))
-        field.tap()
-        // Should be able to interact
-        XCTAssertTrue(field.exists)
-    }
+        // STEP 2: Preset buttons
+        step("Verify preset buttons")
+        waitFor(app.buttons["settings_localhost_preset"], message: "Localhost preset should exist")
+        waitFor(app.buttons["settings_reset_preset"], message: "Reset preset should exist")
 
-    func testPresetButtonsExist() throws {
-        let localhost = app.buttons["settings_localhost_preset"]
-        let reset = app.buttons["settings_reset_preset"]
-        XCTAssertTrue(waitForElement(localhost), "Localhost preset should exist")
-        XCTAssertTrue(waitForElement(reset), "Reset preset should exist")
-    }
+        // STEP 3: Test Connection button
+        step("Verify Test Connection button")
+        waitFor(app.buttons["settings_test_connection"], message: "Test Connection button should exist")
 
-    func testTestConnectionButtonExists() throws {
-        let testBtn = app.buttons["settings_test_connection"]
-        XCTAssertTrue(waitForElement(testBtn), "Test connection button should exist")
-    }
+        // STEP 4: Tap Localhost preset and verify URL changes
+        step("Tap Localhost preset")
+        app.buttons["settings_localhost_preset"].tap()
+        usleep(300_000)
+        let urlValue = serverURL.value as? String ?? ""
+        XCTAssertTrue(urlValue.contains("localhost") || urlValue.contains("ws://"), "URL should contain localhost after preset tap, got: '\(urlValue)'")
 
-    func testSSHFieldsExist() throws {
-        // Scroll down to find SSH fields
+        // STEP 5: Scroll to SSH section
+        step("Scroll to SSH section")
         let scrollView = app.scrollViews.firstMatch
         scrollView.swipeUp()
+        usleep(300_000)
 
-        let host = app.textFields["settings_ssh_host"]
-        let username = app.textFields["settings_ssh_username"]
-        let password = app.secureTextFields["settings_ssh_password"]
+        // STEP 6: SSH fields
+        step("Verify SSH fields")
+        let sshHost = find("settings_ssh_host")
+        XCTAssertTrue(sshHost.exists, "SSH host field should exist")
+        let sshUsername = find("settings_ssh_username")
+        XCTAssertTrue(sshUsername.exists, "SSH username field should exist")
+        let sshPassword = find("settings_ssh_password")
+        XCTAssertTrue(sshPassword.exists, "SSH password field should exist")
 
-        XCTAssertTrue(waitForElement(host), "SSH host field should exist")
-        XCTAssertTrue(waitForElement(username), "SSH username field should exist")
-        XCTAssertTrue(waitForElement(password), "SSH password field should exist")
-    }
+        // STEP 7: Test SSH button
+        step("Verify Test SSH button")
+        waitFor(app.buttons["settings_test_ssh"], message: "Test SSH button should exist")
 
-    func testAppearanceModeButtons() throws {
-        let scrollView = app.scrollViews.firstMatch
+        // STEP 8: Scroll to Appearance section
+        step("Scroll to appearance section")
         scrollView.swipeUp()
+        usleep(300_000)
 
-        // Check that appearance buttons exist (system, dark, light)
-        // The buttons use mode.rawValue for their IDs
-        let systemBtn = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'settings_appearance_'")).firstMatch
-        XCTAssertTrue(waitForElement(systemBtn), "At least one appearance button should exist")
-    }
+        // STEP 9: Appearance mode buttons
+        step("Verify appearance mode buttons")
+        let appearanceButtons = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'settings_appearance_'"))
+        XCTAssertGreaterThanOrEqual(appearanceButtons.count, 2, "Should have at least 2 appearance buttons")
 
-    func testLanguageButtons() throws {
-        let scrollView = app.scrollViews.firstMatch
+        // STEP 10: Tap a different appearance mode
+        step("Tap Dark appearance mode")
+        let darkButton = app.buttons.matching(NSPredicate(format: "identifier CONTAINS 'dark' OR identifier CONTAINS 'Dark'")).firstMatch
+        if darkButton.waitForExistence(timeout: 2) {
+            darkButton.tap()
+            usleep(500_000)
+        }
+
+        // STEP 11: Language buttons
+        step("Verify language buttons")
+        let langButtons = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'settings_language_'"))
+        XCTAssertGreaterThanOrEqual(langButtons.count, 2, "Should have at least 2 language buttons")
+
+        // STEP 12: Scroll to About section
+        step("Scroll to About section")
         scrollView.swipeUp()
-        scrollView.swipeUp()
+        usleep(300_000)
 
-        let enBtn = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'settings_language_'")).firstMatch
-        XCTAssertTrue(waitForElement(enBtn), "At least one language button should exist")
-    }
-
-    func testVersionInfoDisplayed() throws {
-        let scrollView = app.scrollViews.firstMatch
-        scrollView.swipeUp()
-        scrollView.swipeUp()
-
-        let version = app.otherElements["settings_version"]
-        let versionText = app.staticTexts.matching(NSPredicate(format: "label CONTAINS '1.'")).firstMatch
-        XCTAssertTrue(
-            waitForElement(version) || waitForElement(versionText),
-            "Version info should be displayed"
-        )
+        // STEP 13: Version and Build info
+        step("Verify version/build info")
+        // These might be HStack containers, not text — check via find()
+        let version = find("settings_version")
+        XCTAssertTrue(version.exists, "Version row should exist")
     }
 }

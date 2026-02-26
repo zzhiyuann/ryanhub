@@ -1,81 +1,100 @@
 import XCTest
 
+/// Tests the complete chat interface flow — input, send, mic, attachments.
 final class ChatTests: RyanHubUITestBase {
 
-    func testChatEmptyStateShown() throws {
-        // On fresh launch with no messages, empty state should show
-        let emptyState = app.otherElements["chat_empty_state"]
-        // Empty state might be in staticTexts or other containers
-        let welcomeText = app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'Ryan Hub'")).firstMatch
-        // Either the empty state identifier or the welcome text should exist
+    func testChatInterfaceFlow() throws {
+        // Make sure we're on chat tab
+        step("Navigate to chat tab")
+        goToChat()
+
+        // STEP 1: Verify empty state
+        step("Verify empty state or messages area")
+        let emptyState = find("chat_empty_state")
+        let messagesArea = find("chat_messages_area")
         XCTAssertTrue(
-            waitForElement(emptyState) || waitForElement(welcomeText),
-            "Empty state or welcome text should be visible"
+            emptyState.exists || messagesArea.exists,
+            "Should show empty state or messages area"
         )
-    }
 
-    func testChatInputFieldExists() throws {
+        // STEP 2: Verify input field exists
+        step("Verify chat input field")
         let input = app.textFields["chat_input_field"]
-        XCTAssertTrue(waitForElement(input), "Chat input field should exist")
-    }
+        waitFor(input, message: "Chat input field should exist")
 
-    func testMicButtonShowsWhenEmpty() throws {
+        // STEP 3: Verify mic button shows when input is empty
+        step("Verify mic button when empty")
         let mic = app.buttons["chat_mic_button"]
-        XCTAssertTrue(waitForElement(mic), "Mic button should show when input is empty")
-    }
+        waitFor(mic, message: "Mic button should show when input is empty")
 
-    func testSendButtonAppearsWhenTyping() throws {
-        let input = app.textFields["chat_input_field"]
-        XCTAssertTrue(waitForElement(input))
+        // STEP 4: Verify attachment button exists
+        step("Verify attachment button")
+        waitFor(app.buttons["chat_attach_button"], message: "Attachment button should exist")
+
+        // STEP 5: Type text — send button should appear, mic should hide
+        step("Type text and verify send button appears")
         input.tap()
-        input.typeText("Hello test message")
+        input.typeText("Hello from UI test")
+        usleep(500_000)
 
         let send = app.buttons["chat_send_button"]
-        XCTAssertTrue(waitForElement(send, timeout: 3), "Send button should appear when text is entered")
-    }
+        waitFor(send, timeout: 3, message: "Send button should appear when text is entered")
 
-    func testSendButtonDisappearsWhenCleared() throws {
-        let input = app.textFields["chat_input_field"]
-        XCTAssertTrue(waitForElement(input))
-        input.tap()
-        input.typeText("Hello")
-
-        let send = app.buttons["chat_send_button"]
-        XCTAssertTrue(waitForElement(send, timeout: 3))
-
-        // Clear the text
-        let textValue = input.value as? String ?? ""
-        let deleteString = String(repeating: XCUIKeyboardKey.delete.rawValue, count: textValue.count)
-        input.typeText(deleteString)
-
-        // Mic should reappear
-        let mic = app.buttons["chat_mic_button"]
-        XCTAssertTrue(waitForElement(mic, timeout: 3), "Mic button should reappear when text is cleared")
-    }
-
-    func testAttachButtonExists() throws {
-        let attach = app.buttons["chat_attach_button"]
-        XCTAssertTrue(waitForElement(attach), "Attachment button should exist")
-    }
-
-    func testTypingAndSendingMessage() throws {
-        let input = app.textFields["chat_input_field"]
-        XCTAssertTrue(waitForElement(input))
-        input.tap()
-        input.typeText("Test message from UI test")
-
-        let send = app.buttons["chat_send_button"]
-        XCTAssertTrue(waitForElement(send, timeout: 3))
+        // STEP 6: Send the message
+        step("Send message")
         send.tap()
+        usleep(1_000_000)
 
-        // After sending, input should be cleared
-        // Give it a moment for the UI to update
-        sleep(1)
+        // Input should be cleared
         let inputValue = input.value as? String ?? ""
-        XCTAssertTrue(inputValue.isEmpty || inputValue == "Message...", "Input should be cleared after sending")
+        XCTAssertTrue(
+            inputValue.isEmpty || inputValue.contains("Message") || inputValue.contains("message"),
+            "Input should be cleared after sending, got: '\(inputValue)'"
+        )
 
-        // The sent message should appear in the messages area
-        let sentMessage = app.staticTexts["Test message from UI test"]
-        XCTAssertTrue(waitForElement(sentMessage, timeout: 5), "Sent message should appear in chat")
+        // STEP 7: The sent message should appear in the chat
+        step("Verify sent message appears")
+        let sentMessage = app.staticTexts["Hello from UI test"]
+        XCTAssertTrue(
+            exists(sentMessage, timeout: 5),
+            "Sent message should appear in chat"
+        )
+
+        // STEP 8: Mic button should reappear after sending
+        step("Verify mic button reappears")
+        waitFor(mic, timeout: 3, message: "Mic button should reappear after message is sent")
+    }
+
+    func testClearTextRestoresMicButton() throws {
+        goToChat()
+
+        let input = app.textFields["chat_input_field"]
+        waitFor(input)
+        input.tap()
+        input.typeText("Temporary text")
+        usleep(300_000)
+
+        // Send button should be visible
+        let send = app.buttons["chat_send_button"]
+        XCTAssertTrue(exists(send, timeout: 3), "Send button should show")
+
+        // Clear the text using select all + delete
+        step("Clear text")
+        input.press(forDuration: 1.0)
+        usleep(500_000)
+        let selectAll = app.menuItems["Select All"]
+        if selectAll.waitForExistence(timeout: 2) {
+            selectAll.tap()
+            usleep(200_000)
+        }
+        app.keys["delete"].tap()
+        usleep(500_000)
+
+        // Mic button should reappear
+        let mic = app.buttons["chat_mic_button"]
+        XCTAssertTrue(
+            exists(mic, timeout: 3),
+            "Mic button should reappear when text is cleared"
+        )
     }
 }

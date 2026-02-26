@@ -1,5 +1,8 @@
 import Foundation
 import SwiftUI
+import os.log
+
+private let termLog = Logger(subsystem: "com.zwang.ryanhub", category: "Terminal")
 
 /// Represents a tmux session discovered on the remote host.
 struct TmuxSession: Identifiable, Equatable {
@@ -79,15 +82,39 @@ final class TerminalViewModel {
     }
 
     /// Auto-enter tmux after SSH connects.
-    /// Tries to attach to the most recent session, or creates a new Claude session.
-    /// Sends directly to the interactive shell (exec channel may not be ready yet on fresh connect).
+    /// Waits for shell prompt to be ready (via onShellReady callback), then sends tmux command.
     func autoEnterTmux() {
-        guard ssh.isConnected else { return }
+        guard ssh.isConnected else {
+            debugLog("autoEnterTmux: SSH not connected, aborting")
+            return
+        }
+
         let shortId = UUID().uuidString.prefix(4).lowercased()
         let name = "claude-\(shortId)"
 
-        // tmux attach (most recent session) or create new with Claude
-        ssh.sendString("tmux attach 2>/dev/null || tmux new-session -s '\(name)' 'claude; zsh'\n")
+        debugLog("autoEnterTmux: registering onShellReady callback")
+
+        // If shell data already arrived (shellReadyFired), send immediately.
+        // Otherwise, register a callback for when the first shell data arrives.
+        if ssh.shellReadyFired {
+            debugLog("autoEnterTmux: shell already ready, sending now")
+            sendTmuxEntry(name: name)
+        } else {
+            ssh.onShellReady = { [weak self] in
+                debugLog("autoEnterTmux: shell ready callback fired, sending tmux command")
+                // Small extra delay to let the prompt fully render
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    self?.sendTmuxEntry(name: name)
+                }
+            }
+        }
+    }
+
+    /// Actually send the tmux entry command and detect session name.
+    private func sendTmuxEntry(name: String) {
+        guard ssh.isConnected else { return }
+        debugLog("sendTmuxEntry: sending tmux command to shell")
+        ssh.sendString("tmux attach 2>/dev/null || tmux new-session -s '\(name)' 'claude; zsh'\r")
 
         // Figure out which session we landed in
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
@@ -144,7 +171,7 @@ final class TerminalViewModel {
         // Ctrl+B (tmux prefix) → : (command mode) → switch-client -t 'name' → Enter
         ssh.send(Data([0x02]))  // Ctrl+B
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
-            self?.ssh.sendString(":switch-client -t '\(name)'\n")
+            self?.ssh.sendString(":switch-client -t '\(name)'\r")
         }
     }
 
@@ -171,7 +198,7 @@ final class TerminalViewModel {
                     // Ctrl+B : switch-client (intercepted by tmux, not the running program)
                     self?.ssh.send(Data([0x02]))
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                        self?.ssh.sendString(":switch-client -t '\(name)'\n")
+                        self?.ssh.sendString(":switch-client -t '\(name)'\r")
                     }
                 }
             }
@@ -185,7 +212,7 @@ final class TerminalViewModel {
     private func createNewClaudeSession() {
         let shortId = UUID().uuidString.prefix(4).lowercased()
         let name = "claude-\(shortId)"
-        ssh.sendString("tmux new-session -s '\(name)' 'claude; zsh'\n")
+        ssh.sendString("tmux new-session -s '\(name)' 'claude; zsh'\r")
         currentTmuxSession = name
     }
 

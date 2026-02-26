@@ -1,121 +1,95 @@
 import XCTest
 
+/// Tests the Toolkit tab — desktop grid, menu bar, plugin navigation.
 final class ToolkitTests: RyanHubUITestBase {
 
-    override func setUpWithError() throws {
-        try super.setUpWithError()
+    func testToolkitDesktopGridAndAllCards() throws {
+        step("Navigate to Toolkit tab")
         tapTab("tab_toolkit")
-    }
 
-    func testToolkitDesktopGridShows() throws {
-        let grid = app.scrollViews["toolkit_desktop_grid"]
-        let gridAlt = app.otherElements["toolkit_desktop_grid"]
-        XCTAssertTrue(
-            waitForElement(grid) || waitForElement(gridAlt),
-            "Desktop grid should be visible"
-        )
-    }
+        // Make sure we're on home grid
+        let homeBtn = app.buttons["toolkit_menu_home"]
+        if homeBtn.waitForExistence(timeout: 2) {
+            homeBtn.tap()
+            usleep(400_000)
+        }
 
-    func testAllPluginCardsExist() throws {
+        // STEP 1: Desktop grid visible
+        step("Verify desktop grid")
+        let grid = find("toolkit_desktop_grid")
+        XCTAssertTrue(grid.exists, "Desktop grid should be visible")
+
+        // STEP 2: All 5 plugin cards exist
+        step("Verify all 5 plugin cards")
         let plugins = ["bookFactory", "fluent", "parking", "calendar", "health"]
         for plugin in plugins {
             let card = app.buttons["toolkit_card_\(plugin)"]
-            XCTAssertTrue(waitForElement(card), "Plugin card '\(plugin)' should exist")
+            waitFor(card, message: "Plugin card '\(plugin)' should exist in grid")
         }
+
+        // STEP 3: Menu bar exists
+        step("Verify menu bar")
+        let menuBar = find("toolkit_menu_bar")
+        XCTAssertTrue(menuBar.exists, "Menu bar should exist")
     }
 
-    func testMenuBarExists() throws {
-        let menuBar = app.otherElements["toolkit_menu_bar"]
-        XCTAssertTrue(waitForElement(menuBar), "Menu bar should exist")
-    }
+    func testNavigateEachPluginViaCards() throws {
+        tapTab("tab_toolkit")
 
-    func testNavigateToBookFactory() throws {
-        let card = app.buttons["toolkit_card_bookFactory"]
-        XCTAssertTrue(waitForElement(card))
-        card.tap()
+        // Go home first
+        let homeBtn = app.buttons["toolkit_menu_home"]
+        if homeBtn.waitForExistence(timeout: 2) {
+            homeBtn.tap()
+            usleep(400_000)
+        }
 
-        // Should show either server setup or main content
-        let serverSetup = app.otherElements["bookfactory_server_setup"]
-        let libraryTab = app.buttons["bookfactory_tab_library"]
-        XCTAssertTrue(
-            waitForElement(serverSetup) || waitForElement(libraryTab),
-            "BookFactory should show setup or library tab"
-        )
-    }
+        // Book Factory
+        step("Open Book Factory via card")
+        app.buttons["toolkit_card_bookFactory"].tap()
+        usleep(600_000)
+        let bfSetup = find("bookfactory_server_setup")
+        let bfLibrary = app.buttons["bookfactory_tab_library"]
+        XCTAssertTrue(bfSetup.exists || bfLibrary.exists, "BookFactory should load")
 
-    func testNavigateToFluent() throws {
-        let card = app.buttons["toolkit_card_fluent"]
-        XCTAssertTrue(waitForElement(card))
-        card.tap()
+        // Return home via menu
+        step("Return to grid via home button")
+        app.buttons["toolkit_menu_home"].tap()
+        usleep(400_000)
 
-        let dashboard = app.buttons["fluent_tab_dashboard"]
-        XCTAssertTrue(waitForElement(dashboard), "Fluent dashboard tab should appear")
-    }
+        // Fluent
+        step("Open Fluent via card")
+        app.buttons["toolkit_card_fluent"].tap()
+        usleep(600_000)
+        waitFor(app.buttons["fluent_tab_dashboard"], message: "Fluent should show dashboard tab")
 
-    func testNavigateToParking() throws {
-        let card = app.buttons["toolkit_card_parking"]
-        XCTAssertTrue(waitForElement(card))
-        card.tap()
-
-        let todayStatus = app.otherElements["parking_today_status"]
-        XCTAssertTrue(waitForElement(todayStatus), "Parking today status should appear")
-    }
-
-    func testNavigateToCalendar() throws {
-        let card = app.buttons["toolkit_card_calendar"]
-        XCTAssertTrue(waitForElement(card))
-        card.tap()
-
-        // Calendar should show empty state or events
-        let emptyState = app.otherElements["calendar_empty_state"]
-        let todaySection = app.otherElements["calendar_today_section"]
-        XCTAssertTrue(
-            waitForElement(emptyState) || waitForElement(todaySection),
-            "Calendar should show empty state or today section"
-        )
-    }
-
-    func testNavigateToHealth() throws {
-        let card = app.buttons["toolkit_card_health"]
-        XCTAssertTrue(waitForElement(card))
-        card.tap()
-
-        let weightTab = app.buttons["health_tab_weight"]
-        XCTAssertTrue(waitForElement(weightTab), "Health weight tab should appear")
-    }
-
-    func testMenuBarNavigation() throws {
-        // First open a plugin
-        let card = app.buttons["toolkit_card_fluent"]
-        XCTAssertTrue(waitForElement(card))
-        card.tap()
-
-        // Use menu bar to switch to parking
+        // Switch to Parking via MENU BAR (not going home first)
+        step("Switch to Parking via menu bar")
         let parkingMenu = app.buttons["toolkit_menu_parking"]
-        XCTAssertTrue(waitForElement(parkingMenu))
+        waitFor(parkingMenu, message: "Parking menu item should exist")
         parkingMenu.tap()
+        usleep(600_000)
+        let todayStatus = find("parking_today_status")
+        XCTAssertTrue(todayStatus.exists, "Parking today status should appear")
 
-        let todayStatus = app.otherElements["parking_today_status"]
-        XCTAssertTrue(waitForElement(todayStatus), "Should navigate to parking via menu bar")
-    }
+        // Switch to Calendar via menu bar
+        step("Switch to Calendar via menu bar")
+        app.buttons["toolkit_menu_calendar"].tap()
+        usleep(600_000)
+        let calEmpty = find("calendar_empty_state")
+        let calToday = find("calendar_today_section")
+        XCTAssertTrue(calEmpty.exists || calToday.exists, "Calendar should load")
 
-    func testReturnToHomeGrid() throws {
-        // Navigate to a plugin
-        let card = app.buttons["toolkit_card_parking"]
-        XCTAssertTrue(waitForElement(card))
-        card.tap()
+        // Switch to Health via menu bar
+        step("Switch to Health via menu bar")
+        app.buttons["toolkit_menu_health"].tap()
+        usleep(600_000)
+        waitFor(app.buttons["health_tab_weight"], message: "Health weight tab should appear")
 
-        // Press home in menu bar
-        let homeButton = app.buttons["toolkit_menu_home"]
-        XCTAssertTrue(waitForElement(homeButton))
-        homeButton.tap()
-
-        // Desktop grid should reappear
-        let grid = app.scrollViews["toolkit_desktop_grid"]
-        let gridAlt = app.otherElements["toolkit_desktop_grid"]
-        XCTAssertTrue(
-            waitForElement(grid) || waitForElement(gridAlt),
-            "Desktop grid should reappear after pressing home"
-        )
+        // Return to home grid
+        step("Return to home grid")
+        app.buttons["toolkit_menu_home"].tap()
+        usleep(400_000)
+        let grid = find("toolkit_desktop_grid")
+        XCTAssertTrue(grid.exists, "Desktop grid should reappear")
     }
 }

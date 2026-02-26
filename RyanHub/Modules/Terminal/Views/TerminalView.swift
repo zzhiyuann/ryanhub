@@ -1,4 +1,7 @@
 import SwiftUI
+import os.log
+
+private let viewLog = Logger(subsystem: "com.zwang.ryanhub", category: "TerminalView")
 
 /// Main terminal screen with SSH connection, tmux session dropdown, and shortcut keyboard.
 struct SSHTerminalView: View {
@@ -33,12 +36,10 @@ struct SSHTerminalView: View {
             }
         }
         .onChange(of: viewModel.ssh.isConnected) { _, isConnected in
+            debugLog("onChange isConnected: \(isConnected)")
             if isConnected {
-                // Auto-enter tmux after shell is ready
-                Task {
-                    try? await Task.sleep(for: .seconds(0.8))
-                    viewModel.autoEnterTmux()
-                }
+                // autoEnterTmux uses onShellReady callback — no blind delay needed
+                viewModel.autoEnterTmux()
             }
         }
     }
