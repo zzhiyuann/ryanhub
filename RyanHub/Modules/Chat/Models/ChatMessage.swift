@@ -151,18 +151,17 @@ extension ChatMessage {
 // MARK: - Persistence
 
 extension ChatMessage {
-    private static let legacyStorageKey = "ryanhub_chat_messages"
+    /// Single fixed key for all chat messages (single-chat flow).
+    private static let storageKey = "ryanhub_chat_messages_v2"
     private static let maxStoredMessages = 200
 
-    /// Build the UserDefaults key for a given session ID.
-    static func storageKey(for sessionId: String) -> String {
-        "ryanhub_chat_messages_\(sessionId)"
-    }
+    /// Legacy keys for migration from multi-session system.
+    private static let legacyStorageKey = "ryanhub_chat_messages"
+    private static let legacySessionsKey = "ryanhub_chat_sessions"
 
-    /// Save messages to UserDefaults for a specific session.
+    /// Save messages to UserDefaults under the single fixed key.
     /// Image data is written to disk files and stripped from UserDefaults.
-    static func save(_ messages: [ChatMessage], sessionId: String? = nil) {
-        let key = sessionId.map { storageKey(for: $0) } ?? legacyStorageKey
+    static func save(_ messages: [ChatMessage]) {
         let trimmed = Array(messages.suffix(maxStoredMessages)).map { msg -> ChatMessage in
             var stripped = msg
             if let base64 = stripped.imageBase64 {
@@ -190,15 +189,14 @@ extension ChatMessage {
             return stripped
         }
         if let data = try? JSONEncoder().encode(trimmed) {
-            UserDefaults.standard.set(data, forKey: key)
+            UserDefaults.standard.set(data, forKey: storageKey)
         }
     }
 
-    /// Load messages from UserDefaults for a specific session.
+    /// Load messages from UserDefaults.
     /// Messages with hasImageOnDisk=true will have their image data restored from disk.
-    static func loadSaved(sessionId: String? = nil) -> [ChatMessage] {
-        let key = sessionId.map { storageKey(for: $0) } ?? legacyStorageKey
-        guard let data = UserDefaults.standard.data(forKey: key),
+    static func loadSaved() -> [ChatMessage] {
+        guard let data = UserDefaults.standard.data(forKey: storageKey),
               let messages = try? JSONDecoder().decode([ChatMessage].self, from: data) else {
             return []
         }
@@ -233,28 +231,60 @@ extension ChatMessage {
         return deduped
     }
 
-    /// Clear saved messages for a specific session (or legacy key).
-    static func clearSaved(sessionId: String? = nil) {
+    /// Clear all saved messages.
+    static func clearSaved() {
         // Delete associated image files before clearing messages
-        let messages = loadSaved(sessionId: sessionId)
+        let messages = loadSaved()
         for msg in messages where msg.hasImageOnDisk {
             deleteImageFromDisk(messageId: msg.id)
         }
-        let key = sessionId.map { storageKey(for: $0) } ?? legacyStorageKey
-        UserDefaults.standard.removeObject(forKey: key)
+        UserDefaults.standard.removeObject(forKey: storageKey)
     }
 
-    /// Check if legacy (pre-session) messages exist for migration.
-    static var hasLegacyMessages: Bool {
-        UserDefaults.standard.data(forKey: legacyStorageKey) != nil
-    }
+    /// Migrate messages from the old multi-session system into the new single-chat key.
+    /// Merges all session messages into one flat list, sorted by timestamp.
+    /// Called once; old keys are cleaned up after migration.
+    static func migrateFromMultiSession() {
+        // Already migrated if we have data under the new key
+        guard UserDefaults.standard.data(forKey: storageKey) == nil else { return }
 
-    /// Load and remove legacy messages (used for one-time migration).
-    static func migrateLegacyMessages() -> [ChatMessage] {
-        let messages = loadSaved(sessionId: nil)
-        if !messages.isEmpty {
+        var allMessages: [ChatMessage] = []
+
+        // 1. Check for legacy pre-session messages
+        if let data = UserDefaults.standard.data(forKey: legacyStorageKey),
+           let msgs = try? JSONDecoder().decode([ChatMessage].self, from: data) {
+            allMessages.append(contentsOf: msgs)
             UserDefaults.standard.removeObject(forKey: legacyStorageKey)
         }
-        return messages
+
+        // 2. Check for session-based messages
+        if let sessionsData = UserDefaults.standard.data(forKey: legacySessionsKey),
+           let sessions = try? JSONDecoder().decode([LegacySession].self, from: sessionsData) {
+            for session in sessions {
+                let sessionKey = "ryanhub_chat_messages_\(session.id)"
+                if let msgData = UserDefaults.standard.data(forKey: sessionKey),
+                   let msgs = try? JSONDecoder().decode([ChatMessage].self, from: msgData) {
+                    allMessages.append(contentsOf: msgs)
+                }
+                // Clean up old session message key
+                UserDefaults.standard.removeObject(forKey: sessionKey)
+            }
+            // Clean up sessions list key
+            UserDefaults.standard.removeObject(forKey: legacySessionsKey)
+        }
+
+        guard !allMessages.isEmpty else { return }
+
+        // Sort by timestamp and save under the new single key
+        allMessages.sort { $0.timestamp < $1.timestamp }
+        // De-duplicate by ID
+        var seenIds = Set<String>()
+        allMessages = allMessages.filter { seenIds.insert($0.id).inserted }
+        save(allMessages)
+    }
+
+    /// Minimal struct for decoding legacy session data during migration.
+    private struct LegacySession: Codable {
+        let id: String
     }
 }

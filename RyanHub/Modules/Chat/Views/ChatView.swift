@@ -2,208 +2,107 @@ import SwiftUI
 import PhotosUI
 
 /// Main chat screen — the primary interaction surface for Ryan Hub.
-/// Telegram-like chat with real-time WebSocket messaging, image, and voice input.
-/// Supports multi-session chat with a sidebar for session management.
+/// Telegram-like single chat with real-time WebSocket messaging, image, and voice input.
 struct ChatView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.colorScheme) private var colorScheme
     /// ViewModel is owned by ContentView and passed in, so it survives tab switches.
     @Bindable var viewModel: ChatViewModel
     @State private var showCamera = false
-    @State private var showSidebar = false
-    @GestureState private var drawerDragOffset: CGFloat = 0
     /// The message the user is replying to (swipe-to-reply).
     @State private var replyingTo: ChatMessage?
     /// Free-text input for answering agent questions.
     @State private var questionFreeTextInput: String = ""
 
-    /// Width of the sidebar drawer (80% of screen).
-    private var drawerWidth: CGFloat {
-        UIScreen.main.bounds.width * 0.8
-    }
-
     var body: some View {
-        ZStack(alignment: .leading) {
-            // MARK: - Main Chat Content
-            NavigationStack {
-                VStack(spacing: 0) {
-                    // Connection status bar
-                    connectionStatusBar
+        NavigationStack {
+            VStack(spacing: 0) {
+                // Connection status bar
+                connectionStatusBar
 
-                    // Messages area
-                    messagesArea
+                // Messages area
+                messagesArea
 
-                    // Reply bar (shown when replying to a message)
-                    if let replying = replyingTo {
-                        replyBar(for: replying)
-                    }
-
-                    // Question card (shown when agent asks a question)
-                    if viewModel.pendingQuestion != nil {
-                        questionCard
-                    }
-
-                    // Input bar
-                    ChatInputBar(
-                        text: $viewModel.inputText,
-                        isConnected: viewModel.isConnected,
-                        isRecording: viewModel.isRecording,
-                        recordingDuration: viewModel.recordingDuration,
-                        pendingImageData: viewModel.pendingImageData,
-                        onSend: {
-                            if let replying = replyingTo {
-                                viewModel.sendMessage(replyingTo: replying)
-                                replyingTo = nil
-                            } else {
-                                viewModel.sendMessage()
-                            }
-                        },
-                        onStartRecording: {
-                            viewModel.startRecording()
-                        },
-                        onStopRecording: {
-                            viewModel.stopRecording()
-                        },
-                        onCancelRecording: {
-                            viewModel.cancelRecording()
-                        },
-                        onPhotoSelected: { item in
-                            viewModel.handlePhotoSelection(item)
-                        },
-                        onCameraTapped: {
-                            showCamera = true
-                        },
-                        onClearPendingImage: {
-                            viewModel.clearPendingImage()
-                        }
-                    )
+                // Reply bar (shown when replying to a message)
+                if let replying = replyingTo {
+                    replyBar(for: replying)
                 }
-                .background(AdaptiveColors.background(for: colorScheme))
-                .navigationTitle(currentSessionTitle)
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .topBarLeading) {
-                        Button {
-                            withAnimation(.easeInOut(duration: 0.25)) {
-                                showSidebar = true
-                            }
+
+                // Question card (shown when agent asks a question)
+                if viewModel.pendingQuestion != nil {
+                    questionCard
+                }
+
+                // Input bar
+                ChatInputBar(
+                    text: $viewModel.inputText,
+                    isConnected: viewModel.isConnected,
+                    isRecording: viewModel.isRecording,
+                    recordingDuration: viewModel.recordingDuration,
+                    pendingImageData: viewModel.pendingImageData,
+                    onSend: {
+                        if let replying = replyingTo {
+                            viewModel.sendMessage(replyingTo: replying)
+                            replyingTo = nil
+                        } else {
+                            viewModel.sendMessage()
+                        }
+                    },
+                    onStartRecording: {
+                        viewModel.startRecording()
+                    },
+                    onStopRecording: {
+                        viewModel.stopRecording()
+                    },
+                    onCancelRecording: {
+                        viewModel.cancelRecording()
+                    },
+                    onPhotoSelected: { item in
+                        viewModel.handlePhotoSelection(item)
+                    },
+                    onCameraTapped: {
+                        showCamera = true
+                    },
+                    onClearPendingImage: {
+                        viewModel.clearPendingImage()
+                    }
+                )
+            }
+            .background(AdaptiveColors.background(for: colorScheme))
+            .navigationTitle(L10n.tabChat)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        Button(role: .destructive) {
+                            viewModel.clearHistory()
                         } label: {
-                            Image(systemName: "line.3.horizontal")
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                            Label("Clear History", systemImage: "trash")
                         }
-                    }
-
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Menu {
-                            Button {
-                                viewModel.createNewSession()
-                            } label: {
-                                Label("New Chat", systemImage: "square.and.pencil")
-                            }
-
-                            Button(role: .destructive) {
-                                viewModel.clearHistory()
-                            } label: {
-                                Label("Clear History", systemImage: "trash")
-                            }
-                        } label: {
-                            Image(systemName: "ellipsis.circle")
-                                .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
-                        }
-                    }
-                }
-                .task {
-                    // Connect once when the view first appears.
-                    // Do NOT disconnect on disappear — the connection should persist
-                    // across tab switches and navigation.
-                    if !viewModel.isConnected {
-                        viewModel.connect(to: appState.serverURL, appState: appState)
-                    }
-                }
-                .onChange(of: appState.serverURL) { _, newURL in
-                    viewModel.disconnect()
-                    viewModel.connect(to: newURL, appState: appState)
-                }
-                .sheet(isPresented: $showCamera) {
-                    CameraImagePicker { imageData in
-                        viewModel.pendingImageData = imageData
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                            .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
                     }
                 }
             }
-
-            // MARK: - Scrim Overlay
-            if showSidebar {
-                Color.black.opacity(0.4)
-                    .ignoresSafeArea()
-                    .onTapGesture {
-                        withAnimation(.easeInOut(duration: 0.25)) {
-                            showSidebar = false
-                        }
-                    }
-                    .transition(.opacity)
-            }
-
-            // MARK: - Drawer Panel
-            ChatSidebarView(
-                isPresented: $showSidebar,
-                sessions: viewModel.sessions,
-                currentSessionId: viewModel.currentSessionId,
-                onSelectSession: { id in
-                    viewModel.switchSession(id)
-                },
-                onNewChat: {
-                    viewModel.createNewSession()
-                },
-                onDeleteSession: { id in
-                    viewModel.deleteSession(id)
+            .task {
+                // Connect once when the view first appears.
+                // Do NOT disconnect on disappear — the connection should persist
+                // across tab switches and navigation.
+                if !viewModel.isConnected {
+                    viewModel.connect(to: appState.serverURL, appState: appState)
                 }
-            )
-            .frame(width: drawerWidth)
-            .offset(x: drawerXOffset)
-            .gesture(drawerDragGesture)
+            }
+            .onChange(of: appState.serverURL) { _, newURL in
+                viewModel.disconnect()
+                viewModel.connect(to: newURL, appState: appState)
+            }
+            .sheet(isPresented: $showCamera) {
+                CameraImagePicker { imageData in
+                    viewModel.pendingImageData = imageData
+                }
+            }
         }
-        .animation(.easeInOut(duration: 0.25), value: showSidebar)
-    }
-
-    // MARK: - Drawer Offset
-
-    /// Computes the x-offset for the drawer panel, combining open/close state with drag gesture.
-    private var drawerXOffset: CGFloat {
-        let baseOffset = showSidebar ? 0 : -drawerWidth
-        // Only apply drag offset when the drawer is open (dragging to close)
-        let clampedDrag = min(0, drawerDragOffset)
-        return baseOffset + clampedDrag
-    }
-
-    /// Drag gesture that allows swiping the drawer closed (drag left).
-    private var drawerDragGesture: some Gesture {
-        DragGesture()
-            .updating($drawerDragOffset) { value, state, _ in
-                // Only allow dragging to the left (negative translation)
-                if value.translation.width < 0 {
-                    state = value.translation.width
-                }
-            }
-            .onEnded { value in
-                // Dismiss if dragged more than 30% of drawer width to the left
-                if value.translation.width < -(drawerWidth * 0.3) {
-                    withAnimation(.easeInOut(duration: 0.25)) {
-                        showSidebar = false
-                    }
-                }
-            }
-    }
-
-    // MARK: - Session Title
-
-    private var currentSessionTitle: String {
-        if let sessionId = viewModel.currentSessionId,
-           let session = viewModel.sessions.first(where: { $0.id == sessionId }),
-           session.title != "New Chat" {
-            return session.title
-        }
-        return L10n.tabChat
     }
 
     // MARK: - Connection Status Bar

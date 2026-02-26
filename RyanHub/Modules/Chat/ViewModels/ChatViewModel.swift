@@ -4,7 +4,7 @@ import AVFoundation
 import PhotosUI
 
 /// ViewModel for the Chat module. Manages messages, WebSocket communication,
-/// image/voice input, chat state, and multi-session management.
+/// image/voice input, and chat state. Single-chat flow (no multi-session).
 @MainActor
 @Observable
 final class ChatViewModel {
@@ -21,13 +21,13 @@ final class ChatViewModel {
     var messageUpdateTrigger: Int = 0
 
     /// Per-message status tracking for concurrent message handling.
-    /// Maps user message ID → current status.
+    /// Maps user message ID -> current status.
     var messageStatuses: [String: MessageStatus] = [:]
 
     /// Status of an individual message in the pipeline.
     enum MessageStatus: Equatable {
         case sending           // Message sent, waiting for ack
-        case acknowledged      // Server received (👀)
+        case acknowledged      // Server received
         case processing        // Server is generating response
         case done              // Final response received
         case failed(String)    // Error
@@ -61,14 +61,6 @@ final class ChatViewModel {
     /// Whether free-text answers are allowed for the pending question.
     var pendingQuestionAllowFreeText: Bool = true
 
-    // MARK: - Session State
-
-    /// The currently active session ID.
-    var currentSessionId: String?
-
-    /// All sessions for sidebar display, sorted by lastMessageAt descending.
-    var sessions: [ChatSession] = []
-
     // MARK: - Private
 
     private let webSocket = WebSocketClient()
@@ -84,7 +76,7 @@ final class ChatViewModel {
     private weak var appState: AppState?
     private var statePollingTask: Task<Void, Never>?
 
-    /// Maps user message ID → when the message was sent (for progress phases).
+    /// Maps user message ID -> when the message was sent (for progress phases).
     private var messageSendTimes: [String: Date] = [:]
 
     /// Timer that periodically triggers UI updates while messages are pending,
@@ -104,18 +96,8 @@ final class ChatViewModel {
     // MARK: - Init
 
     init() {
-        migrateIfNeeded()
-        sessions = ChatSession.loadSessions()
-
-        // If there are existing sessions, load the most recent one.
-        // Otherwise, create a fresh session.
-        if let firstSession = sessions.first {
-            currentSessionId = firstSession.id
-            messages = ChatMessage.loadSaved(sessionId: firstSession.id)
-        } else {
-            createNewSession()
-        }
-
+        ChatMessage.migrateFromMultiSession()
+        messages = ChatMessage.loadSaved()
         setupWebSocketCallbacks()
     }
 
@@ -159,8 +141,8 @@ final class ChatViewModel {
 
         guard !text.isEmpty else { return }
 
-        // Handle slash commands. Some have local-side effects (e.g. /new creates
-        // a local session), but recognized commands are still sent to the Dispatcher
+        // Handle slash commands. Some have local-side effects (e.g. /new clears
+        // the chat), but recognized commands are still sent to the Dispatcher
         // as regular messages — the Dispatcher's _classify() parses /commands and
         // @model prefixes from message content. Returns true if fully handled.
         if text.hasPrefix("/") {
@@ -178,9 +160,6 @@ final class ChatViewModel {
         )
         appendMessage(userMessage)
         inputText = ""
-
-        // Auto-title: if this is the first user message, set the session title
-        autoTitleCurrentSession(from: text)
 
         let messageId = userMessage.id
         messageStatuses[messageId] = .sending
@@ -224,10 +203,6 @@ final class ChatViewModel {
             replyToPreview: replyPreview
         )
         appendMessage(userMessage)
-
-        // Auto-title for image messages
-        let titleText = caption.isEmpty ? "[Image]" : caption
-        autoTitleCurrentSession(from: titleText)
 
         let messageId = userMessage.id
         messageStatuses[messageId] = .sending
@@ -351,9 +326,6 @@ final class ChatViewModel {
         appendMessage(userMessage)
         recordingDuration = 0
 
-        // Auto-title for voice messages
-        autoTitleCurrentSession(from: "[Voice message]")
-
         let messageId = userMessage.id
         messageStatuses[messageId] = .sending
         messageSendTimes[messageId] = Date()
@@ -397,60 +369,11 @@ final class ChatViewModel {
         }
     }
 
-    /// Clear all chat history for the current session.
+    /// Clear all chat history.
     func clearHistory() {
         messages.removeAll()
         messageUpdateTrigger += 1
-
-        if let sessionId = currentSessionId {
-            ChatMessage.clearSaved(sessionId: sessionId)
-            // Update session metadata
-            updateCurrentSession(messageCount: 0, lastPreview: "", lastTimestamp: .now)
-        }
-    }
-
-    // MARK: - Session Management
-
-    /// Create a new chat session and switch to it.
-    func createNewSession() {
-        let session = ChatSession()
-        sessions.insert(session, at: 0)
-        currentSessionId = session.id
-        messages = []
-        messageUpdateTrigger += 1
-        isTyping = false
-        currentStreamingMessageId = nil
-        pruneOldSessions()
-        ChatSession.saveSessions(sessions)
-    }
-
-    /// Switch to an existing session by ID.
-    func switchSession(_ id: String) {
-        guard id != currentSessionId else { return }
-        guard sessions.contains(where: { $0.id == id }) else { return }
-
-        currentSessionId = id
-        messages = ChatMessage.loadSaved(sessionId: id)
-        messageUpdateTrigger += 1
-        isTyping = false
-        currentStreamingMessageId = nil
-    }
-
-    /// Delete a session by ID.
-    func deleteSession(_ id: String) {
-        sessions.removeAll { $0.id == id }
-        ChatSession.deleteSession(id: id)
-
-        // If we deleted the current session, switch to the first remaining or create new
-        if id == currentSessionId {
-            if let firstSession = sessions.first {
-                switchSession(firstSession.id)
-            } else {
-                createNewSession()
-            }
-        }
-
-        ChatSession.saveSessions(sessions)
+        ChatMessage.clearSaved()
     }
 
     // MARK: - Progress Phases
@@ -551,7 +474,6 @@ final class ChatViewModel {
 
     // MARK: - Message Editing
 
-    /// The maximum age (in seconds) within which a sent message can be edited.
     /// Whether a user message can be edited.
     func isMessageEditable(_ message: ChatMessage) -> Bool {
         message.role == .user && message.messageType == .text
@@ -637,18 +559,21 @@ final class ChatViewModel {
             return false
         }
 
-        // /new: create a local session AND tell the Dispatcher to force_new.
+        // /new: clear the chat and tell the Dispatcher to force_new.
         if baseCommand == "/new" {
             let userMessage = ChatMessage.user(text)
             appendMessage(userMessage)
             inputText = ""
 
-            createNewSession()
-
             // Also send to Dispatcher so it sets force_new for the next task.
             sendCommandAsMessage(text, userMessageId: userMessage.id)
 
-            let systemMsg = ChatMessage.assistant("New session started.")
+            // Clear local messages to start fresh
+            messages.removeAll()
+            messageUpdateTrigger += 1
+            ChatMessage.clearSaved()
+
+            let systemMsg = ChatMessage.assistant("Chat cleared. Starting fresh.")
             appendMessage(systemMsg)
             return true
         }
@@ -658,7 +583,6 @@ final class ChatViewModel {
             let userMessage = ChatMessage.user(text)
             appendMessage(userMessage)
             inputText = ""
-            autoTitleCurrentSession(from: text)
 
             sendCommandAsMessage(text, userMessageId: userMessage.id)
             return true
@@ -728,79 +652,6 @@ final class ChatViewModel {
         saveMessages()
     }
 
-    /// Auto-set the session title from the first user message.
-    private func autoTitleCurrentSession(from text: String) {
-        guard let sessionId = currentSessionId,
-              let index = sessions.firstIndex(where: { $0.id == sessionId }) else { return }
-
-        // Only auto-title if the session still has the default title and this is the first message
-        let userMessages = messages.filter { $0.role == .user }
-        if sessions[index].title == "New Chat" && userMessages.count <= 1 {
-            let title = String(text.prefix(50))
-            sessions[index].title = title
-            ChatSession.saveSessions(sessions)
-        }
-    }
-
-    /// Update the current session's metadata after a message change.
-    private func updateCurrentSession(messageCount: Int, lastPreview: String, lastTimestamp: Date) {
-        guard let sessionId = currentSessionId,
-              let index = sessions.firstIndex(where: { $0.id == sessionId }) else { return }
-        sessions[index].messageCount = messageCount
-        sessions[index].lastMessagePreview = lastPreview
-        sessions[index].lastMessageAt = lastTimestamp
-        // Re-sort sessions so the most recent is first
-        sessions.sort { $0.lastMessageAt > $1.lastMessageAt }
-        ChatSession.saveSessions(sessions)
-    }
-
-    /// Prune sessions beyond the max limit.
-    private func pruneOldSessions() {
-        let maxSessions = 50
-        if sessions.count > maxSessions {
-            let removed = sessions.suffix(from: maxSessions)
-            for session in removed {
-                ChatMessage.clearSaved(sessionId: session.id)
-            }
-            sessions = Array(sessions.prefix(maxSessions))
-        }
-    }
-
-    /// Migrate legacy messages (pre-session system) into a new session.
-    private func migrateIfNeeded() {
-        guard ChatMessage.hasLegacyMessages else { return }
-
-        let legacyMessages = ChatMessage.migrateLegacyMessages()
-        guard !legacyMessages.isEmpty else { return }
-
-        // Create a session from the legacy messages
-        let firstTimestamp = legacyMessages.first?.timestamp ?? .now
-        let lastTimestamp = legacyMessages.last?.timestamp ?? .now
-        let firstUserMessage = legacyMessages.first(where: { $0.role == .user })
-        let title = firstUserMessage.map { String($0.content.prefix(50)) } ?? "Imported Chat"
-        let lastPreview = legacyMessages.last.map { msg -> String in
-            let preview = msg.content
-            return String(preview.prefix(100))
-        } ?? ""
-
-        let session = ChatSession(
-            id: UUID().uuidString,
-            title: title,
-            createdAt: firstTimestamp,
-            lastMessageAt: lastTimestamp,
-            messageCount: legacyMessages.count,
-            lastMessagePreview: lastPreview
-        )
-
-        // Save messages under the new session key
-        ChatMessage.save(legacyMessages, sessionId: session.id)
-
-        // Save the session
-        var existingSessions = ChatSession.loadSessions()
-        existingSessions.insert(session, at: 0)
-        ChatSession.saveSessions(existingSessions)
-    }
-
     private func setupWebSocketCallbacks() {
         webSocket.onConnectionChange = { [weak self] connected in
             Task { @MainActor in
@@ -856,7 +707,7 @@ final class ChatViewModel {
     private func handleDispatcherMessage(_ message: DispatcherMessage) {
         switch message.type {
         case "ack":
-            // Server acknowledged receipt of our message (👀)
+            // Server acknowledged receipt of our message
             if let id = message.id {
                 messageStatuses[id] = .acknowledged
                 messageUpdateTrigger += 1
@@ -870,8 +721,6 @@ final class ChatViewModel {
             }
         case "edit_ack":
             // Server acknowledged edit; the message will be re-dispatched.
-            // The ack/response flow will restart automatically via the existing
-            // message handling, so just update status to acknowledged.
             if let id = message.id {
                 messageStatuses[id] = .acknowledged
                 messageUpdateTrigger += 1
@@ -1046,16 +895,6 @@ final class ChatViewModel {
     }
 
     private func saveMessages() {
-        ChatMessage.save(messages, sessionId: currentSessionId)
-
-        // Update session metadata
-        if let lastMessage = messages.last {
-            let preview = String(lastMessage.content.prefix(100))
-            updateCurrentSession(
-                messageCount: messages.count,
-                lastPreview: preview,
-                lastTimestamp: lastMessage.timestamp
-            )
-        }
+        ChatMessage.save(messages)
     }
 }
