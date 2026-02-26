@@ -79,31 +79,25 @@ final class TerminalViewModel {
     }
 
     /// Auto-enter tmux after SSH connects.
-    /// Checks for existing sessions — attaches to the most recent, or creates a new Claude session.
+    /// Tries to attach to the most recent session, or creates a new Claude session.
+    /// Sends directly to the interactive shell (exec channel may not be ready yet on fresh connect).
     func autoEnterTmux() {
         guard ssh.isConnected else { return }
+        let shortId = UUID().uuidString.prefix(4).lowercased()
+        let name = "claude-\(shortId)"
 
-        let command = "tmux ls -F '#{session_name}|#{session_windows}|#{session_created}|#{session_attached}' 2>/dev/null || true"
+        // tmux attach (most recent session) or create new with Claude
+        ssh.sendString("tmux attach 2>/dev/null || tmux new-session -s '\(name)' 'claude; zsh'\n")
 
-        ssh.execCommand(command) { [weak self] output in
-            DispatchQueue.main.async {
-                guard let self else { return }
-
-                if let output, !output.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    self.parseTmuxOutput(output)
-
-                    // Attach to the most recently created session
-                    if let latest = self.tmuxSessions.sorted(by: {
-                        ($0.createdAt ?? .distantPast) > ($1.createdAt ?? .distantPast)
-                    }).first {
-                        self.ssh.sendString("tmux attach -t '\(latest.id)'\n")
-                        self.currentTmuxSession = latest.id
+        // Figure out which session we landed in
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+            self?.ssh.execCommand("tmux display-message -p '#{session_name}' 2>/dev/null") { output in
+                DispatchQueue.main.async {
+                    if let session = output?.trimmingCharacters(in: .whitespacesAndNewlines), !session.isEmpty {
+                        self?.currentTmuxSession = session
                     } else {
-                        self.createNewClaudeSession()
+                        self?.currentTmuxSession = name
                     }
-                } else {
-                    // No sessions — create a new one
-                    self.createNewClaudeSession()
                 }
             }
         }
