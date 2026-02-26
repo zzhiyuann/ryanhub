@@ -24,6 +24,9 @@ final class ParkingViewModel {
     /// Last purchase/skip status from the parkmobile-auto cron job.
     var lastCronStatus: CronPurchaseStatus?
 
+    /// Purchase history loaded from purchase-history.json.
+    var purchaseHistory: [CronPurchaseStatus] = []
+
     /// The month currently displayed in the calendar picker.
     var calendarDisplayedMonth: Date = Date()
 
@@ -48,35 +51,20 @@ final class ParkingViewModel {
         return !Calendar.current.isDateInWeekend(tomorrow)
     }
 
-    /// Smart suggestion: if today is Friday, suggest skipping next Monday.
-    var smartSuggestion: SmartSuggestion? {
-        let calendar = Calendar.current
-        let weekday = calendar.component(.weekday, from: Date())
-        // weekday: 1 = Sunday, 6 = Friday, 7 = Saturday
-        if weekday == 6 {
-            // Today is Friday, suggest next Monday
-            guard let nextMonday = calendar.date(byAdding: .day, value: 3, to: Date()) else { return nil }
-            let mondayStart = calendar.startOfDay(for: nextMonday)
-            if !isDateAlreadySkipped(mondayStart) {
-                return SmartSuggestion(
-                    title: "Skip Next Monday",
-                    subtitle: "You usually don't park on Mondays after a weekend",
-                    icon: "lightbulb.fill",
-                    date: mondayStart
-                )
-            }
-        }
-        return nil
-    }
-
     /// Monthly stats for the current calendar month.
     var currentMonthStats: MonthlyParkingStats {
         computeMonthStats(for: Date())
     }
 
-    /// Monthly stats for the displayed calendar month.
-    var displayedMonthStats: MonthlyParkingStats {
-        computeMonthStats(for: calendarDisplayedMonth)
+    /// Actual cost this month from purchase history.
+    var currentMonthCost: Double {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM"
+        let currentMonth = formatter.string(from: Date())
+        return purchaseHistory
+            .filter { $0.status == "purchased" && $0.date.hasPrefix(currentMonth) }
+            .compactMap(\.price)
+            .reduce(0, +)
     }
 
     /// Estimated "until" time for today's active parking.
@@ -159,6 +147,7 @@ final class ParkingViewModel {
     init() {
         loadSkipDates()
         loadCronStatus()
+        loadPurchaseHistory()
         updateTodayStatus()
     }
 
@@ -247,12 +236,6 @@ final class ParkingViewModel {
         saveSkipDates()
     }
 
-    /// Apply the smart suggestion.
-    func applySmartSuggestion() {
-        guard let suggestion = smartSuggestion else { return }
-        toggleDate(suggestion.date)
-    }
-
     /// Restore (un-skip) a specific date.
     func restoreDate(_ entry: ParkingSkipEntry) {
         skipDates.removeAll { Calendar.current.isDate($0.date, inSameDayAs: entry.date) }
@@ -321,6 +304,9 @@ final class ParkingViewModel {
 
     /// Path to the last status file written by buy.js / run.sh.
     private let statusFilePath = "/Users/zwang/projects/parkmobile-auto/last-status.json"
+
+    /// Path to the purchase history file.
+    private let historyFilePath = "/Users/zwang/projects/parkmobile-auto/purchase-history.json"
 
     /// Load skip dates from the skip-dates.txt file.
     func loadSkipDates() {
@@ -423,6 +409,16 @@ final class ParkingViewModel {
         lastCronStatus = status
     }
 
+    /// Load purchase history from purchase-history.json.
+    private func loadPurchaseHistory() {
+        guard let data = try? Data(contentsOf: URL(fileURLWithPath: historyFilePath)),
+              let history = try? JSONDecoder().decode([CronPurchaseStatus].self, from: data) else {
+            purchaseHistory = []
+            return
+        }
+        purchaseHistory = history
+    }
+
     /// Show a brief feedback message.
     private func showFeedback(_ message: String) {
         lastActionMessage = message
@@ -430,12 +426,3 @@ final class ParkingViewModel {
     }
 }
 
-// MARK: - Smart Suggestion
-
-/// A context-aware parking suggestion.
-struct SmartSuggestion {
-    let title: String
-    let subtitle: String
-    let icon: String
-    let date: Date
-}

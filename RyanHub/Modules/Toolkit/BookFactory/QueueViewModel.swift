@@ -48,16 +48,17 @@ final class QueueViewModel {
 
     // MARK: - Topic CRUD
 
-    func addTopic(title: String, tier: String?, description: String?) async {
+    func addTopic(title: String, tier: String?, description: String?, scheduling: String = "End of Queue") async {
         struct Body: Encodable {
             let title: String
             let tier: String?
             let description: String?
+            let scheduling: String
         }
         do {
             let _: QueueTopic = try await api.post(
                 "/api/queue/topics",
-                body: Body(title: title, tier: tier, description: description)
+                body: Body(title: title, tier: tier, description: description, scheduling: scheduling)
             )
             await loadTopics()
             await loadSchedule()

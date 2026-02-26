@@ -252,15 +252,79 @@ struct AddTopicSheet: View {
     @State private var title = ""
     @State private var tier = ""
     @State private var description = ""
+    @State private var scheduling: Scheduling = .endOfQueue
+    @State private var isSubmitting = false
+
+    enum Scheduling: String, CaseIterable, Identifiable {
+        case now = "Generate Now"
+        case today = "Today"
+        case tomorrow = "Tomorrow"
+        case endOfQueue = "End of Queue"
+
+        var id: String { rawValue }
+
+        var icon: String {
+            switch self {
+            case .now: return "bolt.fill"
+            case .today: return "sun.max.fill"
+            case .tomorrow: return "sunrise.fill"
+            case .endOfQueue: return "text.append"
+            }
+        }
+
+        var subtitle: String {
+            switch self {
+            case .now: return "Start generation immediately"
+            case .today: return "Add to today's remaining slots"
+            case .tomorrow: return "Schedule for tomorrow"
+            case .endOfQueue: return "Add at the bottom"
+            }
+        }
+    }
 
     var body: some View {
         NavigationStack {
             Form {
                 Section {
-                    TextField("Title", text: $title)
+                    TextField("Topic title", text: $title)
                         .textInputAutocapitalization(.sentences)
                 } header: {
                     Text("Topic Title")
+                }
+
+                Section {
+                    ForEach(Scheduling.allCases) { option in
+                        Button {
+                            scheduling = option
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: option.icon)
+                                    .font(.body)
+                                    .foregroundStyle(colorForScheduling(option))
+                                    .frame(width: 24)
+
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(option.rawValue)
+                                        .font(.subheadline)
+                                        .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                                    Text(option.subtitle)
+                                        .font(.caption)
+                                        .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                                }
+
+                                Spacer()
+
+                                if scheduling == option {
+                                    Image(systemName: "checkmark")
+                                        .font(.subheadline.weight(.semibold))
+                                        .foregroundStyle(Color.hubPrimary)
+                                }
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                } header: {
+                    Text("When to Generate")
                 }
 
                 Section {
@@ -279,25 +343,48 @@ struct AddTopicSheet: View {
             }
             .navigationTitle("Add Topic")
             .navigationBarTitleDisplayMode(.inline)
+            .alert("Error", isPresented: .init(
+                get: { vm.error != nil },
+                set: { if !$0 { vm.error = nil } }
+            )) {
+                Button("OK") { vm.error = nil }
+            } message: {
+                Text(vm.error ?? "")
+            }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Add") {
+                    Button(scheduling == .now ? "Generate" : "Add") {
+                        isSubmitting = true
                         Task {
                             await vm.addTopic(
                                 title: title,
                                 tier: tier.isEmpty ? nil : tier,
-                                description: description.isEmpty ? nil : description
+                                description: description.isEmpty ? nil : description,
+                                scheduling: scheduling.rawValue
                             )
-                            dismiss()
+                            // Only dismiss if no error occurred
+                            if vm.error == nil {
+                                dismiss()
+                            }
+                            isSubmitting = false
                         }
                     }
                     .tint(.hubPrimary)
-                    .disabled(title.trimmingCharacters(in: .whitespaces).isEmpty)
+                    .disabled(title.trimmingCharacters(in: .whitespaces).isEmpty || isSubmitting)
                 }
             }
+        }
+    }
+
+    private func colorForScheduling(_ option: Scheduling) -> Color {
+        switch option {
+        case .now: return Color.hubAccentRed
+        case .today: return Color.hubPrimary
+        case .tomorrow: return Color.hubPrimary.opacity(0.7)
+        case .endOfQueue: return AdaptiveColors.textSecondary(for: colorScheme)
         }
     }
 }

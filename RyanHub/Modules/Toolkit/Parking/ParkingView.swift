@@ -12,7 +12,6 @@ struct ParkingView: View {
         ScrollView {
             VStack(spacing: HubLayout.sectionSpacing) {
                 todayStatusCard
-                smartSuggestionSection
                 calendarPickerSection
             }
             .padding(HubLayout.standardPadding)
@@ -101,7 +100,7 @@ struct ParkingView: View {
                     )
                     Spacer()
                     monthStatPill(
-                        value: String(format: "$%.0f", viewModel.currentMonthStats.estimatedCost),
+                        value: String(format: "$%.0f", viewModel.currentMonthCost),
                         label: "cost",
                         color: Color.hubPrimary
                     )
@@ -176,50 +175,6 @@ struct ParkingView: View {
         case .skipped: return .hubAccentYellow
         case .notPurchased: return .hubAccentRed
         case .unknown: return Color.hubPrimary
-        }
-    }
-
-    // MARK: - Smart Suggestion
-
-    @ViewBuilder
-    private var smartSuggestionSection: some View {
-        if let suggestion = viewModel.smartSuggestion {
-            Button {
-                withAnimation(.easeInOut(duration: 0.25)) {
-                    viewModel.applySmartSuggestion()
-                }
-            } label: {
-                HStack(spacing: 12) {
-                    Image(systemName: suggestion.icon)
-                        .font(.system(size: 20, weight: .medium))
-                        .foregroundStyle(Color.hubPrimary)
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(suggestion.title)
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
-
-                        Text(suggestion.subtitle)
-                            .font(.hubCaption)
-                            .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
-                    }
-
-                    Spacer()
-
-                    Image(systemName: "plus.circle.fill")
-                        .font(.system(size: 20))
-                        .foregroundStyle(Color.hubPrimary)
-                }
-                .padding(HubLayout.cardInnerPadding)
-                .background(
-                    RoundedRectangle(cornerRadius: HubLayout.cardCornerRadius)
-                        .fill(Color.hubPrimary.opacity(0.08))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: HubLayout.cardCornerRadius)
-                                .stroke(Color.hubPrimary.opacity(0.2), lineWidth: 1)
-                        )
-                )
-            }
         }
     }
 
