@@ -15,92 +15,73 @@ struct ChatView: View {
     @State private var questionFreeTextInput: String = ""
 
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                // Connection status bar
+        VStack(spacing: 0) {
+            // Compact connection status (only shown when NOT connected)
+            if viewModel.connectionState != .connected {
                 connectionStatusBar
+            }
 
-                // Messages area
-                messagesArea
+            // Messages area
+            messagesArea
 
-                // Reply bar (shown when replying to a message)
-                if let replying = replyingTo {
-                    replyBar(for: replying)
-                }
+            // Reply bar (shown when replying to a message)
+            if let replying = replyingTo {
+                replyBar(for: replying)
+            }
 
-                // Question card (shown when agent asks a question)
-                if viewModel.pendingQuestion != nil {
-                    questionCard
-                }
+            // Question card (shown when agent asks a question)
+            if viewModel.pendingQuestion != nil {
+                questionCard
+            }
 
-                // Input bar
-                ChatInputBar(
-                    text: $viewModel.inputText,
-                    isConnected: viewModel.isConnected,
-                    isRecording: viewModel.isRecording,
-                    recordingDuration: viewModel.recordingDuration,
-                    pendingImageData: viewModel.pendingImageData,
-                    onSend: {
-                        if let replying = replyingTo {
-                            viewModel.sendMessage(replyingTo: replying)
-                            replyingTo = nil
-                        } else {
-                            viewModel.sendMessage()
-                        }
-                    },
-                    onStartRecording: {
-                        viewModel.startRecording()
-                    },
-                    onStopRecording: {
-                        viewModel.stopRecording()
-                    },
-                    onCancelRecording: {
-                        viewModel.cancelRecording()
-                    },
-                    onPhotoSelected: { item in
-                        viewModel.handlePhotoSelection(item)
-                    },
-                    onCameraTapped: {
-                        showCamera = true
-                    },
-                    onClearPendingImage: {
-                        viewModel.clearPendingImage()
+            // Input bar
+            ChatInputBar(
+                text: $viewModel.inputText,
+                isConnected: viewModel.isConnected,
+                isRecording: viewModel.isRecording,
+                recordingDuration: viewModel.recordingDuration,
+                pendingImageData: viewModel.pendingImageData,
+                onSend: {
+                    if let replying = replyingTo {
+                        viewModel.sendMessage(replyingTo: replying)
+                        replyingTo = nil
+                    } else {
+                        viewModel.sendMessage()
                     }
-                )
-            }
-            .background(AdaptiveColors.background(for: colorScheme))
-            .navigationTitle(L10n.tabChat)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        Button(role: .destructive) {
-                            viewModel.clearHistory()
-                        } label: {
-                            Label("Clear History", systemImage: "trash")
-                        }
-                    } label: {
-                        Image(systemName: "ellipsis.circle")
-                            .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
-                    }
+                },
+                onStartRecording: {
+                    viewModel.startRecording()
+                },
+                onStopRecording: {
+                    viewModel.stopRecording()
+                },
+                onCancelRecording: {
+                    viewModel.cancelRecording()
+                },
+                onPhotoSelected: { item in
+                    viewModel.handlePhotoSelection(item)
+                },
+                onCameraTapped: {
+                    showCamera = true
+                },
+                onClearPendingImage: {
+                    viewModel.clearPendingImage()
                 }
+            )
+        }
+        .background(AdaptiveColors.background(for: colorScheme))
+        .task {
+            if !viewModel.isConnected {
+                viewModel.connect(to: appState.serverURL, appState: appState)
             }
-            .task {
-                // Connect once when the view first appears.
-                // Do NOT disconnect on disappear — the connection should persist
-                // across tab switches and navigation.
-                if !viewModel.isConnected {
-                    viewModel.connect(to: appState.serverURL, appState: appState)
-                }
-            }
-            .onChange(of: appState.serverURL) { _, newURL in
-                viewModel.disconnect()
-                viewModel.connect(to: newURL, appState: appState)
-            }
-            .sheet(isPresented: $showCamera) {
-                CameraImagePicker { imageData in
-                    viewModel.pendingImageData = imageData
-                }
+        }
+        .onChange(of: appState.serverURL) { _, newURL in
+            viewModel.disconnect()
+            viewModel.connect(to: newURL, appState: appState)
+        }
+        .sheet(isPresented: $showCamera) {
+            CameraImagePicker { imageData in
+                viewModel.pendingImageData = imageData
             }
         }
     }
@@ -131,10 +112,10 @@ struct ChatView: View {
         HStack(spacing: 6) {
             Circle()
                 .fill(statusColor)
-                .frame(width: 8, height: 8)
+                .frame(width: 6, height: 6)
 
             Text(statusText)
-                .font(.hubCaption)
+                .font(.system(size: 11))
                 .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
 
             Spacer()
@@ -143,12 +124,12 @@ struct ChatView: View {
                 Button("Retry") {
                     viewModel.retry()
                 }
-                .font(.hubCaption)
+                .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(Color.hubPrimary)
             }
         }
         .padding(.horizontal, HubLayout.standardPadding)
-        .padding(.vertical, 6)
+        .padding(.vertical, 4)
         .background(AdaptiveColors.surface(for: colorScheme).opacity(0.8))
     }
 

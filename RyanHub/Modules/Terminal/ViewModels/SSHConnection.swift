@@ -2,8 +2,9 @@ import Foundation
 import NIOCore
 import NIOPosix
 import NIOSSH
+
 /// Manages an SSH connection with PTY shell to a remote host.
-/// Based on SwiftTerm's iOS SSH example, adapted for password auth.
+/// Based on SwiftTerm's iOS SSH example, using password auth.
 @MainActor @Observable
 final class SSHConnection {
     // MARK: - State
@@ -68,6 +69,7 @@ final class SSHConnection {
             }
             .channelOption(ChannelOptions.socket(SocketOptionLevel(SOL_SOCKET), SO_REUSEADDR), value: 1)
             .channelOption(ChannelOptions.socket(SocketOptionLevel(IPPROTO_TCP), TCP_NODELAY), value: 1)
+            .connectTimeout(.seconds(10))
 
         bootstrap.connect(host: host, port: port).whenComplete { [weak self] result in
             guard let self else { return }
@@ -80,8 +82,8 @@ final class SSHConnection {
             case .success(let channel):
                 DispatchQueue.main.async {
                     self.channel = channel
-                    self.createSessionChannel(on: channel)
                 }
+                self.createSessionChannel(on: channel)
             }
         }
     }
@@ -119,13 +121,11 @@ final class SSHConnection {
 
     /// Disconnect from the remote host.
     func disconnect() {
-        if let channel, let group {
+        if let channel {
             self.channel = nil
             self.sessionChannel = nil
-            channel.closeFuture.whenComplete { [weak self] _ in
-                self?.shutdownGroup()
-            }
             channel.close(promise: nil)
+            shutdownGroup()
         } else {
             shutdownGroup()
         }
@@ -134,26 +134,25 @@ final class SSHConnection {
 
     // MARK: - Private
 
-    private func createSessionChannel(on channel: Channel) {
+    /// Creates the SSH session channel — called on the NIO event loop thread.
+    private nonisolated func createSessionChannel(on channel: Channel) {
         channel.pipeline.handler(type: NIOSSHHandler.self).whenComplete { [weak self] result in
             guard let self else { return }
             switch result {
             case .failure(let error):
                 DispatchQueue.main.async {
-                    self.state = .failed("SSH handshake failed: \(error.localizedDescription)")
+                    self.state = .failed("SSH handler error: \(error.localizedDescription)")
                 }
             case .success(let sshHandler):
                 let promise = channel.eventLoop.makePromise(of: Channel.self)
                 sshHandler.createChannel(promise, channelType: .session) { [weak self] childChannel, channelType in
-                    guard let self else {
-                        return channel.eventLoop.makeFailedFuture(SSHSessionError.invalidChannel)
-                    }
                     guard channelType == .session else {
                         return channel.eventLoop.makeFailedFuture(SSHSessionError.invalidChannel)
                     }
 
                     return childChannel.eventLoop.makeCompletedFuture {
-                        let handler = SSHShellHandler(
+                        // Shell handler: receives data and sends PTY/shell in channelActive
+                        let shellHandler = SSHShellChannelHandler(
                             onData: { [weak self] data in
                                 DispatchQueue.main.async {
                                     self?.onDataReceived?(data)
@@ -165,7 +164,7 @@ final class SSHConnection {
                                 }
                             }
                         )
-                        try childChannel.pipeline.syncOperations.addHandler(handler)
+                        try childChannel.pipeline.syncOperations.addHandler(shellHandler)
                         try childChannel.pipeline.syncOperations.addHandler(
                             SSHErrorHandler { [weak self] error in
                                 DispatchQueue.main.async {
@@ -185,32 +184,6 @@ final class SSHConnection {
                         case .success(let childChannel):
                             self.sessionChannel = childChannel
                             self.state = .connected
-
-                            // Request PTY + shell
-                            childChannel.eventLoop.execute {
-                                let pty = SSHChannelRequestEvent.PseudoTerminalRequest(
-                                    wantReply: false,
-                                    term: "xterm-256color",
-                                    terminalCharacterWidth: 80,
-                                    terminalRowHeight: 24,
-                                    terminalPixelWidth: 0,
-                                    terminalPixelHeight: 0,
-                                    terminalModes: SSHTerminalModes([:])
-                                )
-                                childChannel.triggerUserOutboundEvent(pty, promise: nil)
-
-                                let env = SSHChannelRequestEvent.EnvironmentRequest(
-                                    wantReply: false,
-                                    name: "LANG",
-                                    value: "en_US.UTF-8"
-                                )
-                                childChannel.triggerUserOutboundEvent(env, promise: nil)
-
-                                childChannel.triggerUserOutboundEvent(
-                                    SSHChannelRequestEvent.ShellRequest(wantReply: false),
-                                    promise: nil
-                                )
-                            }
                         }
                     }
                 }
@@ -230,7 +203,6 @@ final class SSHConnection {
             group.shutdownGracefully { _ in }
         }
     }
-
 }
 
 // MARK: - SSH Helper Types
@@ -255,10 +227,11 @@ private final class AcceptAllHostKeysDelegate: NIOSSHClientServerAuthenticationD
     }
 }
 
-/// Password authentication delegate.
+/// Password authentication delegate. Only tries once — returns nil on retry to avoid loops.
 private final class PasswordAuthDelegate: NIOSSHClientUserAuthenticationDelegate {
     private let username: String
     private let password: String
+    private var triedOnce = false
 
     init(username: String, password: String) {
         self.username = username
@@ -269,6 +242,13 @@ private final class PasswordAuthDelegate: NIOSSHClientUserAuthenticationDelegate
         availableMethods: NIOSSHAvailableUserAuthenticationMethods,
         nextChallengePromise: EventLoopPromise<NIOSSHUserAuthenticationOffer?>
     ) {
+        // Only try password once — if it fails, return nil to stop auth
+        guard !triedOnce else {
+            nextChallengePromise.succeed(nil)
+            return
+        }
+        triedOnce = true
+
         guard availableMethods.contains(.password) else {
             nextChallengePromise.succeed(nil)
             return
@@ -281,8 +261,9 @@ private final class PasswordAuthDelegate: NIOSSHClientUserAuthenticationDelegate
     }
 }
 
-/// Handles incoming SSH channel data (shell output) and lifecycle events.
-private final class SSHShellHandler: ChannelInboundHandler {
+/// Handles incoming SSH channel data and lifecycle.
+/// Sends PTY + shell request in channelActive (correct timing per SSH protocol).
+private final class SSHShellChannelHandler: ChannelInboundHandler {
     typealias InboundIn = SSHChannelData
 
     private let onData: (Data) -> Void
@@ -300,6 +281,37 @@ private final class SSHShellHandler: ChannelInboundHandler {
             }
     }
 
+    /// Called when the SSH session channel becomes active — request PTY + shell here.
+    func channelActive(context: ChannelHandlerContext) {
+        // Request pseudo-terminal
+        let pty = SSHChannelRequestEvent.PseudoTerminalRequest(
+            wantReply: false,
+            term: "xterm-256color",
+            terminalCharacterWidth: 80,
+            terminalRowHeight: 24,
+            terminalPixelWidth: 0,
+            terminalPixelHeight: 0,
+            terminalModes: SSHTerminalModes([:])
+        )
+        context.triggerUserOutboundEvent(pty, promise: nil)
+
+        // Set LANG environment variable
+        let env = SSHChannelRequestEvent.EnvironmentRequest(
+            wantReply: false,
+            name: "LANG",
+            value: "en_US.UTF-8"
+        )
+        context.triggerUserOutboundEvent(env, promise: nil)
+
+        // Request shell
+        context.triggerUserOutboundEvent(
+            SSHChannelRequestEvent.ShellRequest(wantReply: false),
+            promise: nil
+        )
+
+        context.fireChannelActive()
+    }
+
     func channelRead(context: ChannelHandlerContext, data: NIOAny) {
         let payload = unwrapInboundIn(data)
         guard case .byteBuffer(var buffer) = payload.data else { return }
@@ -310,6 +322,8 @@ private final class SSHShellHandler: ChannelInboundHandler {
     func userInboundEventTriggered(context: ChannelHandlerContext, event: Any) {
         if let status = event as? SSHChannelRequestEvent.ExitStatus {
             onExit(status.exitStatus)
+        } else if event is SSHChannelRequestEvent.ExitSignal {
+            onExit(-1)
         } else {
             context.fireUserInboundEventTriggered(event)
         }
