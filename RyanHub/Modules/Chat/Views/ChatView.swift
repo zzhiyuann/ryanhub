@@ -288,21 +288,6 @@ struct ChatView: View {
                                 isEditable: viewModel.isMessageEditable(message)
                             )
                             .id(message.id)
-
-                            // Show per-message progress phase below pending user messages
-                            if message.role == .user,
-                               let progress = viewModel.progressText(for: message.id) {
-                                HStack(spacing: 6) {
-                                    Text("\u{1F431}")
-                                        .font(.system(size: 14))
-                                    Text(progress)
-                                        .font(.system(size: 13, weight: .medium))
-                                        .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
-                                    Spacer()
-                                }
-                                .padding(.horizontal, 4)
-                                .transition(.opacity)
-                            }
                         }
                     }
 
