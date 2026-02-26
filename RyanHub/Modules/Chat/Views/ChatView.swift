@@ -14,6 +14,8 @@ struct ChatView: View {
     @GestureState private var drawerDragOffset: CGFloat = 0
     /// The message the user is replying to (swipe-to-reply).
     @State private var replyingTo: ChatMessage?
+    /// Free-text input for answering agent questions.
+    @State private var questionFreeTextInput: String = ""
 
     /// Width of the sidebar drawer (80% of screen).
     private var drawerWidth: CGFloat {
@@ -34,6 +36,11 @@ struct ChatView: View {
                     // Reply bar (shown when replying to a message)
                     if let replying = replyingTo {
                         replyBar(for: replying)
+                    }
+
+                    // Question card (shown when agent asks a question)
+                    if viewModel.pendingQuestion != nil {
+                        questionCard
                     }
 
                     // Input bar
@@ -274,7 +281,11 @@ struct ChatView: View {
                                 },
                                 onRetry: { msg in
                                     viewModel.retryMessage(msg)
-                                }
+                                },
+                                onEdit: { msg, newContent in
+                                    viewModel.editMessage(msg, newContent: newContent)
+                                },
+                                isEditable: viewModel.isMessageEditable(message)
                             )
                             .id(message.id)
 
@@ -311,9 +322,7 @@ struct ChatView: View {
                 .padding(.vertical, HubLayout.itemSpacing)
             }
             .scrollDismissesKeyboard(.interactively)
-            .onAppear {
-                scrollToBottom(proxy: proxy)
-            }
+            .defaultScrollAnchor(.bottom)
             // React to ALL message mutations via the trigger counter.
             // This covers: new messages, streaming content updates, and deletions.
             .onChange(of: viewModel.messageUpdateTrigger) {
@@ -344,6 +353,102 @@ struct ChatView: View {
                 .padding(.horizontal, 32)
         }
         .frame(maxWidth: .infinity)
+    }
+
+    // MARK: - Question Card
+
+    @ViewBuilder
+    private var questionCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Header
+            HStack {
+                Image(systemName: "questionmark.circle.fill")
+                    .font(.system(size: 18))
+                    .foregroundStyle(Color.hubAccentYellow)
+
+                Text("Agent Question")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+
+                Spacer()
+
+                Button {
+                    withAnimation(.easeOut(duration: 0.15)) {
+                        viewModel.dismissQuestion()
+                    }
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 18))
+                        .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme).opacity(0.6))
+                }
+            }
+
+            // Question text
+            if let question = viewModel.pendingQuestion {
+                Text(question)
+                    .font(.hubBody)
+                    .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+            }
+
+            // Option buttons
+            if !viewModel.pendingQuestionOptions.isEmpty {
+                VStack(spacing: 8) {
+                    ForEach(viewModel.pendingQuestionOptions, id: \.self) { option in
+                        Button {
+                            withAnimation(.easeOut(duration: 0.15)) {
+                                viewModel.answerQuestion(option)
+                                questionFreeTextInput = ""
+                            }
+                        } label: {
+                            Text(option)
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundStyle(Color.hubPrimary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 10)
+                                .background(
+                                    RoundedRectangle(cornerRadius: HubLayout.buttonCornerRadius)
+                                        .stroke(Color.hubPrimary.opacity(0.4), lineWidth: 1)
+                                )
+                        }
+                    }
+                }
+            }
+
+            // Free text input
+            if viewModel.pendingQuestionAllowFreeText {
+                HStack(spacing: 8) {
+                    TextField("Type a custom answer...", text: $questionFreeTextInput)
+                        .font(.system(size: 14))
+                        .textFieldStyle(.plain)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(
+                            RoundedRectangle(cornerRadius: HubLayout.buttonCornerRadius)
+                                .fill(AdaptiveColors.surfaceSecondary(for: colorScheme))
+                        )
+
+                    Button {
+                        withAnimation(.easeOut(duration: 0.15)) {
+                            viewModel.answerQuestion(questionFreeTextInput)
+                            questionFreeTextInput = ""
+                        }
+                    } label: {
+                        Image(systemName: "arrow.up.circle.fill")
+                            .font(.system(size: 28))
+                            .foregroundStyle(
+                                questionFreeTextInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                                    ? AdaptiveColors.textSecondary(for: colorScheme).opacity(0.4)
+                                    : Color.hubPrimary
+                            )
+                    }
+                    .disabled(questionFreeTextInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+        }
+        .padding(14)
+        .background(AdaptiveColors.surface(for: colorScheme))
+        .transition(.move(edge: .bottom).combined(with: .opacity))
     }
 
     // MARK: - Helpers

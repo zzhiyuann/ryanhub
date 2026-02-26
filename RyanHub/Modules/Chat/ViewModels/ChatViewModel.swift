@@ -48,6 +48,19 @@ final class ChatViewModel {
     var isRecording: Bool = false
     var recordingDuration: TimeInterval = 0
 
+    // MARK: - AskUserQuestion State
+
+    /// The question text from the agent's AskUserQuestion tool call.
+    var pendingQuestion: String?
+    /// Option buttons for the pending question.
+    var pendingQuestionOptions: [String] = []
+    /// The message ID associated with the pending question.
+    var pendingQuestionMessageId: String?
+    /// The session ID prefix for routing the answer back.
+    var pendingQuestionSessionId: String?
+    /// Whether free-text answers are allowed for the pending question.
+    var pendingQuestionAllowFreeText: Bool = true
+
     // MARK: - Session State
 
     /// The currently active session ID.
@@ -536,6 +549,66 @@ final class ChatViewModel {
         }
     }
 
+    // MARK: - Message Editing
+
+    /// The maximum age (in seconds) within which a sent message can be edited.
+    static let editWindowSeconds: TimeInterval = 10
+
+    /// Whether a user message is still within the edit window.
+    func isMessageEditable(_ message: ChatMessage) -> Bool {
+        guard message.role == .user,
+              message.messageType == .text,
+              let sendTime = messageSendTimes[message.id] else { return false }
+        let age = Date().timeIntervalSince(sendTime)
+        return age < Self.editWindowSeconds
+    }
+
+    /// Edit a previously sent message: update local content, tell the Dispatcher
+    /// to cancel the running task and re-dispatch with the new text.
+    func editMessage(_ message: ChatMessage, newContent: String) {
+        let trimmed = newContent.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        guard isMessageEditable(message) else { return }
+
+        let messageId = message.id
+
+        // Update local message content in-place
+        if let index = messages.firstIndex(where: { $0.id == messageId }) {
+            messages[index] = ChatMessage(
+                id: messageId,
+                content: trimmed,
+                role: .user,
+                timestamp: message.timestamp,
+                replyToId: message.replyToId,
+                replyToPreview: message.replyToPreview
+            )
+            messageUpdateTrigger += 1
+        }
+
+        // Remove any existing assistant response for the original message
+        messages.removeAll { $0.id == "resp-\(messageId)" }
+        messageUpdateTrigger += 1
+
+        // Reset message status to sending
+        messageStatuses[messageId] = .sending
+        messageSendTimes[messageId] = Date()
+        isTyping = true
+        currentStreamingMessageId = nil
+        startProgressTimer()
+
+        // Send edit to Dispatcher
+        Task {
+            do {
+                try await webSocket.sendEditMessage(id: messageId, content: trimmed)
+            } catch {
+                self.messageStatuses[messageId] = .failed(error.localizedDescription)
+                self.updateGlobalTypingState()
+            }
+        }
+
+        saveMessages()
+    }
+
     // MARK: - Slash Commands
 
     /// Known slash commands that the Dispatcher recognizes.
@@ -791,6 +864,16 @@ final class ChatViewModel {
             if let connected = message.connected {
                 isConnected = connected
             }
+        case "edit_ack":
+            // Server acknowledged edit; the message will be re-dispatched.
+            // The ack/response flow will restart automatically via the existing
+            // message handling, so just update status to acknowledged.
+            if let id = message.id {
+                messageStatuses[id] = .acknowledged
+                messageUpdateTrigger += 1
+            }
+        case "question":
+            handleQuestionMessage(message)
         case "error":
             if let id = message.id {
                 let errText = message.message ?? "Unknown error"
@@ -864,6 +947,73 @@ final class ChatViewModel {
 
         // Update global typing state based on all pending messages
         updateGlobalTypingState()
+    }
+
+    private func handleQuestionMessage(_ message: DispatcherMessage) {
+        guard let questionText = message.question,
+              let sessionId = message.sessionId else { return }
+
+        pendingQuestion = questionText
+        pendingQuestionOptions = message.options ?? []
+        pendingQuestionMessageId = message.id
+        pendingQuestionSessionId = sessionId
+        pendingQuestionAllowFreeText = message.allowFreeText ?? true
+
+        // Add a system-style message showing the question in the chat
+        let optionsText = pendingQuestionOptions.isEmpty
+            ? ""
+            : "\n\nOptions:\n" + pendingQuestionOptions.enumerated().map { "\($0.offset + 1). \($0.element)" }.joined(separator: "\n")
+        let questionMessage = ChatMessage.assistant(
+            "Agent asks: \(questionText)\(optionsText)",
+            id: "question-\(sessionId)"
+        )
+        appendMessage(questionMessage)
+        messageUpdateTrigger += 1
+    }
+
+    /// Send an answer to a pending AskUserQuestion back to the Dispatcher.
+    func answerQuestion(_ answer: String) {
+        guard let sessionId = pendingQuestionSessionId,
+              let messageId = pendingQuestionMessageId else { return }
+
+        let answerText = answer.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !answerText.isEmpty else { return }
+
+        // Clear pending question state
+        let savedSessionId = sessionId
+        let savedMessageId = messageId
+        pendingQuestion = nil
+        pendingQuestionOptions = []
+        pendingQuestionMessageId = nil
+        pendingQuestionSessionId = nil
+        pendingQuestionAllowFreeText = true
+
+        // Add the user's answer as a chat message
+        let answerMessage = ChatMessage.user("Answer: \(answerText)")
+        appendMessage(answerMessage)
+
+        // Send the answer to the Dispatcher via WebSocket
+        Task {
+            do {
+                try await webSocket.sendAnswer(
+                    id: savedMessageId,
+                    sessionId: savedSessionId,
+                    answer: answerText
+                )
+            } catch {
+                let errorMessage = ChatMessage.assistant("Failed to send answer: \(error.localizedDescription)")
+                self.appendMessage(errorMessage)
+            }
+        }
+    }
+
+    /// Dismiss a pending question without answering.
+    func dismissQuestion() {
+        pendingQuestion = nil
+        pendingQuestionOptions = []
+        pendingQuestionMessageId = nil
+        pendingQuestionSessionId = nil
+        pendingQuestionAllowFreeText = true
     }
 
     /// Update global isTyping based on whether any messages are still pending.

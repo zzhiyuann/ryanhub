@@ -85,6 +85,19 @@ final class WebSocketClient {
         try await task.send(.string(jsonString))
     }
 
+    /// Send an edit message to re-dispatch a previously sent message with new content.
+    func sendEditMessage(id: String, content: String) async throws {
+        let payload = ClientEditMessage(type: "edit", id: id, content: content)
+        let data = try JSONEncoder().encode(payload)
+        guard let jsonString = String(data: data, encoding: .utf8) else {
+            throw WebSocketError.encodingFailed
+        }
+        guard let task = webSocketTask, isConnected else {
+            throw WebSocketError.notConnected
+        }
+        try await task.send(.string(jsonString))
+    }
+
     /// Send a message with an image attachment (base64-encoded).
     func sendImageMessage(id: String, imageBase64: String, caption: String = "", project: String? = nil, language: String? = nil) async throws {
         let payload = ClientImageMessage(
@@ -95,6 +108,19 @@ final class WebSocketClient {
             project: project,
             language: language
         )
+        let data = try JSONEncoder().encode(payload)
+        guard let jsonString = String(data: data, encoding: .utf8) else {
+            throw WebSocketError.encodingFailed
+        }
+        guard let task = webSocketTask, isConnected else {
+            throw WebSocketError.notConnected
+        }
+        try await task.send(.string(jsonString))
+    }
+
+    /// Send an answer to an AskUserQuestion from the Dispatcher.
+    func sendAnswer(id: String, sessionId: String, answer: String) async throws {
+        let payload = ClientAnswerMessage(type: "answer", id: id, sessionId: sessionId, answer: answer)
         let data = try JSONEncoder().encode(payload)
         guard let jsonString = String(data: data, encoding: .utf8) else {
             throw WebSocketError.encodingFailed
@@ -350,6 +376,12 @@ struct ClientMessage: Codable {
     let language: String?
 }
 
+struct ClientEditMessage: Codable {
+    let type: String   // "edit"
+    let id: String     // original message ID
+    let content: String // new message content
+}
+
 struct ClientImageMessage: Codable {
     let type: String
     let id: String
@@ -379,18 +411,37 @@ struct ClientVoiceMessage: Codable {
     }
 }
 
+struct ClientAnswerMessage: Codable {
+    let type: String   // "answer"
+    let id: String
+    let sessionId: String
+    let answer: String
+
+    enum CodingKeys: String, CodingKey {
+        case type, id, answer
+        case sessionId = "session_id"
+    }
+}
+
 struct DispatcherMessage: Codable {
-    let type: String        // "response", "status", "error", "pong", "ack"
+    let type: String        // "response", "status", "error", "pong", "ack", "edit_ack", "question"
     let id: String?
     let content: String?
     let streaming: Bool?
     let connected: Bool?
     let activeSessions: Int?
     let message: String?
+    // Question fields (only present when type == "question")
+    let sessionId: String?
+    let question: String?
+    let options: [String]?
+    let allowFreeText: Bool?
 
     enum CodingKeys: String, CodingKey {
-        case type, id, content, streaming, connected, message
+        case type, id, content, streaming, connected, message, question, options
         case activeSessions = "active_sessions"
+        case sessionId = "session_id"
+        case allowFreeText = "allow_free_text"
     }
 }
 

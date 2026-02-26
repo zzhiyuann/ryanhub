@@ -96,21 +96,23 @@ struct CustomTabBar: View {
 
     @ViewBuilder
     private func tabButton(for tab: MainTab) -> some View {
+        let isSelected = selectedTab == tab
         Button {
             selectedTab = tab
         } label: {
             VStack(spacing: isCompact ? 0 : 3) {
                 Image(systemName: tab.icon)
-                    .font(.system(size: isCompact ? 18 : 20, weight: .medium))
+                    .font(.system(size: isCompact ? 18 : 20, weight: isSelected ? .bold : .medium))
                     .symbolRenderingMode(.monochrome)
+                    .foregroundStyle(isSelected ? Color.hubPrimary : AdaptiveColors.textSecondary(for: colorScheme))
 
                 if !isCompact {
                     Text(tab.label)
-                        .font(.hubCaption)
+                        .font(.system(size: 13, weight: isSelected ? .bold : .medium))
+                        .foregroundStyle(isSelected ? Color.hubPrimary : AdaptiveColors.textSecondary(for: colorScheme))
                         .transition(.opacity.combined(with: .scale(scale: 0.8)))
                 }
             }
-            .foregroundStyle(selectedTab == tab ? Color.hubPrimary : AdaptiveColors.textSecondary(for: colorScheme))
             .frame(maxWidth: .infinity)
             .contentShape(Rectangle())
         }
