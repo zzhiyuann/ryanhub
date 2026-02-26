@@ -11,7 +11,6 @@ struct SettingsView: View {
             ScrollView {
                 VStack(spacing: HubLayout.sectionSpacing) {
                     serverSection
-                    foodAnalysisSection
                     appearanceSection
                     languageSection
                     aboutSection
@@ -130,87 +129,6 @@ struct SettingsView: View {
                             .font(.system(size: 11))
                             .foregroundStyle(Color.hubAccentRed)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                }
-                .frame(maxWidth: .infinity)
-            }
-        }
-    }
-
-    // MARK: - Food Analysis Section
-
-    @ViewBuilder
-    private var foodAnalysisSection: some View {
-        VStack(alignment: .leading, spacing: HubLayout.itemSpacing) {
-            SectionHeader(title: L10n.settingsFoodAnalysis)
-
-            HubCard {
-                VStack(spacing: HubLayout.itemSpacing) {
-                    // Food analysis URL input
-                    TextField("http://localhost:18790", text: Bindable(appState).foodAnalysisURL)
-                        .font(.hubBody)
-                        .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
-                        .keyboardType(.URL)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .padding(.horizontal, HubLayout.standardPadding)
-                        .frame(height: HubLayout.buttonHeight)
-                        .background(
-                            RoundedRectangle(cornerRadius: HubLayout.inputCornerRadius)
-                                .fill(AdaptiveColors.surfaceSecondary(for: colorScheme))
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: HubLayout.inputCornerRadius)
-                                .stroke(
-                                    viewModel.foodAnalysisURLWarning != nil
-                                        ? Color.hubAccentRed.opacity(0.5)
-                                        : AdaptiveColors.border(for: colorScheme),
-                                    lineWidth: 1
-                                )
-                        )
-                        .onChange(of: appState.foodAnalysisURL) { _, newValue in
-                            viewModel.validateFoodAnalysisURL(newValue)
-                            // Mark as custom if user manually changes it
-                            appState.isCustomFoodAnalysisURL = true
-                        }
-
-                    // URL validation warning
-                    if let warning = viewModel.foodAnalysisURLWarning {
-                        HStack(spacing: 4) {
-                            Image(systemName: "exclamationmark.triangle.fill")
-                                .font(.system(size: 11))
-                            Text(warning)
-                                .font(.system(size: 11))
-                        }
-                        .foregroundStyle(Color.hubAccentYellow)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-
-                    // Auto-sync hint
-                    if !appState.isCustomFoodAnalysisURL {
-                        HStack(spacing: 4) {
-                            Image(systemName: "link")
-                                .font(.system(size: 11))
-                            Text(L10n.settingsFoodAnalysisAutoSync)
-                                .font(.system(size: 11))
-                        }
-                        .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    } else {
-                        // Show button to re-enable auto-sync
-                        Button {
-                            appState.isCustomFoodAnalysisURL = false
-                            appState.foodAnalysisURL = AppState.deriveFoodAnalysisURL(from: appState.serverURL)
-                        } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: "arrow.triangle.2.circlepath")
-                                    .font(.system(size: 11))
-                                Text(L10n.settingsFoodAnalysisSyncWithServer)
-                                    .font(.system(size: 11))
-                            }
-                            .foregroundStyle(Color.hubPrimary)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
                 .frame(maxWidth: .infinity)

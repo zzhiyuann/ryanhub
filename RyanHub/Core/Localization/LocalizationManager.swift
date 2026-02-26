@@ -45,9 +45,6 @@ enum L10n {
     static var settingsAppearanceLight: String { localized("settings_appearance_light") }
     static var settingsAppearanceDark: String { localized("settings_appearance_dark") }
     static var settingsResetToDefault: String { localized("settings_reset_to_default") }
-    static var settingsFoodAnalysis: String { localized("settings_food_analysis") }
-    static var settingsFoodAnalysisAutoSync: String { localized("settings_food_analysis_auto_sync") }
-    static var settingsFoodAnalysisSyncWithServer: String { localized("settings_food_analysis_sync_with_server") }
     static var settingsAbout: String { localized("settings_about") }
     static var settingsVersion: String { localized("settings_version") }
     static var settingsBuild: String { localized("settings_build") }

@@ -8,8 +8,6 @@ final class SettingsViewModel {
     var isTesting: Bool = false
     var testResultIcon: String?
     var serverURLWarning: String?
-    var foodAnalysisURLWarning: String?
-
     // MARK: - Computed
 
     var appVersion: String {
@@ -24,7 +22,6 @@ final class SettingsViewModel {
 
     func loadFromAppState(_ appState: AppState) {
         validateServerURL(appState.serverURL)
-        validateFoodAnalysisURL(appState.foodAnalysisURL)
     }
 
     /// Validate WebSocket URL format and update warning message.
@@ -40,22 +37,6 @@ final class SettingsViewModel {
             serverURLWarning = "Invalid URL format"
         } else {
             serverURLWarning = nil
-        }
-    }
-
-    /// Validate food analysis URL format and update warning message.
-    func validateFoodAnalysisURL(_ url: String) {
-        let trimmed = url.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.isEmpty {
-            foodAnalysisURLWarning = nil
-            return
-        }
-        if !trimmed.hasPrefix("http://") && !trimmed.hasPrefix("https://") {
-            foodAnalysisURLWarning = "URL must start with http:// or https://"
-        } else if URL(string: trimmed) == nil {
-            foodAnalysisURLWarning = "Invalid URL format"
-        } else {
-            foodAnalysisURLWarning = nil
         }
     }
 
