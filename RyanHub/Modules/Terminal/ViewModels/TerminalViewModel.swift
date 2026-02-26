@@ -26,8 +26,8 @@ final class TerminalViewModel {
     var sshUsername: String {
         didSet { UserDefaults.standard.set(sshUsername, forKey: Keys.sshUsername) }
     }
-    var sshKeyPath: String {
-        didSet { UserDefaults.standard.set(sshKeyPath, forKey: Keys.sshKeyPath) }
+    var sshPassword: String {
+        didSet { UserDefaults.standard.set(sshPassword, forKey: Keys.sshPassword) }
     }
 
     // MARK: - State
@@ -48,10 +48,10 @@ final class TerminalViewModel {
     // MARK: - Init
 
     init() {
-        self.sshHost = UserDefaults.standard.string(forKey: Keys.sshHost) ?? ""
+        self.sshHost = UserDefaults.standard.string(forKey: Keys.sshHost) ?? "172.29.39.82"
         self.sshPort = UserDefaults.standard.object(forKey: Keys.sshPort) as? Int ?? 22
-        self.sshUsername = UserDefaults.standard.string(forKey: Keys.sshUsername) ?? ""
-        self.sshKeyPath = UserDefaults.standard.string(forKey: Keys.sshKeyPath) ?? ""
+        self.sshUsername = UserDefaults.standard.string(forKey: Keys.sshUsername) ?? "zhiyuan"
+        self.sshPassword = UserDefaults.standard.string(forKey: Keys.sshPassword) ?? ""
     }
 
     // MARK: - Actions
@@ -63,16 +63,11 @@ final class TerminalViewModel {
             return
         }
 
-        // Resolve key path: use provided or default to ~/.ssh/id_ed25519
-        let keyPath = sshKeyPath.isEmpty
-            ? NSHomeDirectory() + "/.ssh/id_ed25519"
-            : sshKeyPath
-
         ssh.connect(
             host: sshHost,
             port: sshPort,
             username: sshUsername,
-            privateKeyPath: keyPath
+            password: sshPassword
         )
     }
 
@@ -248,6 +243,6 @@ final class TerminalViewModel {
         static let sshHost = "ryanhub_ssh_host"
         static let sshPort = "ryanhub_ssh_port"
         static let sshUsername = "ryanhub_ssh_username"
-        static let sshKeyPath = "ryanhub_ssh_key_path"
+        static let sshPassword = "ryanhub_ssh_password"
     }
 }

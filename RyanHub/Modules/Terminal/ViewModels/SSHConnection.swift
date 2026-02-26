@@ -2,10 +2,8 @@ import Foundation
 import NIOCore
 import NIOPosix
 import NIOSSH
-import Crypto
-
 /// Manages an SSH connection with PTY shell to a remote host.
-/// Based on SwiftTerm's iOS SSH example, adapted for Ed25519 key auth.
+/// Based on SwiftTerm's iOS SSH example, adapted for password auth.
 @MainActor @Observable
 final class SSHConnection {
     // MARK: - State
@@ -31,27 +29,18 @@ final class SSHConnection {
 
     // MARK: - Connection
 
-    /// Connect to the remote host via SSH with Ed25519 key authentication.
-    func connect(host: String, port: Int = 22, username: String, privateKeyPath: String) {
+    /// Connect to the remote host via SSH with password authentication.
+    func connect(host: String, port: Int = 22, username: String, password: String) {
         guard state != .connecting else { return }
         state = .connecting
-
-        // Read and parse the private key
-        let privateKey: Curve25519.Signing.PrivateKey
-        do {
-            privateKey = try Self.loadEd25519Key(from: privateKeyPath)
-        } catch {
-            state = .failed("Key error: \(error.localizedDescription)")
-            return
-        }
 
         let group = MultiThreadedEventLoopGroup(numberOfThreads: 1)
         self.group = group
 
         let serverAuthDelegate = AcceptAllHostKeysDelegate()
-        let userAuthDelegate = Ed25519AuthDelegate(
+        let userAuthDelegate = PasswordAuthDelegate(
             username: username,
-            privateKey: privateKey
+            password: password
         )
 
         let bootstrap = ClientBootstrap(group: group)
@@ -242,78 +231,16 @@ final class SSHConnection {
         }
     }
 
-    // MARK: - Key Loading
-
-    /// Load an Ed25519 private key from an OpenSSH-format file.
-    private static func loadEd25519Key(from path: String) throws -> Curve25519.Signing.PrivateKey {
-        let expandedPath = NSString(string: path).expandingTildeInPath
-        let keyData = try Data(contentsOf: URL(fileURLWithPath: expandedPath))
-        guard let keyString = String(data: keyData, encoding: .utf8) else {
-            throw SSHSessionError.invalidKey
-        }
-
-        // Parse OpenSSH private key format
-        let lines = keyString.components(separatedBy: "\n")
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty && !$0.hasPrefix("-----") }
-
-        let base64 = lines.joined()
-        guard let decoded = Data(base64Encoded: base64) else {
-            throw SSHSessionError.invalidKey
-        }
-
-        // OpenSSH private key binary format for ed25519:
-        // The raw 32-byte private key seed is embedded in the decoded data.
-        // We search for the key material after the "ssh-ed25519" type marker.
-        let marker = Data("ssh-ed25519".utf8)
-        guard let range = decoded.range(of: marker) else {
-            throw SSHSessionError.invalidKey
-        }
-
-        // After the marker, there are: public key (4-byte len + 32 bytes), then
-        // private key section with 8-byte checkints, type string, public key again,
-        // then 4-byte len + 64 bytes (seed + public key concatenated).
-        // Find the 64-byte key blob (last occurrence of a 64-byte chunk in a
-        // region after the public key).
-        var pos = range.upperBound
-        // Skip public key (4-byte length + 32 bytes)
-        if pos + 36 <= decoded.count {
-            pos += 36
-        }
-        // Now we're in the private section. Skip padding, check ints, type string, etc.
-        // Simpler approach: scan for a 64-byte key sequence after the second "ssh-ed25519"
-        if let secondMarkerRange = decoded.range(of: marker, in: pos..<decoded.count) {
-            var keyPos = secondMarkerRange.upperBound
-            // Skip the public key embedded in private section (4-byte len + 32 bytes)
-            if keyPos + 36 <= decoded.count {
-                keyPos += 36
-            }
-            // Now read 4-byte length then 64-byte key (seed 32 + pubkey 32)
-            if keyPos + 4 <= decoded.count {
-                let len = Int(decoded[keyPos]) << 24 | Int(decoded[keyPos+1]) << 16 |
-                          Int(decoded[keyPos+2]) << 8 | Int(decoded[keyPos+3])
-                keyPos += 4
-                if len == 64 && keyPos + 32 <= decoded.count {
-                    let seed = decoded[keyPos..<keyPos+32]
-                    return try Curve25519.Signing.PrivateKey(rawRepresentation: seed)
-                }
-            }
-        }
-
-        throw SSHSessionError.invalidKey
-    }
 }
 
 // MARK: - SSH Helper Types
 
 enum SSHSessionError: LocalizedError {
     case invalidChannel
-    case invalidKey
 
     var errorDescription: String? {
         switch self {
         case .invalidChannel: return "Invalid SSH channel type"
-        case .invalidKey: return "Could not parse SSH private key"
         }
     }
 }
@@ -328,28 +255,28 @@ private final class AcceptAllHostKeysDelegate: NIOSSHClientServerAuthenticationD
     }
 }
 
-/// Ed25519 private key authentication delegate.
-private final class Ed25519AuthDelegate: NIOSSHClientUserAuthenticationDelegate {
+/// Password authentication delegate.
+private final class PasswordAuthDelegate: NIOSSHClientUserAuthenticationDelegate {
     private let username: String
-    private let privateKey: Curve25519.Signing.PrivateKey
+    private let password: String
 
-    init(username: String, privateKey: Curve25519.Signing.PrivateKey) {
+    init(username: String, password: String) {
         self.username = username
-        self.privateKey = privateKey
+        self.password = password
     }
 
     func nextAuthenticationType(
         availableMethods: NIOSSHAvailableUserAuthenticationMethods,
         nextChallengePromise: EventLoopPromise<NIOSSHUserAuthenticationOffer?>
     ) {
-        guard availableMethods.contains(.publicKey) else {
-            nextChallengePromise.fail(SSHSessionError.invalidKey)
+        guard availableMethods.contains(.password) else {
+            nextChallengePromise.succeed(nil)
             return
         }
         nextChallengePromise.succeed(NIOSSHUserAuthenticationOffer(
             username: username,
             serviceName: "",
-            offer: .privateKey(.init(privateKey: .init(ed25519Key: privateKey)))
+            offer: .password(.init(password: password))
         ))
     }
 }

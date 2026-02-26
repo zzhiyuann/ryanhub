@@ -196,7 +196,7 @@ struct SettingsView: View {
                     settingsInput(
                         placeholder: "172.29.39.82",
                         text: Binding(
-                            get: { UserDefaults.standard.string(forKey: "ryanhub_ssh_host") ?? "" },
+                            get: { UserDefaults.standard.string(forKey: "ryanhub_ssh_host") ?? "172.29.39.82" },
                             set: { UserDefaults.standard.set($0, forKey: "ryanhub_ssh_host") }
                         ),
                         label: "Host"
@@ -206,20 +206,21 @@ struct SettingsView: View {
                     settingsInput(
                         placeholder: "zhiyuan",
                         text: Binding(
-                            get: { UserDefaults.standard.string(forKey: "ryanhub_ssh_username") ?? "" },
+                            get: { UserDefaults.standard.string(forKey: "ryanhub_ssh_username") ?? "zhiyuan" },
                             set: { UserDefaults.standard.set($0, forKey: "ryanhub_ssh_username") }
                         ),
                         label: "Username"
                     )
 
-                    // Key path (optional)
+                    // Password
                     settingsInput(
-                        placeholder: "~/.ssh/id_ed25519 (default)",
+                        placeholder: "SSH password",
                         text: Binding(
-                            get: { UserDefaults.standard.string(forKey: "ryanhub_ssh_key_path") ?? "" },
-                            set: { UserDefaults.standard.set($0, forKey: "ryanhub_ssh_key_path") }
+                            get: { UserDefaults.standard.string(forKey: "ryanhub_ssh_password") ?? "" },
+                            set: { UserDefaults.standard.set($0, forKey: "ryanhub_ssh_password") }
                         ),
-                        label: "Key Path"
+                        label: "Password",
+                        isSecure: true
                     )
                 }
                 .frame(maxWidth: .infinity)
@@ -228,27 +229,33 @@ struct SettingsView: View {
     }
 
     @ViewBuilder
-    private func settingsInput(placeholder: String, text: Binding<String>, label: String) -> some View {
+    private func settingsInput(placeholder: String, text: Binding<String>, label: String, isSecure: Bool = false) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(label)
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
 
-            TextField(placeholder, text: text)
-                .font(.system(size: 14, design: .monospaced))
-                .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .padding(.horizontal, 12)
-                .frame(height: 40)
-                .background(
-                    RoundedRectangle(cornerRadius: HubLayout.inputCornerRadius)
-                        .fill(AdaptiveColors.surfaceSecondary(for: colorScheme))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: HubLayout.inputCornerRadius)
-                        .stroke(AdaptiveColors.border(for: colorScheme), lineWidth: 1)
-                )
+            Group {
+                if isSecure {
+                    SecureField(placeholder, text: text)
+                } else {
+                    TextField(placeholder, text: text)
+                }
+            }
+            .font(.system(size: 14, design: .monospaced))
+            .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+            .textInputAutocapitalization(.never)
+            .autocorrectionDisabled()
+            .padding(.horizontal, 12)
+            .frame(height: 40)
+            .background(
+                RoundedRectangle(cornerRadius: HubLayout.inputCornerRadius)
+                    .fill(AdaptiveColors.surfaceSecondary(for: colorScheme))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: HubLayout.inputCornerRadius)
+                    .stroke(AdaptiveColors.border(for: colorScheme), lineWidth: 1)
+            )
         }
     }
 
