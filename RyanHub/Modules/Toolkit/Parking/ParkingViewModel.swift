@@ -92,6 +92,81 @@ final class ParkingViewModel {
         Double(skipDates.count) * Self.costPerDay
     }
 
+    /// Estimated "until" time for today's active parking.
+    /// Parses cron status timestamp + duration to compute end time.
+    var parkingUntilTime: String {
+        guard let cron = lastCronStatus, cron.isToday, cron.status == "purchased",
+              let duration = cron.duration else {
+            return "Until --:--"
+        }
+        // Parse duration like "5 Hours, 27 Minutes"
+        var hours = 0
+        var minutes = 0
+        let parts = duration.lowercased().components(separatedBy: ",")
+        for part in parts {
+            let trimmed = part.trimmingCharacters(in: .whitespaces)
+            if trimmed.contains("hour") {
+                hours = Int(trimmed.components(separatedBy: " ").first ?? "") ?? 0
+            } else if trimmed.contains("minute") {
+                minutes = Int(trimmed.components(separatedBy: " ").first ?? "") ?? 0
+            }
+        }
+        // Parse purchase timestamp
+        let isoFormatter = ISO8601DateFormatter()
+        isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        guard let purchaseTime = isoFormatter.date(from: cron.timestamp) else {
+            // Try without fractional seconds
+            isoFormatter.formatOptions = [.withInternetDateTime]
+            guard let pt = isoFormatter.date(from: cron.timestamp) else {
+                return "Until --:--"
+            }
+            let endTime = pt.addingTimeInterval(TimeInterval(hours * 3600 + minutes * 60))
+            let tf = DateFormatter()
+            tf.dateFormat = "h:mm a"
+            return "Until \(tf.string(from: endTime))"
+        }
+        let endTime = purchaseTime.addingTimeInterval(TimeInterval(hours * 3600 + minutes * 60))
+        let tf = DateFormatter()
+        tf.dateFormat = "h:mm a"
+        return "Until \(tf.string(from: endTime))"
+    }
+
+    /// Remaining parking time as a fraction (0.0 to 1.0), for progress display.
+    var parkingTimeRemaining: (fraction: Double, label: String) {
+        guard let cron = lastCronStatus, cron.isToday, cron.status == "purchased",
+              let duration = cron.duration else {
+            return (0, "--:--")
+        }
+        var hours = 0
+        var minutes = 0
+        let parts = duration.lowercased().components(separatedBy: ",")
+        for part in parts {
+            let trimmed = part.trimmingCharacters(in: .whitespaces)
+            if trimmed.contains("hour") {
+                hours = Int(trimmed.components(separatedBy: " ").first ?? "") ?? 0
+            } else if trimmed.contains("minute") {
+                minutes = Int(trimmed.components(separatedBy: " ").first ?? "") ?? 0
+            }
+        }
+        let totalSeconds = Double(hours * 3600 + minutes * 60)
+        let isoFormatter = ISO8601DateFormatter()
+        isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        var purchaseTime = isoFormatter.date(from: cron.timestamp)
+        if purchaseTime == nil {
+            isoFormatter.formatOptions = [.withInternetDateTime]
+            purchaseTime = isoFormatter.date(from: cron.timestamp)
+        }
+        guard let start = purchaseTime else { return (0, "--:--") }
+        let elapsed = Date().timeIntervalSince(start)
+        let remaining = max(0, totalSeconds - elapsed)
+        let fraction = totalSeconds > 0 ? remaining / totalSeconds : 0
+
+        let remHours = Int(remaining) / 3600
+        let remMins = (Int(remaining) % 3600) / 60
+        let label = remHours > 0 ? "\(remHours)h \(remMins)m" : "\(remMins)m"
+        return (fraction, label)
+    }
+
     // MARK: - Init
 
     init() {

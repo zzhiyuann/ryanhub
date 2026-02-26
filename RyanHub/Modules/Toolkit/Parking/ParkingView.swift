@@ -13,8 +13,7 @@ struct ParkingView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: HubLayout.sectionSpacing) {
-                cronStatusBanner
-                statusAndStatsSection
+                todayStatusCard
                 smartSuggestionSection
                 calendarPickerSection
                 savingsSection
@@ -31,158 +30,151 @@ struct ParkingView: View {
         }
     }
 
-    // MARK: - Cron Status Banner
+    // MARK: - Today Status Card
 
-    /// Shows the last purchase result from the cron job (today only).
-    @ViewBuilder
-    private var cronStatusBanner: some View {
-        if let status = viewModel.lastCronStatus, status.isToday {
-            let iconColor: Color = switch status.iconColorName {
-            case "green": .hubAccentGreen
-            case "yellow": .hubAccentYellow
-            case "orange": .hubAccentYellow
-            case "red": .hubAccentRed
-            default: AdaptiveColors.textSecondary(for: colorScheme)
-            }
-
-            HubCard {
-                HStack(spacing: 10) {
-                    Image(systemName: status.iconName)
-                        .font(.system(size: 18))
-                        .foregroundStyle(iconColor)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Today's Purchase")
-                            .font(.hubCaption)
-                            .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
-                        Text(status.summary)
-                            .font(.hubBody)
-                            .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+    private var todayStatusCard: some View {
+        HubCard {
+            VStack(spacing: 12) {
+                // Main status row
+                HStack(spacing: 14) {
+                    // Countdown ring when active, static icon otherwise
+                    if viewModel.todayStatus == .active {
+                        let remaining = viewModel.parkingTimeRemaining
+                        ZStack {
+                            Circle()
+                                .stroke(
+                                    AdaptiveColors.surfaceSecondary(for: colorScheme),
+                                    lineWidth: 5
+                                )
+                            Circle()
+                                .trim(from: 0, to: CGFloat(remaining.fraction))
+                                .stroke(
+                                    Color.hubAccentGreen,
+                                    style: StrokeStyle(lineWidth: 5, lineCap: .round)
+                                )
+                                .rotationEffect(.degrees(-90))
+                            Text(remaining.label)
+                                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                .foregroundStyle(Color.hubAccentGreen)
+                        }
+                        .frame(width: 52, height: 52)
+                    } else {
+                        Image(systemName: todayIconName)
+                            .font(.system(size: 28, weight: .medium))
+                            .foregroundStyle(todayIconColor)
+                            .frame(width: 52, height: 52)
+                            .background(
+                                Circle()
+                                    .fill(todayIconColor.opacity(0.12))
+                            )
                     }
-                    Spacer()
-                }
-            }
-        }
-    }
 
-    // MARK: - Status & Monthly Stats
-
-    private var statusAndStatsSection: some View {
-        VStack(alignment: .leading, spacing: HubLayout.itemSpacing) {
-            SectionHeader(title: "This Month")
-
-            HubCard {
-                HStack(spacing: 20) {
-                    // Progress ring
-                    progressRing
-                        .frame(width: 72, height: 72)
-
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(statusTitle)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(todayHeadline)
                             .font(.hubHeading)
                             .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
 
-                        Text(statusSubtitle)
+                        Text(todaySubline)
                             .font(.hubCaption)
                             .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
-
-                        // Mini stats row
-                        HStack(spacing: 12) {
-                            miniStat(
-                                value: "\(viewModel.currentMonthStats.activeDays)",
-                                label: "Active",
-                                color: .hubAccentGreen
-                            )
-                            miniStat(
-                                value: "\(viewModel.currentMonthStats.skippedDays)",
-                                label: "Skipped",
-                                color: .hubAccentYellow
-                            )
-                            miniStat(
-                                value: "\(viewModel.currentMonthStats.totalWeekdays)",
-                                label: "Total",
-                                color: AdaptiveColors.textSecondary(for: colorScheme)
-                            )
-                        }
-                        .padding(.top, 2)
                     }
 
                     Spacer()
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
+
+                Divider()
+                    .foregroundStyle(AdaptiveColors.border(for: colorScheme))
+
+                // Monthly summary row
+                HStack(spacing: 0) {
+                    monthStatPill(
+                        value: "\(viewModel.currentMonthStats.activeDays)",
+                        label: "active",
+                        color: .hubAccentGreen
+                    )
+                    Spacer()
+                    monthStatPill(
+                        value: "\(viewModel.currentMonthStats.skippedDays)",
+                        label: "skipped",
+                        color: .hubAccentYellow
+                    )
+                    Spacer()
+                    monthStatPill(
+                        value: "\(viewModel.currentMonthStats.totalWeekdays)",
+                        label: "total",
+                        color: AdaptiveColors.textSecondary(for: colorScheme)
+                    )
+                }
             }
         }
     }
 
-    private var progressRing: some View {
-        let stats = viewModel.currentMonthStats
-        let ratio = stats.usageRatio
-
-        return ZStack {
-            // Background track
-            Circle()
-                .stroke(
-                    AdaptiveColors.surfaceSecondary(for: colorScheme),
-                    lineWidth: 6
-                )
-
-            // Active portion (green)
-            Circle()
-                .trim(from: 0, to: CGFloat(ratio))
-                .stroke(
-                    Color.hubAccentGreen,
-                    style: StrokeStyle(lineWidth: 6, lineCap: .round)
-                )
-                .rotationEffect(.degrees(-90))
-
-            // Center icon
-            VStack(spacing: 2) {
-                Image(systemName: viewModel.todayStatus.iconName)
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundStyle(statusIconColor)
-
-                Text("\(Int(ratio * 100))%")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
-            }
-        }
-    }
-
-    private func miniStat(value: String, label: String, color: Color) -> some View {
-        VStack(spacing: 1) {
+    private func monthStatPill(value: String, label: String, color: Color) -> some View {
+        HStack(spacing: 4) {
             Text(value)
-                .font(.system(size: 14, weight: .bold))
+                .font(.system(size: 15, weight: .bold))
                 .foregroundStyle(color)
             Text(label)
-                .font(.system(size: 10, weight: .medium))
+                .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
         }
     }
 
-    private var statusTitle: String {
+    private var todayHeadline: String {
         if !viewModel.isTodayWeekday {
             return "Weekend"
         }
-        return viewModel.todayStatus.displayText
+        switch viewModel.todayStatus {
+        case .active:
+            if let duration = viewModel.lastCronStatus?.duration {
+                return duration
+            }
+            return "Active"
+        case .skipped:
+            return "Skipped Today"
+        case .notPurchased:
+            return "Not Purchased"
+        case .unknown:
+            return "Pending"
+        }
     }
 
-    private var statusSubtitle: String {
+    private var todaySubline: String {
         if !viewModel.isTodayWeekday {
-            return "No parking needed on weekends"
+            return "No parking needed"
         }
         switch viewModel.todayStatus {
-        case .active: return "UVA Zone 5556 parking is active"
-        case .skipped: return "Parking purchase was skipped today"
-        case .notPurchased: return "Parking has not been purchased yet"
-        case .unknown: return "Status will update after next sync"
+        case .active:
+            return "Zone 5556 · \(viewModel.parkingUntilTime)"
+        case .skipped:
+            return "Parking was skipped today"
+        case .notPurchased:
+            if let cron = viewModel.lastCronStatus, cron.isToday {
+                return cron.summary
+            }
+            return "Cron has not run yet"
+        case .unknown:
+            return "Waiting for cron job"
         }
     }
 
-    private var statusIconColor: Color {
+    private var todayIconName: String {
+        if !viewModel.isTodayWeekday { return "moon.zzz.fill" }
+        switch viewModel.todayStatus {
+        case .active: return "car.fill"
+        case .skipped: return "arrow.right.circle.fill"
+        case .notPurchased: return "exclamationmark.circle.fill"
+        case .unknown: return "clock.fill"
+        }
+    }
+
+    private var todayIconColor: Color {
+        if !viewModel.isTodayWeekday { return AdaptiveColors.textSecondary(for: colorScheme) }
         switch viewModel.todayStatus {
         case .active: return .hubAccentGreen
         case .skipped: return .hubAccentYellow
         case .notPurchased: return .hubAccentRed
-        case .unknown: return AdaptiveColors.textSecondary(for: colorScheme)
+        case .unknown: return Color.hubPrimary
         }
     }
 
