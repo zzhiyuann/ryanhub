@@ -119,6 +119,38 @@ final class SSHConnection {
         }
     }
 
+    /// Execute a command on a separate SSH channel (doesn't pollute the interactive shell).
+    /// Used for management commands like tmux ls.
+    nonisolated func execCommand(_ command: String, completion: @escaping @Sendable (String?) -> Void) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self, let channel = self.channel else {
+                completion(nil)
+                return
+            }
+
+            channel.pipeline.handler(type: NIOSSHHandler.self).whenComplete { result in
+                switch result {
+                case .failure:
+                    completion(nil)
+                case .success(let sshHandler):
+                    let promise = channel.eventLoop.makePromise(of: Channel.self)
+                    let handler = ExecChannelHandler(command: command, completion: completion)
+
+                    sshHandler.createChannel(promise, channelType: .session) { childChannel, channelType in
+                        guard channelType == .session else {
+                            return channel.eventLoop.makeFailedFuture(SSHSessionError.invalidChannel)
+                        }
+                        return childChannel.pipeline.addHandler(handler)
+                    }
+
+                    promise.futureResult.whenFailure { _ in
+                        completion(nil)
+                    }
+                }
+            }
+        }
+    }
+
     /// Disconnect from the remote host.
     func disconnect() {
         if let channel {
@@ -327,6 +359,72 @@ private final class SSHShellChannelHandler: ChannelInboundHandler {
         } else {
             context.fireUserInboundEventTriggered(event)
         }
+    }
+}
+
+/// Executes a single command on a dedicated SSH channel, captures output, and closes.
+private final class ExecChannelHandler: ChannelInboundHandler {
+    typealias InboundIn = SSHChannelData
+
+    private let command: String
+    private let completion: (String?) -> Void
+    private var buffer = ""
+    private var completed = false
+
+    init(command: String, completion: @escaping (String?) -> Void) {
+        self.command = command
+        self.completion = completion
+    }
+
+    func handlerAdded(context: ChannelHandlerContext) {
+        context.channel.setOption(ChannelOptions.allowRemoteHalfClosure, value: true)
+            .whenFailure { error in
+                context.fireErrorCaught(error)
+            }
+    }
+
+    func channelActive(context: ChannelHandlerContext) {
+        let exec = SSHChannelRequestEvent.ExecRequest(
+            command: command,
+            wantReply: true
+        )
+        context.triggerUserOutboundEvent(exec, promise: nil)
+        context.fireChannelActive()
+    }
+
+    func channelRead(context: ChannelHandlerContext, data: NIOAny) {
+        let payload = unwrapInboundIn(data)
+        guard case .byteBuffer(var buf) = payload.data, payload.type == .channel else { return }
+        if let str = buf.readString(length: buf.readableBytes) {
+            buffer += str
+        }
+    }
+
+    func userInboundEventTriggered(context: ChannelHandlerContext, event: Any) {
+        if event is SSHChannelRequestEvent.ExitStatus {
+            finish()
+            context.close(promise: nil)
+        } else if event is ChannelEvent {
+            finish()
+        } else {
+            context.fireUserInboundEventTriggered(event)
+        }
+    }
+
+    func channelInactive(context: ChannelHandlerContext) {
+        finish()
+    }
+
+    func errorCaught(context: ChannelHandlerContext, error: Error) {
+        finish()
+        context.close(promise: nil)
+    }
+
+    private func finish() {
+        guard !completed else { return }
+        completed = true
+        let output = buffer
+        completion(output.isEmpty ? nil : output)
     }
 }
 

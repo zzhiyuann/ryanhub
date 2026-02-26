@@ -78,32 +78,19 @@ final class TerminalViewModel {
         currentTmuxSession = nil
     }
 
-    /// List tmux sessions on the remote host.
+    /// List tmux sessions on the remote host via a separate exec channel (no terminal echo).
     func refreshTmuxSessions() {
         guard ssh.isConnected else { return }
         isLoadingSessions = true
 
-        // Send the tmux ls command with a unique marker so we can parse the output
-        let marker = "TMUX_LIST_END_\(UUID().uuidString.prefix(8))"
-        ssh.sendString("tmux ls -F '#{session_name}|#{session_windows}|#{session_created}|#{session_attached}' 2>/dev/null; echo '\(marker)'\n")
+        let command = "tmux ls -F '#{session_name}|#{session_windows}|#{session_created}|#{session_attached}' 2>/dev/null || true"
 
-        // Parse will happen in the data received callback
-        // For now, we capture output in a buffer and parse when we see the marker
-        var buffer = ""
-        let previousHandler = ssh.onDataReceived
-
-        ssh.onDataReceived = { [weak self] data in
-            // Do NOT forward to terminal — suppress tmux ls output from display
-            if let text = String(data: data, encoding: .utf8) {
-                buffer += text
-                if buffer.contains(marker) {
-                    Task { @MainActor in
-                        self?.parseTmuxList(buffer, marker: marker)
-                        self?.isLoadingSessions = false
-                        // Restore original handler
-                        self?.ssh.onDataReceived = previousHandler
-                    }
+        ssh.execCommand(command) { [weak self] output in
+            DispatchQueue.main.async {
+                if let output {
+                    self?.parseTmuxOutput(output)
                 }
+                self?.isLoadingSessions = false
             }
         }
     }
@@ -128,8 +115,15 @@ final class TerminalViewModel {
     func newClaudeSession() {
         let shortId = UUID().uuidString.prefix(4).lowercased()
         let name = "new-\(shortId)"
-        ssh.sendString("tmux new-session -s '\(name)' 'claude; zsh'\n")
-        currentTmuxSession = name
+
+        // Create detached session via exec channel (no echo in terminal)
+        ssh.execCommand("tmux new-session -d -s '\(name)' 'claude; zsh'") { [weak self] _ in
+            DispatchQueue.main.async {
+                // Attach via interactive shell
+                self?.ssh.sendString("tmux attach -t '\(name)'\n")
+                self?.currentTmuxSession = name
+            }
+        }
     }
 
     // MARK: - Keyboard Shortcuts
@@ -196,16 +190,13 @@ final class TerminalViewModel {
 
     // MARK: - Private
 
-    private func parseTmuxList(_ output: String, marker: String) {
+    private func parseTmuxOutput(_ output: String) {
         var sessions: [TmuxSession] = []
         let lines = output.components(separatedBy: "\n")
 
         for line in lines {
             let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
-            // Skip empty lines, command echo, and marker
-            if trimmed.isEmpty || trimmed.contains(marker) || trimmed.contains("tmux ls") {
-                continue
-            }
+            if trimmed.isEmpty { continue }
 
             let parts = trimmed.components(separatedBy: "|")
             guard parts.count >= 4 else { continue }
@@ -220,7 +211,6 @@ final class TerminalViewModel {
             }()
             let attached = parts[3].trimmingCharacters(in: .whitespaces) == "1"
 
-            // Skip sessions that look like system noise
             guard !name.isEmpty else { continue }
 
             sessions.append(TmuxSession(
