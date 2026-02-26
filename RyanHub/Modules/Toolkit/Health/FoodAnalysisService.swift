@@ -109,6 +109,63 @@ final class FoodAnalysisService {
         }
     }
 
+    /// Analyze a physical activity from a text description.
+    func analyzeActivity(_ description: String) async -> ActivityAnalysisResult? {
+        isAnalyzing = true
+        analysisError = nil
+        defer { isAnalyzing = false }
+
+        guard let url = URL(string: "\(bridgeBaseURL)/analyze-activity") else {
+            analysisError = "Invalid bridge server URL: \(bridgeBaseURL)"
+            return nil
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 90
+
+        let body: [String: Any] = ["text": description]
+
+        do {
+            request.httpBody = try JSONSerialization.data(withJSONObject: body)
+            let (data, response) = try await URLSession.shared.data(for: request)
+
+            guard let http = response as? HTTPURLResponse else {
+                analysisError = "Invalid response from analysis server"
+                return nil
+            }
+
+            guard http.statusCode == 200 else {
+                if let errorResponse = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let errorMsg = errorResponse["error"] as? String {
+                    analysisError = errorMsg
+                } else {
+                    analysisError = "Analysis server error (\(http.statusCode))"
+                }
+                return nil
+            }
+
+            let decoder = JSONDecoder()
+            decoder.keyDecodingStrategy = .convertFromSnakeCase
+            return try decoder.decode(ActivityAnalysisResult.self, from: data)
+        } catch let error as URLError where error.code == .cannotConnectToHost
+            || error.code == .networkConnectionLost
+            || error.code == .timedOut
+        {
+            let host = URL(string: bridgeBaseURL)?.host ?? "unknown"
+            let port = URL(string: bridgeBaseURL)?.port.map { String($0) } ?? "18790"
+            analysisError = "Cannot reach analysis server at \(host):\(port). Make sure food-analysis-server.py is running."
+            return nil
+        } catch is DecodingError {
+            analysisError = "Failed to parse activity analysis result"
+            return nil
+        } catch {
+            analysisError = error.localizedDescription
+            return nil
+        }
+    }
+
     /// Check if the bridge server is reachable.
     func checkServerHealth() async -> Bool {
         guard let url = URL(string: "\(bridgeBaseURL)/health") else { return false }
@@ -144,4 +201,12 @@ struct AnalyzedFoodItem: Codable, Identifiable {
     let carbs: Int
     let fat: Int
     let portion: String?
+}
+
+// MARK: - Activity Analysis Result Model
+
+struct ActivityAnalysisResult: Codable {
+    let type: String
+    let caloriesBurned: Int
+    let summary: String
 }

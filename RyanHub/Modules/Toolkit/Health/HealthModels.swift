@@ -150,14 +150,34 @@ struct ActivityEntry: Codable, Identifiable {
     let duration: Int // minutes
     let note: String?
     let rawDescription: String?
+    let caloriesBurned: Int?
+    let isAIAnalyzed: Bool
 
-    init(id: UUID = UUID(), date: Date = Date(), type: String, duration: Int, note: String? = nil, rawDescription: String? = nil) {
+    enum CodingKeys: String, CodingKey {
+        case id, date, type, duration, note, rawDescription, caloriesBurned, isAIAnalyzed
+    }
+
+    init(id: UUID = UUID(), date: Date = Date(), type: String, duration: Int, note: String? = nil, rawDescription: String? = nil, caloriesBurned: Int? = nil, isAIAnalyzed: Bool = false) {
         self.id = id
         self.date = date
         self.type = type
         self.duration = duration
         self.note = note
         self.rawDescription = rawDescription
+        self.caloriesBurned = caloriesBurned
+        self.isAIAnalyzed = isAIAnalyzed
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        date = try container.decode(Date.self, forKey: .date)
+        type = try container.decode(String.self, forKey: .type)
+        duration = try container.decode(Int.self, forKey: .duration)
+        note = try container.decodeIfPresent(String.self, forKey: .note)
+        rawDescription = try container.decodeIfPresent(String.self, forKey: .rawDescription)
+        caloriesBurned = try container.decodeIfPresent(Int.self, forKey: .caloriesBurned)
+        isAIAnalyzed = try container.decodeIfPresent(Bool.self, forKey: .isAIAnalyzed) ?? false
     }
 
     /// Formatted duration string.

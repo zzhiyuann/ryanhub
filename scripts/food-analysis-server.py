@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Food Analysis Bridge Server
+Health Analysis Bridge Server
 
-A lightweight HTTP server that bridges food analysis requests from the iOS app
-to the `claude` CLI. Listens on localhost:18790.
+A lightweight HTTP server that bridges food and activity analysis requests from
+the iOS app to the `claude` CLI. Listens on localhost:18790.
 
 Endpoints:
   POST /analyze — Analyze food from text and/or image
@@ -13,6 +13,13 @@ Endpoints:
         "image_base64": "base64-encoded JPEG" // optional
       }
     Returns: JSON with nutritional analysis
+
+  POST /analyze-activity — Analyze physical activity from text
+    Body (JSON):
+      {
+        "text": "description of activity"
+      }
+    Returns: JSON with activity type, calories burned, summary
 
   GET /health — Health check
     Returns: {"status": "ok"}
@@ -38,6 +45,25 @@ HOST = "127.0.0.1"
 
 # Locate the claude CLI binary
 CLAUDE_PATH = shutil.which("claude") or os.path.expanduser("~/.local/bin/claude")
+
+ACTIVITY_ANALYSIS_PROMPT_TEMPLATE = """\
+You are a fitness expert. Analyze this physical activity description and return a JSON object with estimates.
+The user might describe activities in any language (Chinese, English, etc).
+Be practical and estimate realistic calorie burn based on typical body weight (~85 kg) and intensity.
+
+Activity description: "{description}"
+
+Return ONLY a valid JSON object in this exact format, no other text or markdown:
+{{
+  "type": "Running",
+  "caloriesBurned": 320,
+  "summary": "30 minute moderate jog"
+}}
+
+type should be a concise activity name in English (e.g., Running, Walking, Gym Workout, Yoga, Swimming, Cycling).
+caloriesBurned is estimated kcal burned during the activity.
+summary is a brief one-line description of the activity in English.
+"""
 
 FOOD_ANALYSIS_PROMPT_TEMPLATE = """\
 You are a nutritionist. Analyze this meal/food and return a JSON object with nutritional estimates.
@@ -212,7 +238,7 @@ class FoodAnalysisHandler(http.server.BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = urlparse(self.path).path
-        if path != "/analyze":
+        if path not in ("/analyze", "/analyze-activity"):
             self._send_json(404, {"error": "Not found"})
             return
 
@@ -224,6 +250,36 @@ class FoodAnalysisHandler(http.server.BaseHTTPRequestHandler):
             self._send_json(400, {"error": f"Invalid request body: {e}"})
             return
 
+        if path == "/analyze-activity":
+            self._handle_activity_analysis(data)
+        else:
+            self._handle_food_analysis(data)
+
+    def _handle_activity_analysis(self, data):
+        text = data.get("text")
+        if not text:
+            self._send_json(400, {"error": "Must provide text"})
+            return
+
+        prompt = ACTIVITY_ANALYSIS_PROMPT_TEMPLATE.format(description=text)
+
+        try:
+            raw_output = run_claude_text(prompt)
+            result = extract_result(raw_output)
+            self._send_json(200, result)
+        except subprocess.TimeoutExpired:
+            self._send_json(504, {"error": "Analysis timed out"})
+        except RuntimeError as e:
+            self._send_json(502, {"error": str(e)})
+        except (json.JSONDecodeError, ValueError) as e:
+            self._send_json(
+                500,
+                {"error": f"Failed to parse analysis result: {e}"},
+            )
+        except Exception as e:
+            self._send_json(500, {"error": f"Internal error: {e}"})
+
+    def _handle_food_analysis(self, data):
         text = data.get("text")
         image_base64 = data.get("image_base64")
         has_image = bool(image_base64)

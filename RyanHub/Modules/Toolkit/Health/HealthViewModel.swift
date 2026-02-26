@@ -75,6 +75,11 @@ final class HealthViewModel {
         todayActivityEntries.map(\.duration).reduce(0, +)
     }
 
+    /// Total calories burned today from AI-analyzed activities.
+    var todayActivityCalories: Int {
+        todayActivityEntries.compactMap(\.caloriesBurned).reduce(0, +)
+    }
+
     // MARK: - Init
 
     init() {
@@ -162,6 +167,21 @@ final class HealthViewModel {
     /// Add a new activity entry.
     func addActivity(type: String, duration: Int, date: Date = Date(), note: String? = nil, rawDescription: String? = nil) {
         let entry = ActivityEntry(date: date, type: type, duration: duration, note: note, rawDescription: rawDescription)
+        activityEntries.append(entry)
+        save(activityEntries, forKey: StorageKeys.activityEntries)
+    }
+
+    /// Add an activity from AI analysis result.
+    func addActivityFromAnalysis(_ result: ActivityAnalysisResult, description: String, date: Date = Date()) {
+        let entry = ActivityEntry(
+            date: date,
+            type: result.type,
+            duration: 0,
+            note: result.summary,
+            rawDescription: description,
+            caloriesBurned: result.caloriesBurned,
+            isAIAnalyzed: true
+        )
         activityEntries.append(entry)
         save(activityEntries, forKey: StorageKeys.activityEntries)
     }

@@ -9,14 +9,16 @@ struct HealthView: View {
     @State private var showWeightLog = false
     @State private var showSmartFoodLog = false
     @State private var showActivityLog = false
+    @State private var showSmartActivityLog = false
 
     // Quick activity natural language input
     @State private var quickActivityText = ""
-    @State private var quickActivityParsed: ActivityParser.ParseResult?
+    @State private var smartActivityLogInitialText = ""
     @FocusState private var isQuickActivityFocused: Bool
 
     // Quick meal natural language input
     @State private var quickMealText = ""
+    @State private var smartFoodLogInitialText = ""
     @FocusState private var isQuickMealFocused: Bool
 
     var body: some View {
@@ -33,10 +35,13 @@ struct HealthView: View {
             WeightLogView(viewModel: viewModel)
         }
         .sheet(isPresented: $showSmartFoodLog) {
-            SmartFoodLogView(viewModel: viewModel)
+            SmartFoodLogView(viewModel: viewModel, initialText: smartFoodLogInitialText)
         }
         .sheet(isPresented: $showActivityLog) {
             ActivityLogSheet(viewModel: viewModel)
+        }
+        .sheet(isPresented: $showSmartActivityLog) {
+            SmartActivityLogView(viewModel: viewModel, initialText: smartActivityLogInitialText)
         }
     }
 
@@ -281,6 +286,7 @@ struct HealthView: View {
             // Action row: photo, camera, full form
             HStack(spacing: 16) {
                 Button {
+                    smartFoodLogInitialText = ""
                     showSmartFoodLog = true
                 } label: {
                     HStack(spacing: 4) {
@@ -294,6 +300,7 @@ struct HealthView: View {
                 .accessibilityIdentifier(AccessibilityID.healthPhotoButton)
 
                 Button {
+                    smartFoodLogInitialText = ""
                     showSmartFoodLog = true
                 } label: {
                     HStack(spacing: 4) {
@@ -366,6 +373,9 @@ struct HealthView: View {
 
     private var activityContent: some View {
         VStack(spacing: HubLayout.sectionSpacing) {
+            // Quick activity input (sparkles style, matching Meal)
+            quickActivityLogSection
+
             // Today's summary
             HubCard {
                 HStack {
@@ -375,10 +385,10 @@ struct HealthView: View {
                             .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
 
                         HStack(alignment: .firstTextBaseline, spacing: 4) {
-                            Text("\(viewModel.todayActivityMinutes)")
+                            Text("\(viewModel.todayActivityCalories)")
                                 .font(.system(size: 34, weight: .bold))
                                 .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
-                            Text("min")
+                            Text("kcal")
                                 .font(.system(size: 16, weight: .medium))
                                 .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
                         }
@@ -386,22 +396,20 @@ struct HealthView: View {
 
                     Spacer()
 
-                    Text("\(viewModel.todayActivityEntries.count) activities")
-                        .font(.hubCaption)
-                        .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                    VStack(alignment: .trailing, spacing: 4) {
+                        Text("\(viewModel.todayActivityEntries.count) activities")
+                            .font(.hubCaption)
+                            .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                        if viewModel.todayActivityMinutes > 0 {
+                            Text("\(viewModel.todayActivityMinutes) min")
+                                .font(.hubCaption)
+                                .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                        }
+                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .accessibilityIdentifier(AccessibilityID.healthTodayActivity)
-
-            // Natural language quick log
-            quickActivityLogSection
-
-            // Structured log button (fallback)
-            HubSecondaryButton("Structured Log", icon: "list.bullet") {
-                showActivityLog = true
-            }
-            .accessibilityIdentifier(AccessibilityID.healthStructuredLogButton)
 
             // Today's activities
             if !viewModel.todayActivityEntries.isEmpty {
@@ -421,12 +429,12 @@ struct HealthView: View {
         }
     }
 
-    /// Natural language activity input with live parsing preview.
+    /// AI-powered activity input (sparkles style, matching Meal tab).
     private var quickActivityLogSection: some View {
-        VStack(spacing: HubLayout.itemSpacing) {
-            // Text input
+        VStack(spacing: 8) {
+            // Text input row
             HStack(spacing: 10) {
-                Image(systemName: "text.bubble.fill")
+                Image(systemName: "sparkles")
                     .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(Color.hubAccentGreen)
 
@@ -437,13 +445,6 @@ struct HealthView: View {
                     .accessibilityIdentifier(AccessibilityID.healthQuickActivityInput)
                     .onSubmit {
                         submitQuickActivity()
-                    }
-                    .onChange(of: quickActivityText) { _, newValue in
-                        if newValue.trimmingCharacters(in: .whitespaces).isEmpty {
-                            quickActivityParsed = nil
-                        } else {
-                            quickActivityParsed = ActivityParser.parse(newValue)
-                        }
                     }
 
                 if !quickActivityText.isEmpty {
@@ -469,43 +470,24 @@ struct HealthView: View {
                     )
             )
 
-            // Live parsing preview
-            if let parsed = quickActivityParsed {
-                HStack(spacing: 12) {
-                    Image(systemName: ActivityParser.icon(for: parsed.type))
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(Color.hubAccentGreen)
-
-                    Text(parsed.type)
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
-
-                    if let duration = parsed.duration {
-                        Text("\(duration) min")
+            // Action row: structured log fallback
+            HStack(spacing: 16) {
+                Button {
+                    showActivityLog = true
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "list.bullet")
                             .font(.system(size: 13, weight: .medium))
-                            .foregroundStyle(Color.hubPrimary)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 3)
-                            .background(
-                                Capsule().fill(Color.hubPrimary.opacity(0.12))
-                            )
-                    } else {
-                        Text("30 min (default)")
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 3)
-                            .background(
-                                Capsule().fill(AdaptiveColors.surfaceSecondary(for: colorScheme))
-                            )
+                        Text("Structured Log")
+                            .font(.system(size: 12, weight: .medium))
                     }
-
-                    Spacer()
+                    .foregroundStyle(Color.hubPrimary)
                 }
-                .padding(.horizontal, 4)
-                .transition(.opacity.combined(with: .move(edge: .top)))
-                .animation(.easeOut(duration: 0.15), value: quickActivityParsed?.type)
+                .accessibilityIdentifier(AccessibilityID.healthStructuredLogButton)
+
+                Spacer()
             }
+            .padding(.horizontal, 4)
         }
     }
 
@@ -513,7 +495,8 @@ struct HealthView: View {
         let trimmed = quickMealText.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return }
 
-        // Open SmartFoodLogView with pre-filled text
+        // Pass text to SmartFoodLogView and auto-analyze
+        smartFoodLogInitialText = trimmed
         quickMealText = ""
         isQuickMealFocused = false
         showSmartFoodLog = true
@@ -523,13 +506,11 @@ struct HealthView: View {
         let trimmed = quickActivityText.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return }
 
-        viewModel.addActivityFromDescription(trimmed)
-
-        withAnimation(.easeOut(duration: 0.2)) {
-            quickActivityText = ""
-            quickActivityParsed = nil
-        }
+        // Pass text to SmartActivityLogView and auto-analyze
+        smartActivityLogInitialText = trimmed
+        quickActivityText = ""
         isQuickActivityFocused = false
+        showSmartActivityLog = true
     }
 
     private func activityEntryRow(_ entry: ActivityEntry) -> some View {
@@ -568,9 +549,11 @@ struct HealthView: View {
                             )
                     }
 
-                    Text(entry.formattedDuration)
-                        .font(.hubCaption)
-                        .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                    if entry.duration > 0 {
+                        Text(entry.formattedDuration)
+                            .font(.hubCaption)
+                            .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                    }
 
                     Text(entry.formattedTime)
                         .font(.hubCaption)
@@ -580,8 +563,11 @@ struct HealthView: View {
 
             Spacer()
 
-            // Only show note for structured entries (non-NL)
-            if entry.rawDescription == nil, let note = entry.note, !note.isEmpty {
+            if let calories = entry.caloriesBurned, calories > 0 {
+                Text("\(calories) cal")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Color.hubAccentYellow)
+            } else if entry.rawDescription == nil, let note = entry.note, !note.isEmpty {
                 Text(note)
                     .font(.hubCaption)
                     .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
