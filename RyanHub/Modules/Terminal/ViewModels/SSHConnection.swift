@@ -27,6 +27,7 @@ final class SSHConnection {
     private var group: EventLoopGroup?
     private var channel: Channel?
     private var sessionChannel: Channel?
+    private var connectionTimeoutTask: Task<Void, Never>?
 
     // MARK: - Connection
 
@@ -34,6 +35,17 @@ final class SSHConnection {
     func connect(host: String, port: Int = 22, username: String, password: String) {
         guard state != .connecting else { return }
         state = .connecting
+
+        // Overall connection timeout (covers TCP + SSH handshake + auth)
+        connectionTimeoutTask?.cancel()
+        connectionTimeoutTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(15))
+            guard !Task.isCancelled, let self, self.state == .connecting else { return }
+            self.state = .failed("Connection timed out")
+            self.channel?.close(promise: nil)
+            self.channel = nil
+            self.shutdownGroup()
+        }
 
         let group = MultiThreadedEventLoopGroup(numberOfThreads: 1)
         self.group = group
@@ -76,6 +88,7 @@ final class SSHConnection {
             switch result {
             case .failure(let error):
                 DispatchQueue.main.async {
+                    self.connectionTimeoutTask?.cancel()
                     self.state = .failed("Connect failed: \(error.localizedDescription)")
                     self.shutdownGroup()
                 }
@@ -210,6 +223,7 @@ final class SSHConnection {
                 promise.futureResult.whenComplete { [weak self] result in
                     guard let self else { return }
                     DispatchQueue.main.async {
+                        self.connectionTimeoutTask?.cancel()
                         switch result {
                         case .failure(let error):
                             self.state = .failed("Channel failed: \(error.localizedDescription)")
