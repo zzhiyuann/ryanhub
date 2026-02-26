@@ -592,13 +592,22 @@ final class ChatViewModel {
         currentStreamingMessageId = nil
         startProgressTimer()
 
-        // Send edit to Dispatcher
+        // Re-send as a regular message (not edit protocol) since we've
+        // truncated the conversation — this is effectively a new message.
+        var contentToSend = Self.buildContentWithHealthContext(userText: trimmed)
+        let language = appState?.language ?? .english
+        contentToSend = "\(language.responseLanguageInstruction)\n\n\(contentToSend)"
+        let languageCode = language.rawValue
+
         Task {
             do {
-                try await webSocket.sendEditMessage(id: messageId, content: trimmed)
+                try await webSocket.sendMessage(id: messageId, content: contentToSend, language: languageCode)
             } catch {
                 self.messageStatuses[messageId] = .failed(error.localizedDescription)
                 self.updateGlobalTypingState()
+                let errorMessage = ChatMessage.assistant("Failed to send message: \(error.localizedDescription)")
+                self.appendMessage(errorMessage)
+                self.saveMessages()
             }
         }
 
