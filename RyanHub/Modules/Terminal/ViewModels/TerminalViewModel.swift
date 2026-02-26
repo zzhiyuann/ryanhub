@@ -78,11 +78,53 @@ final class TerminalViewModel {
         currentTmuxSession = nil
     }
 
-    /// Auto-enter tmux after SSH connects. Creates or re-attaches to a persistent "main" session.
+    /// Auto-enter tmux after SSH connects.
+    /// Checks for existing sessions — attaches to the most recent, or creates a new Claude session.
     func autoEnterTmux() {
         guard ssh.isConnected else { return }
-        ssh.sendString("tmux new-session -A -s main\n")
-        currentTmuxSession = "main"
+
+        let command = "tmux ls -F '#{session_name}|#{session_windows}|#{session_created}|#{session_attached}' 2>/dev/null || true"
+
+        ssh.execCommand(command) { [weak self] output in
+            DispatchQueue.main.async {
+                guard let self else { return }
+
+                if let output, !output.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    self.parseTmuxOutput(output)
+
+                    // Attach to the most recently created session
+                    if let latest = self.tmuxSessions.sorted(by: {
+                        ($0.createdAt ?? .distantPast) > ($1.createdAt ?? .distantPast)
+                    }).first {
+                        self.ssh.sendString("tmux attach -t '\(latest.id)'\n")
+                        self.currentTmuxSession = latest.id
+                    } else {
+                        self.createNewClaudeSession()
+                    }
+                } else {
+                    // No sessions — create a new one
+                    self.createNewClaudeSession()
+                }
+            }
+        }
+    }
+
+    /// Kill a tmux session by name.
+    func killTmuxSession(_ name: String) {
+        let isCurrentSession = (currentTmuxSession == name)
+
+        ssh.execCommand("tmux kill-session -t '\(name)'") { [weak self] _ in
+            DispatchQueue.main.async {
+                self?.tmuxSessions.removeAll { $0.id == name }
+
+                if isCurrentSession {
+                    // tmux auto-switches to next session, or exits if none left
+                    // Refresh to find out what we landed on
+                    self?.refreshTmuxSessions()
+                    self?.currentTmuxSession = self?.tmuxSessions.first?.id
+                }
+            }
+        }
     }
 
     /// List tmux sessions on the remote host via a separate exec channel (no terminal echo).
@@ -124,20 +166,33 @@ final class TerminalViewModel {
 
     /// Create a new tmux session with Claude and switch to it.
     func newClaudeSession() {
-        let shortId = UUID().uuidString.prefix(4).lowercased()
-        let name = "new-\(shortId)"
+        if currentTmuxSession != nil {
+            // Already in tmux — create detached and switch via prefix key
+            let shortId = UUID().uuidString.prefix(4).lowercased()
+            let name = "claude-\(shortId)"
 
-        // Create detached session via exec channel (silent)
-        ssh.execCommand("tmux new-session -d -s '\(name)' 'claude; zsh'") { [weak self] _ in
-            DispatchQueue.main.async {
-                self?.currentTmuxSession = name
-                // Switch via tmux prefix key (works inside tmux regardless of running program)
-                self?.ssh.send(Data([0x02]))  // Ctrl+B
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                    self?.ssh.sendString(":switch-client -t '\(name)'\n")
+            ssh.execCommand("tmux new-session -d -s '\(name)' 'claude; zsh'") { [weak self] _ in
+                DispatchQueue.main.async {
+                    self?.currentTmuxSession = name
+                    // Ctrl+B : switch-client (intercepted by tmux, not the running program)
+                    self?.ssh.send(Data([0x02]))
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                        self?.ssh.sendString(":switch-client -t '\(name)'\n")
+                    }
                 }
             }
+        } else {
+            // Not in tmux yet — send directly to shell
+            createNewClaudeSession()
         }
+    }
+
+    /// Create a new Claude tmux session from the bare shell (initial setup).
+    private func createNewClaudeSession() {
+        let shortId = UUID().uuidString.prefix(4).lowercased()
+        let name = "claude-\(shortId)"
+        ssh.sendString("tmux new-session -s '\(name)' 'claude; zsh'\n")
+        currentTmuxSession = name
     }
 
     // MARK: - Keyboard Shortcuts

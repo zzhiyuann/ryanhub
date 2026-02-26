@@ -89,6 +89,7 @@ struct SSHTerminalView: View {
             .background(AdaptiveColors.surface(for: colorScheme))
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier(AccessibilityID.terminalSessionBar)
     }
 
     // MARK: - Connect Prompt
@@ -173,6 +174,7 @@ struct SSHTerminalView: View {
                     .fill(Color.hubPrimary)
             )
         }
+        .accessibilityIdentifier(AccessibilityID.terminalConnectButton)
     }
 
     // MARK: - Session Picker Overlay
@@ -227,12 +229,14 @@ struct SSHTerminalView: View {
                     .padding(.vertical, 11)
                 }
                 .buttonStyle(.plain)
+                .accessibilityIdentifier(AccessibilityID.terminalNewSession)
             }
             .background(AdaptiveColors.surface(for: colorScheme))
             .clipShape(RoundedRectangle(cornerRadius: 10))
             .shadow(color: .black.opacity(0.3), radius: 12, y: 4)
             .padding(.horizontal, 8)
             .padding(.top, 44)
+            .accessibilityIdentifier(AccessibilityID.terminalSessionPicker)
 
             Spacer()
         }
@@ -252,31 +256,45 @@ struct SSHTerminalView: View {
     private func sessionRow(_ session: TmuxSession) -> some View {
         let isActive = session.id == viewModel.currentTmuxSession
 
-        Button {
-            withAnimation(.easeOut(duration: 0.2)) {
-                viewModel.showSessionPicker = false
-            }
-            viewModel.attachTmuxSession(session.id)
-        } label: {
-            HStack(spacing: 8) {
-                Text(session.displayName)
-                    .font(.system(size: 13, weight: isActive ? .bold : .regular, design: .monospaced))
-                    .foregroundStyle(isActive ? Color.hubPrimary : AdaptiveColors.textPrimary(for: colorScheme))
-                    .lineLimit(1)
-
-                Spacer()
-
-                if session.attached {
-                    Text("attached")
-                        .font(.system(size: 10, design: .monospaced))
-                        .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme).opacity(0.6))
+        HStack(spacing: 0) {
+            Button {
+                withAnimation(.easeOut(duration: 0.2)) {
+                    viewModel.showSessionPicker = false
                 }
+                viewModel.attachTmuxSession(session.id)
+            } label: {
+                HStack(spacing: 8) {
+                    Text(session.displayName)
+                        .font(.system(size: 13, weight: isActive ? .bold : .regular, design: .monospaced))
+                        .foregroundStyle(isActive ? Color.hubPrimary : AdaptiveColors.textPrimary(for: colorScheme))
+                        .lineLimit(1)
+
+                    Spacer()
+
+                    if session.attached {
+                        Text("attached")
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme).opacity(0.6))
+                    }
+                }
+                .padding(.leading, 14)
+                .padding(.vertical, 11)
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 11)
-            .background(isActive ? Color.hubPrimary.opacity(0.12) : Color.clear)
+            .buttonStyle(.plain)
+
+            // Kill session
+            Button {
+                viewModel.killTmuxSession(session.id)
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme).opacity(0.5))
+                    .frame(width: 32, height: 32)
+            }
+            .buttonStyle(.plain)
+            .padding(.trailing, 6)
         }
-        .buttonStyle(.plain)
+        .background(isActive ? Color.hubPrimary.opacity(0.12) : Color.clear)
     }
 
 }
