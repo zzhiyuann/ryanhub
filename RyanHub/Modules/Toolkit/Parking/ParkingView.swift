@@ -16,8 +16,6 @@ struct ParkingView: View {
                 todayStatusCard
                 smartSuggestionSection
                 calendarPickerSection
-                savingsSection
-                upcomingSkipsSection
                 skipHistorySection
             }
             .padding(HubLayout.standardPadding)
@@ -103,6 +101,12 @@ struct ParkingView: View {
                         value: "\(viewModel.currentMonthStats.totalWeekdays)",
                         label: "total",
                         color: AdaptiveColors.textSecondary(for: colorScheme)
+                    )
+                    Spacer()
+                    monthStatPill(
+                        value: String(format: "$%.0f", viewModel.currentMonthStats.estimatedCost),
+                        label: "cost",
+                        color: Color.hubPrimary
                     )
                 }
             }
@@ -357,138 +361,6 @@ struct ParkingView: View {
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
         }
-    }
-
-    // MARK: - Savings Tracker
-
-    private var savingsSection: some View {
-        VStack(alignment: .leading, spacing: HubLayout.itemSpacing) {
-            SectionHeader(title: "Cost Tracker")
-
-            HubCard {
-                VStack(spacing: 12) {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Estimated Savings")
-                                .font(.hubCaption)
-                                .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
-
-                            Text(String(format: "$%.2f", viewModel.totalSavings))
-                                .font(.system(size: 28, weight: .bold))
-                                .foregroundStyle(Color.hubAccentGreen)
-                        }
-
-                        Spacer()
-
-                        VStack(alignment: .trailing, spacing: 4) {
-                            Text("This Month")
-                                .font(.hubCaption)
-                                .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
-
-                            Text(String(format: "$%.2f", viewModel.currentMonthStats.estimatedSavings))
-                                .font(.system(size: 20, weight: .semibold))
-                                .foregroundStyle(Color.hubAccentGreen)
-                        }
-                    }
-
-                    Divider()
-                        .foregroundStyle(AdaptiveColors.border(for: colorScheme))
-
-                    HStack {
-                        Label(
-                            "\(viewModel.skipDates.count) total days skipped",
-                            systemImage: "calendar.badge.minus"
-                        )
-                        .font(.hubCaption)
-                        .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
-
-                        Spacer()
-
-                        Text("~$\(String(format: "%.2f", ParkingViewModel.costPerDay))/day")
-                            .font(.hubCaption)
-                            .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-        }
-    }
-
-    // MARK: - Upcoming Skips
-
-    private var upcomingSkipsSection: some View {
-        VStack(alignment: .leading, spacing: HubLayout.itemSpacing) {
-            SectionHeader(title: "Upcoming Skip Dates")
-
-            if viewModel.upcomingSkipDates.isEmpty {
-                HubCard {
-                    HStack {
-                        Image(systemName: "checkmark.seal.fill")
-                            .foregroundStyle(Color.hubAccentGreen)
-                        Text("No upcoming skips")
-                            .font(.hubBody)
-                            .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
-                        Spacer()
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                }
-            } else {
-                VStack(spacing: 8) {
-                    ForEach(viewModel.upcomingSkipDates) { entry in
-                        skipDateRow(entry: entry)
-                    }
-                }
-            }
-        }
-    }
-
-    private func skipDateRow(entry: ParkingSkipEntry) -> some View {
-        HStack(spacing: 12) {
-            Circle()
-                .fill(Color.hubAccentYellow)
-                .frame(width: 8, height: 8)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(entry.relativeDateLabel)
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
-
-                Text(entry.formattedDate)
-                    .font(.hubCaption)
-                    .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
-            }
-
-            Spacer()
-
-            Button {
-                withAnimation(.easeInOut(duration: 0.25)) {
-                    viewModel.restoreDate(entry)
-                }
-            } label: {
-                Text("Restore")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Color.hubPrimary)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(
-                        Capsule()
-                            .fill(Color.hubPrimary.opacity(0.12))
-                    )
-            }
-        }
-        .padding(HubLayout.cardInnerPadding)
-        .background(
-            RoundedRectangle(cornerRadius: HubLayout.cardCornerRadius)
-                .fill(AdaptiveColors.surface(for: colorScheme))
-                .shadow(
-                    color: colorScheme == .dark
-                        ? Color.black.opacity(0.3)
-                        : Color.black.opacity(0.06),
-                    radius: 8,
-                    x: 0,
-                    y: 2
-                )
-        )
     }
 
     // MARK: - Skip History

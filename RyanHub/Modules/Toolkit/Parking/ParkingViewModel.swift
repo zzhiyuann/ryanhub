@@ -87,11 +87,6 @@ final class ParkingViewModel {
         computeMonthStats(for: calendarDisplayedMonth)
     }
 
-    /// Total lifetime savings from all skip dates.
-    var totalSavings: Double {
-        Double(skipDates.count) * Self.costPerDay
-    }
-
     /// Estimated "until" time for today's active parking.
     /// Parses cron status timestamp + duration to compute end time.
     var parkingUntilTime: String {
