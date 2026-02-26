@@ -15,6 +15,10 @@ struct HealthView: View {
     @State private var quickActivityParsed: ActivityParser.ParseResult?
     @FocusState private var isQuickActivityFocused: Bool
 
+    // Quick meal natural language input
+    @State private var quickMealText = ""
+    @FocusState private var isQuickMealFocused: Bool
+
     var body: some View {
         ScrollView {
             VStack(spacing: HubLayout.sectionSpacing) {
@@ -207,55 +211,11 @@ struct HealthView: View {
 
     private var foodContent: some View {
         VStack(spacing: HubLayout.sectionSpacing) {
+            // Quick meal input (same style as activity)
+            quickMealLogSection
+
             // AI-powered daily summary
             DailySummaryView(viewModel: viewModel)
-
-            // Smart log button
-            Button {
-                showSmartFoodLog = true
-            } label: {
-                HStack(spacing: 12) {
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 18, weight: .medium))
-                        .foregroundStyle(.white)
-                        .frame(width: 40, height: 40)
-                        .background(
-                            LinearGradient(
-                                colors: [Color.hubPrimary, Color.hubPrimaryLight],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            in: Circle()
-                        )
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Log a Meal")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
-                        Text("Describe or snap a photo — AI handles the rest")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
-                    }
-
-                    Spacer()
-
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
-                }
-                .padding(HubLayout.cardInnerPadding)
-                .background(
-                    RoundedRectangle(cornerRadius: HubLayout.cardCornerRadius)
-                        .fill(AdaptiveColors.surface(for: colorScheme))
-                        .shadow(
-                            color: colorScheme == .dark
-                                ? Color.black.opacity(0.3)
-                                : Color.black.opacity(0.06),
-                            radius: 8, x: 0, y: 2
-                        )
-                )
-            }
-            .buttonStyle(.plain)
 
             if viewModel.todayFoodEntries.isEmpty {
                 emptyStateCard(
@@ -263,6 +223,77 @@ struct HealthView: View {
                     message: "No meals logged today"
                 )
             }
+        }
+    }
+
+    /// Inline meal input with photo/camera buttons.
+    private var quickMealLogSection: some View {
+        VStack(spacing: 8) {
+            // Text input row
+            HStack(spacing: 10) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(Color.hubPrimary)
+
+                TextField("e.g., Beef noodles and bubble tea", text: $quickMealText)
+                    .font(.hubBody)
+                    .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                    .focused($isQuickMealFocused)
+                    .onSubmit {
+                        submitQuickMeal()
+                    }
+
+                if !quickMealText.isEmpty {
+                    Button {
+                        submitQuickMeal()
+                    } label: {
+                        Image(systemName: "arrow.up.circle.fill")
+                            .font(.system(size: 28))
+                            .foregroundStyle(Color.hubPrimary)
+                    }
+                }
+            }
+            .padding(HubLayout.cardInnerPadding)
+            .background(
+                RoundedRectangle(cornerRadius: HubLayout.cardCornerRadius)
+                    .fill(AdaptiveColors.surface(for: colorScheme))
+                    .shadow(
+                        color: colorScheme == .dark
+                            ? Color.black.opacity(0.3)
+                            : Color.black.opacity(0.06),
+                        radius: 8, x: 0, y: 2
+                    )
+            )
+
+            // Action row: photo, camera, full form
+            HStack(spacing: 16) {
+                Button {
+                    showSmartFoodLog = true
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "photo.on.rectangle")
+                            .font(.system(size: 13, weight: .medium))
+                        Text("Photo")
+                            .font(.system(size: 12, weight: .medium))
+                    }
+                    .foregroundStyle(Color.hubPrimary)
+                }
+
+                Button {
+                    showSmartFoodLog = true
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "camera")
+                            .font(.system(size: 13, weight: .medium))
+                        Text("Camera")
+                            .font(.system(size: 12, weight: .medium))
+                    }
+                    .foregroundStyle(Color.hubPrimary)
+                }
+
+                Spacer()
+            }
+            .padding(.horizontal, 4)
         }
     }
 
@@ -457,6 +488,16 @@ struct HealthView: View {
                 .animation(.easeOut(duration: 0.15), value: quickActivityParsed?.type)
             }
         }
+    }
+
+    private func submitQuickMeal() {
+        let trimmed = quickMealText.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return }
+
+        // Open SmartFoodLogView with pre-filled text
+        quickMealText = ""
+        isQuickMealFocused = false
+        showSmartFoodLog = true
     }
 
     private func submitQuickActivity() {
