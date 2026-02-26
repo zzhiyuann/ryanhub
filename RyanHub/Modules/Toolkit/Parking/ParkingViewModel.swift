@@ -367,39 +367,53 @@ final class ParkingViewModel {
         }
     }
 
-    /// Compute stats for a given month from purchase history.
+    /// Compute stats for a given month from purchase history and skip dates.
     private func computeMonthStats(for referenceDate: Date) -> MonthlyParkingStats {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM"
-        let monthPrefix = formatter.string(from: referenceDate)
-
-        let monthEntries = purchaseHistory.filter { $0.date.hasPrefix(monthPrefix) }
-        let activeDays = monthEntries.filter { $0.status == "purchased" }.count
-        let skippedDays = monthEntries.filter { $0.status == "skipped" }.count
-
-        // Count weekdays up to today (or end of month if viewing past months)
         let calendar = Calendar.current
+        let monthFormatter = DateFormatter()
+        monthFormatter.dateFormat = "yyyy-MM"
+        let monthPrefix = monthFormatter.string(from: referenceDate)
+
+        // Purchased/skipped from actual logs
+        let monthEntries = purchaseHistory.filter { $0.date.hasPrefix(monthPrefix) }
+        let purchasedDays = monthEntries.filter { $0.status == "purchased" }.count
+        let logSkippedDays = monthEntries.filter { $0.status == "skipped" }.count
+
+        // Future skip dates in this month (from skip-dates.txt, not yet in logs)
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd"
+        let logDates = Set(monthEntries.map(\.date))
+        let futureSkippedDays = skipDates.filter { entry in
+            let dateStr = dateFormatter.string(from: entry.date)
+            return dateStr.hasPrefix(monthPrefix) && !logDates.contains(dateStr)
+        }.count
+
+        let skippedDays = logSkippedDays + futureSkippedDays
+
+        // Awaiting: future weekdays in this month not yet purchased/skipped/skip-listed
+        let today = calendar.startOfDay(for: Date())
+        let skipDateStrings = Set(skipDates.map { dateFormatter.string(from: $0.date) })
         guard let monthRange = calendar.range(of: .day, in: .month, for: referenceDate),
               let monthInterval = calendar.dateInterval(of: .month, for: referenceDate) else {
-            return MonthlyParkingStats(totalWeekdays: 0, skippedDays: 0, activeDays: 0, costPerDay: Self.costPerDay)
+            return MonthlyParkingStats(purchasedDays: 0, skippedDays: 0, awaitingDays: 0)
         }
-        let today = calendar.startOfDay(for: Date())
         let firstDay = monthInterval.start
-        var totalWeekdays = 0
+        var awaitingDays = 0
         for dayOffset in 0..<monthRange.count {
             guard let date = calendar.date(byAdding: .day, value: dayOffset, to: firstDay) else { continue }
             let dayStart = calendar.startOfDay(for: date)
-            if dayStart > today { break }
-            if !calendar.isDateInWeekend(dayStart) {
-                totalWeekdays += 1
+            if dayStart <= today { continue }
+            if calendar.isDateInWeekend(dayStart) { continue }
+            let dateStr = dateFormatter.string(from: dayStart)
+            if !logDates.contains(dateStr) && !skipDateStrings.contains(dateStr) {
+                awaitingDays += 1
             }
         }
 
         return MonthlyParkingStats(
-            totalWeekdays: totalWeekdays,
+            purchasedDays: purchasedDays,
             skippedDays: skippedDays,
-            activeDays: activeDays,
-            costPerDay: Self.costPerDay
+            awaitingDays: awaitingDays
         )
     }
 

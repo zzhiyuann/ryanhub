@@ -73,26 +73,9 @@ struct ParkingSkipEntry: Identifiable, Hashable {
 
 /// Tracks parking usage statistics for a given month.
 struct MonthlyParkingStats {
-    let totalWeekdays: Int
+    let purchasedDays: Int
     let skippedDays: Int
-    let activeDays: Int
-    let costPerDay: Double
-
-    /// Fraction of the month's weekdays that have been active (0.0 to 1.0).
-    var usageRatio: Double {
-        guard totalWeekdays > 0 else { return 0 }
-        return Double(activeDays) / Double(totalWeekdays)
-    }
-
-    /// Total estimated savings from skipping.
-    var estimatedSavings: Double {
-        Double(skippedDays) * costPerDay
-    }
-
-    /// Total estimated cost for active days.
-    var estimatedCost: Double {
-        Double(activeDays) * costPerDay
-    }
+    let awaitingDays: Int
 }
 
 // MARK: - Cron Purchase Status

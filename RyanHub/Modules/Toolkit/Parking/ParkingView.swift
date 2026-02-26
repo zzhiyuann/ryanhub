@@ -82,8 +82,8 @@ struct ParkingView: View {
                 // Monthly summary row
                 HStack(spacing: 0) {
                     monthStatPill(
-                        value: "\(viewModel.currentMonthStats.activeDays)",
-                        label: "active",
+                        value: "\(viewModel.currentMonthStats.purchasedDays)",
+                        label: "purchased",
                         color: .hubAccentGreen
                     )
                     Spacer()
@@ -94,15 +94,9 @@ struct ParkingView: View {
                     )
                     Spacer()
                     monthStatPill(
-                        value: "\(viewModel.currentMonthStats.totalWeekdays)",
-                        label: "total",
+                        value: "\(viewModel.currentMonthStats.awaitingDays)",
+                        label: "awaiting",
                         color: AdaptiveColors.textSecondary(for: colorScheme)
-                    )
-                    Spacer()
-                    monthStatPill(
-                        value: String(format: "$%.0f", viewModel.currentMonthCost),
-                        label: "cost",
-                        color: Color.hubPrimary
                     )
                 }
             }
