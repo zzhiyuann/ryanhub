@@ -9,6 +9,7 @@ struct BookReaderView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(BookFactoryAPI.self) private var api
     @Environment(AudioPlayerViewModel.self) private var audioPlayer
+    @Environment(AppState.self) private var appState
 
     @State private var htmlContent: String = ""
     @State private var isLoading = true
@@ -37,6 +38,8 @@ struct BookReaderView: View {
         .background(AdaptiveColors.background(for: colorScheme))
         .navigationTitle(book.title)
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear { appState.isReadingBook = true }
+        .onDisappear { appState.isReadingBook = false }
         .task {
             await loadBookContent()
 

@@ -4,6 +4,7 @@ import SwiftUI
 /// Supports search, pull-to-refresh, audio generation triggers, and playback.
 struct BookLibraryView: View {
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(AppState.self) private var appState
     @Environment(BookFactoryViewModel.self) private var vm
     @Environment(BookFactoryAPI.self) private var api
     @Environment(AudioPlayerViewModel.self) private var audioPlayer
@@ -13,19 +14,24 @@ struct BookLibraryView: View {
     var body: some View {
         @Bindable var vm = vm
         NavigationStack {
-            Group {
-                if vm.isLoading && vm.books.isEmpty {
-                    loadingView
-                } else if vm.books.isEmpty {
-                    emptyView
-                } else {
-                    bookList
+            VStack(spacing: 0) {
+                // Inline search bar at top
+                searchBar
+
+                // Content
+                Group {
+                    if vm.isLoading && vm.books.isEmpty {
+                        loadingView
+                    } else if vm.books.isEmpty {
+                        emptyView
+                    } else {
+                        bookList
+                    }
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             .background(AdaptiveColors.background(for: colorScheme))
-            .navigationTitle("Library")
-            .navigationBarTitleDisplayMode(.inline)
-            .searchable(text: $vm.search, prompt: "Search books...")
+            .navigationBarHidden(true)
             .refreshable {
                 await vm.loadBooks()
             }
@@ -33,6 +39,7 @@ struct BookLibraryView: View {
                 BookReaderView(book: book)
                     .environment(api)
                     .environment(audioPlayer)
+                    .environment(appState)
             }
             .confirmationDialog(
                 "Audio Version",
@@ -81,6 +88,50 @@ struct BookLibraryView: View {
                 }
             }
         }
+    }
+
+    // MARK: - Inline Search Bar
+
+    private var searchBar: some View {
+        @Bindable var vm = vm
+        return HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 15))
+                .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+
+            TextField("Search books...", text: $vm.search)
+                .font(.system(size: 15))
+                .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                .autocorrectionDisabled()
+
+            if !vm.search.isEmpty {
+                Button {
+                    vm.search = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 15))
+                        .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                }
+                .buttonStyle(.plain)
+            }
+
+            Text("\(vm.filteredCount)")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(
+                    Capsule()
+                        .fill(AdaptiveColors.surfaceSecondary(for: colorScheme))
+                )
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(AdaptiveColors.surface(for: colorScheme))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .padding(.horizontal, HubLayout.standardPadding)
+        .padding(.top, 8)
+        .padding(.bottom, 4)
     }
 
     // MARK: - Loading View

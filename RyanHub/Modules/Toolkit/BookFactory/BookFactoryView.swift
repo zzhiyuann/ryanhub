@@ -4,6 +4,7 @@ import SwiftUI
 /// Shows a tabbed interface with library, queue, and settings.
 struct BookFactoryView: View {
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(AppState.self) private var appState
 
     @State private var api = BookFactoryAPI()
     @State private var libraryVM: BookFactoryViewModel?
@@ -83,7 +84,8 @@ struct BookFactoryView: View {
     // MARK: - Main Content
 
     private var mainContent: some View {
-        VStack(spacing: 0) {
+        ZStack(alignment: .bottom) {
+            // Content fills the full area
             Group {
                 switch selectedTab {
                 case .library:
@@ -96,11 +98,19 @@ struct BookFactoryView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            // Mini player above tab bar
-            MiniPlayerView()
+            // Mini player (floats above bubble bar)
+            VStack(spacing: 8) {
+                MiniPlayerView()
+                    .padding(.horizontal, HubLayout.standardPadding)
 
-            // Tab bar
-            tabBar
+                // Floating bubble tab bar — hidden when reading a book
+                if !appState.isReadingBook {
+                    floatingBubbleBar
+                        .transition(.scale(scale: 0.8).combined(with: .opacity))
+                }
+            }
+            .padding(.bottom, 8)
+            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: appState.isReadingBook)
         }
         .background(AdaptiveColors.background(for: colorScheme))
         .task {
@@ -109,37 +119,57 @@ struct BookFactoryView: View {
         }
     }
 
-    // MARK: - Tab Bar
+    // MARK: - Floating Bubble Bar
 
-    private var tabBar: some View {
-        HStack(spacing: 0) {
+    private var floatingBubbleBar: some View {
+        HStack(spacing: 4) {
             ForEach(BookFactoryTab.allCases, id: \.self) { tab in
                 Button {
-                    selectedTab = tab
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        selectedTab = tab
+                    }
                 } label: {
-                    VStack(spacing: 4) {
+                    HStack(spacing: 5) {
                         Image(systemName: tab.icon)
-                            .font(.system(size: 20))
-                        Text(tab.rawValue)
-                            .font(.caption2)
+                            .font(.system(size: 14, weight: .medium))
+
+                        if selectedTab == tab {
+                            Text(tab.rawValue)
+                                .font(.system(size: 13, weight: .semibold))
+                                .transition(.scale(scale: 0.5).combined(with: .opacity))
+                        }
                     }
                     .foregroundStyle(
                         selectedTab == tab
-                            ? Color.hubPrimary
+                            ? .white
                             : AdaptiveColors.textSecondary(for: colorScheme)
                     )
-                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal, selectedTab == tab ? 14 : 10)
+                    .padding(.vertical, 8)
+                    .background(
+                        Capsule()
+                            .fill(selectedTab == tab ? Color.hubPrimary : Color.clear)
+                    )
                 }
                 .buttonStyle(.plain)
             }
         }
-        .padding(.top, 8)
-        .padding(.bottom, 4)
-        .background(AdaptiveColors.surface(for: colorScheme))
-        .overlay(alignment: .top) {
-            AdaptiveColors.border(for: colorScheme)
-                .frame(height: 0.5)
-        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 4)
+        .background(
+            Capsule()
+                .fill(AdaptiveColors.surface(for: colorScheme))
+                .shadow(
+                    color: colorScheme == .dark ? Color.black.opacity(0.4) : Color.black.opacity(0.12),
+                    radius: 12,
+                    x: 0,
+                    y: 4
+                )
+        )
+        .overlay(
+            Capsule()
+                .stroke(AdaptiveColors.border(for: colorScheme), lineWidth: 0.5)
+        )
     }
 
     // MARK: - Helpers

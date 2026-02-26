@@ -36,6 +36,8 @@ final class BookFactoryViewModel {
         }
     }
 
+    var filteredCount: Int { filteredBooks.count }
+
     var groupedBooks: [(date: String, books: [Book])] {
         let grouped = Dictionary(grouping: filteredBooks, by: { $0.date })
         return grouped.keys.sorted(by: >).map { (date: $0, books: grouped[$0] ?? []) }

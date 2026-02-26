@@ -67,6 +67,10 @@ final class AppState {
     /// Used by the custom tab bar to switch to compact (icon-only) mode.
     var isInToolkitModule: Bool = false
 
+    /// True when the user is reading a book (inside BookReaderView).
+    /// Used to hide the floating module tab bubble.
+    var isReadingBook: Bool = false
+
     // MARK: - Connection State
 
     var isConnected: Bool = false
