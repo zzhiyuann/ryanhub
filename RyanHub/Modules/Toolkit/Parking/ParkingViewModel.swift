@@ -367,30 +367,34 @@ final class ParkingViewModel {
         }
     }
 
-    /// Compute stats for a given month.
+    /// Compute stats for a given month from purchase history.
     private func computeMonthStats(for referenceDate: Date) -> MonthlyParkingStats {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM"
+        let monthPrefix = formatter.string(from: referenceDate)
+
+        let monthEntries = purchaseHistory.filter { $0.date.hasPrefix(monthPrefix) }
+        let activeDays = monthEntries.filter { $0.status == "purchased" }.count
+        let skippedDays = monthEntries.filter { $0.status == "skipped" }.count
+
+        // Count weekdays up to today (or end of month if viewing past months)
         let calendar = Calendar.current
-        guard let monthInterval = calendar.dateInterval(of: .month, for: referenceDate),
-              let monthRange = calendar.range(of: .day, in: .month, for: referenceDate) else {
+        guard let monthRange = calendar.range(of: .day, in: .month, for: referenceDate),
+              let monthInterval = calendar.dateInterval(of: .month, for: referenceDate) else {
             return MonthlyParkingStats(totalWeekdays: 0, skippedDays: 0, activeDays: 0, costPerDay: Self.costPerDay)
         }
-
+        let today = calendar.startOfDay(for: Date())
         let firstDay = monthInterval.start
         var totalWeekdays = 0
-        var skippedDays = 0
-
         for dayOffset in 0..<monthRange.count {
             guard let date = calendar.date(byAdding: .day, value: dayOffset, to: firstDay) else { continue }
             let dayStart = calendar.startOfDay(for: date)
+            if dayStart > today { break }
             if !calendar.isDateInWeekend(dayStart) {
                 totalWeekdays += 1
-                if isDateAlreadySkipped(dayStart) {
-                    skippedDays += 1
-                }
             }
         }
 
-        let activeDays = totalWeekdays - skippedDays
         return MonthlyParkingStats(
             totalWeekdays: totalWeekdays,
             skippedDays: skippedDays,
