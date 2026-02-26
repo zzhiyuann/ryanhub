@@ -31,6 +31,8 @@ struct ContentView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.colorScheme) private var colorScheme
     @State private var selectedTab: MainTab = .chat
+    /// ChatViewModel is owned here so it survives tab switches.
+    @State private var chatViewModel = ChatViewModel()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -38,7 +40,7 @@ struct ContentView: View {
             ZStack {
                 switch selectedTab {
                 case .chat:
-                    ChatView()
+                    ChatView(viewModel: chatViewModel)
                 case .toolkit:
                     ToolkitHomeView()
                 case .settings:
@@ -96,13 +98,12 @@ struct CustomTabBar: View {
         let isSelected = selectedTab == tab
 
         return Button {
-            withAnimation(.easeInOut(duration: 0.2)) {
-                selectedTab = tab
-            }
+            selectedTab = tab
         } label: {
             VStack(spacing: isCompact ? 0 : 3) {
                 Image(systemName: tab.icon)
                     .font(.system(size: isCompact ? 18 : 20, weight: .medium))
+                    .symbolRenderingMode(.monochrome)
 
                 if !isCompact {
                     Text(tab.label)
@@ -115,6 +116,7 @@ struct CustomTabBar: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .animation(.easeInOut(duration: 0.15), value: selectedTab)
     }
 
     // MARK: - Safe Area

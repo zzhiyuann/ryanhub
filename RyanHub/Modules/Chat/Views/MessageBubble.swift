@@ -13,6 +13,7 @@ struct MessageBubble: View {
 
     private var isUser: Bool { message.role == .user }
     @State private var swipeOffset: CGFloat = 0
+    @State private var showFullScreenImage = false
 
     var body: some View {
         HStack(alignment: .bottom, spacing: 6) {
@@ -172,12 +173,20 @@ struct MessageBubble: View {
             if let base64 = message.imageBase64,
                let data = Data(base64Encoded: base64),
                let uiImage = UIImage(data: data) {
-                Image(uiImage: uiImage)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .frame(maxWidth: 220, maxHeight: 220)
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .padding(4)
+                Button {
+                    showFullScreenImage = true
+                } label: {
+                    Image(uiImage: uiImage)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(maxWidth: 220, maxHeight: 220)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .padding(4)
+                .fullScreenCover(isPresented: $showFullScreenImage) {
+                    FullScreenImageViewer(image: uiImage)
+                }
             } else {
                 // Placeholder for images that were stripped from persistence
                 HStack(spacing: 6) {
@@ -393,6 +402,91 @@ private struct MarkdownContent: View {
         (try? AttributedString(markdown: text, options: .init(
             interpretedSyntax: .inlineOnlyPreservingWhitespace
         ))) ?? AttributedString(text)
+    }
+}
+
+// MARK: - Full Screen Image Viewer
+
+/// Zoomable full-screen image viewer presented as a sheet.
+struct FullScreenImageViewer: View {
+    @Environment(\.dismiss) private var dismiss
+    let image: UIImage
+    @State private var scale: CGFloat = 1.0
+    @State private var lastScale: CGFloat = 1.0
+    @State private var offset: CGSize = .zero
+    @State private var lastOffset: CGSize = .zero
+
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+
+            Image(uiImage: image)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .scaleEffect(scale)
+                .offset(offset)
+                .gesture(
+                    MagnifyGesture()
+                        .onChanged { value in
+                            scale = lastScale * value.magnification
+                        }
+                        .onEnded { _ in
+                            lastScale = max(scale, 1.0)
+                            if scale < 1.0 {
+                                withAnimation(.spring(response: 0.3)) {
+                                    scale = 1.0
+                                    lastScale = 1.0
+                                    offset = .zero
+                                    lastOffset = .zero
+                                }
+                            }
+                        }
+                        .simultaneously(with:
+                            DragGesture()
+                                .onChanged { value in
+                                    if scale > 1.0 {
+                                        offset = CGSize(
+                                            width: lastOffset.width + value.translation.width,
+                                            height: lastOffset.height + value.translation.height
+                                        )
+                                    } else {
+                                        // Drag down to dismiss
+                                        offset = CGSize(width: 0, height: max(0, value.translation.height))
+                                    }
+                                }
+                                .onEnded { value in
+                                    if scale <= 1.0 && value.translation.height > 100 {
+                                        dismiss()
+                                    } else {
+                                        lastOffset = offset
+                                        if scale <= 1.0 {
+                                            withAnimation(.spring(response: 0.3)) {
+                                                offset = .zero
+                                                lastOffset = .zero
+                                            }
+                                        }
+                                    }
+                                }
+                        )
+                )
+                .onTapGesture(count: 2) {
+                    withAnimation(.spring(response: 0.3)) {
+                        if scale > 1.0 {
+                            scale = 1.0
+                            lastScale = 1.0
+                            offset = .zero
+                            lastOffset = .zero
+                        } else {
+                            scale = 3.0
+                            lastScale = 3.0
+                        }
+                    }
+                }
+        }
+        .onTapGesture {
+            dismiss()
+        }
+        .statusBarHidden()
     }
 }
 

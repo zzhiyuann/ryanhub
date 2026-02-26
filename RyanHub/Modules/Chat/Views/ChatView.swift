@@ -7,7 +7,8 @@ import PhotosUI
 struct ChatView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.colorScheme) private var colorScheme
-    @State private var viewModel = ChatViewModel()
+    /// ViewModel is owned by ContentView and passed in, so it survives tab switches.
+    @Bindable var viewModel: ChatViewModel
     @State private var showCamera = false
     @State private var showSidebar = false
     @GestureState private var drawerDragOffset: CGFloat = 0
@@ -416,6 +417,6 @@ struct CameraImagePicker: UIViewControllerRepresentable {
 }
 
 #Preview {
-    ChatView()
+    ChatView(viewModel: ChatViewModel())
         .environment(AppState())
 }
