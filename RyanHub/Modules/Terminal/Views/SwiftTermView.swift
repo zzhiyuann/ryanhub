@@ -5,30 +5,22 @@ import SwiftTerm
 struct SwiftTermView: UIViewRepresentable {
     typealias UIViewType = SwiftTerm.TerminalView
 
-    /// The SSH connection to pipe input/output through.
     let ssh: SSHConnection
-    /// Called when terminal size changes (cols, rows).
+    let colorScheme: ColorScheme
     var onSizeChange: ((Int, Int) -> Void)?
 
     func makeUIView(context: Context) -> SwiftTerm.TerminalView {
         let tv = SwiftTerm.TerminalView(frame: .zero)
         tv.translatesAutoresizingMaskIntoConstraints = false
 
-        // Dark theme with good contrast
-        tv.nativeForegroundColor = .init(white: 0.9, alpha: 1)
-        tv.nativeBackgroundColor = .init(red: 0.04, green: 0.04, blue: 0.06, alpha: 1)
+        applyTheme(to: tv)
 
-        // Font: use a readable monospace size
         let fontSize: CGFloat = 13
         tv.font = UIFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
 
-        // Set delegate for user input
         tv.terminalDelegate = context.coordinator
-
-        // Store reference so we can feed data later
         context.coordinator.terminalView = tv
 
-        // Wire up SSH data → terminal display
         ssh.onDataReceived = { [weak coordinator = context.coordinator] data in
             coordinator?.feedData(data)
         }
@@ -39,10 +31,23 @@ struct SwiftTermView: UIViewRepresentable {
     func updateUIView(_ uiView: SwiftTerm.TerminalView, context: Context) {
         context.coordinator.ssh = ssh
         context.coordinator.onSizeChange = onSizeChange
+        applyTheme(to: uiView)
     }
 
     func makeCoordinator() -> Coordinator {
         Coordinator(ssh: ssh, onSizeChange: onSizeChange)
+    }
+
+    private func applyTheme(to tv: SwiftTerm.TerminalView) {
+        if colorScheme == .dark {
+            // Match app dark background #0A0A0F
+            tv.nativeBackgroundColor = UIColor(red: 0x0A / 255.0, green: 0x0A / 255.0, blue: 0x0F / 255.0, alpha: 1)
+            tv.nativeForegroundColor = UIColor(white: 0.9, alpha: 1)
+        } else {
+            // Light mode: dark terminal on light surface
+            tv.nativeBackgroundColor = UIColor(red: 0xF0 / 255.0, green: 0xF0 / 255.0, blue: 0xF2 / 255.0, alpha: 1)
+            tv.nativeForegroundColor = UIColor(red: 0x1A / 255.0, green: 0x1A / 255.0, blue: 0x1A / 255.0, alpha: 1)
+        }
     }
 
     // MARK: - Coordinator

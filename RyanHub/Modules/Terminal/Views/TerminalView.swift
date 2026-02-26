@@ -15,6 +15,7 @@ struct SSHTerminalView: View {
             if viewModel.ssh.isConnected {
                 SwiftTermView(
                     ssh: viewModel.ssh,
+                    colorScheme: colorScheme,
                     onSizeChange: { cols, rows in
                         viewModel.ssh.resizeTerminal(cols: cols, rows: rows)
                     }
@@ -29,9 +30,8 @@ struct SSHTerminalView: View {
                 shortcutKeyboard
             }
         }
-        .background(Color(red: 0.04, green: 0.04, blue: 0.06))
+        .background(AdaptiveColors.background(for: colorScheme))
         .overlay {
-            // Session picker dropdown
             if viewModel.showSessionPicker {
                 sessionPickerOverlay
             }
@@ -51,7 +51,6 @@ struct SSHTerminalView: View {
             }
         } label: {
             HStack(spacing: 8) {
-                // Connection indicator
                 Circle()
                     .fill(viewModel.ssh.isConnected ? Color.hubAccentGreen : Color.hubAccentRed)
                     .frame(width: 7, height: 7)
@@ -59,16 +58,16 @@ struct SSHTerminalView: View {
                 if let session = viewModel.currentTmuxSession {
                     Text(session)
                         .font(.system(size: 13, weight: .semibold, design: .monospaced))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
                         .lineLimit(1)
                 } else if viewModel.ssh.isConnected {
                     Text("shell")
                         .font(.system(size: 13, weight: .medium, design: .monospaced))
-                        .foregroundStyle(.white.opacity(0.7))
+                        .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
                 } else {
                     Text("disconnected")
                         .font(.system(size: 13, weight: .medium, design: .monospaced))
-                        .foregroundStyle(.white.opacity(0.5))
+                        .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme).opacity(0.7))
                 }
 
                 Spacer()
@@ -76,13 +75,13 @@ struct SSHTerminalView: View {
                 if viewModel.ssh.isConnected {
                     Image(systemName: "chevron.down")
                         .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.5))
+                        .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
                         .rotationEffect(.degrees(viewModel.showSessionPicker ? 180 : 0))
                 }
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
-            .background(Color.white.opacity(0.06))
+            .background(AdaptiveColors.surface(for: colorScheme))
         }
         .buttonStyle(.plain)
     }
@@ -96,32 +95,32 @@ struct SSHTerminalView: View {
 
             Image(systemName: "terminal.fill")
                 .font(.system(size: 48))
-                .foregroundStyle(.white.opacity(0.3))
+                .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme).opacity(0.5))
 
             if !viewModel.isConfigured {
                 VStack(spacing: 8) {
                     Text("SSH Not Configured")
                         .font(.system(size: 18, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.8))
+                        .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
 
                     Text("Set host and username in Settings > Terminal")
                         .font(.system(size: 14))
-                        .foregroundStyle(.white.opacity(0.4))
+                        .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
                 }
             } else {
                 VStack(spacing: 12) {
                     Text("\(viewModel.sshUsername)@\(viewModel.sshHost)")
                         .font(.system(size: 14, design: .monospaced))
-                        .foregroundStyle(.white.opacity(0.6))
+                        .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
 
                     if case .connecting = viewModel.ssh.state {
                         HStack(spacing: 8) {
                             ProgressView()
-                                .tint(.white.opacity(0.6))
+                                .tint(AdaptiveColors.textSecondary(for: colorScheme))
                                 .controlSize(.small)
                             Text("Connecting...")
                                 .font(.system(size: 14))
-                                .foregroundStyle(.white.opacity(0.6))
+                                .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
                         }
                     } else if case .failed(let reason) = viewModel.ssh.state {
                         Text(reason)
@@ -176,22 +175,21 @@ struct SSHTerminalView: View {
     @ViewBuilder
     private var sessionPickerOverlay: some View {
         VStack(spacing: 0) {
-            // Dropdown positioned below session bar
             VStack(spacing: 0) {
                 if viewModel.isLoadingSessions {
                     HStack(spacing: 8) {
                         ProgressView()
-                            .tint(.white.opacity(0.6))
+                            .tint(AdaptiveColors.textSecondary(for: colorScheme))
                             .controlSize(.small)
                         Text("Loading sessions...")
                             .font(.system(size: 13, design: .monospaced))
-                            .foregroundStyle(.white.opacity(0.5))
+                            .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
                     }
                     .padding(.vertical, 12)
                 } else if viewModel.tmuxSessions.isEmpty {
                     Text("No tmux sessions")
                         .font(.system(size: 13, design: .monospaced))
-                        .foregroundStyle(.white.opacity(0.4))
+                        .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
                         .padding(.vertical, 12)
                 } else {
                     ScrollView {
@@ -204,9 +202,8 @@ struct SSHTerminalView: View {
                     .frame(maxHeight: 240)
                 }
 
-                Divider().overlay(Color.white.opacity(0.1))
+                Divider().overlay(AdaptiveColors.border(for: colorScheme))
 
-                // New session button
                 Button {
                     withAnimation(.easeOut(duration: 0.2)) {
                         viewModel.showSessionPicker = false
@@ -226,11 +223,11 @@ struct SSHTerminalView: View {
                 }
                 .buttonStyle(.plain)
             }
-            .background(Color(red: 0.1, green: 0.1, blue: 0.14))
+            .background(AdaptiveColors.surface(for: colorScheme))
             .clipShape(RoundedRectangle(cornerRadius: 10))
-            .shadow(color: .black.opacity(0.5), radius: 12, y: 4)
+            .shadow(color: .black.opacity(0.3), radius: 12, y: 4)
             .padding(.horizontal, 8)
-            .padding(.top, 44) // Below session bar
+            .padding(.top, 44)
 
             Spacer()
         }
@@ -259,7 +256,7 @@ struct SSHTerminalView: View {
             HStack(spacing: 8) {
                 Text(session.displayName)
                     .font(.system(size: 13, weight: isActive ? .bold : .regular, design: .monospaced))
-                    .foregroundStyle(isActive ? Color.hubPrimary : .white.opacity(0.8))
+                    .foregroundStyle(isActive ? Color.hubPrimary : AdaptiveColors.textPrimary(for: colorScheme))
                     .lineLimit(1)
 
                 Spacer()
@@ -267,7 +264,7 @@ struct SSHTerminalView: View {
                 if session.attached {
                     Text("attached")
                         .font(.system(size: 10, design: .monospaced))
-                        .foregroundStyle(.white.opacity(0.3))
+                        .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme).opacity(0.6))
                 }
             }
             .padding(.horizontal, 14)
@@ -284,22 +281,22 @@ struct SSHTerminalView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
                 shortcutKey("C-c", Color.hubAccentRed.opacity(0.8)) { viewModel.sendCtrlC() }
-                shortcutKey("Tab", .white.opacity(0.5)) { viewModel.sendTab() }
-                shortcutKey("\u{2191}", .white.opacity(0.5)) { viewModel.sendArrowUp() }
-                shortcutKey("\u{2193}", .white.opacity(0.5)) { viewModel.sendArrowDown() }
-                shortcutKey("Esc", .white.opacity(0.5)) { viewModel.sendEscape() }
-                shortcutKey("C-z", .white.opacity(0.5)) { viewModel.sendCtrlZ() }
-                shortcutKey("C-d", .white.opacity(0.5)) { viewModel.sendCtrlD() }
-                shortcutKey("C-l", .white.opacity(0.5)) { viewModel.sendCtrlL() }
+                shortcutKey("Tab", AdaptiveColors.textSecondary(for: colorScheme)) { viewModel.sendTab() }
+                shortcutKey("\u{2191}", AdaptiveColors.textSecondary(for: colorScheme)) { viewModel.sendArrowUp() }
+                shortcutKey("\u{2193}", AdaptiveColors.textSecondary(for: colorScheme)) { viewModel.sendArrowDown() }
+                shortcutKey("Esc", AdaptiveColors.textSecondary(for: colorScheme)) { viewModel.sendEscape() }
+                shortcutKey("C-z", AdaptiveColors.textSecondary(for: colorScheme)) { viewModel.sendCtrlZ() }
+                shortcutKey("C-d", AdaptiveColors.textSecondary(for: colorScheme)) { viewModel.sendCtrlD() }
+                shortcutKey("C-l", AdaptiveColors.textSecondary(for: colorScheme)) { viewModel.sendCtrlL() }
                 shortcutKey("y", Color.hubAccentGreen.opacity(0.7)) { viewModel.sendY() }
                 shortcutKey("n", Color.hubAccentRed.opacity(0.6)) { viewModel.sendN() }
-                shortcutKey("/", .white.opacity(0.5)) { viewModel.sendSlash() }
-                shortcutKey("q", .white.opacity(0.5)) { viewModel.sendQ() }
+                shortcutKey("/", AdaptiveColors.textSecondary(for: colorScheme)) { viewModel.sendSlash() }
+                shortcutKey("q", AdaptiveColors.textSecondary(for: colorScheme)) { viewModel.sendQ() }
             }
             .padding(.horizontal, 8)
         }
         .frame(height: 36)
-        .background(Color.white.opacity(0.04))
+        .background(AdaptiveColors.surfaceSecondary(for: colorScheme))
     }
 
     @ViewBuilder
@@ -312,7 +309,7 @@ struct SSHTerminalView: View {
                 .padding(.vertical, 6)
                 .background(
                     RoundedRectangle(cornerRadius: 5)
-                        .fill(Color.white.opacity(0.08))
+                        .fill(AdaptiveColors.border(for: colorScheme))
                 )
         }
         .buttonStyle(.plain)
