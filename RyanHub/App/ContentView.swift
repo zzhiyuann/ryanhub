@@ -152,24 +152,18 @@ struct CustomTabBar: View {
     @Binding var selectedTab: MainTab
     var isCompact: Bool
 
-    /// Full tab bar height (icon + label + padding).
-    private let fullHeight: CGFloat = 50
-    /// Compact tab bar height (icon only + reduced padding).
-    private let compactHeight: CGFloat = 36
-
     var body: some View {
         HStack(spacing: 0) {
             ForEach(MainTab.allCases, id: \.rawValue) { tab in
                 tabButton(for: tab)
             }
         }
-        .frame(height: isCompact ? compactHeight : fullHeight)
+        .frame(height: 32)
         .padding(.bottom, safeAreaBottomInset)
         .background(
             AdaptiveColors.surface(for: colorScheme)
                 .ignoresSafeArea(edges: .bottom)
         )
-        .animation(.easeInOut(duration: 0.25), value: isCompact)
     }
 
     // MARK: - Tab Button
@@ -180,29 +174,18 @@ struct CustomTabBar: View {
         Button {
             selectedTab = tab
         } label: {
-            VStack(spacing: isCompact ? 0 : 3) {
-                Image(systemName: tab.icon)
-                    .font(.system(size: isCompact ? 18 : 20, weight: isSelected ? .bold : .medium))
-                    .symbolRenderingMode(.monochrome)
-                    .foregroundStyle(isSelected ? Color.hubPrimary : AdaptiveColors.textSecondary(for: colorScheme))
-
-                if !isCompact {
-                    Text(tab.label)
-                        .font(.system(size: 13, weight: isSelected ? .bold : .medium))
-                        .foregroundStyle(isSelected ? Color.hubPrimary : AdaptiveColors.textSecondary(for: colorScheme))
-                        .transition(.opacity.combined(with: .scale(scale: 0.8)))
-                }
-            }
-            .frame(maxWidth: .infinity)
-            .contentShape(Rectangle())
+            Image(systemName: tab.icon)
+                .font(.system(size: 17, weight: isSelected ? .bold : .medium))
+                .symbolRenderingMode(.monochrome)
+                .foregroundStyle(isSelected ? Color.hubPrimary : AdaptiveColors.textSecondary(for: colorScheme))
+                .frame(maxWidth: .infinity)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
 
     // MARK: - Safe Area
 
-    /// Returns the bottom safe area inset for devices with a home indicator (e.g. iPhone X+).
-    /// Falls back to 0 for devices with a physical home button.
     private var safeAreaBottomInset: CGFloat {
         let scenes = UIApplication.shared.connectedScenes
         let windowScene = scenes.first as? UIWindowScene
