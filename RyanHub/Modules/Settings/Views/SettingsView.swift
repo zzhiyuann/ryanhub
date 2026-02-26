@@ -194,9 +194,9 @@ struct SettingsView: View {
                 VStack(spacing: HubLayout.itemSpacing) {
                     // Host
                     settingsInput(
-                        placeholder: "172.29.39.82",
+                        placeholder: "100.89.67.80",
                         text: Binding(
-                            get: { UserDefaults.standard.string(forKey: "ryanhub_ssh_host") ?? "172.29.39.82" },
+                            get: { UserDefaults.standard.string(forKey: "ryanhub_ssh_host") ?? "100.89.67.80" },
                             set: { UserDefaults.standard.set($0, forKey: "ryanhub_ssh_host") }
                         ),
                         label: "Host"
@@ -204,9 +204,9 @@ struct SettingsView: View {
 
                     // Username
                     settingsInput(
-                        placeholder: "zhiyuan",
+                        placeholder: "zwang",
                         text: Binding(
-                            get: { UserDefaults.standard.string(forKey: "ryanhub_ssh_username") ?? "zhiyuan" },
+                            get: { UserDefaults.standard.string(forKey: "ryanhub_ssh_username") ?? "zwang" },
                             set: { UserDefaults.standard.set($0, forKey: "ryanhub_ssh_username") }
                         ),
                         label: "Username"

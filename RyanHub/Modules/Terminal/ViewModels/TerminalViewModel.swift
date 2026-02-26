@@ -48,9 +48,9 @@ final class TerminalViewModel {
     // MARK: - Init
 
     init() {
-        self.sshHost = UserDefaults.standard.string(forKey: Keys.sshHost) ?? "172.29.39.82"
+        self.sshHost = UserDefaults.standard.string(forKey: Keys.sshHost) ?? "100.89.67.80"
         self.sshPort = UserDefaults.standard.object(forKey: Keys.sshPort) as? Int ?? 22
-        self.sshUsername = UserDefaults.standard.string(forKey: Keys.sshUsername) ?? "zhiyuan"
+        self.sshUsername = UserDefaults.standard.string(forKey: Keys.sshUsername) ?? "zwang"
         self.sshPassword = UserDefaults.standard.string(forKey: Keys.sshPassword) ?? ""
     }
 
