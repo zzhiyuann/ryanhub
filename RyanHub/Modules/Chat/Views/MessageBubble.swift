@@ -13,10 +13,16 @@ struct MessageBubble: View {
     var onReply: ((ChatMessage) -> Void)?
     var onScrollToMessage: ((String) -> Void)?
     var onRetry: ((ChatMessage) -> Void)?
+    /// Called when the user edits a message: (originalMessage, newContent).
+    var onEdit: ((ChatMessage, String) -> Void)?
+    /// Whether this message is within the edit window (< 10s since send).
+    var isEditable: Bool = false
 
     private var isUser: Bool { message.role == .user }
     @State private var swipeOffset: CGFloat = 0
     @State private var showFullScreenImage = false
+    @State private var isEditing = false
+    @State private var editText = ""
 
     var body: some View {
         HStack(alignment: .bottom, spacing: 6) {
@@ -47,12 +53,16 @@ struct MessageBubble: View {
                     quotedPreview(replyPreview)
                 }
 
-                // Message content bubble
-                bubbleContent
-                    .background(bubbleBackground)
-                    .clipShape(BubbleShape(isUser: isUser))
+                // Message content bubble (or inline edit field)
+                if isEditing {
+                    editBubble
+                } else {
+                    bubbleContent
+                        .background(bubbleBackground)
+                        .clipShape(BubbleShape(isUser: isUser))
+                }
 
-                // Timestamp + status
+                // Timestamp + status + edit button
                 HStack(spacing: 4) {
                     Text(message.timestamp, style: .time)
                         .font(.system(size: 10, weight: .regular))
@@ -60,6 +70,22 @@ struct MessageBubble: View {
 
                     if isUser, let status = messageStatus {
                         messageStatusIcon(status)
+                    }
+
+                    // Edit button: visible for editable user text messages
+                    if isUser && isEditable && !isEditing && message.messageType == .text {
+                        Button {
+                            editText = message.content
+                            withAnimation(.easeOut(duration: 0.15)) {
+                                isEditing = true
+                            }
+                        } label: {
+                            Image(systemName: "pencil")
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundStyle(Color.hubPrimary.opacity(0.7))
+                        }
+                        .buttonStyle(.plain)
+                        .transition(.opacity)
                     }
                 }
                 .padding(.horizontal, 4)
@@ -136,7 +162,7 @@ struct MessageBubble: View {
             HStack(spacing: 6) {
                 RoundedRectangle(cornerRadius: 1.5)
                     .fill(Color.hubPrimary)
-                    .frame(width: 3)
+                    .frame(width: 3, height: 16)
 
                 Text(preview)
                     .font(.system(size: 12))
@@ -146,9 +172,11 @@ struct MessageBubble: View {
                             : AdaptiveColors.textSecondary(for: colorScheme)
                     )
                     .lineLimit(1)
+                    .truncationMode(.tail)
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
+            .fixedSize(horizontal: false, vertical: true)
             .background(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .fill(
@@ -159,6 +187,68 @@ struct MessageBubble: View {
             )
         }
         .buttonStyle(.plain)
+    }
+
+    // MARK: - Edit Bubble
+
+    @ViewBuilder
+    private var editBubble: some View {
+        VStack(alignment: .trailing, spacing: 6) {
+            TextField("Edit message...", text: $editText, axis: .vertical)
+                .font(.hubBody)
+                .foregroundStyle(.white)
+                .tint(.white)
+                .lineLimit(1...8)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(Color.hubPrimary.opacity(0.85))
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(Color.white.opacity(0.3), lineWidth: 1)
+                )
+
+            HStack(spacing: 12) {
+                Button {
+                    withAnimation(.easeOut(duration: 0.15)) {
+                        isEditing = false
+                    }
+                } label: {
+                    Text("Cancel")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    let newContent = editText.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !newContent.isEmpty, newContent != message.content else {
+                        withAnimation(.easeOut(duration: 0.15)) {
+                            isEditing = false
+                        }
+                        return
+                    }
+                    onEdit?(message, newContent)
+                    withAnimation(.easeOut(duration: 0.15)) {
+                        isEditing = false
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 11, weight: .bold))
+                        Text("Save")
+                            .font(.system(size: 12, weight: .semibold))
+                    }
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(
+                        Capsule().fill(Color.hubPrimary)
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+        }
     }
 
     // MARK: - Bubble Content
@@ -455,9 +545,13 @@ private struct MarkdownContent: View {
             .font(.hubBody)
             .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
             .textSelection(.enabled)
+            .fixedSize(horizontal: false, vertical: true)
     }
 
     private var markdownAttributedString: AttributedString {
+        // Use full markdown parsing so block-level elements (lists, headings,
+        // code blocks, paragraphs) render correctly instead of being collapsed
+        // into a single inline span that gets truncated.
         (try? AttributedString(markdown: text, options: .init(
             interpretedSyntax: .inlineOnlyPreservingWhitespace
         ))) ?? AttributedString(text)
