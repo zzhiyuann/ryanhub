@@ -71,6 +71,23 @@ final class ChatViewModel {
     private weak var appState: AppState?
     private var statePollingTask: Task<Void, Never>?
 
+    /// Maps user message ID → when the message was sent (for progress phases).
+    private var messageSendTimes: [String: Date] = [:]
+
+    /// Timer that periodically triggers UI updates while messages are pending,
+    /// so the progress phase text refreshes as time elapses.
+    private var progressTimer: Timer?
+
+    /// Progress phase descriptions based on elapsed time since a message was sent.
+    private static let progressPhases: [(TimeInterval, String)] = [
+        (5, "Received, processing..."),
+        (30, "Analyzing task..."),
+        (60, "Reading code..."),
+        (120, "Writing changes..."),
+        (180, "Still running... complex task"),
+        (300, "Running for a while, hang tight"),
+    ]
+
     // MARK: - Init
 
     init() {
@@ -129,6 +146,16 @@ final class ChatViewModel {
 
         guard !text.isEmpty else { return }
 
+        // Handle slash commands. Some have local-side effects (e.g. /new creates
+        // a local session), but recognized commands are still sent to the Dispatcher
+        // as regular messages — the Dispatcher's _classify() parses /commands and
+        // @model prefixes from message content. Returns true if fully handled.
+        if text.hasPrefix("/") {
+            if handleSlashCommand(text) {
+                return
+            }
+        }
+
         let replyPreview = replyingTo.map { String($0.content.prefix(80)) }
         let userMessage = ChatMessage(
             content: text,
@@ -144,7 +171,9 @@ final class ChatViewModel {
 
         let messageId = userMessage.id
         messageStatuses[messageId] = .sending
+        messageSendTimes[messageId] = Date()
         isTyping = true
+        startProgressTimer()
 
         // Build the content to send over the wire. If the message is health-related,
         // prepend a structured health data context so the AI can answer questions
@@ -189,7 +218,9 @@ final class ChatViewModel {
 
         let messageId = userMessage.id
         messageStatuses[messageId] = .sending
+        messageSendTimes[messageId] = Date()
         isTyping = true
+        startProgressTimer()
 
         let language = appState?.language ?? .english
         let languageCode = language.rawValue
@@ -312,7 +343,9 @@ final class ChatViewModel {
 
         let messageId = userMessage.id
         messageStatuses[messageId] = .sending
+        messageSendTimes[messageId] = Date()
         isTyping = true
+        startProgressTimer()
 
         let language = appState?.language ?? .english
         let languageCode = language.rawValue
@@ -405,6 +438,193 @@ final class ChatViewModel {
         }
 
         ChatSession.saveSessions(sessions)
+    }
+
+    // MARK: - Progress Phases
+
+    /// Returns the current progress phase text for a pending user message,
+    /// or nil if the message is not in a pending state.
+    func progressText(for messageId: String) -> String? {
+        guard let status = messageStatuses[messageId],
+              status == .acknowledged || status == .processing,
+              let sendTime = messageSendTimes[messageId] else { return nil }
+        let elapsed = Date().timeIntervalSince(sendTime)
+        var phase = "Processing..."
+        for (threshold, text) in Self.progressPhases {
+            if elapsed >= threshold { phase = text }
+        }
+        return phase
+    }
+
+    /// Retry a failed user message by re-sending it to the Dispatcher.
+    func retryMessage(_ message: ChatMessage) {
+        guard message.role == .user else { return }
+
+        // Remove the failed status
+        messageStatuses.removeValue(forKey: message.id)
+        // Remove any error response that was appended for this message
+        messages.removeAll { $0.id == "resp-\(message.id)" }
+        messageUpdateTrigger += 1
+
+        // Re-send
+        messageStatuses[message.id] = .sending
+        messageSendTimes[message.id] = Date()
+        isTyping = true
+        startProgressTimer()
+
+        var contentToSend: String
+        switch message.messageType {
+        case .image:
+            // Re-send image message
+            let language = appState?.language ?? .english
+            let languageCode = language.rawValue
+            var wireCaption = message.content
+            let langInstruction = language.responseLanguageInstruction
+            if wireCaption.isEmpty {
+                wireCaption = langInstruction
+            } else {
+                wireCaption = "\(langInstruction)\n\n\(wireCaption)"
+            }
+            let messageId = message.id
+            Task {
+                do {
+                    try await webSocket.sendImageMessage(
+                        id: messageId,
+                        imageBase64: message.imageBase64 ?? "",
+                        caption: wireCaption,
+                        language: languageCode
+                    )
+                } catch {
+                    self.messageStatuses[messageId] = .failed(error.localizedDescription)
+                    self.updateGlobalTypingState()
+                }
+            }
+            return
+        case .voice:
+            // Re-send voice message
+            let language = appState?.language ?? .english
+            let languageCode = language.rawValue
+            let messageId = message.id
+            Task {
+                do {
+                    try await webSocket.sendVoiceMessage(
+                        id: messageId,
+                        audioBase64: message.voiceBase64 ?? "",
+                        duration: message.voiceDuration ?? 0,
+                        language: languageCode
+                    )
+                } catch {
+                    self.messageStatuses[messageId] = .failed(error.localizedDescription)
+                    self.updateGlobalTypingState()
+                }
+            }
+            return
+        case .text:
+            contentToSend = Self.buildContentWithHealthContext(userText: message.content)
+            let language = appState?.language ?? .english
+            contentToSend = "\(language.responseLanguageInstruction)\n\n\(contentToSend)"
+            let messageId = message.id
+            let languageCode = language.rawValue
+            Task {
+                do {
+                    try await webSocket.sendMessage(id: messageId, content: contentToSend, language: languageCode)
+                } catch {
+                    self.messageStatuses[messageId] = .failed(error.localizedDescription)
+                    self.updateGlobalTypingState()
+                }
+            }
+        }
+    }
+
+    // MARK: - Slash Commands
+
+    /// Known slash commands that the Dispatcher recognizes.
+    /// Commands not in this set produce a local "unknown command" error.
+    private static let knownCommands: Set<String> = [
+        "/status", "/cancel", "/stop", "/history",
+        "/help", "/peek", "/new", "/q", "/quick"
+    ]
+
+    /// Handle a slash command typed by the user.
+    /// Returns true if the command was fully handled (caller should return early).
+    /// Returns false if the text should continue through normal sendMessage flow
+    /// (this happens for unknown commands that look like slash commands but aren't).
+    private func handleSlashCommand(_ text: String) -> Bool {
+        let lowered = text.lowercased().trimmingCharacters(in: .whitespaces)
+        let baseCommand = String(lowered.split(separator: " ").first ?? "")
+
+        // /q (quick Q&A) has arguments — send the full text as a regular message.
+        // The Dispatcher parses the /q prefix and routes to quick-answer mode.
+        if baseCommand == "/q" || baseCommand == "/quick" {
+            // Fall through to normal sendMessage flow — don't intercept.
+            return false
+        }
+
+        // /new: create a local session AND tell the Dispatcher to force_new.
+        if baseCommand == "/new" {
+            let userMessage = ChatMessage.user(text)
+            appendMessage(userMessage)
+            inputText = ""
+
+            createNewSession()
+
+            // Also send to Dispatcher so it sets force_new for the next task.
+            sendCommandAsMessage(text, userMessageId: userMessage.id)
+
+            let systemMsg = ChatMessage.assistant("New session started.")
+            appendMessage(systemMsg)
+            return true
+        }
+
+        // Known server-side commands: send as regular message, Dispatcher handles them.
+        if Self.knownCommands.contains(baseCommand) {
+            let userMessage = ChatMessage.user(text)
+            appendMessage(userMessage)
+            inputText = ""
+            autoTitleCurrentSession(from: text)
+
+            sendCommandAsMessage(text, userMessageId: userMessage.id)
+            return true
+        }
+
+        // Unknown command — show local error, don't send to server.
+        let userMessage = ChatMessage.user(text)
+        appendMessage(userMessage)
+        inputText = ""
+
+        let helpText = """
+            Unknown command: \(baseCommand)
+            Available: /status, /cancel, /history, /new, /peek, /help, /q <question>
+            Model switch: @haiku, @sonnet, @opus (prefix your message)
+            """
+        let systemMsg = ChatMessage.assistant(helpText)
+        appendMessage(systemMsg)
+        return true
+    }
+
+    /// Send a slash command to the Dispatcher as a regular "message" type.
+    /// The Dispatcher's _classify() method parses /commands from message content,
+    /// so no special "command" wire type is needed.
+    private func sendCommandAsMessage(_ text: String, userMessageId: String) {
+        let messageId = userMessageId
+        messageStatuses[messageId] = .sending
+        messageSendTimes[messageId] = Date()
+        isTyping = true
+        startProgressTimer()
+
+        Task {
+            do {
+                // Send the raw command text — no language prefix or health context
+                // needed for meta-commands.
+                try await webSocket.sendMessage(id: messageId, content: text)
+            } catch {
+                self.messageStatuses[messageId] = .failed(error.localizedDescription)
+                self.updateGlobalTypingState()
+                let errorMessage = ChatMessage.assistant("Failed to send command: \(error.localizedDescription)")
+                self.appendMessage(errorMessage)
+                self.saveMessages()
+            }
+        }
     }
 
     // MARK: - Health Context Injection
@@ -600,6 +820,9 @@ final class ChatViewModel {
 
         // Update per-message status
         messageStatuses[id] = isStreaming ? .processing : .done
+        if !isStreaming {
+            messageSendTimes.removeValue(forKey: id)
+        }
 
         // Find the original user message to auto-link the reply
         let userMessage = messages.first(where: { $0.id == id && $0.role == .user })
@@ -648,6 +871,24 @@ final class ChatViewModel {
         isTyping = messageStatuses.values.contains(where: {
             $0 == .sending || $0 == .acknowledged || $0 == .processing
         })
+    }
+
+    /// Start a repeating timer that forces a view update every 5 seconds
+    /// so progress phase text refreshes as time elapses for pending messages.
+    private func startProgressTimer() {
+        progressTimer?.invalidate()
+        progressTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                guard let self else { return }
+                // Only trigger update if there are pending messages
+                if self.messageStatuses.values.contains(where: { $0 == .acknowledged || $0 == .processing }) {
+                    self.messageUpdateTrigger += 1
+                } else {
+                    self.progressTimer?.invalidate()
+                    self.progressTimer = nil
+                }
+            }
+        }
     }
 
     private func saveMessages() {

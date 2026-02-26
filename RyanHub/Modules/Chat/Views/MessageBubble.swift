@@ -12,6 +12,7 @@ struct MessageBubble: View {
     var messageStatus: ChatViewModel.MessageStatus?
     var onReply: ((ChatMessage) -> Void)?
     var onScrollToMessage: ((String) -> Void)?
+    var onRetry: ((ChatMessage) -> Void)?
 
     private var isUser: Bool { message.role == .user }
     @State private var swipeOffset: CGFloat = 0
@@ -62,6 +63,28 @@ struct MessageBubble: View {
                     }
                 }
                 .padding(.horizontal, 4)
+
+                // Retry button for failed user messages
+                if case .failed = messageStatus, isUser {
+                    Button {
+                        onRetry?(message)
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "arrow.clockwise")
+                                .font(.system(size: 11))
+                            Text("Retry")
+                                .font(.system(size: 11, weight: .medium))
+                        }
+                        .foregroundStyle(Color.hubAccentRed)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(
+                            Capsule()
+                                .stroke(Color.hubAccentRed.opacity(0.5), lineWidth: 1)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
             }
             .offset(x: swipeOffset)
 
