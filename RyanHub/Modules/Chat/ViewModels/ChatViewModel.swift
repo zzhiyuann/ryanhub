@@ -552,19 +552,13 @@ final class ChatViewModel {
     // MARK: - Message Editing
 
     /// The maximum age (in seconds) within which a sent message can be edited.
-    static let editWindowSeconds: TimeInterval = 10
-
-    /// Whether a user message is still within the edit window.
+    /// Whether a user message can be edited.
     func isMessageEditable(_ message: ChatMessage) -> Bool {
-        guard message.role == .user,
-              message.messageType == .text,
-              let sendTime = messageSendTimes[message.id] else { return false }
-        let age = Date().timeIntervalSince(sendTime)
-        return age < Self.editWindowSeconds
+        message.role == .user && message.messageType == .text
     }
 
-    /// Edit a previously sent message: update local content, tell the Dispatcher
-    /// to cancel the running task and re-dispatch with the new text.
+    /// Edit a previously sent message: update content, truncate all messages
+    /// after it (ChatGPT-style), and re-send to get a fresh response.
     func editMessage(_ message: ChatMessage, newContent: String) {
         let trimmed = newContent.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
@@ -572,8 +566,9 @@ final class ChatViewModel {
 
         let messageId = message.id
 
-        // Update local message content in-place
+        // Find the edited message and truncate everything after it
         if let index = messages.firstIndex(where: { $0.id == messageId }) {
+            // Update the message content
             messages[index] = ChatMessage(
                 id: messageId,
                 content: trimmed,
@@ -582,12 +577,13 @@ final class ChatViewModel {
                 replyToId: message.replyToId,
                 replyToPreview: message.replyToPreview
             )
+
+            // Remove all messages after this one
+            if index + 1 < messages.count {
+                messages.removeSubrange((index + 1)...)
+            }
             messageUpdateTrigger += 1
         }
-
-        // Remove any existing assistant response for the original message
-        messages.removeAll { $0.id == "resp-\(messageId)" }
-        messageUpdateTrigger += 1
 
         // Reset message status to sending
         messageStatuses[messageId] = .sending

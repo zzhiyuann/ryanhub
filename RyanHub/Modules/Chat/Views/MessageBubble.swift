@@ -15,8 +15,6 @@ struct MessageBubble: View {
     var onRetry: ((ChatMessage) -> Void)?
     /// Called when the user edits a message: (originalMessage, newContent).
     var onEdit: ((ChatMessage, String) -> Void)?
-    /// Whether this message is within the edit window (< 10s since send).
-    var isEditable: Bool = false
 
     private var isUser: Bool { message.role == .user }
     @State private var swipeOffset: CGFloat = 0
@@ -72,8 +70,8 @@ struct MessageBubble: View {
                         messageStatusIcon(status)
                     }
 
-                    // Edit button: visible for editable user text messages
-                    if isUser && isEditable && !isEditing && message.messageType == .text {
+                    // Edit button: visible for all user text messages
+                    if isUser && !isEditing && message.messageType == .text {
                         Button {
                             editText = message.content
                             withAnimation(.easeOut(duration: 0.15)) {

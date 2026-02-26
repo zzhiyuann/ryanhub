@@ -259,7 +259,7 @@ struct ChatView: View {
     private var messagesArea: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(spacing: HubLayout.itemSpacing) {
+                LazyVStack(spacing: 6) {
                     if viewModel.messages.isEmpty {
                         emptyState
                             .padding(.top, 80)
@@ -284,8 +284,7 @@ struct ChatView: View {
                                 },
                                 onEdit: { msg, newContent in
                                     viewModel.editMessage(msg, newContent: newContent)
-                                },
-                                isEditable: viewModel.isMessageEditable(message)
+                                }
                             )
                             .id(message.id)
                         }
@@ -304,7 +303,7 @@ struct ChatView: View {
                         .id("bottom-anchor")
                 }
                 .padding(.horizontal, HubLayout.standardPadding)
-                .padding(.vertical, HubLayout.itemSpacing)
+                .padding(.vertical, 6)
             }
             .scrollDismissesKeyboard(.interactively)
             .defaultScrollAnchor(.bottom)
