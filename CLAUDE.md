@@ -17,7 +17,7 @@ RyanHub/
 │   ├── Localization/           # L10n manager + en/zh-Hans .strings files
 │   └── Models/                 # AppState (global observable state)
 └── Modules/
-    ├── Chat/                   # AI chat interface (Views, ViewModels, Models)
+    ├── Chat/                   # AI chat interface (single-chat flow, no multi-session)
     ├── Toolkit/                # Personal tools grid + plugin modules
     │   ├── BookFactory/        # Book generation & audio playback
     │   ├── Fluent/             # Language learning (WebView wrapper for PWA)
