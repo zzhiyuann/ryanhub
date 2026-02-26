@@ -213,8 +213,8 @@ struct ParkingView: View {
                         }
                     }
 
-                    // Weekday headers (Mon-Sun)
-                    let weekdays = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"]
+                    // Weekday headers (Sun-Sat)
+                    let weekdays = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"]
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 7), spacing: 4) {
                         ForEach(weekdays.indices, id: \.self) { index in
                             Text(weekdays[index])
@@ -241,7 +241,6 @@ struct ParkingView: View {
                     HStack(spacing: 16) {
                         legendItem(color: .hubPrimary, label: "Today")
                         legendItem(color: .hubAccentYellow, label: "Skipped")
-                        legendItem(color: AdaptiveColors.textSecondary(for: colorScheme).opacity(0.3), label: "Weekend")
                     }
                     .padding(.top, 4)
                 }

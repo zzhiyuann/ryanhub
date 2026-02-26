@@ -274,10 +274,10 @@ final class ParkingViewModel {
         }
 
         let firstDay = monthInterval.start
-        // weekday: 1 = Sunday. We want Monday=0, so adjust.
+        // weekday: 1 = Sunday, 2 = Monday, ..., 7 = Saturday
         let firstWeekday = calendar.component(.weekday, from: firstDay)
-        // Convert to Monday-based index: Mon=0, Tue=1, ..., Sun=6
-        let leadingEmpties = (firstWeekday + 5) % 7
+        // Sunday-based index: Sun=0, Mon=1, ..., Sat=6
+        let leadingEmpties = firstWeekday - 1
 
         var days: [Date?] = Array(repeating: nil, count: leadingEmpties)
 
