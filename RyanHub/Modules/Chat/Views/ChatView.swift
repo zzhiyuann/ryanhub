@@ -34,6 +34,7 @@ struct ChatView: View {
                         isConnected: viewModel.isConnected,
                         isRecording: viewModel.isRecording,
                         recordingDuration: viewModel.recordingDuration,
+                        pendingImageData: viewModel.pendingImageData,
                         onSend: {
                             viewModel.sendMessage()
                         },
@@ -51,6 +52,9 @@ struct ChatView: View {
                         },
                         onCameraTapped: {
                             showCamera = true
+                        },
+                        onClearPendingImage: {
+                            viewModel.clearPendingImage()
                         }
                     )
                 }
@@ -103,7 +107,7 @@ struct ChatView: View {
                 }
                 .sheet(isPresented: $showCamera) {
                     CameraImagePicker { imageData in
-                        viewModel.sendImageMessage(data: imageData)
+                        viewModel.pendingImageData = imageData
                     }
                 }
             }

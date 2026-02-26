@@ -148,26 +148,36 @@ final class ChatViewModel {
         }
     }
 
-    /// Send an image message from photo picker data.
-    func sendImageMessage(data: Data) {
+    /// Send an image message from photo picker data, with an optional user caption.
+    func sendImageMessage(data: Data, caption: String = "") {
         let base64 = data.base64EncodedString()
-        let userMessage = ChatMessage.userImage(base64: base64)
+        let userMessage = ChatMessage.userImage(base64: base64, caption: caption)
         appendMessage(userMessage)
         isTyping = true
 
         // Auto-title for image messages
-        autoTitleCurrentSession(from: "[Image]")
+        let titleText = caption.isEmpty ? "[Image]" : caption
+        autoTitleCurrentSession(from: titleText)
 
         let messageId = userMessage.id
         let language = appState?.language ?? .english
         let languageCode = language.rawValue
+
+        // Build the wire caption: user caption (if any) + language instruction.
+        var wireCaption = caption
+        let langInstruction = language.responseLanguageInstruction
+        if wireCaption.isEmpty {
+            wireCaption = langInstruction
+        } else {
+            wireCaption = "\(langInstruction)\n\n\(wireCaption)"
+        }
 
         Task {
             do {
                 try await webSocket.sendImageMessage(
                     id: messageId,
                     imageBase64: base64,
-                    caption: language.responseLanguageInstruction,
+                    caption: wireCaption,
                     language: languageCode
                 )
             } catch {
@@ -181,16 +191,22 @@ final class ChatViewModel {
 
     /// Handle photo picker selection.
     /// Loads image data from the PhotosPickerItem, converts through UIImage
-    /// to normalize the format, then JPEG-compresses before sending.
+    /// to normalize the format, then stores as pending image for the user to
+    /// add a caption before sending.
     func handlePhotoSelection(_ item: PhotosPickerItem?) {
         guard let item else { return }
         Task {
             if let data = try? await item.loadTransferable(type: Data.self),
                let uiImage = UIImage(data: data),
                let jpegData = uiImage.jpegData(compressionQuality: 0.7) {
-                self.sendImageMessage(data: jpegData)
+                self.pendingImageData = jpegData
             }
         }
+    }
+
+    /// Clear the pending image attachment without sending.
+    func clearPendingImage() {
+        pendingImageData = nil
     }
 
     // MARK: - Voice Recording

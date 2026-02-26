@@ -3,25 +3,32 @@ import PhotosUI
 
 /// Chat input bar with text field, attachment button, voice record, and send button.
 /// Fixed at the bottom of the chat, similar to Telegram.
+/// Supports attaching a photo and typing a caption before sending.
 struct ChatInputBar: View {
     @Environment(\.colorScheme) private var colorScheme
     @Binding var text: String
     let isConnected: Bool
     let isRecording: Bool
     let recordingDuration: TimeInterval
+    /// Pending image data for preview. Non-nil when a photo is attached but not yet sent.
+    let pendingImageData: Data?
     let onSend: () -> Void
     let onStartRecording: () -> Void
     let onStopRecording: () -> Void
     let onCancelRecording: () -> Void
     let onPhotoSelected: (PhotosPickerItem?) -> Void
     let onCameraTapped: () -> Void
+    /// Called when the user taps the X on the pending image preview.
+    let onClearPendingImage: () -> Void
 
     @FocusState private var isFocused: Bool
     @State private var selectedPhotoItem: PhotosPickerItem?
     @State private var showPhotoPicker = false
 
     private var canSend: Bool {
-        !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && isConnected
+        let hasText = !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let hasImage = pendingImageData != nil
+        return (hasText || hasImage) && isConnected
     }
 
     var body: some View {
@@ -32,9 +39,52 @@ struct ChatInputBar: View {
             if isRecording {
                 recordingBar
             } else {
-                standardBar
+                VStack(spacing: 0) {
+                    // Pending image preview strip
+                    if pendingImageData != nil {
+                        pendingImagePreview
+                    }
+
+                    standardBar
+                }
             }
         }
+    }
+
+    // MARK: - Pending Image Preview
+
+    private var pendingImagePreview: some View {
+        HStack(spacing: 10) {
+            // Thumbnail
+            if let data = pendingImageData, let uiImage = UIImage(data: data) {
+                Image(uiImage: uiImage)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: 48, height: 48)
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .stroke(AdaptiveColors.border(for: colorScheme), lineWidth: 1)
+                    )
+            }
+
+            Text("Photo attached")
+                .font(.hubCaption)
+                .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+
+            Spacer()
+
+            // Dismiss button
+            Button(action: onClearPendingImage) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 20))
+                    .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme).opacity(0.7))
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .background(AdaptiveColors.surface(for: colorScheme).opacity(0.95))
+        .transition(.move(edge: .bottom).combined(with: .opacity))
     }
 
     // MARK: - Standard Input Bar
@@ -45,7 +95,11 @@ struct ChatInputBar: View {
             attachmentButton
 
             // Text input
-            TextField(L10n.chatPlaceholder, text: $text, axis: .vertical)
+            TextField(
+                pendingImageData != nil ? "Add a caption..." : L10n.chatPlaceholder,
+                text: $text,
+                axis: .vertical
+            )
                 .font(.hubBody)
                 .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
                 .lineLimit(1...5)
@@ -211,12 +265,14 @@ struct ChatInputBar: View {
             isConnected: true,
             isRecording: false,
             recordingDuration: 0,
+            pendingImageData: nil,
             onSend: { print("Send") },
             onStartRecording: { print("Record") },
             onStopRecording: { print("Stop") },
             onCancelRecording: { print("Cancel") },
             onPhotoSelected: { _ in },
-            onCameraTapped: { print("Camera") }
+            onCameraTapped: { print("Camera") },
+            onClearPendingImage: { print("Clear image") }
         )
     }
     .background(Color(red: 0x0A / 255.0, green: 0x0A / 255.0, blue: 0x0F / 255.0))
