@@ -424,7 +424,7 @@ struct ClientAnswerMessage: Codable {
 }
 
 struct DispatcherMessage: Codable {
-    let type: String        // "response", "status", "error", "pong", "ack", "edit_ack", "question"
+    let type: String        // "response", "status", "error", "pong", "ack", "edit_ack", "question", "notification"
     let id: String?
     let content: String?
     let streaming: Bool?
@@ -436,9 +436,11 @@ struct DispatcherMessage: Codable {
     let question: String?
     let options: [String]?
     let allowFreeText: Bool?
+    // Notification fields (only present when type == "notification")
+    let source: String?
 
     enum CodingKeys: String, CodingKey {
-        case type, id, content, streaming, connected, message, question, options
+        case type, id, content, streaming, connected, message, question, options, source
         case activeSessions = "active_sessions"
         case sessionId = "session_id"
         case allowFreeText = "allow_free_text"

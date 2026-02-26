@@ -727,6 +727,8 @@ final class ChatViewModel {
             }
         case "question":
             handleQuestionMessage(message)
+        case "notification":
+            handleNotificationMessage(message)
         case "error":
             if let id = message.id {
                 let errText = message.message ?? "Unknown error"
@@ -800,6 +802,18 @@ final class ChatViewModel {
 
         // Update global typing state based on all pending messages
         updateGlobalTypingState()
+    }
+
+    private func handleNotificationMessage(_ message: DispatcherMessage) {
+        guard let content = message.content else { return }
+        let source = message.source ?? "system"
+        let id = message.id ?? UUID().uuidString
+        let notification = ChatMessage.assistant(
+            "[\(source)] \(content)",
+            id: "notif-\(id)"
+        )
+        appendMessage(notification)
+        messageUpdateTrigger += 1
     }
 
     private func handleQuestionMessage(_ message: DispatcherMessage) {
