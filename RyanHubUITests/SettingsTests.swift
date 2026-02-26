@@ -30,9 +30,7 @@ final class SettingsTests: RyanHubUITestBase {
 
         // STEP 5: Scroll to SSH section
         step("Scroll to SSH section")
-        let scrollView = app.scrollViews.firstMatch
-        scrollView.swipeUp()
-        usleep(300_000)
+        scrollContentUp()
 
         // STEP 6: SSH fields
         step("Verify SSH fields")
@@ -49,8 +47,7 @@ final class SettingsTests: RyanHubUITestBase {
 
         // STEP 8: Scroll to Appearance section
         step("Scroll to appearance section")
-        scrollView.swipeUp()
-        usleep(300_000)
+        scrollContentUp()
 
         // STEP 9: Appearance mode buttons
         step("Verify appearance mode buttons")
@@ -72,8 +69,7 @@ final class SettingsTests: RyanHubUITestBase {
 
         // STEP 12: Scroll to About section
         step("Scroll to About section")
-        scrollView.swipeUp()
-        usleep(300_000)
+        scrollContentUp()
 
         // STEP 13: Version and Build info
         step("Verify version/build info")

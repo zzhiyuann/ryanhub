@@ -2,67 +2,8 @@ import XCTest
 
 /// Agentic explorer — runs exploration steps, logs everything it sees.
 /// Claude Code writes steps, runs them, reads results, decides next step.
-final class AgenticExplorer: XCTestCase {
-
-    let app = XCUIApplication()
-
-    override func setUp() {
-        continueAfterFailure = true
-        app.launchArguments = ["--uitesting"]
-        app.launch()
-    }
-
-    func saveScreenshot(_ name: String) {
-        let screenshot = app.screenshot()
-        let attachment = XCTAttachment(screenshot: screenshot)
-        attachment.name = name
-        attachment.lifetime = .keepAlways
-        add(attachment)
-    }
-
-    func dismissKeyboard() {
-        if app.keyboards.count > 0 {
-            app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.15)).tap()
-            usleep(500_000)
-        }
-        if app.keyboards.count > 0 {
-            app.swipeDown()
-            usleep(500_000)
-        }
-    }
-
-    /// Safely get label text, returns "N/A" if element doesn't exist
-    func safeLabel(_ element: XCUIElement) -> String {
-        guard element.exists else { return "N/A (not found)" }
-        return element.label
-    }
-
-    /// Navigate to a plugin via menu bar, with home reset first
-    func navigateToPlugin(_ pluginId: String) {
-        // First go home to reset state
-        let homeBtn = app.buttons["toolkit_menu_home"]
-        if homeBtn.exists {
-            homeBtn.tap()
-            usleep(300_000)
-        }
-        // Then navigate to the plugin
-        let menuBtn = app.buttons["toolkit_menu_\(pluginId)"]
-        if menuBtn.exists {
-            menuBtn.tap()
-            sleep(1)
-        } else {
-            print("WARNING: toolkit_menu_\(pluginId) not found!")
-        }
-    }
-
-    /// Scroll the content area (not the menu bar's horizontal ScrollView)
-    func scrollContentUp() {
-        // Target the largest/main scroll view by swiping in the content area (below menu bar)
-        let contentArea = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.6))
-        let destination = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3))
-        contentArea.press(forDuration: 0.05, thenDragTo: destination)
-        usleep(500_000)
-    }
+/// Inherits shared helpers from RyanHubUITestBase (scrollContentUp, safeLabel, etc.)
+final class AgenticExplorer: RyanHubUITestBase {
 
     // MARK: - Full Exploration
 
@@ -125,11 +66,10 @@ final class AgenticExplorer: XCTestCase {
             print("card \(p): \(card.exists)")
         }
 
-        // Check menu bar — try multiple element types
+        // Check menu bar
         let menuBarOther = app.otherElements["toolkit_menu_bar"]
         print("menu bar (other): \(menuBarOther.exists)")
 
-        // Also check menu item buttons exist
         for p in plugins {
             let menuItem = app.buttons["toolkit_menu_\(p)"]
             print("menu \(p): \(menuItem.exists)")
@@ -139,8 +79,7 @@ final class AgenticExplorer: XCTestCase {
 
         // ==================== HEALTH PLUGIN ====================
         print("=== HEALTH PLUGIN ===")
-        app.buttons["toolkit_card_health"].tap()
-        sleep(1)
+        navigateToPlugin("health")
         saveScreenshot("06_health_weight")
 
         let weightTab = app.buttons["health_tab_weight"]
@@ -221,11 +160,10 @@ final class AgenticExplorer: XCTestCase {
         navigateToPlugin("parking")
         saveScreenshot("13_parking")
 
-        // Verify we're in Parking (not another plugin)
+        // Verify we're in Parking
         let parkingTodayStatus = app.otherElements["parking_today_status"]
         print("today status: \(parkingTodayStatus.exists)")
 
-        // Also check for any parking-specific elements
         let parkingPrevMonth = app.buttons["parking_prev_month"]
         let parkingNextMonth = app.buttons["parking_next_month"]
         let parkingMonthLabel = app.staticTexts["parking_month_label"]

@@ -14,9 +14,7 @@ final class ParkingTests: RyanHubUITestBase {
 
         // STEP 2: Scroll down to calendar section
         step("Scroll to calendar section")
-        let scrollView = app.scrollViews.firstMatch
-        scrollView.swipeUp()
-        usleep(500_000)
+        scrollContentUp()
 
         // STEP 3: Calendar section visible
         step("Verify calendar section")
@@ -77,8 +75,7 @@ final class ParkingTests: RyanHubUITestBase {
 
         // STEP 10: Scroll back up to verify today status still shows
         step("Scroll back to top")
-        scrollView.swipeDown()
-        usleep(300_000)
+        scrollContentDown()
         XCTAssertTrue(todayStatus.exists, "Today's status should still be visible after scrolling back")
     }
 }

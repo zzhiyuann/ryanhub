@@ -84,6 +84,7 @@ struct CalendarPluginView: View {
             Spacer()
                 .frame(height: 40)
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier(AccessibilityID.calendarEmptyState)
     }
 
@@ -166,6 +167,7 @@ struct CalendarPluginView: View {
                     .frame(maxWidth: .infinity)
                 }
             }
+            .accessibilityElement(children: .contain)
             .accessibilityIdentifier(AccessibilityID.calendarWeekOverview)
         }
     }
@@ -256,6 +258,7 @@ struct CalendarPluginView: View {
                 }
             }
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier(AccessibilityID.calendarTodaySection)
     }
 
@@ -285,6 +288,7 @@ struct CalendarPluginView: View {
                 }
             }
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier(AccessibilityID.calendarTomorrowSection)
     }
 
@@ -306,6 +310,7 @@ struct CalendarPluginView: View {
                 }
             }
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier(AccessibilityID.calendarThisWeekSection)
     }
 

@@ -111,9 +111,7 @@ final class HealthTests: RyanHubUITestBase {
 
         // STEP 13: Structured Log button
         step("Activity tab: verify structured log button")
-        let scrollView = app.scrollViews.firstMatch
-        scrollView.swipeUp()
-        usleep(300_000)
+        scrollContentUp()
 
         let structuredLog = app.buttons["health_structured_log_button"]
         waitFor(structuredLog, message: "Structured Log button should exist")

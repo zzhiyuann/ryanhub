@@ -252,6 +252,7 @@ struct ParkingView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier(AccessibilityID.parkingCalendar)
     }
 

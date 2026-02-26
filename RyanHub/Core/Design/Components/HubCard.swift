@@ -25,6 +25,7 @@ struct HubCard<Content: View>: View {
                         y: 2
                     )
             )
+            .accessibilityElement(children: .contain)
     }
 }
 

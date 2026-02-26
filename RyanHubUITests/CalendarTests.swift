@@ -59,9 +59,7 @@ final class CalendarTests: RyanHubUITestBase {
 
         // STEP 6: Scroll through content
         step("Scroll through calendar content")
-        let scrollView = app.scrollViews.firstMatch
-        scrollView.swipeUp()
-        usleep(300_000)
+        scrollContentUp()
 
         // STEP 7: Check for tomorrow section
         let tomorrowSection = find("calendar_tomorrow_section")
@@ -76,7 +74,6 @@ final class CalendarTests: RyanHubUITestBase {
         }
 
         // Scroll back
-        scrollView.swipeDown()
-        usleep(300_000)
+        scrollContentDown()
     }
 }

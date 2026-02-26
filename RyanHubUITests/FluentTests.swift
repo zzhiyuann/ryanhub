@@ -50,9 +50,7 @@ final class FluentTests: RyanHubUITestBase {
 
         // STEP 5: Scroll down for quick actions
         step("Dashboard: scroll to quick actions")
-        let scrollView = app.scrollViews.firstMatch
-        scrollView.swipeUp()
-        usleep(300_000)
+        scrollContentUp()
 
         let browseWords = app.buttons["fluent_browse_words"]
         let reviewCards = app.buttons["fluent_review_cards"]
@@ -73,10 +71,8 @@ final class FluentTests: RyanHubUITestBase {
         // Vocabulary should show a word list or empty state
         // Try scrolling through the list
         step("Vocabulary: scroll through list")
-        scrollView.swipeUp()
-        usleep(300_000)
-        scrollView.swipeDown()
-        usleep(300_000)
+        scrollContentUp()
+        scrollContentDown()
 
         // STEP 7: Switch to Review tab
         step("Switch to Review tab")
