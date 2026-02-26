@@ -80,7 +80,7 @@ class RyanHubUITestBase: XCTestCase {
         usleep(300_000)
     }
 
-    /// Navigate to a toolkit plugin via the menu bar (not card tap).
+    /// Navigate to a toolkit plugin via card (preferred) or menu bar.
     func navigateToPlugin(_ pluginRawValue: String) {
         tapTab("tab_toolkit")
         // Go to home grid first to reset state
@@ -89,18 +89,18 @@ class RyanHubUITestBase: XCTestCase {
             homeButton.tap()
             usleep(400_000)
         }
-        // Tap the menu bar item (more reliable than card)
-        let menuItem = app.buttons["toolkit_menu_\(pluginRawValue)"]
-        if menuItem.waitForExistence(timeout: 3) {
-            menuItem.tap()
-            usleep(500_000)
-        } else {
-            // Fallback: tap the card
-            let card = app.buttons["toolkit_card_\(pluginRawValue)"]
-            waitFor(card, message: "Plugin '\(pluginRawValue)' not found via menu or card")
+        // Try tapping the card on the home grid first (always hittable)
+        let card = app.buttons["toolkit_card_\(pluginRawValue)"]
+        if card.waitForExistence(timeout: 2), card.isHittable {
             card.tap()
             usleep(500_000)
+            return
         }
+        // Fallback: tap the menu bar item
+        let menuItem = app.buttons["toolkit_menu_\(pluginRawValue)"]
+        waitFor(menuItem, message: "Plugin '\(pluginRawValue)' not found via card or menu")
+        menuItem.tap()
+        usleep(500_000)
     }
 
     /// Return to the chat tab.
