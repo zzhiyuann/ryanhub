@@ -57,6 +57,7 @@ struct SettingsView: View {
                                     lineWidth: 1
                                 )
                         )
+                        .accessibilityIdentifier(AccessibilityID.settingsServerURL)
                         .onChange(of: appState.serverURL) { _, newValue in
                             viewModel.validateServerURL(newValue)
                         }
@@ -78,10 +79,12 @@ struct SettingsView: View {
                         presetButton(title: "Localhost", icon: "desktopcomputer") {
                             appState.serverURL = AppState.defaultServerURL
                         }
+                        .accessibilityIdentifier(AccessibilityID.settingsLocalhostPreset)
 
                         presetButton(title: L10n.settingsResetToDefault, icon: "arrow.counterclockwise") {
                             appState.resetServerURLs()
                         }
+                        .accessibilityIdentifier(AccessibilityID.settingsResetPreset)
                     }
 
                     HStack(spacing: HubLayout.itemSpacing) {
@@ -122,6 +125,7 @@ struct SettingsView: View {
                             )
                         }
                         .disabled(viewModel.isTesting)
+                        .accessibilityIdentifier(AccessibilityID.settingsTestConnection)
                     }
 
                     // Show error detail if there is one
@@ -201,6 +205,7 @@ struct SettingsView: View {
                         ),
                         label: "Host"
                     )
+                    .accessibilityIdentifier(AccessibilityID.settingsSSHHost)
 
                     // Username
                     settingsInput(
@@ -211,6 +216,7 @@ struct SettingsView: View {
                         ),
                         label: "Username"
                     )
+                    .accessibilityIdentifier(AccessibilityID.settingsSSHUsername)
 
                     // Password
                     settingsInput(
@@ -222,6 +228,7 @@ struct SettingsView: View {
                         label: "Password",
                         isSecure: true
                     )
+                    .accessibilityIdentifier(AccessibilityID.settingsSSHPassword)
 
                     // Test SSH button
                     HStack(spacing: HubLayout.itemSpacing) {
@@ -257,6 +264,7 @@ struct SettingsView: View {
                             )
                         }
                         .disabled(viewModel.isTestingSSH)
+                        .accessibilityIdentifier(AccessibilityID.settingsTestSSH)
                     }
                 }
                 .frame(maxWidth: .infinity)
@@ -329,6 +337,7 @@ struct SettingsView: View {
                                 )
                         }
                         .buttonStyle(.plain)
+                        .accessibilityIdentifier("settings_appearance_\(mode.rawValue)")
                     }
                 }
                 .padding(4)
@@ -375,6 +384,7 @@ struct SettingsView: View {
                                 )
                         }
                         .buttonStyle(.plain)
+                        .accessibilityIdentifier("settings_language_\(lang.rawValue)")
                     }
                 }
                 .padding(4)
@@ -397,8 +407,10 @@ struct SettingsView: View {
             HubCard {
                 VStack(spacing: HubLayout.itemSpacing) {
                     aboutRow(label: L10n.settingsVersion, value: viewModel.appVersion)
+                        .accessibilityIdentifier(AccessibilityID.settingsVersion)
                     Divider().overlay(AdaptiveColors.border(for: colorScheme))
                     aboutRow(label: L10n.settingsBuild, value: viewModel.buildNumber)
+                        .accessibilityIdentifier(AccessibilityID.settingsBuild)
                 }
                 .frame(maxWidth: .infinity)
             }

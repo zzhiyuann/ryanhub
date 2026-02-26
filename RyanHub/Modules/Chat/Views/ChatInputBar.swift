@@ -80,11 +80,13 @@ struct ChatInputBar: View {
                     .font(.system(size: 20))
                     .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme).opacity(0.7))
             }
+            .accessibilityIdentifier(AccessibilityID.chatClearImageButton)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
         .background(AdaptiveColors.surface(for: colorScheme).opacity(0.95))
         .transition(.move(edge: .bottom).combined(with: .opacity))
+        .accessibilityIdentifier(AccessibilityID.chatPendingImagePreview)
     }
 
     // MARK: - Standard Input Bar
@@ -117,6 +119,7 @@ struct ChatInputBar: View {
                             lineWidth: 1
                         )
                 )
+                .accessibilityIdentifier(AccessibilityID.chatInputField)
                 .onSubmit {
                     if canSend {
                         onSend()
@@ -145,6 +148,7 @@ struct ChatInputBar: View {
                     .font(.system(size: 28))
                     .foregroundStyle(Color.hubAccentRed)
             }
+            .accessibilityIdentifier(AccessibilityID.chatRecordingCancelButton)
 
             // Recording indicator
             HStack(spacing: 8) {
@@ -175,6 +179,7 @@ struct ChatInputBar: View {
                     .font(.system(size: 34))
                     .foregroundStyle(Color.hubPrimary)
             }
+            .accessibilityIdentifier(AccessibilityID.chatRecordingStopButton)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -206,6 +211,7 @@ struct ChatInputBar: View {
                 )
         }
         .disabled(!isConnected)
+        .accessibilityIdentifier(AccessibilityID.chatAttachButton)
         .photosPicker(
             isPresented: $showPhotoPicker,
             selection: $selectedPhotoItem,
@@ -225,6 +231,7 @@ struct ChatInputBar: View {
                 .font(.system(size: 34))
                 .foregroundStyle(Color.hubPrimary)
         }
+        .accessibilityIdentifier(AccessibilityID.chatSendButton)
         .transition(.scale.combined(with: .opacity))
     }
 
@@ -239,6 +246,7 @@ struct ChatInputBar: View {
                 )
         }
         .disabled(!isConnected)
+        .accessibilityIdentifier(AccessibilityID.chatMicButton)
         .transition(.scale.combined(with: .opacity))
     }
 

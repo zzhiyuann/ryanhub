@@ -69,6 +69,11 @@ struct HealthView: View {
                                 : Color.clear)
                     )
                 }
+                .accessibilityIdentifier(
+                    tab == .weight ? AccessibilityID.healthTabWeight :
+                    tab == .food ? AccessibilityID.healthTabFood :
+                    AccessibilityID.healthTabActivity
+                )
             }
         }
         .padding(4)
@@ -120,6 +125,7 @@ struct HealthView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
+            .accessibilityIdentifier(AccessibilityID.healthCurrentWeight)
 
             // Weight timeline chart
             if viewModel.timelineWeights.count >= 2 {
@@ -133,6 +139,7 @@ struct HealthView: View {
             HubButton("Log Weight", icon: "plus.circle.fill") {
                 showWeightLog = true
             }
+            .accessibilityIdentifier(AccessibilityID.healthLogWeightButton)
 
             // Recent entries
             if !viewModel.weightEntries.isEmpty {
@@ -239,6 +246,7 @@ struct HealthView: View {
                     .font(.hubBody)
                     .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
                     .focused($isQuickMealFocused)
+                    .accessibilityIdentifier(AccessibilityID.healthQuickMealInput)
                     .onSubmit {
                         submitQuickMeal()
                     }
@@ -251,6 +259,7 @@ struct HealthView: View {
                             .font(.system(size: 28))
                             .foregroundStyle(Color.hubPrimary)
                     }
+                    .accessibilityIdentifier(AccessibilityID.healthQuickMealSubmit)
                 }
             }
             .padding(HubLayout.cardInnerPadding)
@@ -278,6 +287,7 @@ struct HealthView: View {
                     }
                     .foregroundStyle(Color.hubPrimary)
                 }
+                .accessibilityIdentifier(AccessibilityID.healthPhotoButton)
 
                 Button {
                     showSmartFoodLog = true
@@ -290,6 +300,7 @@ struct HealthView: View {
                     }
                     .foregroundStyle(Color.hubPrimary)
                 }
+                .accessibilityIdentifier(AccessibilityID.healthCameraButton)
 
                 Spacer()
             }
@@ -377,6 +388,7 @@ struct HealthView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
+            .accessibilityIdentifier(AccessibilityID.healthTodayActivity)
 
             // Natural language quick log
             quickActivityLogSection
@@ -385,6 +397,7 @@ struct HealthView: View {
             HubSecondaryButton("Structured Log", icon: "list.bullet") {
                 showActivityLog = true
             }
+            .accessibilityIdentifier(AccessibilityID.healthStructuredLogButton)
 
             // Today's activities
             if !viewModel.todayActivityEntries.isEmpty {
@@ -417,6 +430,7 @@ struct HealthView: View {
                     .font(.hubBody)
                     .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
                     .focused($isQuickActivityFocused)
+                    .accessibilityIdentifier(AccessibilityID.healthQuickActivityInput)
                     .onSubmit {
                         submitQuickActivity()
                     }
@@ -436,6 +450,7 @@ struct HealthView: View {
                             .font(.system(size: 28))
                             .foregroundStyle(Color.hubAccentGreen)
                     }
+                    .accessibilityIdentifier(AccessibilityID.healthQuickActivitySubmit)
                 }
             }
             .padding(HubLayout.cardInnerPadding)

@@ -101,6 +101,7 @@ struct ParkingView: View {
                 }
             }
         }
+        .accessibilityIdentifier(AccessibilityID.parkingTodayStatus)
     }
 
     private func monthStatPill(value: String, label: String, color: Color) -> some View {
@@ -192,12 +193,14 @@ struct ParkingView: View {
                                 .foregroundStyle(Color.hubPrimary)
                                 .frame(width: 32, height: 32)
                         }
+                        .accessibilityIdentifier(AccessibilityID.parkingPrevMonth)
 
                         Spacer()
 
                         Text(viewModel.displayedMonthLabel)
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                            .accessibilityIdentifier(AccessibilityID.parkingMonthLabel)
 
                         Spacer()
 
@@ -211,6 +214,7 @@ struct ParkingView: View {
                                 .foregroundStyle(Color.hubPrimary)
                                 .frame(width: 32, height: 32)
                         }
+                        .accessibilityIdentifier(AccessibilityID.parkingNextMonth)
                     }
 
                     // Weekday headers (Sun-Sat)
@@ -248,6 +252,7 @@ struct ParkingView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
+        .accessibilityIdentifier(AccessibilityID.parkingCalendar)
     }
 
     private func calendarDayCell(date: Date) -> some View {
@@ -331,6 +336,7 @@ struct ParkingView: View {
             )
             .padding(.bottom, 20)
             .transition(.move(edge: .bottom).combined(with: .opacity))
+            .accessibilityIdentifier(AccessibilityID.parkingConfirmation)
             .task {
                 try? await Task.sleep(for: .seconds(2))
                 withAnimation(.easeInOut(duration: 0.3)) {

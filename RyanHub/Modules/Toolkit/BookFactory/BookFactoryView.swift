@@ -79,6 +79,7 @@ struct BookFactoryView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(AdaptiveColors.background(for: colorScheme))
+        .accessibilityIdentifier(AccessibilityID.bookFactoryServerSetup)
     }
 
     // MARK: - Main Content
@@ -102,6 +103,7 @@ struct BookFactoryView: View {
             VStack(spacing: 8) {
                 MiniPlayerView()
                     .padding(.horizontal, HubLayout.standardPadding)
+                    .accessibilityIdentifier(AccessibilityID.bookFactoryMiniPlayer)
 
                 // Floating bubble tab bar — hidden when reading a book
                 if !appState.isReadingBook {
@@ -152,6 +154,11 @@ struct BookFactoryView: View {
                     )
                 }
                 .buttonStyle(.plain)
+                .accessibilityIdentifier(
+                    tab == .library ? AccessibilityID.bookFactoryTabLibrary :
+                    tab == .queue ? AccessibilityID.bookFactoryTabQueue :
+                    AccessibilityID.bookFactoryTabSettings
+                )
             }
         }
         .padding(.horizontal, 6)
@@ -203,12 +210,15 @@ struct BookFactoryServerSetup: View {
             HubTextField(placeholder: "Server address (e.g. 192.168.1.100:3443)", text: $urlText)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
+                .accessibilityIdentifier(AccessibilityID.bookFactoryServerURL)
 
             HubTextField(placeholder: "Username", text: $username)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
+                .accessibilityIdentifier(AccessibilityID.bookFactoryUsername)
 
             HubTextField(placeholder: "Password", text: $password, isSecure: true)
+                .accessibilityIdentifier(AccessibilityID.bookFactoryPassword)
 
             if let error = connectionError {
                 Text(error)
@@ -221,6 +231,7 @@ struct BookFactoryServerSetup: View {
                 Task { await connect() }
             }
             .disabled(urlText.isEmpty || username.isEmpty || password.isEmpty)
+            .accessibilityIdentifier(AccessibilityID.bookFactoryConnectButton)
         }
     }
 

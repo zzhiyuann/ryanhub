@@ -142,6 +142,7 @@ struct ContentView: View {
                 )
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier(mode == .chat ? AccessibilityID.modeChatButton : AccessibilityID.modeTerminalButton)
     }
 }
 
@@ -184,6 +185,7 @@ struct CustomTabBar: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier("tab_\(tab.rawValue)")
     }
 
     // MARK: - Safe Area

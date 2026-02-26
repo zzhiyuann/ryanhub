@@ -60,6 +60,7 @@ struct FluentView: View {
                 .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
                 .frame(maxWidth: .infinity)
             }
+            .accessibilityIdentifier(AccessibilityID.fluentTabSettings)
         }
         .padding(.top, 8)
         .padding(.bottom, 4)
@@ -90,6 +91,11 @@ struct FluentView: View {
             .foregroundStyle(isSelected ? Color.hubPrimary : AdaptiveColors.textSecondary(for: colorScheme))
             .frame(maxWidth: .infinity)
         }
+        .accessibilityIdentifier(
+            tab == .dashboard ? AccessibilityID.fluentTabDashboard :
+            tab == .vocabulary ? AccessibilityID.fluentTabVocabulary :
+            AccessibilityID.fluentTabReview
+        )
     }
 
     // MARK: - Dashboard
@@ -195,12 +201,14 @@ struct FluentView: View {
                                     Capsule().fill(Color.hubPrimary)
                                 )
                         }
+                        .accessibilityIdentifier(AccessibilityID.fluentStartReview)
                     }
                 }
 
                 Spacer(minLength: 0)
             }
         }
+        .accessibilityIdentifier(AccessibilityID.fluentDailyGoalCard)
     }
 
     private var goalProgress: Double {
@@ -227,6 +235,7 @@ struct FluentView: View {
                                 Circle().fill(Color.hubPrimary.opacity(0.12))
                             )
                     }
+                    .accessibilityIdentifier(AccessibilityID.fluentSpeakButton)
                 }
 
                 Text(word.term)
@@ -274,6 +283,7 @@ struct FluentView: View {
                 }
             }
         }
+        .accessibilityIdentifier(AccessibilityID.fluentWordOfDay)
         .onTapGesture {
             viewModel.showDetail(for: word)
         }
@@ -340,6 +350,7 @@ struct FluentView: View {
                 ) {
                     viewModel.selectedTab = .vocabulary
                 }
+                .accessibilityIdentifier(AccessibilityID.fluentBrowseWords)
 
                 quickActionButton(
                     title: "Review Cards",
@@ -348,6 +359,7 @@ struct FluentView: View {
                 ) {
                     viewModel.selectedTab = .review
                 }
+                .accessibilityIdentifier(AccessibilityID.fluentReviewCards)
             }
         }
     }

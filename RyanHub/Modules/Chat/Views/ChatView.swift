@@ -121,6 +121,7 @@ struct ChatView: View {
                 }
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(Color.hubPrimary)
+                .accessibilityIdentifier(AccessibilityID.chatRetryButton)
             }
         }
         .padding(.horizontal, HubLayout.standardPadding)
@@ -180,6 +181,7 @@ struct ChatView: View {
                 .padding(.horizontal, HubLayout.standardPadding)
                 .padding(.vertical, 6)
             }
+            .accessibilityIdentifier(AccessibilityID.chatMessagesArea)
             .scrollDismissesKeyboard(.interactively)
             .defaultScrollAnchor(.bottom)
             // React to ALL message mutations via the trigger counter.
@@ -212,6 +214,7 @@ struct ChatView: View {
                 .padding(.horizontal, 32)
         }
         .frame(maxWidth: .infinity)
+        .accessibilityIdentifier(AccessibilityID.chatEmptyState)
     }
 
     // MARK: - Question Card
@@ -240,6 +243,7 @@ struct ChatView: View {
                         .font(.system(size: 18))
                         .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme).opacity(0.6))
                 }
+                .accessibilityIdentifier(AccessibilityID.chatQuestionDismiss)
             }
 
             // Question text
@@ -286,6 +290,7 @@ struct ChatView: View {
                             RoundedRectangle(cornerRadius: HubLayout.buttonCornerRadius)
                                 .fill(AdaptiveColors.surfaceSecondary(for: colorScheme))
                         )
+                        .accessibilityIdentifier(AccessibilityID.chatQuestionFreeInput)
 
                     Button {
                         withAnimation(.easeOut(duration: 0.15)) {
@@ -302,12 +307,14 @@ struct ChatView: View {
                             )
                     }
                     .disabled(questionFreeTextInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .accessibilityIdentifier(AccessibilityID.chatQuestionFreeSubmit)
                 }
             }
         }
         .padding(14)
         .background(AdaptiveColors.surface(for: colorScheme))
         .transition(.move(edge: .bottom).combined(with: .opacity))
+        .accessibilityIdentifier(AccessibilityID.chatQuestionCard)
     }
 
     // MARK: - Helpers
@@ -341,11 +348,13 @@ struct ChatView: View {
                     .font(.system(size: 18))
                     .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme).opacity(0.6))
             }
+            .accessibilityIdentifier(AccessibilityID.chatReplyDismiss)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 6)
         .background(AdaptiveColors.surface(for: colorScheme).opacity(0.95))
         .transition(.move(edge: .bottom).combined(with: .opacity))
+        .accessibilityIdentifier(AccessibilityID.chatReplyBar)
     }
 
     private func scrollToBottom(proxy: ScrollViewProxy) {

@@ -119,6 +119,7 @@ struct ToolkitMenuBar: View {
                     .frame(height: 0.5)
             }
         }
+        .accessibilityIdentifier(AccessibilityID.toolkitMenuBar)
         .opacity(appeared ? 1 : 0)
         .offset(y: appeared ? 0 : -10)
     }
@@ -149,6 +150,7 @@ struct ToolkitMenuBar: View {
                 )
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier(AccessibilityID.toolkitMenuHome)
     }
 
     // MARK: - Vertical Divider
@@ -197,6 +199,7 @@ struct ToolkitMenuBar: View {
             )
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier(AccessibilityID.toolkitMenuItem(plugin.rawValue))
     }
 }
 
@@ -239,11 +242,13 @@ struct ToolkitDesktopGrid: View {
                             ToolkitPluginCard(plugin: plugin)
                         }
                         .buttonStyle(.plain)
+                        .accessibilityIdentifier(AccessibilityID.toolkitCard(plugin.rawValue))
                     }
                 }
             }
             .padding(HubLayout.standardPadding)
         }
+        .accessibilityIdentifier(AccessibilityID.toolkitDesktopGrid)
     }
 }
 

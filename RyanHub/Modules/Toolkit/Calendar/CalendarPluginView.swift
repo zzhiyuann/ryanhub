@@ -39,6 +39,7 @@ struct CalendarPluginView: View {
                     }
                 }
                 .disabled(viewModel.isLoading)
+                .accessibilityIdentifier(AccessibilityID.calendarRefreshButton)
             }
         }
         .sheet(isPresented: $viewModel.showEventDetail) {
@@ -78,10 +79,12 @@ struct CalendarPluginView: View {
             }
             .padding(.horizontal, 40)
             .padding(.top, 8)
+            .accessibilityIdentifier(AccessibilityID.calendarSyncButton)
 
             Spacer()
                 .frame(height: 40)
         }
+        .accessibilityIdentifier(AccessibilityID.calendarEmptyState)
     }
 
     // MARK: - Sync Header
@@ -139,6 +142,7 @@ struct CalendarPluginView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
+            .accessibilityIdentifier(AccessibilityID.calendarCountdown)
         }
     }
 
@@ -162,6 +166,7 @@ struct CalendarPluginView: View {
                     .frame(maxWidth: .infinity)
                 }
             }
+            .accessibilityIdentifier(AccessibilityID.calendarWeekOverview)
         }
     }
 
@@ -251,6 +256,7 @@ struct CalendarPluginView: View {
                 }
             }
         }
+        .accessibilityIdentifier(AccessibilityID.calendarTodaySection)
     }
 
     // MARK: - Tomorrow Section
@@ -279,6 +285,7 @@ struct CalendarPluginView: View {
                 }
             }
         }
+        .accessibilityIdentifier(AccessibilityID.calendarTomorrowSection)
     }
 
     // MARK: - This Week Section
@@ -299,6 +306,7 @@ struct CalendarPluginView: View {
                 }
             }
         }
+        .accessibilityIdentifier(AccessibilityID.calendarThisWeekSection)
     }
 
     // MARK: - Event Card
