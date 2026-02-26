@@ -557,23 +557,23 @@ final class ChatViewModel {
         message.role == .user && message.messageType == .text
     }
 
-    /// Edit a previously sent message: update content, truncate all messages
-    /// after it (ChatGPT-style), and re-send to get a fresh response.
+    /// Edit a previously sent message: replace it with a new message carrying
+    /// the edited content, truncate all messages after it (ChatGPT-style),
+    /// and re-send to get a fresh response.
     func editMessage(_ message: ChatMessage, newContent: String) {
         let trimmed = newContent.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         guard isMessageEditable(message) else { return }
 
-        let messageId = message.id
+        // Create a brand-new message ID so the dispatcher treats it as fresh
+        let newId = UUID().uuidString
 
-        // Find the edited message and truncate everything after it
-        if let index = messages.firstIndex(where: { $0.id == messageId }) {
-            // Update the message content
+        // Find the edited message, replace it, and truncate everything after
+        if let index = messages.firstIndex(where: { $0.id == message.id }) {
             messages[index] = ChatMessage(
-                id: messageId,
+                id: newId,
                 content: trimmed,
                 role: .user,
-                timestamp: message.timestamp,
                 replyToId: message.replyToId,
                 replyToPreview: message.replyToPreview
             )
@@ -585,15 +585,14 @@ final class ChatViewModel {
             messageUpdateTrigger += 1
         }
 
-        // Reset message status to sending
-        messageStatuses[messageId] = .sending
-        messageSendTimes[messageId] = Date()
+        // Set up status tracking for the new message
+        messageStatuses[newId] = .sending
+        messageSendTimes[newId] = Date()
         isTyping = true
         currentStreamingMessageId = nil
         startProgressTimer()
 
-        // Re-send as a regular message (not edit protocol) since we've
-        // truncated the conversation — this is effectively a new message.
+        // Send as a regular new message
         var contentToSend = Self.buildContentWithHealthContext(userText: trimmed)
         let language = appState?.language ?? .english
         contentToSend = "\(language.responseLanguageInstruction)\n\n\(contentToSend)"
@@ -601,9 +600,9 @@ final class ChatViewModel {
 
         Task {
             do {
-                try await webSocket.sendMessage(id: messageId, content: contentToSend, language: languageCode)
+                try await webSocket.sendMessage(id: newId, content: contentToSend, language: languageCode)
             } catch {
-                self.messageStatuses[messageId] = .failed(error.localizedDescription)
+                self.messageStatuses[newId] = .failed(error.localizedDescription)
                 self.updateGlobalTypingState()
                 let errorMessage = ChatMessage.assistant("Failed to send message: \(error.localizedDescription)")
                 self.appendMessage(errorMessage)
