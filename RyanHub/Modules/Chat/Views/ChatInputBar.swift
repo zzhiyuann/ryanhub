@@ -18,6 +18,7 @@ struct ChatInputBar: View {
 
     @FocusState private var isFocused: Bool
     @State private var selectedPhotoItem: PhotosPickerItem?
+    @State private var showPhotoPicker = false
 
     private var canSend: Bool {
         !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && isConnected
@@ -130,10 +131,9 @@ struct ChatInputBar: View {
 
     private var attachmentButton: some View {
         Menu {
-            PhotosPicker(
-                selection: $selectedPhotoItem,
-                matching: .images
-            ) {
+            Button {
+                showPhotoPicker = true
+            } label: {
                 Label("Photo Library", systemImage: "photo.on.rectangle")
             }
 
@@ -152,10 +152,14 @@ struct ChatInputBar: View {
                 )
         }
         .disabled(!isConnected)
+        .photosPicker(
+            isPresented: $showPhotoPicker,
+            selection: $selectedPhotoItem,
+            matching: .images
+        )
         .onChange(of: selectedPhotoItem) { _, newValue in
             if newValue != nil {
                 onPhotoSelected(newValue)
-                // Reset so the same photo can be re-selected
                 selectedPhotoItem = nil
             }
         }
