@@ -50,3 +50,18 @@ targets:
         CODE_SIGN_IDENTITY: ""
         CODE_SIGNING_REQUIRED: "NO"
         CODE_SIGNING_ALLOWED: "NO"
+  RyanHubUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: RyanHubUITests
+        excludes:
+          - "**/.DS_Store"
+    dependencies:
+      - target: RyanHub
+    settings:
+      base:
+        CODE_SIGN_IDENTITY: ""
+        CODE_SIGNING_REQUIRED: "NO"
+        CODE_SIGNING_ALLOWED: "NO"
+        TEST_TARGET_NAME: RyanHub
