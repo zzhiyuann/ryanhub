@@ -25,10 +25,6 @@ struct SSHTerminalView: View {
                 connectPrompt
             }
 
-            // Floating shortcut keyboard (only when connected)
-            if viewModel.ssh.isConnected {
-                shortcutKeyboard
-            }
         }
         .background(AdaptiveColors.background(for: colorScheme))
         .overlay {
@@ -274,44 +270,4 @@ struct SSHTerminalView: View {
         .buttonStyle(.plain)
     }
 
-    // MARK: - Shortcut Keyboard
-
-    @ViewBuilder
-    private var shortcutKeyboard: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
-                shortcutKey("C-c", Color.hubAccentRed.opacity(0.8)) { viewModel.sendCtrlC() }
-                shortcutKey("Tab", AdaptiveColors.textSecondary(for: colorScheme)) { viewModel.sendTab() }
-                shortcutKey("\u{2191}", AdaptiveColors.textSecondary(for: colorScheme)) { viewModel.sendArrowUp() }
-                shortcutKey("\u{2193}", AdaptiveColors.textSecondary(for: colorScheme)) { viewModel.sendArrowDown() }
-                shortcutKey("Esc", AdaptiveColors.textSecondary(for: colorScheme)) { viewModel.sendEscape() }
-                shortcutKey("C-z", AdaptiveColors.textSecondary(for: colorScheme)) { viewModel.sendCtrlZ() }
-                shortcutKey("C-d", AdaptiveColors.textSecondary(for: colorScheme)) { viewModel.sendCtrlD() }
-                shortcutKey("C-l", AdaptiveColors.textSecondary(for: colorScheme)) { viewModel.sendCtrlL() }
-                shortcutKey("y", Color.hubAccentGreen.opacity(0.7)) { viewModel.sendY() }
-                shortcutKey("n", Color.hubAccentRed.opacity(0.6)) { viewModel.sendN() }
-                shortcutKey("/", AdaptiveColors.textSecondary(for: colorScheme)) { viewModel.sendSlash() }
-                shortcutKey("q", AdaptiveColors.textSecondary(for: colorScheme)) { viewModel.sendQ() }
-            }
-            .padding(.horizontal, 8)
-        }
-        .frame(height: 36)
-        .background(AdaptiveColors.surfaceSecondary(for: colorScheme))
-    }
-
-    @ViewBuilder
-    private func shortcutKey(_ label: String, _ color: Color, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(label)
-                .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                .foregroundStyle(color)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(
-                    RoundedRectangle(cornerRadius: 5)
-                        .fill(AdaptiveColors.border(for: colorScheme))
-                )
-        }
-        .buttonStyle(.plain)
-    }
 }

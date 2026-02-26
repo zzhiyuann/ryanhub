@@ -68,6 +68,7 @@ struct ContentView: View {
                 isCompact: appState.isInToolkitModule
             )
         }
+        .ignoresSafeArea(.keyboard)
         .background(AdaptiveColors.background(for: colorScheme))
     }
 
@@ -94,19 +95,24 @@ struct ContentView: View {
         }
     }
 
+    /// Connection status color for the chat icon.
+    private var chatStatusColor: Color {
+        switch chatViewModel.connectionState {
+        case .connected: return Color.hubAccentGreen
+        default: return Color.hubAccentRed
+        }
+    }
+
+    /// Connection status color for the terminal icon.
+    private var terminalStatusColor: Color {
+        terminalViewModel.ssh.isConnected ? Color.hubAccentGreen : Color.hubAccentRed
+    }
+
     @ViewBuilder
     private var chatModeToggle: some View {
         HStack(spacing: 0) {
-            modeButton(
-                icon: "bubble.left.and.bubble.right.fill",
-                label: "Chat",
-                mode: .chat
-            )
-            modeButton(
-                icon: "terminal.fill",
-                label: "Terminal",
-                mode: .terminal
-            )
+            modeButton(icon: "bubble.left.and.bubble.right.fill", mode: .chat, statusColor: chatStatusColor)
+            modeButton(icon: "terminal.fill", mode: .terminal, statusColor: terminalStatusColor)
         }
         .padding(3)
         .background(
@@ -118,26 +124,22 @@ struct ContentView: View {
     }
 
     @ViewBuilder
-    private func modeButton(icon: String, label: String, mode: ChatMode) -> some View {
+    private func modeButton(icon: String, mode: ChatMode, statusColor: Color) -> some View {
         let isSelected = chatMode == mode
         Button {
             withAnimation(.easeInOut(duration: 0.2)) {
                 chatMode = mode
             }
         } label: {
-            HStack(spacing: 4) {
-                Image(systemName: icon)
-                    .font(.system(size: 11, weight: .semibold))
-                Text(label)
-                    .font(.system(size: 12, weight: .semibold))
-            }
-            .foregroundStyle(isSelected ? .white : AdaptiveColors.textSecondary(for: colorScheme))
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 6)
-            .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(isSelected ? Color.hubPrimary : Color.clear)
-            )
+            Image(systemName: icon)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(isSelected ? statusColor : AdaptiveColors.textSecondary(for: colorScheme).opacity(0.5))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 6)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(isSelected ? AdaptiveColors.surface(for: colorScheme) : Color.clear)
+                )
         }
         .buttonStyle(.plain)
     }

@@ -93,10 +93,7 @@ final class TerminalViewModel {
         let previousHandler = ssh.onDataReceived
 
         ssh.onDataReceived = { [weak self] data in
-            // Forward to terminal display
-            previousHandler?(data)
-
-            // Also capture for parsing
+            // Do NOT forward to terminal — suppress tmux ls output from display
             if let text = String(data: data, encoding: .utf8) {
                 buffer += text
                 if buffer.contains(marker) {

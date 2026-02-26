@@ -222,6 +222,42 @@ struct SettingsView: View {
                         label: "Password",
                         isSecure: true
                     )
+
+                    // Test SSH button
+                    HStack(spacing: HubLayout.itemSpacing) {
+                        if let error = viewModel.sshTestError {
+                            Text(error)
+                                .font(.system(size: 11))
+                                .foregroundStyle(Color.hubAccentRed)
+                                .lineLimit(2)
+                        }
+
+                        Spacer()
+
+                        Button {
+                            viewModel.testSSHConnection()
+                        } label: {
+                            HStack(spacing: 6) {
+                                if viewModel.isTestingSSH {
+                                    ProgressView()
+                                        .controlSize(.small)
+                                } else {
+                                    Image(systemName: viewModel.sshTestResultIcon ?? "bolt.fill")
+                                        .font(.system(size: 14, weight: .semibold))
+                                }
+                                Text("Test SSH")
+                                    .font(.hubCaption)
+                            }
+                            .foregroundStyle(Color.hubPrimary)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 8)
+                            .background(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .fill(Color.hubPrimary.opacity(0.1))
+                            )
+                        }
+                        .disabled(viewModel.isTestingSSH)
+                    }
                 }
                 .frame(maxWidth: .infinity)
             }

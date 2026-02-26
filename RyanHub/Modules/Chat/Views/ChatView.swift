@@ -16,11 +16,6 @@ struct ChatView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Compact connection status (only shown when NOT connected)
-            if viewModel.connectionState != .connected {
-                connectionStatusBar
-            }
-
             // Messages area
             messagesArea
 
