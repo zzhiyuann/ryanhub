@@ -8,15 +8,12 @@ import SwiftUI
 struct ParkingView: View {
     @Environment(\.colorScheme) private var colorScheme
     @State private var viewModel = ParkingViewModel()
-    @State private var showHistory = false
-
     var body: some View {
         ScrollView {
             VStack(spacing: HubLayout.sectionSpacing) {
                 todayStatusCard
                 smartSuggestionSection
                 calendarPickerSection
-                skipHistorySection
             }
             .padding(HubLayout.standardPadding)
         }
@@ -361,74 +358,6 @@ struct ParkingView: View {
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
         }
-    }
-
-    // MARK: - Skip History
-
-    private var skipHistorySection: some View {
-        VStack(alignment: .leading, spacing: HubLayout.itemSpacing) {
-            if !viewModel.pastSkipDates.isEmpty {
-                Button {
-                    withAnimation(.easeInOut(duration: 0.25)) {
-                        showHistory.toggle()
-                    }
-                } label: {
-                    HStack {
-                        SectionHeader(title: "Skip History")
-
-                        Spacer()
-
-                        HStack(spacing: 4) {
-                            Text("\(viewModel.pastSkipDates.count) past")
-                                .font(.system(size: 12, weight: .medium))
-                            Image(systemName: showHistory ? "chevron.up" : "chevron.down")
-                                .font(.system(size: 11, weight: .semibold))
-                        }
-                        .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
-                    }
-                }
-
-                if showHistory {
-                    VStack(spacing: 6) {
-                        ForEach(viewModel.pastSkipDates.prefix(10)) { entry in
-                            historyRow(entry: entry)
-                        }
-
-                        if viewModel.pastSkipDates.count > 10 {
-                            Text("and \(viewModel.pastSkipDates.count - 10) more...")
-                                .font(.hubCaption)
-                                .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
-                                .frame(maxWidth: .infinity)
-                                .padding(.top, 4)
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    private func historyRow(entry: ParkingSkipEntry) -> some View {
-        HStack(spacing: 12) {
-            Circle()
-                .fill(AdaptiveColors.textSecondary(for: colorScheme).opacity(0.3))
-                .frame(width: 6, height: 6)
-
-            Text(entry.formattedDate)
-                .font(.system(size: 14, weight: .regular))
-                .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
-
-            Spacer()
-
-            Text(String(format: "-$%.2f", ParkingViewModel.costPerDay))
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(Color.hubAccentGreen.opacity(0.7))
-        }
-        .padding(.horizontal, HubLayout.cardInnerPadding)
-        .padding(.vertical, 8)
-        .background(
-            RoundedRectangle(cornerRadius: HubLayout.cardCornerRadius)
-                .fill(AdaptiveColors.surface(for: colorScheme).opacity(0.5))
-        )
     }
 
     // MARK: - Confirmation Banner

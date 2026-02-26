@@ -37,14 +37,6 @@ final class ParkingViewModel {
             .sorted { $0.date < $1.date }
     }
 
-    /// Past skip dates sorted reverse chronologically.
-    var pastSkipDates: [ParkingSkipEntry] {
-        let today = Calendar.current.startOfDay(for: Date())
-        return skipDates
-            .filter { Calendar.current.startOfDay(for: $0.date) < today }
-            .sorted { $0.date > $1.date }
-    }
-
     /// Whether today is a weekday (parking is only relevant on weekdays).
     var isTodayWeekday: Bool {
         !Calendar.current.isDateInWeekend(Date())
