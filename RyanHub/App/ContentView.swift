@@ -68,7 +68,6 @@ struct ContentView: View {
                 isCompact: appState.isInToolkitModule
             )
         }
-        .ignoresSafeArea(.keyboard)
         .background(AdaptiveColors.background(for: colorScheme))
     }
 
