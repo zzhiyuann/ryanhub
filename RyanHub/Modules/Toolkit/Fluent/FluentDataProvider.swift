@@ -59,6 +59,9 @@ enum FluentDataProvider: ToolkitDataProvider {
             lines.append("Top categories: \(top.joined(separator: ", "))")
         }
 
+        // Action hints
+        lines.append("Actions: Vocabulary review is done in-app (Fluent tab). No chat actions available.")
+
         lines.append("[End \(displayName)]")
         return lines.joined(separator: "\n")
     }

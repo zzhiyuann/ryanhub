@@ -64,6 +64,12 @@ enum BookFactoryDataProvider: ToolkitDataProvider {
             lines.append("(\(books.count - 5) more books)")
         }
 
+        // Action hints — tell the agent how to generate books
+        lines.append("Actions:")
+        lines.append("- Generate a book NOW: run `env -u CLAUDE_CODE -u CLAUDECODE /Users/zwang/bookfactory/generate_now.sh \"<topic>\"` (takes ~20 min, runs in background)")
+        lines.append("- Add to backlog: append a line to /Users/zwang/bookfactory/topic_backlog.md (batch cron picks it up)")
+        lines.append("- IMPORTANT: Do NOT write book content inline in chat. Always use the generation pipeline above.")
+
         lines.append("[End \(displayName)]")
         return lines.joined(separator: "\n")
     }

@@ -91,6 +91,9 @@ enum CalendarDataProvider: ToolkitDataProvider {
             lines.append("(Calendar synced \(formatter.localizedString(for: syncTime, relativeTo: Date())))")
         }
 
+        // Action hints
+        lines.append("Actions: Calendar is read-only. Events are synced from Google Calendar via the Calendar tab.")
+
         lines.append("[End \(displayName)]")
         return lines.joined(separator: "\n")
     }

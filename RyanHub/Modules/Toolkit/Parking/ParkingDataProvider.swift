@@ -92,6 +92,12 @@ enum ParkingDataProvider: ToolkitDataProvider {
             lines.append("Purchased days this month: \(purchasedDays)")
         }
 
+        // Action hints — tell the agent how to modify parking state
+        lines.append("Actions:")
+        lines.append("- Skip a date: append YYYY-MM-DD to \(skipDatesFilePath) (one per line, weekdays only)")
+        lines.append("- Restore a date: remove the line from \(skipDatesFilePath)")
+        lines.append("- View skip list: cat \(skipDatesFilePath)")
+
         lines.append("[End \(displayName)]")
         return lines.joined(separator: "\n")
     }

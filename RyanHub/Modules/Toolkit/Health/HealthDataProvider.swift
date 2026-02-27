@@ -47,6 +47,12 @@ enum HealthDataProvider: ToolkitDataProvider {
         if let w = weightSection { parts.append(w) }
         if let f = foodSection { parts.append(f) }
         if let a = activitySection { parts.append(a) }
+        // Action hints — health data is recorded through the chat naturally
+        parts.append("Actions:")
+        parts.append("- Record food: user says what they ate, you log it (existing flow)")
+        parts.append("- Record weight: user reports weight, you log it")
+        parts.append("- Record activity: user describes workout, you log it")
+
         parts.append("[End \(displayName)]")
 
         return parts.joined(separator: "\n")
