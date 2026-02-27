@@ -36,6 +36,7 @@ Endpoints:
   GET/POST /popo/daily-summary — Daily behavior summaries
   POST     /popo/audio — Upload audio file (binary)
   GET      /popo/audio/<filename> — Retrieve audio file
+  POST     /popo/narrations/analyze — Transcribe + affective analysis (OpenAI)
   All GET endpoints support ?date=YYYY-MM-DD filtering.
 
 Usage:
@@ -53,6 +54,8 @@ import base64
 import os
 import shutil
 import uuid
+import threading
+from typing import Optional, Dict, Any
 from urllib.parse import urlparse, parse_qs
 
 PORT = 18790
@@ -93,6 +96,148 @@ DATA_FILES = {
 # POPO audio storage directory
 POPO_AUDIO_DIR = os.path.join(BRIDGE_DATA_DIR, "popo_audio")
 os.makedirs(POPO_AUDIO_DIR, exist_ok=True)
+
+# ---------------------------------------------------------------------------
+# OpenAI integration for narration transcription + affect analysis
+# ---------------------------------------------------------------------------
+
+OPENAI_AVAILABLE = False
+openai_client = None
+
+try:
+    import openai
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if api_key:
+        openai_client = openai.OpenAI()
+        OPENAI_AVAILABLE = True
+        print("OpenAI API available for narration transcription + affect analysis.")
+    else:
+        print("Warning: OPENAI_API_KEY not set. Narration analysis will be skipped.",
+              file=sys.stderr)
+except ImportError:
+    print("Warning: openai package not installed. Narration analysis will be skipped.",
+          file=sys.stderr)
+
+
+AFFECT_ANALYSIS_SYSTEM_PROMPT = """\
+Analyze the emotional tone and psychological state from this voice diary transcript. \
+Return JSON with the following fields:
+- mood: integer 1-10 (1 = very negative, 10 = very positive)
+- energy: integer 1-10 (1 = exhausted, 10 = highly energized)
+- stress: integer 1-10 (1 = very relaxed, 10 = extremely stressed)
+- primary_emotion: string (e.g., "calm", "anxious", "happy", "frustrated", "neutral")
+- secondary_emotion: string (a secondary detected emotion, or "none")
+- brief_summary: string (one sentence summarizing the overall emotional tone)
+"""
+
+
+def transcribe_audio(audio_path):
+    # type: (str) -> Optional[str]
+    """Transcribe an audio file using OpenAI Whisper API.
+    Returns the transcript text, or None if unavailable."""
+    if not OPENAI_AVAILABLE or openai_client is None:
+        return None
+    try:
+        with open(audio_path, "rb") as f:
+            transcript = openai_client.audio.transcriptions.create(
+                model="whisper-1",
+                file=f
+            )
+        return transcript.text
+    except Exception as e:
+        print(f"[Narration] Transcription failed: {e}", file=sys.stderr)
+        return None
+
+
+def analyze_affect(transcript_text):
+    # type: (str) -> Optional[Dict[str, Any]]
+    """Analyze emotional affect from transcript text using GPT-4o-mini.
+    Returns a dict with mood/energy/stress/emotion fields, or None."""
+    if not OPENAI_AVAILABLE or openai_client is None:
+        return None
+    if not transcript_text or not transcript_text.strip():
+        return None
+    try:
+        response = openai_client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": AFFECT_ANALYSIS_SYSTEM_PROMPT},
+                {"role": "user", "content": transcript_text}
+            ],
+            response_format={"type": "json_object"}
+        )
+        content = response.choices[0].message.content
+        return json.loads(content) if content else None
+    except Exception as e:
+        print(f"[Narration] Affect analysis failed: {e}", file=sys.stderr)
+        return None
+
+
+def run_narration_analysis(audio_path, narration_id=None):
+    # type: (str, Optional[str]) -> Dict[str, Any]
+    """Run the full transcription + affect analysis pipeline.
+    Returns a dict with 'transcript', 'affect', and 'narration_id'."""
+    result = {
+        "narration_id": narration_id,
+        "transcript": None,
+        "affect": None,
+        "status": "skipped"
+    }  # type: Dict[str, Any]
+
+    if not OPENAI_AVAILABLE:
+        result["status"] = "openai_unavailable"
+        return result
+
+    # Step 1: Transcribe
+    transcript = transcribe_audio(audio_path)
+    if transcript:
+        result["transcript"] = transcript
+        result["status"] = "transcribed"
+
+        # Step 2: Affect analysis
+        affect = analyze_affect(transcript)
+        if affect:
+            result["affect"] = affect
+            result["status"] = "analyzed"
+
+    return result
+
+
+def update_narration_with_analysis(narration_id, analysis_result):
+    # type: (str, Dict[str, Any]) -> None
+    """Update the stored narration entry with transcript and affect data."""
+    narrations_file = DATA_FILES.get("/popo/narrations")
+    if not narrations_file or not os.path.exists(narrations_file):
+        return
+
+    try:
+        with open(narrations_file, "r") as f:
+            content = f.read()
+        narrations = json.loads(content) if content.strip() else []
+    except (json.JSONDecodeError, IOError):
+        return
+
+    updated = False
+    for narration in narrations:
+        if isinstance(narration, dict) and narration.get("id") == narration_id:
+            if analysis_result.get("transcript"):
+                narration["transcript"] = analysis_result["transcript"]
+            if analysis_result.get("affect"):
+                narration["affectAnalysis"] = analysis_result["affect"]
+                # Also set legacy extractedMood field
+                primary = analysis_result["affect"].get("primary_emotion")
+                if primary:
+                    narration["extractedMood"] = primary
+            updated = True
+            break
+
+    if updated:
+        try:
+            with open(narrations_file, "w") as f:
+                json.dump(narrations, f, ensure_ascii=False)
+        except IOError as e:
+            print(f"[Narration] Failed to update narration file: {e}", file=sys.stderr)
+
 
 # ---------------------------------------------------------------------------
 # Claude CLI analysis prompts

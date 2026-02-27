@@ -3,7 +3,8 @@ import SwiftUI
 // MARK: - POPO View
 
 /// The main view for the POPO (Proactive Personal Observer) toolkit plugin.
-/// Displays sensing status, modality summary, and recent events.
+/// Displays a timeline-based view with day overview, chronological events,
+/// narrations, nudges, and sensing status controls.
 struct PopoView: View {
     @Environment(\.colorScheme) private var colorScheme
     @State private var viewModel = PopoViewModel()
@@ -14,15 +15,21 @@ struct PopoView: View {
                 // Header
                 header
 
-                // Sensing toggle card
-                sensingToggleCard
+                // Day navigation bar
+                DateNavigationBar(selectedDate: $viewModel.selectedDate)
 
-                // Status card (only when sensing is active)
+                // Today overview card
                 if viewModel.sensingEnabled {
-                    statusCard
-                    modalitySummarySection
-                    recentEventsSection
+                    overviewCard
                 }
+
+                // Timeline section
+                if viewModel.sensingEnabled {
+                    timelineSection
+                }
+
+                // Sensing status footer
+                sensingStatusFooter
             }
             .padding(HubLayout.standardPadding)
         }
@@ -44,348 +51,231 @@ struct PopoView: View {
         .padding(.top, 8)
     }
 
-    // MARK: - Sensing Toggle
+    // MARK: - Overview Card
 
-    private var sensingToggleCard: some View {
-        HubCard {
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "waveform.path.ecg")
-                            .font(.system(size: 18, weight: .medium))
-                            .foregroundStyle(
-                                viewModel.sensingEnabled
-                                    ? Color.hubAccentGreen
-                                    : AdaptiveColors.textSecondary(for: colorScheme)
-                            )
+    private var overviewCard: some View {
+        let summary = viewModel.daySummary
 
-                        Text("Sensing Engine")
-                            .font(.hubHeading)
-                            .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
-                    }
-
-                    Text(viewModel.sensingEnabled ? "Actively observing behavioral signals" : "Tap to start background sensing")
+        return HubCard {
+            VStack(spacing: 14) {
+                // Title row
+                HStack {
+                    Text(overviewTitle)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                    Spacer()
+                    Text("\(summary.eventCount) events")
                         .font(.hubCaption)
                         .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
                 }
 
-                Spacer()
-
-                Toggle("", isOn: $viewModel.sensingEnabled)
-                    .labelsHidden()
-                    .tint(Color.hubPrimary)
-            }
-        }
-    }
-
-    // MARK: - Status Card
-
-    private var statusCard: some View {
-        HubCard {
-            VStack(spacing: HubLayout.itemSpacing) {
-                HStack {
-                    statusItem(
-                        title: "Events",
-                        value: "\(viewModel.engine.recentEvents.count)",
-                        icon: "chart.bar.fill",
-                        color: Color.hubPrimary
+                // Stats grid
+                HStack(spacing: 0) {
+                    overviewStat(
+                        icon: "shoeprints.fill",
+                        value: formatSteps(summary.totalSteps),
+                        label: "Steps",
+                        color: Color(red: 0.2, green: 0.6, blue: 1.0)
                     )
 
-                    Spacer()
+                    overviewDivider
 
-                    statusItem(
-                        title: "Pending",
-                        value: "\(viewModel.engine.pendingEventCount)",
-                        icon: "arrow.triangle.2.circlepath",
-                        color: Color.hubAccentYellow
-                    )
-
-                    Spacer()
-
-                    statusItem(
-                        title: "Last Sync",
-                        value: viewModel.lastSyncTimeString ?? "Never",
-                        icon: "icloud.and.arrow.up.fill",
+                    overviewStat(
+                        icon: "figure.walk",
+                        value: topActivity(from: summary.activityBreakdown),
+                        label: "Activity",
                         color: Color.hubAccentGreen
                     )
-                }
 
-                // Sync button
-                if viewModel.engine.pendingEventCount > 0 {
-                    Button {
-                        Task { await viewModel.syncNow() }
-                    } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: "arrow.triangle.2.circlepath")
-                                .font(.system(size: 13, weight: .medium))
-                            Text("Sync Now")
-                                .font(.hubCaption)
-                        }
-                        .foregroundStyle(Color.hubPrimary)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 8)
-                        .background(
-                            RoundedRectangle(cornerRadius: HubLayout.buttonCornerRadius)
-                                .stroke(Color.hubPrimary, lineWidth: 1)
-                        )
-                    }
-                    .buttonStyle(.plain)
+                    overviewDivider
+
+                    overviewStat(
+                        icon: "mappin.and.ellipse",
+                        value: "\(summary.locationChanges)",
+                        label: "Locations",
+                        color: Color.hubAccentGreen
+                    )
+
+                    overviewDivider
+
+                    overviewStat(
+                        icon: "iphone",
+                        value: "\(summary.screenEvents)",
+                        label: "Screen",
+                        color: AdaptiveColors.textSecondary(for: colorScheme)
+                    )
                 }
             }
         }
     }
 
-    private func statusItem(title: String, value: String, icon: String, color: Color) -> some View {
-        VStack(spacing: 4) {
+    private var overviewTitle: String {
+        let calendar = Calendar.current
+        if calendar.isDateInToday(viewModel.selectedDate) {
+            return "Today's Overview"
+        } else if calendar.isDateInYesterday(viewModel.selectedDate) {
+            return "Yesterday's Overview"
+        } else {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "MMM d"
+            return "\(formatter.string(from: viewModel.selectedDate)) Overview"
+        }
+    }
+
+    private func overviewStat(icon: String, value: String, label: String, color: Color) -> some View {
+        VStack(spacing: 6) {
             Image(systemName: icon)
                 .font(.system(size: 16, weight: .medium))
                 .foregroundStyle(color)
 
             Text(value)
-                .font(.system(size: 15, weight: .semibold))
+                .font(.system(size: 15, weight: .bold))
                 .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
 
-            Text(title)
+            Text(label)
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
         }
+        .frame(maxWidth: .infinity)
     }
 
-    // MARK: - Modality Summary
+    private var overviewDivider: some View {
+        Rectangle()
+            .fill(AdaptiveColors.border(for: colorScheme))
+            .frame(width: 1, height: 40)
+    }
 
-    private var modalitySummarySection: some View {
+    private func formatSteps(_ steps: Int) -> String {
+        if steps >= 1000 {
+            let k = Double(steps) / 1000.0
+            return String(format: "%.1fk", k)
+        }
+        return "\(steps)"
+    }
+
+    private func topActivity(from breakdown: [String: Int]) -> String {
+        guard let top = breakdown.max(by: { $0.value < $1.value }) else {
+            return "None"
+        }
+        return top.key.capitalized
+    }
+
+    // MARK: - Timeline Section
+
+    private var timelineSection: some View {
         VStack(alignment: .leading, spacing: HubLayout.itemSpacing) {
-            SectionHeader(title: "ACTIVE SENSORS")
+            SectionHeader(title: "TIMELINE")
 
-            let summary = viewModel.engine.modalitySummary
-            if summary.isEmpty {
-                HubCard {
-                    HStack {
-                        Image(systemName: "antenna.radiowaves.left.and.right.slash")
-                            .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
-                        Text("Waiting for sensor data...")
-                            .font(.hubBody)
-                            .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                }
+            let items = viewModel.timelineItems
+            if items.isEmpty {
+                emptyTimelineState
             } else {
-                LazyVGrid(columns: [
-                    GridItem(.flexible(), spacing: HubLayout.itemSpacing),
-                    GridItem(.flexible(), spacing: HubLayout.itemSpacing)
-                ], spacing: HubLayout.itemSpacing) {
-                    ForEach(summary, id: \.modality) { item in
-                        modalityCard(item)
+                // Timeline list
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                        TimelineEventRow(
+                            item: item,
+                            isExpanded: viewModel.isExpanded(item.id),
+                            isLast: index == items.count - 1
+                        ) {
+                            withAnimation(.easeInOut(duration: 0.25)) {
+                                viewModel.toggleExpanded(item.id)
+                            }
+                        }
                     }
                 }
+                .padding(.horizontal, 4)
             }
         }
     }
 
-    private func modalityCard(_ item: (modality: SensingModality, count: Int, latest: Date?)) -> some View {
+    private var emptyTimelineState: some View {
         HubCard {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack {
-                    Image(systemName: modalityIcon(item.modality))
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(modalityColor(item.modality))
+            VStack(spacing: 10) {
+                Image(systemName: "clock.arrow.circlepath")
+                    .font(.system(size: 28, weight: .light))
+                    .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme).opacity(0.5))
 
-                    Text(modalityDisplayName(item.modality))
-                        .font(.hubCaption)
-                        .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                Text("No events yet")
+                    .font(.hubBody)
+                    .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+
+                Text("Events will appear here as sensors collect data")
+                    .font(.hubCaption)
+                    .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme).opacity(0.7))
+                    .multilineTextAlignment(.center)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+        }
+    }
+
+    // MARK: - Sensing Status Footer
+
+    private var sensingStatusFooter: some View {
+        VStack(spacing: HubLayout.itemSpacing) {
+            // Sensing toggle
+            HubCard {
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 8) {
+                            Circle()
+                                .fill(viewModel.sensingEnabled ? Color.hubAccentGreen : AdaptiveColors.textSecondary(for: colorScheme).opacity(0.3))
+                                .frame(width: 8, height: 8)
+
+                            Text("Sensing Engine")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                        }
+
+                        Text(viewModel.sensingEnabled ? "Actively observing" : "Paused")
+                            .font(.system(size: 12, weight: .regular))
+                            .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                    }
 
                     Spacer()
 
-                    Text("\(item.count)")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(modalityColor(item.modality))
-                }
-
-                if let latest = item.latest {
-                    Text(timeAgoString(from: latest))
-                        .font(.system(size: 11, weight: .regular))
-                        .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                    Toggle("", isOn: $viewModel.sensingEnabled)
+                        .labelsHidden()
+                        .tint(Color.hubPrimary)
                 }
             }
-        }
-    }
 
-    // MARK: - Recent Events
+            // Sync status row (only when sensing is on)
+            if viewModel.sensingEnabled {
+                HStack(spacing: 12) {
+                    // Last sync
+                    HStack(spacing: 4) {
+                        Image(systemName: "icloud.and.arrow.up.fill")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                        Text("Synced \(viewModel.lastSyncTimeString ?? "never")")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                    }
 
-    private var recentEventsSection: some View {
-        VStack(alignment: .leading, spacing: HubLayout.itemSpacing) {
-            SectionHeader(title: "RECENT EVENTS")
+                    Spacer()
 
-            // Modality filter chips
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 6) {
-                    filterChip(title: "All", modality: nil)
-                    ForEach(SensingModality.allCases, id: \.self) { modality in
-                        filterChip(title: modalityDisplayName(modality), modality: modality)
+                    // Pending count + sync button
+                    if viewModel.engine.pendingEventCount > 0 {
+                        Button {
+                            Task { await viewModel.syncNow() }
+                        } label: {
+                            HStack(spacing: 4) {
+                                Text("\(viewModel.engine.pendingEventCount) pending")
+                                    .font(.system(size: 11, weight: .medium))
+                                Image(systemName: "arrow.triangle.2.circlepath")
+                                    .font(.system(size: 10, weight: .medium))
+                            }
+                            .foregroundStyle(Color.hubPrimary)
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
+                .padding(.horizontal, 4)
             }
-
-            let events = Array(viewModel.filteredEvents.prefix(20))
-            if events.isEmpty {
-                HubCard {
-                    Text("No events yet")
-                        .font(.hubBody)
-                        .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
-                        .frame(maxWidth: .infinity, alignment: .center)
-                }
-            } else {
-                ForEach(events) { event in
-                    eventRow(event)
-                }
-            }
-        }
-    }
-
-    private func filterChip(title: String, modality: SensingModality?) -> some View {
-        let isSelected = viewModel.selectedModality == modality
-        return Button {
-            withAnimation(.easeInOut(duration: 0.2)) {
-                viewModel.selectedModality = modality
-            }
-        } label: {
-            Text(title)
-                .font(.system(size: 12, weight: isSelected ? .semibold : .medium))
-                .foregroundStyle(
-                    isSelected
-                        ? Color.white
-                        : AdaptiveColors.textSecondary(for: colorScheme)
-                )
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(
-                    Capsule()
-                        .fill(isSelected ? Color.hubPrimary : AdaptiveColors.surfaceSecondary(for: colorScheme))
-                )
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func eventRow(_ event: SensingEvent) -> some View {
-        HubCard {
-            HStack(spacing: 10) {
-                // Modality icon
-                Image(systemName: modalityIcon(event.modality))
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(modalityColor(event.modality))
-                    .frame(width: 28, height: 28)
-                    .background(
-                        Circle()
-                            .fill(modalityColor(event.modality).opacity(0.12))
-                    )
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(modalityDisplayName(event.modality))
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
-
-                    Text(eventSummary(event))
-                        .font(.system(size: 12, weight: .regular))
-                        .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
-                        .lineLimit(1)
-                }
-
-                Spacer()
-
-                Text(timeAgoString(from: event.timestamp))
-                    .font(.system(size: 11, weight: .regular))
-                    .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
-            }
-        }
-    }
-
-    // MARK: - Helpers
-
-    private func modalityIcon(_ modality: SensingModality) -> String {
-        switch modality {
-        case .motion: return "figure.walk"
-        case .steps: return "shoeprints.fill"
-        case .heartRate: return "heart.fill"
-        case .hrv: return "waveform.path.ecg"
-        case .sleep: return "moon.fill"
-        case .location: return "location.fill"
-        case .screen: return "iphone"
-        case .workout: return "dumbbell.fill"
-        }
-    }
-
-    private func modalityColor(_ modality: SensingModality) -> Color {
-        switch modality {
-        case .motion: return Color.hubAccentGreen
-        case .steps: return Color.hubPrimary
-        case .heartRate: return Color.hubAccentRed
-        case .hrv: return Color.hubAccentYellow
-        case .sleep: return Color.hubPrimaryLight
-        case .location: return Color.hubAccentGreen
-        case .screen: return Color.hubPrimary
-        case .workout: return Color.hubAccentRed
-        }
-    }
-
-    private func modalityDisplayName(_ modality: SensingModality) -> String {
-        switch modality {
-        case .motion: return "Motion"
-        case .steps: return "Steps"
-        case .heartRate: return "Heart Rate"
-        case .hrv: return "HRV"
-        case .sleep: return "Sleep"
-        case .location: return "Location"
-        case .screen: return "Screen"
-        case .workout: return "Workout"
-        }
-    }
-
-    private func eventSummary(_ event: SensingEvent) -> String {
-        switch event.modality {
-        case .motion:
-            let activity = event.payload["activityType"] ?? "unknown"
-            let confidence = event.payload["confidence"] ?? ""
-            return "\(activity) (\(confidence))"
-        case .steps:
-            let steps = event.payload["steps"] ?? "0"
-            return "\(steps) steps"
-        case .heartRate:
-            let bpm = event.payload["bpm"] ?? "0"
-            return "\(bpm) BPM"
-        case .hrv:
-            let sdnn = event.payload["sdnn"] ?? "0"
-            return "\(sdnn) ms SDNN"
-        case .sleep:
-            let stage = event.payload["stage"] ?? "unknown"
-            return "Stage: \(stage)"
-        case .location:
-            let lat = event.payload["latitude"] ?? "?"
-            let lon = event.payload["longitude"] ?? "?"
-            return "(\(lat), \(lon))"
-        case .screen:
-            let state = event.payload["state"] ?? "unknown"
-            let duration = event.payload["sessionDuration"] ?? "0"
-            return "\(state) — \(duration)s"
-        case .workout:
-            let type = event.payload["type"] ?? "unknown"
-            let calories = event.payload["calories"] ?? "0"
-            return "\(type) — \(calories) kcal"
-        }
-    }
-
-    private func timeAgoString(from date: Date) -> String {
-        let interval = Date().timeIntervalSince(date)
-        if interval < 60 {
-            return "Just now"
-        } else if interval < 3600 {
-            let minutes = Int(interval / 60)
-            return "\(minutes)m ago"
-        } else if interval < 86400 {
-            let hours = Int(interval / 3600)
-            return "\(hours)h ago"
-        } else {
-            let days = Int(interval / 86400)
-            return "\(days)d ago"
         }
     }
 }

@@ -22,6 +22,7 @@ from .session import Session, SessionManager
 from .telegram import TelegramClient
 from .transcript import Transcript
 from .ws_server import WebSocketServer
+from .popo_brain import PopoBrain
 
 # Self-healing feedback loop — write issues to shared JSONL store.
 # Works standalone (no cortex_cli dependency) by writing directly to the file.
@@ -166,6 +167,12 @@ class Dispatcher:
                 on_edit=self._handle_ws_edit,
             )
 
+        # Proactive Facai Brain — POPO behavioral nudge engine
+        self._popo_brain = PopoBrain(
+            ws_client_count_fn=lambda: self._ws.client_count if self._ws else 0,
+            ws_broadcast_fn=self._ws.broadcast if self._ws else None,
+        )
+
     # -- Lifecycle --
 
     def _acquire_pid(self) -> bool:
@@ -222,6 +229,12 @@ class Dispatcher:
                 log.exception("Failed to start WebSocket server")
                 self._ws = None
 
+        # Start Proactive Facai Brain (POPO behavioral nudge engine)
+        try:
+            self._popo_brain.start()
+        except Exception:
+            log.exception("Failed to start PopoBrain (non-fatal)")
+
         loop = asyncio.get_running_loop()
         for sig in (signal.SIGTERM, signal.SIGINT):
             loop.add_signal_handler(sig, self._shutdown)
@@ -250,6 +263,12 @@ class Dispatcher:
         if self._tasks:
             log.info("Draining %d in-flight tasks", len(self._tasks))
             await asyncio.gather(*self._tasks, return_exceptions=True)
+
+        # Stop Proactive Facai Brain
+        try:
+            await self._popo_brain.stop()
+        except Exception:
+            log.debug("PopoBrain stop error (non-fatal)", exc_info=True)
 
         # Stop WebSocket server
         if self._ws:

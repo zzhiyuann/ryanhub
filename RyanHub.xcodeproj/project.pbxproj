@@ -44,6 +44,7 @@
 		4D96295338EAC5B7FD4610A7 /* QueueViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B9EA9D07E750C36E09F40F8 /* QueueViewModel.swift */; };
 		4E03D04048BEB3D5621E4279 /* SettingsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A69D457FFC342C44FD9AC5A8 /* SettingsViewModel.swift */; };
 		504E97D62446343F63968AA7 /* WeightTimelineChart.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF08A389291EC57C9A1078D4 /* WeightTimelineChart.swift */; };
+		52C5CD2B1F22735752837166 /* TimelineEventRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50A88114B163C9987EA342F9 /* TimelineEventRow.swift */; };
 		558DE9429893FB50073C6AE7 /* ParkingViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D16D2295813670830D5C718A /* ParkingViewModel.swift */; };
 		5A0AF4334635D100551DDBBE /* BookFactoryDataProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12DF6C8BE46A85B9A8F35721 /* BookFactoryDataProvider.swift */; };
 		5DF447B30CF7C0C0A2C305C6 /* CalendarTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5AC6E4C1F353A83F301D80A /* CalendarTests.swift */; };
@@ -72,6 +73,7 @@
 		990DCC48DBBAAC7D99FE697E /* NotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6FCA5345EBFCEA0EABD94A0C /* NotificationManager.swift */; };
 		9F010855B1B3ECEA2AFEE416 /* HealthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D06AEB0354C4C85106A24AE1 /* HealthView.swift */; };
 		A279119E7719DE06DF755120 /* HealthSensor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44E36DA42169A81B9EE5BF11 /* HealthSensor.swift */; };
+		A3BD7E1314A22C211CCDDCB5 /* NarrationRecordButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = D75C1C1A3B8309A824D70396 /* NarrationRecordButton.swift */; };
 		A40E6627B20377EDD61A4772 /* CameraView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78CFF4214607AFA100F868C3 /* CameraView.swift */; };
 		A440D502E05A68D109AF8BC9 /* HubTextField.swift in Sources */ = {isa = PBXBuildFile; fileRef = E65564252C7D5721D9784435 /* HubTextField.swift */; };
 		A67D87D9ECA15A068F404093 /* SSHConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 451A5D81323FC8ABDC20C701 /* SSHConnection.swift */; };
@@ -150,6 +152,7 @@
 		4AD0CBF73B859088687163F3 /* HealthModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthModels.swift; sourceTree = "<group>"; };
 		4F626D9022E18DF95570CD45 /* Narration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Narration.swift; sourceTree = "<group>"; };
 		50453019898E6F1254892D59 /* Nudge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Nudge.swift; sourceTree = "<group>"; };
+		50A88114B163C9987EA342F9 /* TimelineEventRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineEventRow.swift; sourceTree = "<group>"; };
 		544DEFE89CD15A88D94AFAA8 /* RyanHubUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = RyanHubUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		54F5DDF9901F52B04883C031 /* HealthKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = HealthKit.framework; path = System/Library/Frameworks/HealthKit.framework; sourceTree = SDKROOT; };
 		5A8BAE87477C77371E777370 /* FluentModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FluentModels.swift; sourceTree = "<group>"; };
@@ -206,6 +209,7 @@
 		D16D2295813670830D5C718A /* ParkingViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParkingViewModel.swift; sourceTree = "<group>"; };
 		D1FC8D72C2E96DC23DF5A0F2 /* MotionSensor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MotionSensor.swift; sourceTree = "<group>"; };
 		D720AA4B2C547EB4CD326ABC /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		D75C1C1A3B8309A824D70396 /* NarrationRecordButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NarrationRecordButton.swift; sourceTree = "<group>"; };
 		D95AF3A0C5EE080C5A0E90DB /* TypingIndicator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TypingIndicator.swift; sourceTree = "<group>"; };
 		D9C923C9AB5D8E6D4D5D079B /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		DF2B5DB752ACC5184B6FC043 /* QueueManagerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QueueManagerView.swift; sourceTree = "<group>"; };
@@ -345,7 +349,9 @@
 		6478E18E92C50548C6D9D891 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				D75C1C1A3B8309A824D70396 /* NarrationRecordButton.swift */,
 				0152D48D40EC33B14872CF9C /* PopoView.swift */,
+				50A88114B163C9987EA342F9 /* TimelineEventRow.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -794,6 +800,7 @@
 				086B8E3A17F05ECE1E5F2C70 /* MiniPlayerView.swift in Sources */,
 				826E7CF7E7C6BD4B1AB01EDC /* MotionSensor.swift in Sources */,
 				1FE3CC643DD5DC6AEDE9C4D9 /* Narration.swift in Sources */,
+				A3BD7E1314A22C211CCDDCB5 /* NarrationRecordButton.swift in Sources */,
 				990DCC48DBBAAC7D99FE697E /* NotificationManager.swift in Sources */,
 				167534714B6B555EA3420185 /* Nudge.swift in Sources */,
 				40C6530DBEB36CA6844D3A87 /* ParkingDataProvider.swift in Sources */,
@@ -819,6 +826,7 @@
 				EEABA9A1DDBF6F9612295792 /* TerminalView.swift in Sources */,
 				E8118E935475B47A7822A814 /* TerminalViewModel.swift in Sources */,
 				26463C7B7CDCD1B15AD42709 /* Theme.swift in Sources */,
+				52C5CD2B1F22735752837166 /* TimelineEventRow.swift in Sources */,
 				491F7CF1946ED389B6D04300 /* ToolkitDataProvider.swift in Sources */,
 				E7E291D4BE573049A202E9BA /* ToolkitHomeView.swift in Sources */,
 				CACAAC73720212D53EBB98DA /* TypingIndicator.swift in Sources */,
