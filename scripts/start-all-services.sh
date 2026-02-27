@@ -366,9 +366,8 @@ do_start() {
 
     local failures=0
 
-    start_dispatcher || (( failures++ )) || true
-    # food-analysis is on-demand only — started by iOS app when needed
-    # start_food       || (( failures++ )) || true
+    start_dispatcher  || (( failures++ )) || true
+    start_food        || (( failures++ )) || true
     start_bookfactory || (( failures++ )) || true
 
     echo ""
