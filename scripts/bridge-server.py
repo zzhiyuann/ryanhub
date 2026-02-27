@@ -36,7 +36,9 @@ Endpoints:
   GET/POST /popo/daily-summary — Daily behavior summaries
   POST     /popo/audio — Upload audio file (binary)
   GET      /popo/audio/<filename> — Retrieve audio file
-  POST     /popo/narrations/analyze — Transcribe (Whisper) + affective analysis (Claude)
+  POST     /popo/narrations/analyze — Transcribe (Whisper) + affective analysis (local emotion model)
+  POST     /popo/location/enrich — Reverse geocode + semantic place enrichment
+  POST     /popo/location/learn-place — Teach the system a named place
   All GET endpoints support ?date=YYYY-MM-DD filtering.
 
 Usage:
@@ -55,6 +57,7 @@ import os
 import shutil
 import uuid
 import threading
+from datetime import datetime
 from typing import Optional, Dict, Any
 from urllib.parse import urlparse, parse_qs
 
@@ -124,37 +127,80 @@ def get_whisper_model():
     return _whisper_model
 
 # ---------------------------------------------------------------------------
-# Anthropic Claude integration for text analysis (affect analysis)
+# Local HuggingFace emotion model for affect analysis
 # ---------------------------------------------------------------------------
 
-ANTHROPIC_AVAILABLE = False
-anthropic_client = None
+SENTIMENT_AVAILABLE = False
+_sentiment_pipeline = None
 
 try:
-    import anthropic
-    anthropic_key = os.environ.get("ANTHROPIC_API_KEY")
-    if anthropic_key:
-        anthropic_client = anthropic.Anthropic(api_key=anthropic_key)
-        ANTHROPIC_AVAILABLE = True
-        print("Anthropic Claude available for affect analysis.")
-    else:
-        print("Warning: ANTHROPIC_API_KEY not set. Affect analysis will be skipped.",
-              file=sys.stderr)
+    from transformers import pipeline as hf_pipeline
+    SENTIMENT_AVAILABLE = True
+    print("HuggingFace transformers available for local affect analysis.")
 except ImportError:
-    print("Warning: anthropic package not installed. Affect analysis will be skipped.",
+    print("Warning: transformers not installed. Affect analysis will be skipped.",
           file=sys.stderr)
+    print("  Install with: pip install transformers torch", file=sys.stderr)
 
 
-AFFECT_ANALYSIS_SYSTEM_PROMPT = """\
-Analyze the emotional tone and psychological state from this voice diary transcript. \
-Return JSON with the following fields:
-- mood: integer 1-10 (1 = very negative, 10 = very positive)
-- energy: integer 1-10 (1 = exhausted, 10 = highly energized)
-- stress: integer 1-10 (1 = very relaxed, 10 = extremely stressed)
-- primary_emotion: string (e.g., "calm", "anxious", "happy", "frustrated", "neutral")
-- secondary_emotion: string (a secondary detected emotion, or "none")
-- brief_summary: string (one sentence summarizing the overall emotional tone)
-"""
+def get_sentiment_pipeline():
+    """Lazily load the emotion classification model."""
+    global _sentiment_pipeline
+    if _sentiment_pipeline is None:
+        print("[Affect] Loading emotion model (first call, may take a moment)...")
+        _sentiment_pipeline = hf_pipeline(
+            "text-classification",
+            model="j-hartmann/emotion-english-distilroberta-base",
+            top_k=None,  # return all emotion scores
+            device="mps" if __import__('torch').backends.mps.is_available() else "cpu"
+        )
+        print("[Affect] Model loaded successfully.")
+    return _sentiment_pipeline
+
+
+def _emotion_to_valence(emotion):
+    """Map emotion label to valence (-1.0 to 1.0)."""
+    mapping = {
+        'joy': 0.8, 'surprise': 0.3, 'neutral': 0.0,
+        'sadness': -0.6, 'anger': -0.7, 'disgust': -0.8, 'fear': -0.5
+    }
+    return mapping.get(emotion, 0.0)
+
+
+def _emotion_to_arousal(emotion):
+    """Map emotion label to arousal (0.0 to 1.0)."""
+    mapping = {
+        'joy': 0.6, 'surprise': 0.8, 'neutral': 0.2,
+        'sadness': 0.3, 'anger': 0.9, 'disgust': 0.5, 'fear': 0.8
+    }
+    return mapping.get(emotion, 0.5)
+
+
+def _emotion_to_mood(emotion):
+    """Map emotion label to mood score (1-10 scale)."""
+    mapping = {
+        'joy': 8, 'surprise': 6, 'neutral': 5,
+        'sadness': 3, 'anger': 2, 'disgust': 2, 'fear': 3
+    }
+    return mapping.get(emotion, 5)
+
+
+def _emotion_to_energy(emotion):
+    """Map emotion label to energy score (1-10 scale)."""
+    mapping = {
+        'joy': 7, 'surprise': 8, 'neutral': 5,
+        'sadness': 3, 'anger': 8, 'disgust': 4, 'fear': 7
+    }
+    return mapping.get(emotion, 5)
+
+
+def _emotion_to_stress(emotion):
+    """Map emotion label to stress score (1-10 scale)."""
+    mapping = {
+        'joy': 2, 'surprise': 5, 'neutral': 3,
+        'sadness': 6, 'anger': 8, 'disgust': 6, 'fear': 8
+    }
+    return mapping.get(emotion, 5)
 
 
 def transcribe_audio(audio_path):
@@ -175,31 +221,44 @@ def transcribe_audio(audio_path):
         return None
 
 
-def analyze_affect(transcript_text):
+def analyze_affect(text):
     # type: (str) -> Optional[Dict[str, Any]]
-    """Analyze emotional affect from transcript text using Anthropic Claude.
-    Returns a dict with mood/energy/stress/emotion fields, or None."""
-    if not ANTHROPIC_AVAILABLE or anthropic_client is None:
-        return None
-    if not transcript_text or not transcript_text.strip():
+    """Analyze emotional affect of text using local emotion model.
+    Returns a dict matching the iOS AffectAnalysis schema, or None."""
+    if not SENTIMENT_AVAILABLE or not text or len(text.strip()) < 10:
         return None
     try:
-        response = anthropic_client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=500,
-            messages=[{
-                "role": "user",
-                "content": (
-                    AFFECT_ANALYSIS_SYSTEM_PROMPT
-                    + "\n\nReturn ONLY valid JSON, no other text.\n\n"
-                    + f"Transcript: {transcript_text}"
-                ),
-            }],
-        )
-        content = response.content[0].text
-        return json.loads(content) if content else None
+        pipe = get_sentiment_pipeline()
+        # Model returns list of dicts: [{"label": "joy", "score": 0.95}, ...]
+        results = pipe(text[:512])[0]  # truncate to model max, get first result
+
+        # Sort by score descending
+        results.sort(key=lambda x: x['score'], reverse=True)
+
+        primary = results[0]
+        secondary = results[1] if len(results) > 1 else None
+
+        # Build response matching iOS AffectAnalysis CodingKeys (snake_case)
+        analysis = {
+            "primary_emotion": primary['label'],
+            "confidence": round(primary['score'], 3),
+            "valence": _emotion_to_valence(primary['label']),
+            "arousal": _emotion_to_arousal(primary['label']),
+            "mood": _emotion_to_mood(primary['label']),
+            "energy": _emotion_to_energy(primary['label']),
+            "stress": _emotion_to_stress(primary['label']),
+            "emotions": {r['label']: round(r['score'], 3) for r in results},
+            "brief_summary": f"Detected {primary['label']} ({primary['score']:.0%} confidence)"
+        }
+
+        if secondary and secondary['score'] > 0.1:
+            analysis["secondary_emotion"] = secondary['label']
+
+        print(f"[Affect] {primary['label']} ({primary['score']:.2f}) for: {text[:60]}...")
+        return analysis
+
     except Exception as e:
-        print(f"[Narration] Affect analysis failed: {e}", file=sys.stderr)
+        print(f"[Affect] Analysis failed: {e}", file=sys.stderr)
         return None
 
 
@@ -267,6 +326,106 @@ def update_narration_with_analysis(narration_id, analysis_result):
                 json.dump(narrations, f, ensure_ascii=False)
         except IOError as e:
             print(f"[Narration] Failed to update narration file: {e}", file=sys.stderr)
+
+
+# ---------------------------------------------------------------------------
+# Geopy integration for semantic location enrichment
+# ---------------------------------------------------------------------------
+
+GEOPY_AVAILABLE = False
+_geocoder = None
+
+try:
+    from geopy.geocoders import Nominatim
+    from geopy.distance import geodesic
+    _geocoder = Nominatim(user_agent="ryanhub-popo/1.0")
+    GEOPY_AVAILABLE = True
+    print("Geopy available for location enrichment.")
+except ImportError:
+    print("Warning: geopy not installed. Location enrichment will be unavailable.",
+          file=sys.stderr)
+    print("  Install with: pip install geopy", file=sys.stderr)
+
+# Known places file for home/work detection
+KNOWN_PLACES_FILE = os.path.join(BRIDGE_DATA_DIR, "popo", "known_places.json")
+os.makedirs(os.path.join(BRIDGE_DATA_DIR, "popo"), exist_ok=True)
+
+
+def check_known_places(lat, lng):
+    """Check if coordinates match a known place (within 200m).
+    Returns the place label string, or None."""
+    if not GEOPY_AVAILABLE:
+        return None
+    if not os.path.exists(KNOWN_PLACES_FILE):
+        return None
+    try:
+        with open(KNOWN_PLACES_FILE, "r") as f:
+            content = f.read()
+        places = json.loads(content) if content.strip() else []
+    except (json.JSONDecodeError, IOError):
+        return None
+
+    for place in places:
+        if not isinstance(place, dict):
+            continue
+        plat = place.get("lat")
+        plng = place.get("lng")
+        if plat is None or plng is None:
+            continue
+        dist = geodesic((lat, lng), (plat, plng)).meters
+        if dist < 200:
+            return place.get("label")
+    return None
+
+
+def enrich_location_data(lat, lng, timestamp_str=None):
+    """Enrich a lat/lng with semantic place info.
+    Returns a dict with address, place_type, semantic_label, etc."""
+    result = {}
+
+    # 1. Reverse geocode via Nominatim
+    if GEOPY_AVAILABLE and _geocoder:
+        try:
+            location = _geocoder.reverse(
+                f"{lat}, {lng}", exactly_one=True, language="en"
+            )
+            if location:
+                addr = location.raw.get("address", {})
+                result["address"] = location.address
+                result["place_type"] = (
+                    addr.get("amenity")
+                    or addr.get("shop")
+                    or addr.get("building")
+                    or addr.get("leisure")
+                    or ""
+                )
+                result["neighborhood"] = (
+                    addr.get("neighbourhood") or addr.get("suburb") or ""
+                )
+                result["city"] = addr.get("city") or addr.get("town") or ""
+        except Exception as e:
+            print(f"[Location] Geocode failed: {e}")
+
+    # 2. Check against known places (home/work clusters)
+    known = check_known_places(lat, lng)
+    if known:
+        result["semantic_label"] = known
+
+    # 3. Time-based heuristic
+    if timestamp_str:
+        try:
+            hour = datetime.fromisoformat(
+                timestamp_str.replace("Z", "+00:00")
+            ).hour
+            if not known:
+                if 0 <= hour <= 6:
+                    result["semantic_hint"] = "likely_home"
+                elif 8 <= hour <= 17:
+                    result["semantic_hint"] = "likely_work"
+        except (ValueError, AttributeError):
+            pass
+
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -484,6 +643,16 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
         # POPO narration analysis (transcription + affect)
         if path == "/popo/narrations/analyze":
             self._handle_narration_analysis()
+            return
+
+        # POPO location enrichment
+        if path == "/popo/location/enrich":
+            self._handle_location_enrich()
+            return
+
+        # POPO learn a named place
+        if path == "/popo/location/learn-place":
+            self._handle_learn_place()
             return
 
         # Server-side data write (health + chat + popo)
@@ -770,6 +939,97 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
             self._send_json(500, {"error": "Analysis failed: %s" % e})
 
     # -----------------------------------------------------------------------
+    # Location enrichment endpoints
+    # -----------------------------------------------------------------------
+
+    def _handle_location_enrich(self):
+        """Enrich a lat/lng with semantic place info (reverse geocode + known places)."""
+        try:
+            content_length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(content_length)
+            data = json.loads(body) if body else {}
+        except (json.JSONDecodeError, ValueError) as e:
+            self._send_json(400, {"error": "Invalid request body: %s" % e})
+            return
+
+        lat = data.get("latitude")
+        lng = data.get("longitude")
+        timestamp = data.get("timestamp")
+
+        if lat is None or lng is None:
+            self._send_json(400, {"error": "latitude and longitude required"})
+            return
+
+        try:
+            lat = float(lat)
+            lng = float(lng)
+        except (TypeError, ValueError):
+            self._send_json(400, {"error": "latitude and longitude must be numeric"})
+            return
+
+        enrichment = enrich_location_data(lat, lng, timestamp)
+        self._send_json(200, {"ok": True, "enrichment": enrichment})
+
+    def _handle_learn_place(self):
+        """Teach the system a named place (e.g., Home, Work, Gym)."""
+        try:
+            content_length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(content_length)
+            data = json.loads(body) if body else {}
+        except (json.JSONDecodeError, ValueError) as e:
+            self._send_json(400, {"error": "Invalid request body: %s" % e})
+            return
+
+        lat = data.get("latitude")
+        lng = data.get("longitude")
+        label = data.get("label")
+
+        if lat is None or lng is None or not label:
+            self._send_json(400, {"error": "latitude, longitude, and label required"})
+            return
+
+        try:
+            lat = float(lat)
+            lng = float(lng)
+        except (TypeError, ValueError):
+            self._send_json(400, {"error": "latitude and longitude must be numeric"})
+            return
+
+        # Load existing places
+        places = []
+        if os.path.exists(KNOWN_PLACES_FILE):
+            try:
+                with open(KNOWN_PLACES_FILE, "r") as f:
+                    content = f.read()
+                places = json.loads(content) if content.strip() else []
+            except (json.JSONDecodeError, IOError):
+                places = []
+
+        # Check for existing place with same label — update its coordinates
+        updated = False
+        for place in places:
+            if isinstance(place, dict) and place.get("label") == label:
+                place["lat"] = lat
+                place["lng"] = lng
+                updated = True
+                break
+
+        if not updated:
+            places.append({"lat": lat, "lng": lng, "label": label})
+
+        try:
+            with open(KNOWN_PLACES_FILE, "w") as f:
+                json.dump(places, f, ensure_ascii=False, indent=2)
+            self._send_json(200, {
+                "ok": True,
+                "label": label,
+                "updated": updated,
+                "total_places": len(places)
+            })
+        except IOError as e:
+            self._send_json(500, {"error": "Failed to save place: %s" % e})
+
+    # -----------------------------------------------------------------------
     # Parking endpoints
     # -----------------------------------------------------------------------
 
@@ -928,10 +1188,14 @@ def main():
         print("Local Whisper: available (narration transcription enabled)")
     else:
         print("Local Whisper: not available (narration transcription disabled)")
-    if ANTHROPIC_AVAILABLE:
-        print("Anthropic Claude: available (affect analysis enabled)")
+    if SENTIMENT_AVAILABLE:
+        print("Local emotion model: available (affect analysis enabled)")
     else:
-        print("Anthropic Claude: not available (affect analysis disabled)")
+        print("Local emotion model: not available (affect analysis disabled)")
+    if GEOPY_AVAILABLE:
+        print("Geopy: available (location enrichment enabled)")
+    else:
+        print("Geopy: not available (location enrichment disabled)")
     print("Press Ctrl+C to stop.")
 
     try:

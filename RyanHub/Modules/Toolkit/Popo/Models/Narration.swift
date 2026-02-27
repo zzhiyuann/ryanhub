@@ -3,6 +3,7 @@ import Foundation
 // MARK: - Affect Analysis
 
 /// Emotional/psychological analysis result from a voice diary transcript.
+/// Produced by a local emotion classification model (j-hartmann/emotion-english-distilroberta-base).
 struct AffectAnalysis: Codable, Equatable {
     /// Mood on a 1–10 scale (1 = very low, 10 = very positive).
     var mood: Int?
@@ -10,15 +11,23 @@ struct AffectAnalysis: Codable, Equatable {
     var energy: Int?
     /// Stress level on a 1–10 scale.
     var stress: Int?
-    /// Primary detected emotion (e.g., "calm", "anxious", "happy").
+    /// Primary detected emotion (e.g., "joy", "anger", "sadness", "neutral").
     var primaryEmotion: String?
     /// Secondary detected emotion.
     var secondaryEmotion: String?
     /// One-sentence summary of the overall emotional tone.
     var briefSummary: String?
+    /// Model confidence for the primary emotion (0.0 to 1.0).
+    var confidence: Double?
+    /// Emotional valence (-1.0 negative to 1.0 positive).
+    var valence: Double?
+    /// Emotional arousal (0.0 calm to 1.0 excited).
+    var arousal: Double?
+    /// Full emotion scores from the model (e.g., {"joy": 0.85, "anger": 0.02, ...}).
+    var emotions: [String: Double]?
 
     enum CodingKeys: String, CodingKey {
-        case mood, energy, stress
+        case mood, energy, stress, confidence, valence, arousal, emotions
         case primaryEmotion = "primary_emotion"
         case secondaryEmotion = "secondary_emotion"
         case briefSummary = "brief_summary"
