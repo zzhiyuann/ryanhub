@@ -167,7 +167,7 @@ struct FluentReviewView: View {
 
     private var progressHeader: some View {
         HStack {
-            Text("\(viewModel.currentCardIndex + 1) / \(viewModel.reviewCards.count)")
+            Text("\(viewModel.todayStats.cardsReviewed) / \(viewModel.settings.dailyGoal)")
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
 

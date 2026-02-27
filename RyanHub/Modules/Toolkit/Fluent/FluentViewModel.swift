@@ -73,8 +73,8 @@ final class FluentViewModel {
     }
 
     var reviewProgress: Double {
-        guard !reviewCards.isEmpty else { return 0 }
-        return Double(currentCardIndex) / Double(reviewCards.count)
+        guard settings.dailyGoal > 0 else { return 0 }
+        return min(1.0, Double(todayStats.cardsReviewed) / Double(settings.dailyGoal))
     }
 
     // MARK: - Settings
