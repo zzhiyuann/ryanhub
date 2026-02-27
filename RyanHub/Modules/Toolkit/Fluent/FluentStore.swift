@@ -115,16 +115,38 @@ final class FluentStore {
         saveFlashcards(cards)
     }
 
-    /// Get cards that are due for review (due date <= now).
+    /// Get due cards, one per word (random card type for variety).
+    /// Returns up to `limit` unique vocabulary words, each represented by one flashcard.
     func getDueCards(limit: Int = 50) -> [FlashCard] {
         let now = Date()
         let cards = loadFlashcards()
-        return Array(
-            cards
-                .filter { $0.fsrs.due <= now }
-                .sorted { $0.fsrs.due < $1.fsrs.due }
-                .prefix(limit)
-        )
+        let dueCards = cards.filter { $0.fsrs.due <= now }
+
+        // Group by vocabulary word
+        var byWord: [String: [FlashCard]] = [:]
+        for card in dueCards {
+            byWord[card.vocabularyId, default: []].append(card)
+        }
+
+        // Pick one card per word (random type for variety across sessions)
+        var result: [FlashCard] = byWord.compactMap { _, wordCards in
+            wordCards.randomElement()
+        }
+
+        // Sort by earliest due date, then limit
+        result.sort { $0.fsrs.due < $1.fsrs.due }
+        return Array(result.prefix(limit))
+    }
+
+    /// Update FSRS state for ALL cards belonging to the same word.
+    func updateWordCards(vocabularyId: String, fsrs: FSRSCardData) {
+        var cards = loadFlashcards()
+        let now = Date()
+        for i in cards.indices where cards[i].vocabularyId == vocabularyId {
+            cards[i].fsrs = fsrs
+            cards[i].updatedAt = now
+        }
+        saveFlashcards(cards)
     }
 
     // MARK: - Flashcard Generation

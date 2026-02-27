@@ -1,25 +1,41 @@
 import SwiftUI
+import PhotosUI
 
 // MARK: - Health View
 
 /// Main health tracking view with tabs for weight, food, and activity.
+/// Food and activity analysis happens inline — no sheet popups.
 struct HealthView: View {
+    @Environment(AppState.self) private var appState
     @Environment(\.colorScheme) private var colorScheme
     @State private var viewModel = HealthViewModel()
     @State private var showWeightLog = false
-    @State private var showSmartFoodLog = false
-    @State private var showActivityLog = false
-    @State private var showSmartActivityLog = false
 
-    // Quick activity natural language input
+    // Quick meal input
+    @State private var quickMealText = ""
+    @FocusState private var isQuickMealFocused: Bool
+
+    // Quick activity input
     @State private var quickActivityText = ""
-    @State private var smartActivityLogInitialText = ""
     @FocusState private var isQuickActivityFocused: Bool
 
-    // Quick meal natural language input
-    @State private var quickMealText = ""
-    @State private var smartFoodLogInitialText = ""
-    @FocusState private var isQuickMealFocused: Bool
+    // Inline food analysis state
+    @State private var foodAnalysisService = FoodAnalysisService()
+    @State private var foodAnalysisResult: FoodAnalysisResult?
+    @State private var isFoodAnalyzing = false
+    @State private var foodAnalysisError: String?
+    @State private var selectedPhoto: PhotosPickerItem?
+    @State private var selectedImage: UIImage?
+    @State private var showCamera = false
+    @State private var foodAnalysisDate = Date()
+    @State private var foodAnalysisDescription = ""
+
+    // Inline activity analysis state
+    @State private var activityAnalysisResult: ActivityAnalysisResult?
+    @State private var isActivityAnalyzing = false
+    @State private var activityAnalysisError: String?
+    @State private var activityAnalysisDate = Date()
+    @State private var activityAnalysisDescription = ""
 
     var body: some View {
         ScrollView {
@@ -34,14 +50,17 @@ struct HealthView: View {
         .sheet(isPresented: $showWeightLog) {
             WeightLogView(viewModel: viewModel)
         }
-        .sheet(isPresented: $showSmartFoodLog) {
-            SmartFoodLogView(viewModel: viewModel, initialText: smartFoodLogInitialText)
+        .fullScreenCover(isPresented: $showCamera) {
+            CameraView { image in
+                selectedImage = image
+                Task { await analyzeFoodInput() }
+            }
         }
-        .sheet(isPresented: $showActivityLog) {
-            ActivityLogSheet(viewModel: viewModel)
+        .onChange(of: selectedPhoto) { _, newValue in
+            Task { await loadPhoto(newValue) }
         }
-        .sheet(isPresented: $showSmartActivityLog) {
-            SmartActivityLogView(viewModel: viewModel, initialText: smartActivityLogInitialText)
+        .onAppear {
+            foodAnalysisService.updateBaseURL(appState.foodAnalysisURL)
         }
     }
 
@@ -227,13 +246,33 @@ struct HealthView: View {
 
     private var foodContent: some View {
         VStack(spacing: HubLayout.sectionSpacing) {
-            // Quick meal input (same style as activity)
+            // Quick meal input with photo/camera
             quickMealLogSection
+
+            // Inline image preview
+            if let image = selectedImage {
+                foodImagePreview(image)
+            }
+
+            // Inline analyzing indicator
+            if isFoodAnalyzing {
+                foodAnalyzingIndicator
+            }
+
+            // Inline error banner
+            if let error = foodAnalysisError {
+                foodErrorBanner(error)
+            }
+
+            // Inline analysis result
+            if let result = foodAnalysisResult {
+                foodAnalysisResultView(result)
+            }
 
             // AI-powered daily summary
             DailySummaryView(viewModel: viewModel)
 
-            if viewModel.todayFoodEntries.isEmpty {
+            if viewModel.todayFoodEntries.isEmpty && foodAnalysisResult == nil {
                 emptyStateCard(
                     icon: "fork.knife",
                     message: "No meals logged today"
@@ -283,12 +322,9 @@ struct HealthView: View {
                     )
             )
 
-            // Action row: photo, camera, full form
+            // Action row: photo, camera
             HStack(spacing: 16) {
-                Button {
-                    smartFoodLogInitialText = ""
-                    showSmartFoodLog = true
-                } label: {
+                PhotosPicker(selection: $selectedPhoto, matching: .images) {
                     HStack(spacing: 4) {
                         Image(systemName: "photo.on.rectangle")
                             .font(.system(size: 13, weight: .medium))
@@ -300,8 +336,7 @@ struct HealthView: View {
                 .accessibilityIdentifier(AccessibilityID.healthPhotoButton)
 
                 Button {
-                    smartFoodLogInitialText = ""
-                    showSmartFoodLog = true
+                    showCamera = true
                 } label: {
                     HStack(spacing: 4) {
                         Image(systemName: "camera")
@@ -317,6 +352,166 @@ struct HealthView: View {
             }
             .padding(.horizontal, 4)
         }
+    }
+
+    // MARK: - Inline Food Analysis Views
+
+    private func foodImagePreview(_ image: UIImage) -> some View {
+        ZStack(alignment: .topTrailing) {
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFill()
+                .frame(maxWidth: .infinity)
+                .frame(height: 200)
+                .clipShape(RoundedRectangle(cornerRadius: HubLayout.cardCornerRadius))
+
+            Button {
+                selectedImage = nil
+                selectedPhoto = nil
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 24))
+                    .foregroundStyle(.white)
+                    .shadow(radius: 4)
+            }
+            .padding(8)
+        }
+    }
+
+    private var foodAnalyzingIndicator: some View {
+        HStack(spacing: 12) {
+            ProgressView()
+                .tint(Color.hubPrimary)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Analyzing your meal...")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                Text("AI is estimating calories and nutrition")
+                    .font(.hubCaption)
+                    .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+            }
+
+            Spacer()
+        }
+        .padding(HubLayout.cardInnerPadding)
+        .background(
+            RoundedRectangle(cornerRadius: HubLayout.cardCornerRadius)
+                .fill(Color.hubPrimary.opacity(0.08))
+        )
+    }
+
+    private func foodErrorBanner(_ error: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(Color.hubAccentYellow)
+            Text(error)
+                .font(.hubCaption)
+                .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+            Spacer()
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color.hubAccentYellow.opacity(0.1))
+        )
+    }
+
+    private func foodAnalysisResultView(_ result: FoodAnalysisResult) -> some View {
+        VStack(spacing: HubLayout.itemSpacing) {
+            // Summary header
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("AI Analysis")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(Color.hubPrimary)
+                    Text(result.summary)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                }
+                Spacer()
+                Image(systemName: "sparkles")
+                    .foregroundStyle(Color.hubPrimary)
+            }
+            .padding(HubLayout.cardInnerPadding)
+            .background(
+                RoundedRectangle(cornerRadius: HubLayout.cardCornerRadius)
+                    .fill(Color.hubPrimary.opacity(0.06))
+            )
+
+            // Calories + macros
+            HStack(spacing: 12) {
+                macroCard(label: "Calories", value: "\(result.totalCalories)", unit: "kcal", color: .hubAccentYellow)
+                macroCard(label: "Protein", value: "\(result.totalProtein)", unit: "g", color: .hubAccentRed)
+                macroCard(label: "Carbs", value: "\(result.totalCarbs)", unit: "g", color: .hubPrimary)
+                macroCard(label: "Fat", value: "\(result.totalFat)", unit: "g", color: .hubAccentGreen)
+            }
+
+            // Individual items
+            if result.items.count > 1 {
+                VStack(alignment: .leading, spacing: 8) {
+                    SectionHeader(title: "Items")
+                    ForEach(result.items) { item in
+                        foodItemRow(item)
+                    }
+                }
+            }
+
+            // Save button
+            HubButton("Save Meal", icon: "checkmark.circle.fill") {
+                saveFoodResult(result)
+            }
+        }
+    }
+
+    private func macroCard(label: String, value: String, unit: String, color: Color) -> some View {
+        VStack(spacing: 4) {
+            Text(value)
+                .font(.system(size: 20, weight: .bold))
+                .foregroundStyle(color)
+            Text(unit)
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(color.opacity(0.7))
+            Text(label)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(color.opacity(0.08))
+        )
+    }
+
+    private func foodItemRow(_ item: AnalyzedFoodItem) -> some View {
+        HStack(spacing: 10) {
+            Circle()
+                .fill(Color.hubPrimary.opacity(0.3))
+                .frame(width: 6, height: 6)
+
+            Text(item.name)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+
+            if let portion = item.portion {
+                Text("(\(portion))")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+            }
+
+            Spacer()
+
+            Text("\(item.calories) cal")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Color.hubAccentYellow)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(AdaptiveColors.surface(for: colorScheme))
+        )
     }
 
     private func foodEntryRow(_ entry: FoodEntry) -> some View {
@@ -369,12 +564,96 @@ struct HealthView: View {
         )
     }
 
+    // MARK: - Food Actions
+
+    private func submitQuickMeal() {
+        let trimmed = quickMealText.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return }
+        foodAnalysisDescription = trimmed
+        quickMealText = ""
+        isQuickMealFocused = false
+        foodAnalysisResult = nil
+        foodAnalysisError = nil
+        foodAnalysisDate = Date()
+        isFoodAnalyzing = true
+        Task {
+            let result = await foodAnalysisService.analyzeText(trimmed)
+            isFoodAnalyzing = false
+            foodAnalysisError = foodAnalysisService.analysisError
+            foodAnalysisResult = result
+        }
+    }
+
+    private func analyzeFoodInput() async {
+        foodAnalysisResult = nil
+        foodAnalysisError = nil
+        foodAnalysisDate = Date()
+        isFoodAnalyzing = true
+        if let image = selectedImage {
+            let context = quickMealText.isEmpty ? nil : quickMealText
+            foodAnalysisDescription = quickMealText
+            let result = await foodAnalysisService.analyzeImage(image, context: context)
+            isFoodAnalyzing = false
+            foodAnalysisError = foodAnalysisService.analysisError
+            foodAnalysisResult = result
+        } else {
+            let trimmed = quickMealText.trimmingCharacters(in: .whitespaces)
+            guard !trimmed.isEmpty else {
+                isFoodAnalyzing = false
+                return
+            }
+            foodAnalysisDescription = trimmed
+            let result = await foodAnalysisService.analyzeText(trimmed)
+            isFoodAnalyzing = false
+            foodAnalysisError = foodAnalysisService.analysisError
+            foodAnalysisResult = result
+        }
+    }
+
+    private func loadPhoto(_ item: PhotosPickerItem?) async {
+        guard let item else { return }
+        if let data = try? await item.loadTransferable(type: Data.self),
+           let image = UIImage(data: data) {
+            selectedImage = image
+            await analyzeFoodInput()
+        }
+    }
+
+    private func saveFoodResult(_ result: FoodAnalysisResult) {
+        let description = foodAnalysisDescription.isEmpty
+            ? result.summary
+            : foodAnalysisDescription
+        viewModel.addFoodFromAnalysis(result, description: description, date: foodAnalysisDate)
+        // Clear state
+        foodAnalysisResult = nil
+        foodAnalysisError = nil
+        foodAnalysisDescription = ""
+        selectedImage = nil
+        selectedPhoto = nil
+        quickMealText = ""
+    }
+
     // MARK: - Activity Content
 
     private var activityContent: some View {
         VStack(spacing: HubLayout.sectionSpacing) {
-            // Quick activity input (sparkles style, matching Meal)
+            // Quick activity input
             quickActivityLogSection
+
+            // Inline analyzing indicator
+            if isActivityAnalyzing {
+                activityAnalyzingIndicator
+            }
+
+            // Inline error banner
+            if let error = activityAnalysisError {
+                activityErrorBanner(error)
+            }
+
+            // Inline activity analysis result
+            if let result = activityAnalysisResult {
+                activityAnalysisResultView(result)
+            }
 
             // Today's summary
             HubCard {
@@ -420,7 +699,7 @@ struct HealthView: View {
                         activityEntryRow(entry)
                     }
                 }
-            } else {
+            } else if activityAnalysisResult == nil {
                 emptyStateCard(
                     icon: "figure.run",
                     message: "No activities logged today"
@@ -429,89 +708,185 @@ struct HealthView: View {
         }
     }
 
-    /// AI-powered activity input (sparkles style, matching Meal tab).
+    /// AI-powered activity input.
     private var quickActivityLogSection: some View {
-        VStack(spacing: 8) {
-            // Text input row
-            HStack(spacing: 10) {
-                Image(systemName: "sparkles")
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundStyle(Color.hubAccentGreen)
+        HStack(spacing: 10) {
+            Image(systemName: "sparkles")
+                .font(.system(size: 16, weight: .medium))
+                .foregroundStyle(Color.hubAccentGreen)
 
-                TextField("e.g., Walked 30 min to campus", text: $quickActivityText)
-                    .font(.hubBody)
-                    .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
-                    .focused($isQuickActivityFocused)
-                    .accessibilityIdentifier(AccessibilityID.healthQuickActivityInput)
-                    .onSubmit {
-                        submitQuickActivity()
-                    }
-
-                if !quickActivityText.isEmpty {
-                    Button {
-                        submitQuickActivity()
-                    } label: {
-                        Image(systemName: "arrow.up.circle.fill")
-                            .font(.system(size: 28))
-                            .foregroundStyle(Color.hubAccentGreen)
-                    }
-                    .accessibilityIdentifier(AccessibilityID.healthQuickActivitySubmit)
+            TextField("e.g., Walked 30 min to campus", text: $quickActivityText)
+                .font(.hubBody)
+                .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                .focused($isQuickActivityFocused)
+                .accessibilityIdentifier(AccessibilityID.healthQuickActivityInput)
+                .onSubmit {
+                    submitQuickActivity()
                 }
+
+            if !quickActivityText.isEmpty {
+                Button {
+                    submitQuickActivity()
+                } label: {
+                    Image(systemName: "arrow.up.circle.fill")
+                        .font(.system(size: 28))
+                        .foregroundStyle(Color.hubAccentGreen)
+                }
+                .accessibilityIdentifier(AccessibilityID.healthQuickActivitySubmit)
+            }
+        }
+        .padding(HubLayout.cardInnerPadding)
+        .background(
+            RoundedRectangle(cornerRadius: HubLayout.cardCornerRadius)
+                .fill(AdaptiveColors.surface(for: colorScheme))
+                .shadow(
+                    color: colorScheme == .dark
+                        ? Color.black.opacity(0.3)
+                        : Color.black.opacity(0.06),
+                    radius: 8, x: 0, y: 2
+                )
+        )
+    }
+
+    // MARK: - Inline Activity Analysis Views
+
+    private var activityAnalyzingIndicator: some View {
+        HStack(spacing: 12) {
+            ProgressView()
+                .tint(Color.hubAccentGreen)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Analyzing your activity...")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                Text("AI is estimating calories burned")
+                    .font(.hubCaption)
+                    .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+            }
+
+            Spacer()
+        }
+        .padding(HubLayout.cardInnerPadding)
+        .background(
+            RoundedRectangle(cornerRadius: HubLayout.cardCornerRadius)
+                .fill(Color.hubAccentGreen.opacity(0.08))
+        )
+    }
+
+    private func activityErrorBanner(_ error: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(Color.hubAccentYellow)
+            Text(error)
+                .font(.hubCaption)
+                .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+            Spacer()
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color.hubAccentYellow.opacity(0.1))
+        )
+    }
+
+    private func activityAnalysisResultView(_ result: ActivityAnalysisResult) -> some View {
+        VStack(spacing: HubLayout.itemSpacing) {
+            // Summary header
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("AI Analysis")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(Color.hubAccentGreen)
+                    Text(result.summary)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                }
+                Spacer()
+                Image(systemName: "sparkles")
+                    .foregroundStyle(Color.hubAccentGreen)
             }
             .padding(HubLayout.cardInnerPadding)
             .background(
                 RoundedRectangle(cornerRadius: HubLayout.cardCornerRadius)
-                    .fill(AdaptiveColors.surface(for: colorScheme))
-                    .shadow(
-                        color: colorScheme == .dark
-                            ? Color.black.opacity(0.3)
-                            : Color.black.opacity(0.06),
-                        radius: 8, x: 0, y: 2
-                    )
+                    .fill(Color.hubAccentGreen.opacity(0.06))
             )
 
-            // Action row: structured log fallback
+            // Activity type + calories burned
             HStack(spacing: 16) {
-                Button {
-                    showActivityLog = true
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "list.bullet")
-                            .font(.system(size: 13, weight: .medium))
-                        Text("Structured Log")
-                            .font(.system(size: 12, weight: .medium))
-                    }
-                    .foregroundStyle(Color.hubPrimary)
-                }
-                .accessibilityIdentifier(AccessibilityID.healthStructuredLogButton)
+                VStack(spacing: 8) {
+                    Image(systemName: ActivityParser.icon(for: result.type))
+                        .font(.system(size: 28, weight: .medium))
+                        .foregroundStyle(Color.hubAccentGreen)
 
-                Spacer()
+                    Text(result.type)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color.hubAccentGreen.opacity(0.08))
+                )
+
+                VStack(spacing: 4) {
+                    Text("\(result.caloriesBurned)")
+                        .font(.system(size: 34, weight: .bold))
+                        .foregroundStyle(Color.hubAccentYellow)
+                    Text("kcal")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(Color.hubAccentYellow.opacity(0.7))
+                    Text("Burned")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color.hubAccentYellow.opacity(0.08))
+                )
             }
-            .padding(.horizontal, 4)
+
+            // Save button
+            HubButton("Save Activity", icon: "checkmark.circle.fill") {
+                saveActivityResult(result)
+            }
         }
     }
 
-    private func submitQuickMeal() {
-        let trimmed = quickMealText.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty else { return }
-
-        // Pass text to SmartFoodLogView and auto-analyze
-        smartFoodLogInitialText = trimmed
-        quickMealText = ""
-        isQuickMealFocused = false
-        showSmartFoodLog = true
-    }
+    // MARK: - Activity Actions
 
     private func submitQuickActivity() {
         let trimmed = quickActivityText.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return }
-
-        // Pass text to SmartActivityLogView and auto-analyze
-        smartActivityLogInitialText = trimmed
+        activityAnalysisDescription = trimmed
         quickActivityText = ""
         isQuickActivityFocused = false
-        showSmartActivityLog = true
+        activityAnalysisResult = nil
+        activityAnalysisError = nil
+        activityAnalysisDate = Date()
+        isActivityAnalyzing = true
+        Task {
+            let result = await foodAnalysisService.analyzeActivity(trimmed)
+            isActivityAnalyzing = false
+            activityAnalysisError = foodAnalysisService.analysisError
+            activityAnalysisResult = result
+        }
     }
+
+    private func saveActivityResult(_ result: ActivityAnalysisResult) {
+        let description = activityAnalysisDescription.isEmpty
+            ? result.summary
+            : activityAnalysisDescription
+        viewModel.addActivityFromAnalysis(result, description: description, date: activityAnalysisDate)
+        activityAnalysisResult = nil
+        activityAnalysisError = nil
+        activityAnalysisDescription = ""
+        quickActivityText = ""
+    }
+
+    // MARK: - Shared
 
     private func activityEntryRow(_ entry: ActivityEntry) -> some View {
         HStack(spacing: 12) {
@@ -524,7 +899,6 @@ struct HealthView: View {
                 )
 
             VStack(alignment: .leading, spacing: 2) {
-                // Show raw description if from natural language, otherwise show type
                 if let rawDesc = entry.rawDescription, !rawDesc.isEmpty {
                     Text(rawDesc)
                         .font(.system(size: 15, weight: .medium))
@@ -537,7 +911,6 @@ struct HealthView: View {
                 }
 
                 HStack(spacing: 8) {
-                    // Show parsed type tag if from natural language
                     if entry.rawDescription != nil {
                         Text(entry.type)
                             .font(.system(size: 11, weight: .semibold))
@@ -604,80 +977,6 @@ struct HealthView: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 12)
-        }
-    }
-}
-
-// MARK: - Activity Log Sheet
-
-/// Sheet for logging a new activity entry.
-struct ActivityLogSheet: View {
-    @Environment(\.colorScheme) private var colorScheme
-    @Environment(\.dismiss) private var dismiss
-    let viewModel: HealthViewModel
-
-    @State private var activityType = ""
-    @State private var durationText = ""
-    @State private var note = ""
-    @State private var date = Date()
-
-    private var isValid: Bool {
-        !activityType.trimmingCharacters(in: .whitespaces).isEmpty &&
-        (Int(durationText) ?? 0) > 0
-    }
-
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: HubLayout.sectionSpacing) {
-                    VStack(alignment: .leading, spacing: HubLayout.itemSpacing) {
-                        SectionHeader(title: "Activity Type")
-                        HubTextField(placeholder: "e.g., Running, Walking, Gym", text: $activityType)
-                    }
-
-                    VStack(alignment: .leading, spacing: HubLayout.itemSpacing) {
-                        SectionHeader(title: "Duration (minutes)")
-                        HubTextField(placeholder: "30", text: $durationText)
-                            .keyboardType(.numberPad)
-                    }
-
-                    VStack(alignment: .leading, spacing: HubLayout.itemSpacing) {
-                        SectionHeader(title: "Date & Time")
-                        DatePicker("", selection: $date)
-                            .datePickerStyle(.compact)
-                            .labelsHidden()
-                            .tint(.hubPrimary)
-                    }
-
-                    VStack(alignment: .leading, spacing: HubLayout.itemSpacing) {
-                        SectionHeader(title: "Note (Optional)")
-                        HubTextField(placeholder: "Add a note...", text: $note)
-                    }
-
-                    HubButton(L10n.commonSave, icon: "checkmark") {
-                        guard let duration = Int(durationText) else { return }
-                        viewModel.addActivity(
-                            type: activityType.trimmingCharacters(in: .whitespaces),
-                            duration: duration,
-                            date: date,
-                            note: note.isEmpty ? nil : note
-                        )
-                        dismiss()
-                    }
-                    .disabled(!isValid)
-                    .opacity(isValid ? 1 : 0.5)
-                }
-                .padding(HubLayout.standardPadding)
-            }
-            .background(AdaptiveColors.background(for: colorScheme))
-            .navigationTitle("Log Activity")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(L10n.commonCancel) { dismiss() }
-                        .foregroundStyle(Color.hubPrimary)
-                }
-            }
         }
     }
 }

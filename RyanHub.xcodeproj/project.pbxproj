@@ -21,7 +21,6 @@
 		194ECBCB064E544FE7C478F7 /* ParkingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 459EF3910E2F8897601D5792 /* ParkingView.swift */; };
 		19A40196DB4A648973051BD3 /* FluentVocabularyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 026DF5BE84A6E963CAEDFCFE /* FluentVocabularyView.swift */; };
 		1B7F833C1C817EED819CB44E /* FluentStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21DAA3F09BEB33DF0B836FFF /* FluentStore.swift */; };
-		1DB52E90E6CB0CDB510B31EA /* SmartFoodLogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B97135A287819FDC740700E /* SmartFoodLogView.swift */; };
 		23A7028770DC5CFB2E22DBA1 /* ChatTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6ECC6AFCDE8904CCEAD9EBBE /* ChatTests.swift */; };
 		26463C7B7CDCD1B15AD42709 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33CAB4BF0FA7C79E224110B1 /* Theme.swift */; };
 		2DC64949E9D9CDA532DBFB16 /* SwiftTerm in Frameworks */ = {isa = PBXBuildFile; productRef = 05EF287CF861CA9F565EEEFD /* SwiftTerm */; };
@@ -57,6 +56,7 @@
 		9363474FAEDFEE1D454B322E /* BookModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4D40B06DEE0FABF0F9F66E6 /* BookModels.swift */; };
 		98B81A155F9E70956CDA31BA /* RyanHubApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD94D3E0824640F6802F86A4 /* RyanHubApp.swift */; };
 		9F010855B1B3ECEA2AFEE416 /* HealthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D06AEB0354C4C85106A24AE1 /* HealthView.swift */; };
+		A40E6627B20377EDD61A4772 /* CameraView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78CFF4214607AFA100F868C3 /* CameraView.swift */; };
 		A440D502E05A68D109AF8BC9 /* HubTextField.swift in Sources */ = {isa = PBXBuildFile; fileRef = E65564252C7D5721D9784435 /* HubTextField.swift */; };
 		A67D87D9ECA15A068F404093 /* SSHConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 451A5D81323FC8ABDC20C701 /* SSHConnection.swift */; };
 		AB3C20EDEFED295D54AD7F52 /* ToolkitTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0D1D7BFF0973ACC109D2297 /* ToolkitTests.swift */; };
@@ -73,7 +73,6 @@
 		C8820059845B61126DFFF9BC /* FluentModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A8BAE87477C77371E777370 /* FluentModels.swift */; };
 		CACAAC73720212D53EBB98DA /* TypingIndicator.swift in Sources */ = {isa = PBXBuildFile; fileRef = D95AF3A0C5EE080C5A0E90DB /* TypingIndicator.swift */; };
 		D4A8A7E86F34F94DF6F28D2E /* WeightLogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45981F3DD312C51871008ACC /* WeightLogView.swift */; };
-		DD735C8183D7C54C5EFD098C /* FoodLogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0D33059E71D62E60205E236 /* FoodLogView.swift */; };
 		DDD1EBBC0D0A37DE88DA44AB /* BookFactorySettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E068490AE36E663E37FB013 /* BookFactorySettingsView.swift */; };
 		E08BA7D6AB8FEA99B9E8CF5D /* LocalizationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4E8144CB5135172B2DC2F7E /* LocalizationManager.swift */; };
 		E6B383A34C266240B795CAC3 /* ChatMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD86AE08D1796BF465BC38E2 /* ChatMessage.swift */; };
@@ -87,7 +86,6 @@
 		F336238395BFA892A3ACD299 /* FluentReviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E5DFE94BFC993641FAAE8FB /* FluentReviewView.swift */; };
 		F44DF37E2E4D1C5BD5A73F73 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 335BA591A35FB41B6FD8EEC1 /* Localizable.strings */; };
 		F69C522701B2FFBE3A78C36A /* SectionHeader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9AE49953418A97242254CFD7 /* SectionHeader.swift */; };
-		F7941B41AF2A1F733DFC7EFB /* SmartActivityLogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72AD74DBC1E70073311F1072 /* SmartActivityLogView.swift */; };
 		F8D8E97DE66120A10A1D9EE1 /* QueueManagerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF2B5DB752ACC5184B6FC043 /* QueueManagerView.swift */; };
 /* End PBXBuildFile section */
 
@@ -133,8 +131,8 @@
 		6D083DD2A5B38D1F4C3A9A64 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		6D81FD1D4462E12FF6BD418D /* AudioPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPlayerView.swift; sourceTree = "<group>"; };
 		6ECC6AFCDE8904CCEAD9EBBE /* ChatTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatTests.swift; sourceTree = "<group>"; };
-		72AD74DBC1E70073311F1072 /* SmartActivityLogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmartActivityLogView.swift; sourceTree = "<group>"; };
 		75BD223A2DD8D357BDBA7F54 /* CalendarModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarModels.swift; sourceTree = "<group>"; };
+		78CFF4214607AFA100F868C3 /* CameraView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraView.swift; sourceTree = "<group>"; };
 		7A46AB9A86B2866494F8AD84 /* BookReaderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookReaderView.swift; sourceTree = "<group>"; };
 		7BB6AD55A1E11D383B6345C4 /* FluentSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FluentSettingsView.swift; sourceTree = "<group>"; };
 		7C96E54E2891BD4600075855 /* ToolkitHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolkitHomeView.swift; sourceTree = "<group>"; };
@@ -144,7 +142,6 @@
 		8324A0F5B9279548ED9454E9 /* DailySummaryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailySummaryView.swift; sourceTree = "<group>"; };
 		834BECFA48894B5E6684F1DF /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		87648D721BF30026B9914553 /* CalendarViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarViewModel.swift; sourceTree = "<group>"; };
-		8B97135A287819FDC740700E /* SmartFoodLogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmartFoodLogView.swift; sourceTree = "<group>"; };
 		925B470E17A407A342F947A5 /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
 		97C55DB0A38557D415DF779F /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/Localizable.strings; sourceTree = "<group>"; };
 		9AE49953418A97242254CFD7 /* SectionHeader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SectionHeader.swift; sourceTree = "<group>"; };
@@ -166,7 +163,6 @@
 		CD86AE08D1796BF465BC38E2 /* ChatMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatMessage.swift; sourceTree = "<group>"; };
 		CF08A389291EC57C9A1078D4 /* WeightTimelineChart.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeightTimelineChart.swift; sourceTree = "<group>"; };
 		D06AEB0354C4C85106A24AE1 /* HealthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthView.swift; sourceTree = "<group>"; };
-		D0D33059E71D62E60205E236 /* FoodLogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FoodLogView.swift; sourceTree = "<group>"; };
 		D16D2295813670830D5C718A /* ParkingViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParkingViewModel.swift; sourceTree = "<group>"; };
 		D720AA4B2C547EB4CD326ABC /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		D95AF3A0C5EE080C5A0E90DB /* TypingIndicator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TypingIndicator.swift; sourceTree = "<group>"; };
@@ -489,15 +485,13 @@
 		EC9CB57E20405AD648F55CCD /* Health */ = {
 			isa = PBXGroup;
 			children = (
+				78CFF4214607AFA100F868C3 /* CameraView.swift */,
 				8324A0F5B9279548ED9454E9 /* DailySummaryView.swift */,
 				34BC44409C203DC902136BB1 /* FoodAnalysisService.swift */,
-				D0D33059E71D62E60205E236 /* FoodLogView.swift */,
 				A6AC78DD349D07BBC0ABC36A /* HealthDataProvider.swift */,
 				4AD0CBF73B859088687163F3 /* HealthModels.swift */,
 				D06AEB0354C4C85106A24AE1 /* HealthView.swift */,
 				0ECA4BEE320B57F9B1EBD6EF /* HealthViewModel.swift */,
-				72AD74DBC1E70073311F1072 /* SmartActivityLogView.swift */,
-				8B97135A287819FDC740700E /* SmartFoodLogView.swift */,
 				45981F3DD312C51871008ACC /* WeightLogView.swift */,
 				CF08A389291EC57C9A1078D4 /* WeightTimelineChart.swift */,
 			);
@@ -632,6 +626,7 @@
 				77288B93E50EBEE415E95007 /* CalendarModels.swift in Sources */,
 				BD100B6110735DA563B36EF1 /* CalendarPluginView.swift in Sources */,
 				5FD7730168DF713A1D55546E /* CalendarViewModel.swift in Sources */,
+				A40E6627B20377EDD61A4772 /* CameraView.swift in Sources */,
 				E9544173000F3EA84613FAF2 /* ChatInputBar.swift in Sources */,
 				E6B383A34C266240B795CAC3 /* ChatMessage.swift in Sources */,
 				B3CB4EA04A8ED2E6B0F445EE /* ChatView.swift in Sources */,
@@ -649,7 +644,6 @@
 				E8C577056653D2EF8F96A30D /* FluentVocabularyDetailView.swift in Sources */,
 				19A40196DB4A648973051BD3 /* FluentVocabularyView.swift in Sources */,
 				5E9E114C645A3B1312CD6EE5 /* FoodAnalysisService.swift in Sources */,
-				DD735C8183D7C54C5EFD098C /* FoodLogView.swift in Sources */,
 				7A3B8C1BD49A7E4B52E43565 /* HealthDataProvider.swift in Sources */,
 				87CD4523F1720206F91E3EE8 /* HealthModels.swift in Sources */,
 				9F010855B1B3ECEA2AFEE416 /* HealthView.swift in Sources */,
@@ -670,8 +664,6 @@
 				F69C522701B2FFBE3A78C36A /* SectionHeader.swift in Sources */,
 				B6989682EC1AC53E552E4517 /* SettingsView.swift in Sources */,
 				4E03D04048BEB3D5621E4279 /* SettingsViewModel.swift in Sources */,
-				F7941B41AF2A1F733DFC7EFB /* SmartActivityLogView.swift in Sources */,
-				1DB52E90E6CB0CDB510B31EA /* SmartFoodLogView.swift in Sources */,
 				6073B03F55243B3E6E723E00 /* SwiftTermView.swift in Sources */,
 				EEABA9A1DDBF6F9612295792 /* TerminalView.swift in Sources */,
 				E8118E935475B47A7822A814 /* TerminalViewModel.swift in Sources */,

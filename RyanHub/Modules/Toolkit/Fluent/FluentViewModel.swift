@@ -156,14 +156,9 @@ final class FluentViewModel {
         guard !isAnimating, let card = currentCard else { return }
         isAnimating = true
 
-        // Apply FSRS scheduling
+        // Apply FSRS scheduling — update ALL cards for this word as one unit
         let updated = FSRSEngine.review(card: card.fsrs, rating: rating)
-        var updatedCard = card
-        updatedCard.fsrs = updated
-        updatedCard.updatedAt = Date()
-
-        // Save updated card
-        store.updateFlashcard(updatedCard)
+        store.updateWordCards(vocabularyId: card.vocabularyId, fsrs: updated)
 
         // Track session stats
         sessionReviewed += 1
