@@ -172,15 +172,15 @@ struct CustomTabBar: View {
 
     @ViewBuilder
     private func tabButton(for tab: MainTab) -> some View {
-        let isSelected = selectedTab == tab
         Button {
             selectedTab = tab
         } label: {
             Image(systemName: tab.icon)
-                .font(.system(size: 17, weight: isSelected ? .bold : .medium))
+                .font(.system(size: 17, weight: selectedTab == tab ? .bold : .medium))
                 .symbolRenderingMode(.monochrome)
-                .foregroundStyle(isSelected ? Color.hubPrimary : AdaptiveColors.textSecondary(for: colorScheme))
+                .foregroundStyle(selectedTab == tab ? Color.hubPrimary : AdaptiveColors.textSecondary(for: colorScheme))
                 .frame(maxWidth: .infinity)
+                .frame(height: 44)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
