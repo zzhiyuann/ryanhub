@@ -64,6 +64,7 @@ struct WeightTimelineChart: View {
                 if sortedEntries.count >= 2 {
                     chartView
                         .frame(height: 200)
+                        .clipped()
                 } else {
                     Text("Log at least 2 entries to see the timeline")
                         .font(.hubBody)
