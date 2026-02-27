@@ -86,6 +86,10 @@ final class ChatViewModel {
     /// so the progress phase text refreshes as time elapses.
     private var progressTimer: Timer?
 
+    /// Tracks when the last streaming chunk arrived.
+    /// Used to detect stale streams that stopped receiving data.
+    private var lastStreamChunkTime: Date?
+
     /// Progress phase descriptions based on elapsed time since a message was sent.
     private static let progressPhases: [(TimeInterval, String)] = [
         (5, "Received, processing..."),
@@ -700,8 +704,15 @@ final class ChatViewModel {
                 self.connectionState = self.webSocket.connectionState
                 if !connected {
                     self.connectionError = self.webSocket.lastError
+                    // Fix 1: Clear streaming state on disconnect.
+                    // When WebSocket drops mid-stream, pending statuses would
+                    // stay forever, keeping isTyping true. Force them to .done.
+                    self.clearStaleStreamingState()
                 } else {
                     self.connectionError = nil
+                    // Fix 3: On reconnect, clean up any leftover .processing
+                    // states from the previous connection that never completed.
+                    self.clearStaleStreamingState()
                 }
                 self.syncStateToAppState()
             }
@@ -835,9 +846,11 @@ final class ChatViewModel {
 
         if !isStreaming {
             currentStreamingMessageId = nil
+            lastStreamChunkTime = nil
             saveMessages()
         } else {
             currentStreamingMessageId = assistantId
+            lastStreamChunkTime = Date()
         }
 
         // Update global typing state based on all pending messages
@@ -932,11 +945,17 @@ final class ChatViewModel {
 
     /// Start a repeating timer that forces a view update every 5 seconds
     /// so progress phase text refreshes as time elapses for pending messages.
+    /// Also checks for stale streams that stopped receiving data.
     private func startProgressTimer() {
         progressTimer?.invalidate()
         progressTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 guard let self else { return }
+
+                // Fix 2: Check for stale streams — if no chunk arrived in 30s,
+                // force-complete the stream so the typing indicator clears.
+                self.checkForStaleStream()
+
                 // Only trigger update if there are pending messages
                 if self.messageStatuses.values.contains(where: { $0 == .acknowledged || $0 == .processing }) {
                     self.messageUpdateTrigger += 1
@@ -945,6 +964,81 @@ final class ChatViewModel {
                     self.progressTimer = nil
                 }
             }
+        }
+    }
+
+    /// Maximum seconds to wait for a new streaming chunk before considering
+    /// the stream stale and auto-completing it.
+    private static let staleStreamTimeout: TimeInterval = 30
+
+    /// If a stream is active but no chunk has arrived within the timeout,
+    /// force-complete it to unstick the typing indicator.
+    private func checkForStaleStream() {
+        guard let streamingId = currentStreamingMessageId,
+              let lastChunk = lastStreamChunkTime,
+              Date().timeIntervalSince(lastChunk) > Self.staleStreamTimeout else { return }
+
+        // Mark the streaming message as no longer streaming
+        if let index = messages.firstIndex(where: { $0.id == streamingId }) {
+            messages[index] = ChatMessage(
+                id: messages[index].id,
+                content: messages[index].content,
+                role: .assistant,
+                timestamp: messages[index].timestamp,
+                isStreaming: false,
+                replyToId: messages[index].replyToId,
+                replyToPreview: messages[index].replyToPreview
+            )
+        }
+
+        // Find the original user message ID from the streaming assistant ID
+        // (assistant IDs are "resp-<userMessageId>")
+        let userMessageId = String(streamingId.dropFirst("resp-".count))
+        messageStatuses[userMessageId] = .done
+        messageSendTimes.removeValue(forKey: userMessageId)
+
+        currentStreamingMessageId = nil
+        lastStreamChunkTime = nil
+        updateGlobalTypingState()
+        saveMessages()
+        messageUpdateTrigger += 1
+    }
+
+    /// Clear all in-flight streaming state. Called on disconnect and reconnect
+    /// to prevent the typing indicator from getting permanently stuck.
+    private func clearStaleStreamingState() {
+        var changed = false
+        for (id, status) in messageStatuses {
+            if status == .sending || status == .acknowledged || status == .processing {
+                messageStatuses[id] = .done
+                messageSendTimes.removeValue(forKey: id)
+                changed = true
+            }
+        }
+
+        if currentStreamingMessageId != nil {
+            // Mark the streaming message as complete in the messages array
+            if let streamingId = currentStreamingMessageId,
+               let index = messages.firstIndex(where: { $0.id == streamingId }) {
+                messages[index] = ChatMessage(
+                    id: messages[index].id,
+                    content: messages[index].content,
+                    role: .assistant,
+                    timestamp: messages[index].timestamp,
+                    isStreaming: false,
+                    replyToId: messages[index].replyToId,
+                    replyToPreview: messages[index].replyToPreview
+                )
+            }
+            currentStreamingMessageId = nil
+            lastStreamChunkTime = nil
+            changed = true
+        }
+
+        if changed {
+            updateGlobalTypingState()
+            saveMessages()
+            messageUpdateTrigger += 1
         }
     }
 
