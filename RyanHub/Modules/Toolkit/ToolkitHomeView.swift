@@ -70,6 +70,8 @@ struct ToolkitHomeView: View {
             CalendarPluginView()
         case .health:
             HealthView()
+        case .popo:
+            PopoView()
         }
     }
 }
@@ -309,6 +311,7 @@ enum ToolkitPlugin: String, CaseIterable, Identifiable {
     case parking
     case calendar
     case health
+    case popo
 
     var id: String { rawValue }
 
@@ -319,6 +322,7 @@ enum ToolkitPlugin: String, CaseIterable, Identifiable {
         case .parking: return L10n.toolkitParking
         case .calendar: return L10n.toolkitCalendar
         case .health: return L10n.toolkitHealth
+        case .popo: return L10n.toolkitPopo
         }
     }
 
@@ -330,6 +334,7 @@ enum ToolkitPlugin: String, CaseIterable, Identifiable {
         case .parking: return "Parking"
         case .calendar: return "Calendar"
         case .health: return "Health"
+        case .popo: return "POPO"
         }
     }
 
@@ -340,6 +345,7 @@ enum ToolkitPlugin: String, CaseIterable, Identifiable {
         case .parking: return L10n.toolkitParkingDesc
         case .calendar: return L10n.toolkitCalendarDesc
         case .health: return L10n.toolkitHealthDesc
+        case .popo: return L10n.toolkitPopoDesc
         }
     }
 
@@ -350,6 +356,7 @@ enum ToolkitPlugin: String, CaseIterable, Identifiable {
         case .parking: return "car.fill"
         case .calendar: return "calendar"
         case .health: return "heart.fill"
+        case .popo: return "waveform.path.ecg"
         }
     }
 
@@ -360,6 +367,7 @@ enum ToolkitPlugin: String, CaseIterable, Identifiable {
         case .parking: return .hubAccentGreen
         case .calendar: return .hubAccentYellow
         case .health: return .hubAccentRed
+        case .popo: return .hubPrimaryLight
         }
     }
 }

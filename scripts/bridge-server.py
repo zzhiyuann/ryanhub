@@ -29,6 +29,15 @@ Endpoints:
   POST   /chat/messages — Write chat messages (JSON array)
   DELETE /chat/messages — Clear chat messages
 
+  POPO (Proactive Personal Observer) data:
+  GET/POST /popo/sensing — Passive sensing events (motion, steps, HR, etc.)
+  GET/POST /popo/narrations — Voice diary entries with transcript + mood
+  GET/POST /popo/nudges — Proactive nudge records from Facai
+  GET/POST /popo/daily-summary — Daily behavior summaries
+  POST     /popo/audio — Upload audio file (binary)
+  GET      /popo/audio/<filename> — Retrieve audio file
+  All GET endpoints support ?date=YYYY-MM-DD filtering.
+
 Usage:
   python3 scripts/bridge-server.py
 
@@ -43,7 +52,8 @@ import tempfile
 import base64
 import os
 import shutil
-from urllib.parse import urlparse
+import uuid
+from urllib.parse import urlparse, parse_qs
 
 PORT = 18790
 HOST = "0.0.0.0"
@@ -74,7 +84,15 @@ DATA_FILES = {
     "/health-data/food": os.path.join(BRIDGE_DATA_DIR, "health_food.json"),
     "/health-data/activity": os.path.join(BRIDGE_DATA_DIR, "health_activity.json"),
     "/chat/messages": os.path.join(BRIDGE_DATA_DIR, "chat_messages.json"),
+    "/popo/sensing": os.path.join(BRIDGE_DATA_DIR, "popo_sensing.json"),
+    "/popo/narrations": os.path.join(BRIDGE_DATA_DIR, "popo_narrations.json"),
+    "/popo/nudges": os.path.join(BRIDGE_DATA_DIR, "popo_nudges.json"),
+    "/popo/daily-summary": os.path.join(BRIDGE_DATA_DIR, "popo_summaries.json"),
 }
+
+# POPO audio storage directory
+POPO_AUDIO_DIR = os.path.join(BRIDGE_DATA_DIR, "popo_audio")
+os.makedirs(POPO_AUDIO_DIR, exist_ok=True)
 
 # ---------------------------------------------------------------------------
 # Claude CLI analysis prompts
@@ -258,11 +276,18 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
     """HTTP request handler for all RyanHub bridge endpoints."""
 
     def do_GET(self):
-        path = urlparse(self.path).path
+        parsed = urlparse(self.path)
+        path = parsed.path
         if path == "/health":
             self._send_json(200, {"status": "ok"})
         elif path in PARKING_FILES:
             self._serve_parking_file(path)
+        elif path.startswith("/popo/audio/"):
+            self._serve_audio_file(path)
+        elif path in DATA_FILES and path.startswith("/popo/"):
+            query = parse_qs(parsed.query)
+            date_filter = query.get("date", [None])[0]
+            self._serve_popo_data(path, date_filter)
         elif path in DATA_FILES:
             self._serve_data_file(path)
         else:
@@ -276,7 +301,12 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
             self._write_parking_skip_dates()
             return
 
-        # Server-side data write (health + chat)
+        # POPO audio upload
+        if path == "/popo/audio":
+            self._handle_audio_upload()
+            return
+
+        # Server-side data write (health + chat + popo)
         if path in DATA_FILES:
             self._write_data_file(path)
             return
@@ -370,6 +400,122 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
             self._send_json(200, {"ok": True, "count": len(data) if isinstance(data, list) else 1})
         except IOError as e:
             self._send_json(500, {"error": f"Failed to write: {e}"})
+
+    # -----------------------------------------------------------------------
+    # POPO data endpoints
+    # -----------------------------------------------------------------------
+
+    def _serve_popo_data(self, path, date_filter=None):
+        """Serve a POPO JSON data file, optionally filtered by date.
+        date_filter should be 'YYYY-MM-DD' or None for all data."""
+        filepath = DATA_FILES[path]
+        if not os.path.exists(filepath):
+            self._send_json(200, [])
+            return
+        try:
+            with open(filepath, "r") as f:
+                content = f.read()
+            data = json.loads(content) if content.strip() else []
+        except (json.JSONDecodeError, IOError):
+            self._send_json(200, [])
+            return
+
+        if date_filter and isinstance(data, list):
+            # For daily-summary, match on the 'date' field directly
+            if path == "/popo/daily-summary":
+                data = [
+                    item for item in data
+                    if isinstance(item, dict) and item.get("date", "") == date_filter
+                ]
+            else:
+                # For other POPO data, match date portion of 'timestamp'
+                data = [
+                    item for item in data
+                    if isinstance(item, dict)
+                    and item.get("timestamp", "")[:10] == date_filter
+                ]
+
+        self._send_json(200, data)
+
+    def _handle_audio_upload(self):
+        """Accept a binary audio file upload and save to POPO audio directory.
+        Expects Content-Type with audio/* or application/octet-stream.
+        The filename can be provided via X-Filename header, or a UUID is generated."""
+        try:
+            content_length = int(self.headers.get("Content-Length", 0))
+            if content_length == 0:
+                self._send_json(400, {"error": "Empty body"})
+                return
+
+            body = self.rfile.read(content_length)
+
+            # Determine filename
+            filename = self.headers.get("X-Filename")
+            if not filename:
+                # Guess extension from content type
+                content_type = self.headers.get("Content-Type", "")
+                ext = ".m4a"  # default
+                if "wav" in content_type:
+                    ext = ".wav"
+                elif "mp3" in content_type or "mpeg" in content_type:
+                    ext = ".mp3"
+                elif "caf" in content_type:
+                    ext = ".caf"
+                filename = f"{uuid.uuid4()}{ext}"
+
+            # Sanitize filename (prevent directory traversal)
+            filename = os.path.basename(filename)
+            filepath = os.path.join(POPO_AUDIO_DIR, filename)
+
+            with open(filepath, "wb") as f:
+                f.write(body)
+
+            self._send_json(200, {
+                "ok": True,
+                "filename": filename,
+                "size": len(body),
+            })
+        except IOError as e:
+            self._send_json(500, {"error": f"Failed to save audio: {e}"})
+
+    def _serve_audio_file(self, path):
+        """Serve a stored audio file from POPO audio directory.
+        Path format: /popo/audio/<filename>"""
+        filename = path.split("/popo/audio/", 1)[-1]
+        if not filename:
+            self._send_json(400, {"error": "No filename specified"})
+            return
+
+        # Sanitize to prevent directory traversal
+        filename = os.path.basename(filename)
+        filepath = os.path.join(POPO_AUDIO_DIR, filename)
+
+        if not os.path.exists(filepath):
+            self._send_json(404, {"error": "Audio file not found"})
+            return
+
+        # Determine content type from extension
+        ext = os.path.splitext(filename)[1].lower()
+        content_types = {
+            ".m4a": "audio/mp4",
+            ".mp3": "audio/mpeg",
+            ".wav": "audio/wav",
+            ".caf": "audio/x-caf",
+            ".aac": "audio/aac",
+        }
+        content_type = content_types.get(ext, "application/octet-stream")
+
+        try:
+            with open(filepath, "rb") as f:
+                data = f.read()
+            self.send_response(200)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(len(data)))
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            self.wfile.write(data)
+        except IOError as e:
+            self._send_json(500, {"error": f"Failed to read audio: {e}"})
 
     # -----------------------------------------------------------------------
     # Parking endpoints
@@ -506,7 +652,7 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "POST, GET, DELETE, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Filename")
         self.end_headers()
 
     def log_message(self, format, *args):

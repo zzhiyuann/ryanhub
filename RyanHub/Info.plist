@@ -33,6 +33,11 @@
 	<string>Ryan Hub needs microphone access to record voice messages.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Ryan Hub needs photo library access to send images in chat.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+		<string>processing</string>
+	</array>
 	<key>UILaunchScreen</key>
 	<dict/>
 	<key>UISupportedInterfaceOrientations</key>

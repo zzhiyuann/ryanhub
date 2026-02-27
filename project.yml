@@ -45,6 +45,9 @@ targets:
         NSCameraUsageDescription: "Ryan Hub needs camera access to capture photos for chat."
         NSPhotoLibraryUsageDescription: "Ryan Hub needs photo library access to send images in chat."
         NSHealthShareUsageDescription: "Ryan Hub reads your step count to estimate daily calories burned."
+        UIBackgroundModes:
+          - fetch
+          - processing
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
     entitlements:

@@ -64,6 +64,17 @@ final class ChatViewModel {
     /// Whether free-text answers are allowed for the pending question.
     var pendingQuestionAllowFreeText: Bool = true
 
+    // MARK: - Notification Integration
+
+    /// Reference to the notification manager for sending local push notifications.
+    @ObservationIgnored weak var notificationManager: NotificationManager?
+
+    /// Reference to AppState for checking foreground/background and tab state.
+    @ObservationIgnored weak var appStateRef: AppState?
+
+    /// Whether the user is currently viewing the chat tab.
+    @ObservationIgnored var isUserOnChatTab: Bool = true
+
     // MARK: - Private
 
     private let webSocket = WebSocketClient()
@@ -843,6 +854,9 @@ final class ChatViewModel {
         if !isStreaming {
             currentStreamingMessageId = nil
             saveMessages()
+            // Fire a local notification if the app is in background
+            // or the user is not on the chat tab.
+            sendLocalNotificationIfNeeded(content: content, messageId: assistantId)
         } else {
             currentStreamingMessageId = assistantId
         }
@@ -855,12 +869,15 @@ final class ChatViewModel {
         guard let content = message.content else { return }
         let source = message.source ?? "system"
         let id = message.id ?? UUID().uuidString
+        let notifId = "notif-\(id)"
         let notification = ChatMessage.assistant(
             "[\(source)] \(content)",
-            id: "notif-\(id)"
+            id: notifId
         )
         appendMessage(notification)
         messageUpdateTrigger += 1
+        // Fire a local push notification for proactive messages
+        sendLocalNotificationIfNeeded(content: content, messageId: notifId)
     }
 
     private func handleQuestionMessage(_ message: DispatcherMessage) {
@@ -1017,6 +1034,32 @@ final class ChatViewModel {
         case .text:
             return String(message.content.prefix(80))
         }
+    }
+
+    // MARK: - Local Notification Delivery
+
+    /// Send a local push notification for a new assistant message if the user
+    /// is not actively viewing the chat tab (app in background, or on another tab).
+    private func sendLocalNotificationIfNeeded(content: String, messageId: String) {
+        guard let notificationManager else { return }
+
+        let isInBackground = !(appStateRef?.isAppInForeground ?? true)
+
+        if isInBackground {
+            // App is in background — send full iOS notification with banner + sound
+            let preview = String(content.prefix(200))
+            notificationManager.sendFacaiNotification(
+                title: "Facai",
+                body: preview,
+                identifier: messageId
+            )
+        } else if !isUserOnChatTab {
+            // App is in foreground but user is on a different tab —
+            // increment the in-app badge count on the chat tab icon.
+            notificationManager.unreadChatCount += 1
+        }
+        // If app is in foreground AND user is on chat tab, do nothing —
+        // the message is already visible in the chat view.
     }
 
     private func saveMessages() {

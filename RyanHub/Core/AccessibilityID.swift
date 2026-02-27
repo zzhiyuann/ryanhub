@@ -118,6 +118,12 @@ enum AccessibilityID {
     static let healthTodayActivity = "health_today_activity"
     static let healthStepsCard = "health_steps_card"
 
+    // MARK: - POPO
+
+    static let popoSensingToggle = "popo_sensing_toggle"
+    static let popoSyncButton = "popo_sync_button"
+    static let popoEventsList = "popo_events_list"
+
     // MARK: - Settings
 
     static let settingsServerURL = "settings_server_url"

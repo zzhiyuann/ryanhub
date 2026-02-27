@@ -97,6 +97,14 @@ final class AppState {
     /// Used to hide the floating module tab bubble.
     var isReadingBook: Bool = false
 
+    /// Pending deep link from a notification tap. ContentView observes this
+    /// to perform navigation, then sets it back to nil once handled.
+    var pendingDeepLink: DeepLink?
+
+    /// Whether the app is currently in the foreground (active scene phase).
+    /// Used by ChatViewModel to decide whether to fire local notifications.
+    var isAppInForeground: Bool = true
+
     // MARK: - Connection State
 
     var isConnected: Bool = false

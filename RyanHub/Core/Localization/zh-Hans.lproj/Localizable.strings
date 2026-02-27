@@ -24,6 +24,8 @@
 "toolkit_calendar_desc" = "日程和事件";
 "toolkit_health" = "健康";
 "toolkit_health_desc" = "追踪健康与健身";
+"toolkit_popo" = "POPO";
+"toolkit_popo_desc" = "行为感知引擎";
 
 /* Settings */
 "settings_title" = "设置";

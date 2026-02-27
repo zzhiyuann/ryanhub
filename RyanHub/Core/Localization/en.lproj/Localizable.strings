@@ -24,6 +24,8 @@
 "toolkit_calendar_desc" = "Schedule & events";
 "toolkit_health" = "Health";
 "toolkit_health_desc" = "Track wellness & fitness";
+"toolkit_popo" = "POPO";
+"toolkit_popo_desc" = "Behavioral sensing engine";
 
 /* Settings */
 "settings_title" = "Settings";

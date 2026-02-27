@@ -35,6 +35,7 @@ enum ChatMode: String {
 
 struct ContentView: View {
     @Environment(AppState.self) private var appState
+    @Environment(NotificationManager.self) private var notificationManager
     @Environment(\.colorScheme) private var colorScheme
     @State private var selectedTab: MainTab = .chat
     @State private var chatMode: ChatMode = .chat
@@ -63,11 +64,36 @@ struct ContentView: View {
                 .frame(height: 0.5)
 
             // Tab bar — fixed at bottom
-            HStack(spacing: 0) {
-                ForEach(MainTab.allCases, id: \.rawValue) { tab in
-                    Button {
-                        selectedTab = tab
-                    } label: {
+            tabBar
+        }
+        .background(AdaptiveColors.background(for: colorScheme))
+        .ignoresSafeArea(.keyboard)
+        .onChange(of: selectedTab) { _, newTab in
+            chatViewModel.isUserOnChatTab = (newTab == .chat)
+            if newTab == .chat {
+                notificationManager.clearChatBadge()
+            }
+        }
+        .onChange(of: appState.pendingDeepLink) { _, deepLink in
+            guard let deepLink else { return }
+            handleDeepLink(deepLink)
+            appState.pendingDeepLink = nil
+        }
+        .onAppear {
+            chatViewModel.notificationManager = notificationManager
+            chatViewModel.appStateRef = appState
+        }
+    }
+
+    // MARK: - Tab Bar
+
+    private var tabBar: some View {
+        HStack(spacing: 0) {
+            ForEach(MainTab.allCases, id: \.rawValue) { tab in
+                Button {
+                    selectedTab = tab
+                } label: {
+                    ZStack(alignment: .topTrailing) {
                         Image(systemName: tab.icon)
                             .font(.system(size: 20, weight: selectedTab == tab ? .bold : .medium))
                             .symbolRenderingMode(.monochrome)
@@ -75,18 +101,27 @@ struct ContentView: View {
                             .frame(maxWidth: .infinity)
                             .frame(height: 50)
                             .contentShape(Rectangle())
+
+                        // Unread badge on chat tab
+                        if tab == .chat && notificationManager.unreadChatCount > 0 {
+                            Text("\(notificationManager.unreadChatCount)")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundStyle(.white)
+                                .frame(minWidth: 16, minHeight: 16)
+                                .padding(.horizontal, 3)
+                                .background(Circle().fill(Color.hubAccentRed))
+                                .offset(x: -4, y: 8)
+                        }
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("tab_\(tab.rawValue)")
                 }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("tab_\(tab.rawValue)")
             }
-            .background(
-                AdaptiveColors.surface(for: colorScheme)
-                    .ignoresSafeArea(edges: .bottom)
-            )
         }
-        .background(AdaptiveColors.background(for: colorScheme))
-        .ignoresSafeArea(.keyboard)
+        .background(
+            AdaptiveColors.surface(for: colorScheme)
+                .ignoresSafeArea(edges: .bottom)
+        )
     }
 
 
@@ -162,6 +197,20 @@ struct ContentView: View {
         .buttonStyle(.plain)
         .accessibilityIdentifier(mode == .chat ? AccessibilityID.modeChatButton : AccessibilityID.modeTerminalButton)
     }
+
+    // MARK: - Deep Linking
+
+    /// Handle a deep link by switching to the appropriate tab/plugin.
+    private func handleDeepLink(_ deepLink: DeepLink) {
+        switch deepLink {
+        case .chat:
+            selectedTab = .chat
+            chatMode = .chat
+            notificationManager.clearChatBadge()
+        case .popo:
+            selectedTab = .toolkit
+        }
+    }
 }
 
 
@@ -170,4 +219,5 @@ struct ContentView: View {
 #Preview {
     ContentView()
         .environment(AppState())
+        .environment(NotificationManager())
 }

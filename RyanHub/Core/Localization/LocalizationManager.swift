@@ -32,6 +32,8 @@ enum L10n {
     static var toolkitCalendarDesc: String { localized("toolkit_calendar_desc") }
     static var toolkitHealth: String { localized("toolkit_health") }
     static var toolkitHealthDesc: String { localized("toolkit_health_desc") }
+    static var toolkitPopo: String { localized("toolkit_popo") }
+    static var toolkitPopoDesc: String { localized("toolkit_popo_desc") }
 
     // MARK: - Settings
 
