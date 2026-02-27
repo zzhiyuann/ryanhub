@@ -64,19 +64,37 @@ final class FluentStore {
         save(items, to: vocabularyURL)
     }
 
-    /// Seed database if empty, return true if seeded.
+    /// Seed database if empty, or incrementally sync new vocabulary from seed data.
+    /// Returns true if any new items were added.
     func seedIfNeeded() -> Bool {
         let existing = loadVocabulary()
+
         if existing.isEmpty {
+            // Fresh install — seed everything
             let seed = FluentSeedData.allVocabulary
             saveVocabulary(seed)
-
-            // Generate flashcards for all seed items
             let cards = seed.flatMap { FluentStore.generateFlashcards(for: $0) }
             saveFlashcards(cards)
             return true
         }
-        return false
+
+        // Incremental sync — add any seed items not already in local store
+        let existingIds = Set(existing.map { $0.id })
+        let seed = FluentSeedData.allVocabulary
+        let newItems = seed.filter { !existingIds.contains($0.id) }
+
+        guard !newItems.isEmpty else { return false }
+
+        // Append new vocabulary
+        saveVocabulary(existing + newItems)
+
+        // Generate and append flashcards for new items only
+        var existingCards = loadFlashcards()
+        let newCards = newItems.flatMap { FluentStore.generateFlashcards(for: $0) }
+        existingCards.append(contentsOf: newCards)
+        saveFlashcards(existingCards)
+
+        return true
     }
 
     // MARK: - Flashcards
