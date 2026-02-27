@@ -259,22 +259,31 @@ final class HealthViewModel {
 
     // MARK: - Server Sync
 
-    /// Fetch all health data from the bridge server and update in-memory + local cache.
+    /// Fetch all health data from the bridge server and merge with local cache.
+    /// Uses union-by-id so entries from multiple devices are preserved.
     private func loadFromServer() async {
-        if let weights: [WeightEntry] = await fetchFromServer(endpoint: "/health-data/weight") {
-            weightEntries = weights
-            saveLocal(weights, forKey: StorageKeys.weightEntries)
+        if let serverWeights: [WeightEntry] = await fetchFromServer(endpoint: "/health-data/weight") {
+            weightEntries = mergeById(local: weightEntries, server: serverWeights)
+            saveLocal(weightEntries, forKey: StorageKeys.weightEntries)
         }
 
-        if let food: [FoodEntry] = await fetchFromServer(endpoint: "/health-data/food") {
-            foodEntries = food
-            saveLocal(food, forKey: StorageKeys.foodEntries)
+        if let serverFood: [FoodEntry] = await fetchFromServer(endpoint: "/health-data/food") {
+            foodEntries = mergeById(local: foodEntries, server: serverFood)
+            saveLocal(foodEntries, forKey: StorageKeys.foodEntries)
         }
 
-        if let activities: [ActivityEntry] = await fetchFromServer(endpoint: "/health-data/activity") {
-            activityEntries = activities
-            saveLocal(activities, forKey: StorageKeys.activityEntries)
+        if let serverActivities: [ActivityEntry] = await fetchFromServer(endpoint: "/health-data/activity") {
+            activityEntries = mergeById(local: activityEntries, server: serverActivities)
+            saveLocal(activityEntries, forKey: StorageKeys.activityEntries)
         }
+    }
+
+    /// Merge two arrays by id. Server entries take precedence for duplicates.
+    private func mergeById<T: Identifiable & Decodable>(local: [T], server: [T]) -> [T] where T.ID: Hashable {
+        var merged: [T.ID: T] = [:]
+        for item in local { merged[item.id] = item }
+        for item in server { merged[item.id] = item }
+        return Array(merged.values)
     }
 
     /// Generic GET from bridge server, returning decoded JSON or nil on failure.

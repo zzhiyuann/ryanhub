@@ -328,16 +328,42 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
             self._send_json(200, [])
 
     def _write_data_file(self, path):
-        """Write JSON data to a file. Body should be a JSON array."""
+        """Write JSON data to a file. Merges by 'id' field so multi-device
+        sync works correctly (no data loss from concurrent writes)."""
         try:
             content_length = int(self.headers.get("Content-Length", 0))
             body = self.rfile.read(content_length)
-            data = json.loads(body) if body else []
+            incoming = json.loads(body) if body else []
         except (json.JSONDecodeError, ValueError) as e:
             self._send_json(400, {"error": f"Invalid body: {e}"})
             return
 
         filepath = DATA_FILES[path]
+
+        # Load existing data for merge
+        existing = []
+        if os.path.exists(filepath):
+            try:
+                with open(filepath, "r") as f:
+                    content = f.read()
+                existing = json.loads(content) if content.strip() else []
+            except (json.JSONDecodeError, IOError):
+                existing = []
+
+        # Merge by 'id' — incoming entries override existing ones with same id,
+        # and existing entries not in incoming are preserved.
+        if isinstance(incoming, list) and isinstance(existing, list):
+            merged = {}
+            for item in existing:
+                if isinstance(item, dict) and "id" in item:
+                    merged[item["id"]] = item
+            for item in incoming:
+                if isinstance(item, dict) and "id" in item:
+                    merged[item["id"]] = item
+            data = list(merged.values())
+        else:
+            data = incoming
+
         try:
             with open(filepath, "w") as f:
                 json.dump(data, f, ensure_ascii=False)
