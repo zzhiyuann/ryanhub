@@ -94,7 +94,7 @@ struct FluentReviewView: View {
                 // Actions
                 VStack(spacing: HubLayout.itemSpacing) {
                     HubButton("Review More", icon: "arrow.clockwise") {
-                        viewModel.restartReview()
+                        viewModel.startReviewSession()
                     }
 
                     HubSecondaryButton("Back to Home", icon: "house") {

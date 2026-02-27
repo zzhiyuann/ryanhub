@@ -126,6 +126,16 @@ final class FluentViewModel {
 
     // MARK: - Review Session
 
+    /// Resume an active session or start a fresh one if none is in progress.
+    func enterReviewTab() {
+        if !reviewCards.isEmpty && !isReviewComplete && currentCardIndex < reviewCards.count {
+            // Active session — resume where we left off
+            return
+        }
+        startReviewSession()
+    }
+
+    /// Always start a fresh review session (reset everything).
     func startReviewSession() {
         let dueCards = store.getDueCards(limit: 50)
         reviewCards = dueCards
@@ -140,11 +150,6 @@ final class FluentViewModel {
         if let card = currentCard {
             previewIntervals = FSRSEngine.previewIntervals(for: card.fsrs)
         }
-    }
-
-    func restartReview() {
-        isReviewComplete = false
-        startReviewSession()
     }
 
     func flipCard() {

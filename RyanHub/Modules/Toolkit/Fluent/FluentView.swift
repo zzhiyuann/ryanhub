@@ -85,7 +85,7 @@ struct FluentView: View {
                 viewModel.refreshDashboard()
             }
             if tab == .review {
-                viewModel.startReviewSession()
+                viewModel.enterReviewTab()
             }
         } label: {
             VStack(spacing: 4) {
@@ -193,7 +193,7 @@ struct FluentView: View {
 
                     if viewModel.dueCardCount > 0 {
                         Button {
-                            viewModel.startReviewSession()
+                            viewModel.enterReviewTab()
                             viewModel.selectedTab = .review
                         } label: {
                             Text("Start Review")
