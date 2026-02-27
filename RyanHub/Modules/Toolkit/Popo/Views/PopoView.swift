@@ -243,45 +243,44 @@ struct PopoView: View {
                 }
             }
 
-            // Sync status row (only when sensing is on)
+            // Auto-sync status row (only when sensing is on)
             if viewModel.sensingEnabled {
                 HStack(spacing: 12) {
-                    // Last sync
+                    // Auto-sync status indicator
                     HStack(spacing: 4) {
-                        Image(systemName: viewModel.lastSyncError != nil ? "exclamationmark.icloud.fill" : "icloud.and.arrow.up.fill")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(viewModel.lastSyncError != nil ? Color.hubAccentRed : AdaptiveColors.textSecondary(for: colorScheme))
-                        Text("Synced \(viewModel.lastSyncTimeString ?? "never")")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                        if viewModel.isSyncing {
+                            ProgressView()
+                                .scaleEffect(0.6)
+                                .frame(width: 12, height: 12)
+                            Text("Syncing...")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                        } else if viewModel.lastSyncError != nil {
+                            Image(systemName: "exclamationmark.icloud.fill")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(Color.hubAccentRed)
+                            Text("Sync error")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(Color.hubAccentRed)
+                        } else {
+                            Image(systemName: "arrow.triangle.2.circlepath.icloud.fill")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                            Text(viewModel.autoSyncStatusText)
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                        }
                     }
 
                     Spacer()
 
-                    // Sync button — always visible when sensing is on
+                    // De-emphasized manual refresh icon
                     Button {
                         Task { await viewModel.syncNow() }
                     } label: {
-                        HStack(spacing: 4) {
-                            if viewModel.isSyncing {
-                                ProgressView()
-                                    .scaleEffect(0.6)
-                                    .frame(width: 12, height: 12)
-                                Text("Syncing...")
-                                    .font(.system(size: 11, weight: .medium))
-                            } else if viewModel.engine.pendingEventCount > 0 {
-                                Text("\(viewModel.engine.pendingEventCount) pending")
-                                    .font(.system(size: 11, weight: .medium))
-                                Image(systemName: "arrow.triangle.2.circlepath")
-                                    .font(.system(size: 10, weight: .medium))
-                            } else {
-                                Text("Sync Now")
-                                    .font(.system(size: 11, weight: .medium))
-                                Image(systemName: "arrow.triangle.2.circlepath")
-                                    .font(.system(size: 10, weight: .medium))
-                            }
-                        }
-                        .foregroundStyle(Color.hubPrimary)
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme).opacity(0.6))
                     }
                     .buttonStyle(.plain)
                     .disabled(viewModel.isSyncing)

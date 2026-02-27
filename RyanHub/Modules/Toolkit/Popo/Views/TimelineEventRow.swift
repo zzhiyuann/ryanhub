@@ -300,6 +300,15 @@ struct TimelineEventRow: View {
         case .location: return "mappin.and.ellipse"
         case .screen: return "iphone"
         case .workout: return "dumbbell.fill"
+        case .activeEnergy: return "flame.fill"
+        case .basalEnergy: return "flame"
+        case .respiratoryRate: return "lungs.fill"
+        case .bloodOxygen: return "drop.fill"
+        case .noiseExposure: return "ear.fill"
+        case .battery: return "battery.100"
+        case .wifi: return "wifi"
+        case .bluetooth: return "antenna.radiowaves.left.and.right"
+        case .visit: return "building.2.fill"
         }
     }
 
@@ -313,6 +322,15 @@ struct TimelineEventRow: View {
         case .location: return Color.hubAccentGreen
         case .screen: return AdaptiveColors.textSecondary(for: colorScheme)
         case .workout: return Color.hubAccentRed
+        case .activeEnergy: return Color.hubAccentYellow
+        case .basalEnergy: return Color.hubAccentYellow
+        case .respiratoryRate: return Color(red: 0.4, green: 0.7, blue: 0.9)  // Light blue
+        case .bloodOxygen: return Color(red: 0.3, green: 0.5, blue: 0.9)      // Blue
+        case .noiseExposure: return Color(red: 0.8, green: 0.5, blue: 0.2)    // Orange
+        case .battery: return Color.hubAccentGreen
+        case .wifi: return Color.hubPrimaryLight
+        case .bluetooth: return Color.hubPrimary
+        case .visit: return Color.hubAccentGreen
         }
     }
 
@@ -326,6 +344,15 @@ struct TimelineEventRow: View {
         case .location: return "Location"
         case .screen: return "Screen"
         case .workout: return "Workout"
+        case .activeEnergy: return "Active Energy"
+        case .basalEnergy: return "Resting Energy"
+        case .respiratoryRate: return "Respiratory Rate"
+        case .bloodOxygen: return "Blood Oxygen"
+        case .noiseExposure: return "Noise Level"
+        case .battery: return "Battery"
+        case .wifi: return "Wi-Fi"
+        case .bluetooth: return "Bluetooth"
+        case .visit: return "Visit"
         }
     }
 
@@ -359,6 +386,33 @@ struct TimelineEventRow: View {
             let type = event.payload["type"] ?? "unknown"
             let calories = event.payload["calories"] ?? "0"
             return "\(type) — \(calories) kcal"
+        case .activeEnergy:
+            let kcal = event.payload["kcal"] ?? "0"
+            return "\(kcal) kcal active"
+        case .basalEnergy:
+            let kcal = event.payload["kcal"] ?? "0"
+            return "\(kcal) kcal resting"
+        case .respiratoryRate:
+            let rate = event.payload["breathsPerMin"] ?? "0"
+            return "\(rate) breaths/min"
+        case .bloodOxygen:
+            let spo2 = event.payload["spo2"] ?? "0"
+            return "\(spo2)% SpO2"
+        case .noiseExposure:
+            let db = event.payload["decibels"] ?? "0"
+            return "\(db) dB"
+        case .battery:
+            let level = event.payload["level"] ?? "?"
+            return "\(level)%"
+        case .wifi:
+            let ssid = event.payload["ssid"] ?? "unknown"
+            return ssid
+        case .bluetooth:
+            let device = event.payload["device"] ?? "unknown"
+            return device
+        case .visit:
+            let place = event.payload["description"] ?? "unknown"
+            return place
         }
     }
 

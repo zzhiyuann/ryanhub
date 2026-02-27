@@ -29,6 +29,18 @@ final class HealthSensor {
         if let activeEnergy = HKQuantityType.quantityType(forIdentifier: .activeEnergyBurned) {
             types.insert(activeEnergy)
         }
+        if let basalEnergy = HKQuantityType.quantityType(forIdentifier: .basalEnergyBurned) {
+            types.insert(basalEnergy)
+        }
+        if let respiratoryRate = HKQuantityType.quantityType(forIdentifier: .respiratoryRate) {
+            types.insert(respiratoryRate)
+        }
+        if let bloodOxygen = HKQuantityType.quantityType(forIdentifier: .oxygenSaturation) {
+            types.insert(bloodOxygen)
+        }
+        if let noiseExposure = HKQuantityType.quantityType(forIdentifier: .environmentalAudioExposure) {
+            types.insert(noiseExposure)
+        }
         if let sleep = HKCategoryType.categoryType(forIdentifier: .sleepAnalysis) {
             types.insert(sleep)
         }
@@ -127,6 +139,66 @@ final class HealthSensor {
         }
         healthStore.execute(workoutQuery)
         observerQueries.append(workoutQuery)
+
+        // Active energy observer
+        if let activeEnergyType = HKQuantityType.quantityType(forIdentifier: .activeEnergyBurned) {
+            let query = HKObserverQuery(sampleType: activeEnergyType, predicate: nil) { [weak self] _, completionHandler, error in
+                if error == nil {
+                    self?.fetchActiveEnergy()
+                }
+                completionHandler()
+            }
+            healthStore.execute(query)
+            observerQueries.append(query)
+        }
+
+        // Basal energy observer
+        if let basalEnergyType = HKQuantityType.quantityType(forIdentifier: .basalEnergyBurned) {
+            let query = HKObserverQuery(sampleType: basalEnergyType, predicate: nil) { [weak self] _, completionHandler, error in
+                if error == nil {
+                    self?.fetchBasalEnergy()
+                }
+                completionHandler()
+            }
+            healthStore.execute(query)
+            observerQueries.append(query)
+        }
+
+        // Respiratory rate observer
+        if let respiratoryRateType = HKQuantityType.quantityType(forIdentifier: .respiratoryRate) {
+            let query = HKObserverQuery(sampleType: respiratoryRateType, predicate: nil) { [weak self] _, completionHandler, error in
+                if error == nil {
+                    self?.fetchRespiratoryRate()
+                }
+                completionHandler()
+            }
+            healthStore.execute(query)
+            observerQueries.append(query)
+        }
+
+        // Blood oxygen (SpO2) observer
+        if let bloodOxygenType = HKQuantityType.quantityType(forIdentifier: .oxygenSaturation) {
+            let query = HKObserverQuery(sampleType: bloodOxygenType, predicate: nil) { [weak self] _, completionHandler, error in
+                if error == nil {
+                    self?.fetchBloodOxygen()
+                }
+                completionHandler()
+            }
+            healthStore.execute(query)
+            observerQueries.append(query)
+        }
+
+        // Noise exposure observer
+        if let noiseExposureType = HKQuantityType.quantityType(forIdentifier: .environmentalAudioExposure) {
+            let query = HKObserverQuery(sampleType: noiseExposureType, predicate: nil) { [weak self] _, completionHandler, error in
+                if error == nil {
+                    self?.fetchNoiseExposure()
+                }
+                completionHandler()
+            }
+            healthStore.execute(query)
+            observerQueries.append(query)
+        }
     }
 
     // MARK: - Fetch Methods
@@ -137,6 +209,11 @@ final class HealthSensor {
         fetchHRV()
         fetchSleep()
         fetchWorkouts()
+        fetchActiveEnergy()
+        fetchBasalEnergy()
+        fetchRespiratoryRate()
+        fetchBloodOxygen()
+        fetchNoiseExposure()
     }
 
     /// Fetch most recent heart rate samples (last 5 minutes).
@@ -255,6 +332,156 @@ final class HealthSensor {
                         "duration": String(format: "%.0f", workout.duration),
                         "calories": calories.map { String(format: "%.0f", $0) } ?? "unknown",
                         "source": workout.sourceRevision.source.name
+                    ]
+                )
+                self?.onEvent?(event)
+            }
+        }
+        healthStore?.execute(query)
+    }
+
+    /// Fetch active energy burned in the last hour.
+    private func fetchActiveEnergy() {
+        guard let type = HKQuantityType.quantityType(forIdentifier: .activeEnergyBurned) else { return }
+        let oneHourAgo = Date().addingTimeInterval(-3600)
+        let predicate = HKQuery.predicateForSamples(withStart: oneHourAgo, end: Date(), options: .strictStartDate)
+        let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
+
+        let query = HKSampleQuery(
+            sampleType: type,
+            predicate: predicate,
+            limit: 5,
+            sortDescriptors: [sortDescriptor]
+        ) { [weak self] _, samples, error in
+            guard let samples = samples as? [HKQuantitySample], error == nil else { return }
+            for sample in samples {
+                let kcal = sample.quantity.doubleValue(for: .kilocalorie())
+                let event = SensingEvent(
+                    timestamp: sample.startDate,
+                    modality: .activeEnergy,
+                    payload: [
+                        "kcal": String(format: "%.1f", kcal),
+                        "source": sample.sourceRevision.source.name
+                    ]
+                )
+                self?.onEvent?(event)
+            }
+        }
+        healthStore?.execute(query)
+    }
+
+    /// Fetch basal (resting) energy burned in the last hour.
+    private func fetchBasalEnergy() {
+        guard let type = HKQuantityType.quantityType(forIdentifier: .basalEnergyBurned) else { return }
+        let oneHourAgo = Date().addingTimeInterval(-3600)
+        let predicate = HKQuery.predicateForSamples(withStart: oneHourAgo, end: Date(), options: .strictStartDate)
+        let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
+
+        let query = HKSampleQuery(
+            sampleType: type,
+            predicate: predicate,
+            limit: 5,
+            sortDescriptors: [sortDescriptor]
+        ) { [weak self] _, samples, error in
+            guard let samples = samples as? [HKQuantitySample], error == nil else { return }
+            for sample in samples {
+                let kcal = sample.quantity.doubleValue(for: .kilocalorie())
+                let event = SensingEvent(
+                    timestamp: sample.startDate,
+                    modality: .basalEnergy,
+                    payload: [
+                        "kcal": String(format: "%.1f", kcal),
+                        "source": sample.sourceRevision.source.name
+                    ]
+                )
+                self?.onEvent?(event)
+            }
+        }
+        healthStore?.execute(query)
+    }
+
+    /// Fetch respiratory rate samples from the last hour.
+    private func fetchRespiratoryRate() {
+        guard let type = HKQuantityType.quantityType(forIdentifier: .respiratoryRate) else { return }
+        let oneHourAgo = Date().addingTimeInterval(-3600)
+        let predicate = HKQuery.predicateForSamples(withStart: oneHourAgo, end: Date(), options: .strictStartDate)
+        let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
+
+        let query = HKSampleQuery(
+            sampleType: type,
+            predicate: predicate,
+            limit: 5,
+            sortDescriptors: [sortDescriptor]
+        ) { [weak self] _, samples, error in
+            guard let samples = samples as? [HKQuantitySample], error == nil else { return }
+            for sample in samples {
+                let breathsPerMin = sample.quantity.doubleValue(for: HKUnit(from: "count/min"))
+                let event = SensingEvent(
+                    timestamp: sample.startDate,
+                    modality: .respiratoryRate,
+                    payload: [
+                        "breathsPerMin": String(format: "%.1f", breathsPerMin),
+                        "source": sample.sourceRevision.source.name
+                    ]
+                )
+                self?.onEvent?(event)
+            }
+        }
+        healthStore?.execute(query)
+    }
+
+    /// Fetch blood oxygen (SpO2) samples from the last hour.
+    private func fetchBloodOxygen() {
+        guard let type = HKQuantityType.quantityType(forIdentifier: .oxygenSaturation) else { return }
+        let oneHourAgo = Date().addingTimeInterval(-3600)
+        let predicate = HKQuery.predicateForSamples(withStart: oneHourAgo, end: Date(), options: .strictStartDate)
+        let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
+
+        let query = HKSampleQuery(
+            sampleType: type,
+            predicate: predicate,
+            limit: 5,
+            sortDescriptors: [sortDescriptor]
+        ) { [weak self] _, samples, error in
+            guard let samples = samples as? [HKQuantitySample], error == nil else { return }
+            for sample in samples {
+                let percentage = sample.quantity.doubleValue(for: HKUnit.percent()) * 100
+                let event = SensingEvent(
+                    timestamp: sample.startDate,
+                    modality: .bloodOxygen,
+                    payload: [
+                        "spo2": String(format: "%.1f", percentage),
+                        "source": sample.sourceRevision.source.name
+                    ]
+                )
+                self?.onEvent?(event)
+            }
+        }
+        healthStore?.execute(query)
+    }
+
+    /// Fetch environmental audio exposure (noise level) from the last hour.
+    private func fetchNoiseExposure() {
+        guard let type = HKQuantityType.quantityType(forIdentifier: .environmentalAudioExposure) else { return }
+        let oneHourAgo = Date().addingTimeInterval(-3600)
+        let predicate = HKQuery.predicateForSamples(withStart: oneHourAgo, end: Date(), options: .strictStartDate)
+        let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
+
+        let query = HKSampleQuery(
+            sampleType: type,
+            predicate: predicate,
+            limit: 5,
+            sortDescriptors: [sortDescriptor]
+        ) { [weak self] _, samples, error in
+            guard let samples = samples as? [HKQuantitySample], error == nil else { return }
+            for sample in samples {
+                let decibels = sample.quantity.doubleValue(for: HKUnit.decibelAWeightedSoundPressureLevel())
+                let event = SensingEvent(
+                    timestamp: sample.startDate,
+                    modality: .noiseExposure,
+                    payload: [
+                        "decibels": String(format: "%.1f", decibels),
+                        "source": sample.sourceRevision.source.name
                     ]
                 )
                 self?.onEvent?(event)

@@ -60,8 +60,8 @@ struct DayOverviewSummary {
 final class PopoViewModel {
     // MARK: - State
 
-    /// The sensing engine that manages all sensors.
-    let engine = SensingEngine()
+    /// The sensing engine that manages all sensors (shared singleton for BGTask access).
+    let engine = SensingEngine.shared
 
     /// Whether sensing has been toggled on by the user.
     var sensingEnabled: Bool = false {
@@ -279,6 +279,21 @@ final class PopoViewModel {
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .abbreviated
         return formatter.localizedString(for: syncTime, relativeTo: Date())
+    }
+
+    /// Status text for the auto-sync display row.
+    var autoSyncStatusText: String {
+        let pending = engine.pendingEventCount
+        if let lastSync = lastSyncTimeString {
+            if pending > 0 {
+                return "Auto-sync \u{00B7} \(pending) pending \u{00B7} Last: \(lastSync)"
+            }
+            return "Auto-sync \u{00B7} Last: \(lastSync)"
+        }
+        if pending > 0 {
+            return "Auto-sync \u{00B7} \(pending) pending"
+        }
+        return "Auto-sync enabled"
     }
 
     // MARK: - Init

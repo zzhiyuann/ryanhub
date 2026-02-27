@@ -1,4 +1,5 @@
 import Foundation
+import CoreMotion
 
 // MARK: - Sensing Engine
 
@@ -8,6 +9,11 @@ import Foundation
 @MainActor
 @Observable
 final class SensingEngine {
+    // MARK: - Singleton
+
+    /// Shared instance for access from BGTaskScheduler and other system callbacks.
+    static let shared = SensingEngine()
+
     // MARK: - Observable State
 
     /// Whether the sensing engine is actively collecting data.
@@ -40,6 +46,9 @@ final class SensingEngine {
     private let healthSensor = HealthSensor()
     private let locationSensor = LocationSensor()
     private let screenSensor = ScreenSensor()
+    private let batterySensor = BatterySensor()
+    private let wifiSensor = WiFiSensor()
+    private let bluetoothSensor = BluetoothSensor()
 
     // MARK: - Services
 
@@ -80,12 +89,24 @@ final class SensingEngine {
         screenSensor.onEvent = { [weak self] event in
             Task { @MainActor in self?.recordEvent(event) }
         }
+        batterySensor.onEvent = { [weak self] event in
+            Task { @MainActor in self?.recordEvent(event) }
+        }
+        wifiSensor.onEvent = { [weak self] event in
+            Task { @MainActor in self?.recordEvent(event) }
+        }
+        bluetoothSensor.onEvent = { [weak self] event in
+            Task { @MainActor in self?.recordEvent(event) }
+        }
 
         // Start all sensors
         motionSensor.start()
         healthSensor.start()
         locationSensor.start()
         screenSensor.start()
+        batterySensor.start()
+        wifiSensor.start()
+        bluetoothSensor.start()
 
         // Restore last sync time from disk
         let savedSyncTime = UserDefaults.standard.double(forKey: "ryanhub_popo_last_sync_time")
@@ -112,6 +133,9 @@ final class SensingEngine {
         healthSensor.stop()
         locationSensor.stop()
         screenSensor.stop()
+        batterySensor.stop()
+        wifiSensor.stop()
+        bluetoothSensor.stop()
 
         syncTimer?.invalidate()
         syncTimer = nil
@@ -196,5 +220,105 @@ final class SensingEngine {
             )
         }
         .filter { $0.count > 0 }
+    }
+
+    // MARK: - Background Wake
+
+    /// Called from BGTaskScheduler when the app wakes in the background.
+    /// Backfills any missed motion/pedometer data and syncs pending events.
+    func handleBackgroundWake() async {
+        print("[SensingEngine] Background wake — backfilling data and syncing")
+
+        // Determine the backfill window: from last sync (or 1 hour ago) to now
+        let now = Date()
+        let backfillStart = lastSyncTime ?? now.addingTimeInterval(-3600)
+
+        // Backfill pedometer data
+        await backfillPedometerData(from: backfillStart, to: now)
+
+        // Backfill motion activity data
+        await backfillMotionActivity(from: backfillStart, to: now)
+
+        // Sync all pending events to the server
+        await syncPendingEvents()
+
+        print("[SensingEngine] Background wake completed")
+    }
+
+    /// Query CMPedometer for step data in the given range and record events.
+    private func backfillPedometerData(from start: Date, to end: Date) async {
+        guard CMPedometer.isStepCountingAvailable() else { return }
+
+        let pedometer = CMPedometer()
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            pedometer.queryPedometerData(from: start, to: end) { [weak self] data, error in
+                if let data {
+                    let event = SensingEvent(
+                        modality: .steps,
+                        payload: [
+                            "steps": "\(data.numberOfSteps)",
+                            "source": "background_backfill",
+                            "distance": data.distance.map { "\($0)" } ?? "unknown"
+                        ]
+                    )
+                    Task { @MainActor in
+                        self?.recordEvent(event)
+                    }
+                } else if let error {
+                    print("[SensingEngine] Pedometer backfill error: \(error.localizedDescription)")
+                }
+                continuation.resume()
+            }
+        }
+    }
+
+    /// Query CMMotionActivityManager for activity data in the given range and record events.
+    private func backfillMotionActivity(from start: Date, to end: Date) async {
+        guard CMMotionActivityManager.isActivityAvailable() else { return }
+
+        let activityManager = CMMotionActivityManager()
+        let queue = OperationQueue()
+        queue.name = "com.ryanhub.popo.background-motion"
+        queue.maxConcurrentOperationCount = 1
+
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            activityManager.queryActivityStarting(from: start, to: end, to: queue) { [weak self] activities, error in
+                if let activities {
+                    for activity in activities {
+                        let activityType: String
+                        if activity.walking { activityType = "walking" }
+                        else if activity.running { activityType = "running" }
+                        else if activity.cycling { activityType = "cycling" }
+                        else if activity.automotive { activityType = "automotive" }
+                        else if activity.stationary { activityType = "stationary" }
+                        else { activityType = "unknown" }
+
+                        let confidence: String
+                        switch activity.confidence {
+                        case .low: confidence = "low"
+                        case .medium: confidence = "medium"
+                        case .high: confidence = "high"
+                        @unknown default: confidence = "unknown"
+                        }
+
+                        let event = SensingEvent(
+                            timestamp: activity.startDate,
+                            modality: .motion,
+                            payload: [
+                                "activityType": activityType,
+                                "confidence": confidence,
+                                "source": "background_backfill"
+                            ]
+                        )
+                        Task { @MainActor in
+                            self?.recordEvent(event)
+                        }
+                    }
+                } else if let error {
+                    print("[SensingEngine] Motion backfill error: \(error.localizedDescription)")
+                }
+                continuation.resume()
+            }
+        }
     }
 }
