@@ -177,11 +177,7 @@ struct MessageBubble: View {
 
                 Text(preview)
                     .font(.system(size: 12))
-                    .foregroundStyle(
-                        isUser
-                            ? Color.white.opacity(0.7)
-                            : AdaptiveColors.textSecondary(for: colorScheme)
-                    )
+                    .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
                     .lineLimit(preview.hasPrefix("[audio]") ? 6 : 1)
                     .truncationMode(.tail)
             }
@@ -190,11 +186,7 @@ struct MessageBubble: View {
             .fixedSize(horizontal: false, vertical: true)
             .background(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(
-                        isUser
-                            ? Color.white.opacity(0.15)
-                            : AdaptiveColors.surfaceSecondary(for: colorScheme)
-                    )
+                    .fill(AdaptiveColors.surfaceSecondary(for: colorScheme))
             )
         }
         .buttonStyle(.plain)
