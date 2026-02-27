@@ -167,7 +167,7 @@ final class PopoViewModel {
             switch event.modality {
             case .steps:
                 if let steps = event.payload["steps"], let count = Int(steps) {
-                    summary.totalSteps += count
+                    summary.totalSteps = max(summary.totalSteps, count)
                 }
             case .motion:
                 let activity = event.payload["activityType"] ?? "unknown"
