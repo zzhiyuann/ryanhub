@@ -65,6 +65,12 @@ struct MessageBubble: View {
                         .clipShape(BubbleShape(isUser: isUser))
                         .drawingGroup()
                         .contextMenu {
+                            Button {
+                                UIPasteboard.general.string = message.content
+                            } label: {
+                                Label("Copy", systemImage: "doc.on.doc")
+                            }
+
                             Button(role: .destructive) {
                                 onDelete?(message)
                             } label: {
