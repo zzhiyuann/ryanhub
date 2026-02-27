@@ -62,39 +62,33 @@ struct ContentView: View {
             AdaptiveColors.border(for: colorScheme)
                 .frame(height: 0.5)
 
-            // Custom tab bar — flush against bottom edge
+            // Custom tab bar
             HStack(spacing: 0) {
                 ForEach(MainTab.allCases, id: \.rawValue) { tab in
                     Button {
                         selectedTab = tab
                     } label: {
                         Image(systemName: tab.icon)
-                            .font(.system(size: 17, weight: selectedTab == tab ? .bold : .medium))
+                            .font(.system(size: 20, weight: selectedTab == tab ? .bold : .medium))
                             .symbolRenderingMode(.monochrome)
                             .foregroundStyle(selectedTab == tab ? Color.hubPrimary : AdaptiveColors.textSecondary(for: colorScheme))
                             .frame(maxWidth: .infinity)
-                            .frame(height: 44)
+                            .frame(height: 50)
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("tab_\(tab.rawValue)")
                 }
             }
-            .frame(height: 32)
-            .padding(.bottom, safeAreaBottomInset)
             .background(
                 AdaptiveColors.surface(for: colorScheme)
                     .ignoresSafeArea(edges: .bottom)
             )
         }
         .background(AdaptiveColors.background(for: colorScheme))
+        .ignoresSafeArea(.keyboard)
     }
 
-    private var safeAreaBottomInset: CGFloat {
-        let scenes = UIApplication.shared.connectedScenes
-        let windowScene = scenes.first as? UIWindowScene
-        return windowScene?.windows.first?.safeAreaInsets.bottom ?? 0
-    }
 
     // MARK: - Chat / Terminal Content
 

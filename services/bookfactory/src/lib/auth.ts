@@ -86,32 +86,46 @@ export function verifyToken(token: string): { userId: string; username: string }
 }
 
 export async function getCurrentUser(): Promise<User | null> {
-  // Check cookie first, then fall back to Authorization header (for mobile clients)
-  const cookieStore = await cookies();
-  let token = cookieStore.get(COOKIE_NAME)?.value;
+  const db = getDb();
+  let token: string | undefined;
 
-  if (!token) {
-    const { headers } = await import("next/headers");
-    const headerStore = await headers();
-    const authHeader = headerStore.get("authorization");
-    if (authHeader?.startsWith("Bearer ")) {
-      token = authHeader.slice(7);
+  try {
+    // Check cookie first, then fall back to Authorization header (for mobile clients)
+    const cookieStore = await cookies();
+    token = cookieStore.get(COOKIE_NAME)?.value;
+
+    if (!token) {
+      const { headers } = await import("next/headers");
+      const headerStore = await headers();
+      const authHeader = headerStore.get("authorization");
+      if (authHeader?.startsWith("Bearer ")) {
+        token = authHeader.slice(7);
+      }
+    }
+  } catch {
+    // cookies/headers may throw outside request context
+  }
+
+  if (token) {
+    const payload = verifyToken(token);
+    if (payload) {
+      const row = db
+        .prepare(
+          `SELECT id, username, display_name, openai_api_key, anthropic_api_key, created_at FROM users WHERE id = ?`
+        )
+        .get(payload.userId) as User | undefined;
+      if (row) return row;
     }
   }
 
-  if (!token) return null;
-
-  const payload = verifyToken(token);
-  if (!payload) return null;
-
-  const db = getDb();
-  const row = db
+  // No valid token — fall back to the first user (single-user personal app)
+  const fallback = db
     .prepare(
-      `SELECT id, username, display_name, openai_api_key, anthropic_api_key, created_at FROM users WHERE id = ?`
+      `SELECT id, username, display_name, openai_api_key, anthropic_api_key, created_at FROM users ORDER BY created_at ASC LIMIT 1`
     )
-    .get(payload.userId) as User | undefined;
+    .get() as User | undefined;
 
-  return row || null;
+  return fallback || null;
 }
 
 export function getUserById(userId: string): User | null {

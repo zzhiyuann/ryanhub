@@ -312,42 +312,56 @@ final class ParkingViewModel {
         return formatter.string(from: calendarDisplayedMonth)
     }
 
-    // MARK: - Data Persistence (File I/O)
+    // MARK: - Data Persistence (HTTP API via bridge server)
 
-    /// Path to the skip-dates file used by the parkmobile-auto system.
-    private let skipDatesFilePath = "/Users/zwang/projects/parkmobile-auto/skip-dates.txt"
-
-    /// Path to the last status file written by buy.js / run.sh.
-    private let statusFilePath = "/Users/zwang/projects/parkmobile-auto/last-status.json"
-
-    /// Path to the purchase history file.
-    private let historyFilePath = "/Users/zwang/projects/parkmobile-auto/purchase-history.json"
-
-    /// Load skip dates from the skip-dates.txt file.
-    func loadSkipDates() {
-        guard let content = try? String(contentsOfFile: skipDatesFilePath, encoding: .utf8) else {
-            skipDates = []
-            return
-        }
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        skipDates = content.components(separatedBy: .newlines)
-            .map { $0.trimmingCharacters(in: .whitespaces) }
-            .filter { !$0.isEmpty }
-            .compactMap { formatter.date(from: $0) }
-            .map { ParkingSkipEntry(date: $0) }
+    /// Base URL for the bridge server (same as food analysis server).
+    private var bridgeBaseURL: String {
+        UserDefaults.standard.string(forKey: "ryanhub_server_url")
+            .flatMap { URL(string: $0)?.host }
+            .map { "http://\($0):18790" }
+            ?? AppState.defaultFoodAnalysisURL
     }
 
-    /// Write all skip dates back to the skip-dates.txt file, sorted chronologically.
+    /// Load skip dates from the bridge server.
+    func loadSkipDates() {
+        Task {
+            do {
+                let url = URL(string: "\(bridgeBaseURL)/parking/skip-dates")!
+                let (data, _) = try await URLSession.shared.data(from: url)
+                let content = String(data: data, encoding: .utf8) ?? ""
+                let formatter = DateFormatter()
+                formatter.dateFormat = "yyyy-MM-dd"
+                skipDates = content.components(separatedBy: .newlines)
+                    .map { $0.trimmingCharacters(in: .whitespaces) }
+                    .filter { !$0.isEmpty }
+                    .compactMap { formatter.date(from: $0) }
+                    .map { ParkingSkipEntry(date: $0) }
+            } catch {
+                skipDates = []
+            }
+        }
+    }
+
+    /// Write all skip dates back via the bridge server.
     private func saveSkipDates() {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"
-        let lines = skipDates
+        let dateStrings = skipDates
             .map(\.date)
             .sorted()
             .map { formatter.string(from: $0) }
-        let content = lines.isEmpty ? "" : lines.joined(separator: "\n") + "\n"
-        try? content.write(toFile: skipDatesFilePath, atomically: true, encoding: .utf8)
+        Task {
+            do {
+                let url = URL(string: "\(bridgeBaseURL)/parking/skip-dates")!
+                var request = URLRequest(url: url)
+                request.httpMethod = "POST"
+                request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                request.httpBody = try JSONEncoder().encode(["dates": dateStrings])
+                let _ = try await URLSession.shared.data(for: request)
+            } catch {
+                // Silent fail — data will reload on next open
+            }
+        }
     }
 
     // MARK: - Private
@@ -432,24 +446,32 @@ final class ParkingViewModel {
         )
     }
 
-    /// Load the last cron job status from last-status.json.
+    /// Load the last cron job status from the bridge server.
     func loadCronStatus() {
-        guard let data = try? Data(contentsOf: URL(fileURLWithPath: statusFilePath)),
-              let status = try? JSONDecoder().decode(CronPurchaseStatus.self, from: data) else {
-            lastCronStatus = nil
-            return
+        Task {
+            do {
+                let url = URL(string: "\(bridgeBaseURL)/parking/last-status")!
+                let (data, _) = try await URLSession.shared.data(from: url)
+                guard !data.isEmpty else { lastCronStatus = nil; return }
+                lastCronStatus = try JSONDecoder().decode(CronPurchaseStatus.self, from: data)
+            } catch {
+                lastCronStatus = nil
+            }
         }
-        lastCronStatus = status
     }
 
-    /// Load purchase history from purchase-history.json.
+    /// Load purchase history from the bridge server.
     private func loadPurchaseHistory() {
-        guard let data = try? Data(contentsOf: URL(fileURLWithPath: historyFilePath)),
-              let history = try? JSONDecoder().decode([CronPurchaseStatus].self, from: data) else {
-            purchaseHistory = []
-            return
+        Task {
+            do {
+                let url = URL(string: "\(bridgeBaseURL)/parking/purchase-history")!
+                let (data, _) = try await URLSession.shared.data(from: url)
+                guard !data.isEmpty else { purchaseHistory = []; return }
+                purchaseHistory = try JSONDecoder().decode([CronPurchaseStatus].self, from: data)
+            } catch {
+                purchaseHistory = []
+            }
         }
-        purchaseHistory = history
     }
 
     /// Show a brief feedback message.

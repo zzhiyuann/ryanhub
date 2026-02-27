@@ -28,9 +28,7 @@ struct BookFactoryView: View {
 
     var body: some View {
         Group {
-            if api.baseURL.isEmpty {
-                serverSetupView
-            } else if let libraryVM, let audioPlayerVM, let queueVM {
+            if let libraryVM, let audioPlayerVM, let queueVM {
                 mainContent
                     .environment(api)
                     .environment(libraryVM)

@@ -4,6 +4,7 @@ import { listBooks } from "@/lib/books";
 
 export async function GET(req: NextRequest) {
   const user = await getCurrentUser();
+  console.log("[books/route] getCurrentUser returned:", user ? user.username : null);
   if (!user) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }

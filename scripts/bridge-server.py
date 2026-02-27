@@ -1,33 +1,38 @@
 #!/usr/bin/env python3
 """
-Health Analysis Bridge Server
+RyanHub Bridge Server
 
-A lightweight HTTP server that bridges food and activity analysis requests from
-the iOS app to the `claude` CLI. Listens on localhost:18790.
+A lightweight HTTP server that bridges the iOS app to iMac-hosted services
+and data. Listens on 0.0.0.0:18790.
 
 Endpoints:
-  POST /analyze — Analyze food from text and/or image
-    Body (JSON):
-      {
-        "text": "description of food",       // optional
-        "image_base64": "base64-encoded JPEG" // optional
-      }
-    Returns: JSON with nutritional analysis
+  POST /analyze — Analyze food from text and/or image (via claude CLI)
+  POST /analyze-activity — Analyze physical activity from text (via claude CLI)
+  GET  /health — Health check
 
-  POST /analyze-activity — Analyze physical activity from text
-    Body (JSON):
-      {
-        "text": "description of activity"
-      }
-    Returns: JSON with activity type, calories burned, summary
+  Parking data:
+  GET  /parking/skip-dates — Read skip dates (text)
+  POST /parking/skip-dates — Write skip dates (JSON body: {"dates": [...]})
+  GET  /parking/last-status — Read last purchase status (JSON)
+  GET  /parking/purchase-history — Read purchase history (JSON)
 
-  GET /health — Health check
-    Returns: {"status": "ok"}
+  Health data (server-side storage):
+  GET  /health-data/weight — Read weight entries (JSON array)
+  POST /health-data/weight — Write weight entries (JSON array)
+  GET  /health-data/food — Read food entries (JSON array)
+  POST /health-data/food — Write food entries (JSON array)
+  GET  /health-data/activity — Read activity entries (JSON array)
+  POST /health-data/activity — Write activity entries (JSON array)
+
+  Chat data (server-side storage):
+  GET    /chat/messages — Read chat messages (JSON array)
+  POST   /chat/messages — Write chat messages (JSON array)
+  DELETE /chat/messages — Clear chat messages
 
 Usage:
-  python3 scripts/food-analysis-server.py
+  python3 scripts/bridge-server.py
 
-The server requires `claude` CLI to be installed and available in PATH.
+The server requires `claude` CLI for analysis endpoints.
 """
 
 import http.server
@@ -45,6 +50,35 @@ HOST = "0.0.0.0"
 
 # Locate the claude CLI binary
 CLAUDE_PATH = shutil.which("claude") or os.path.expanduser("~/.local/bin/claude")
+
+# ---------------------------------------------------------------------------
+# Parking data (external files managed by parkmobile-auto)
+# ---------------------------------------------------------------------------
+
+PARKING_DIR = "/Users/zwang/projects/parkmobile-auto"
+PARKING_FILES = {
+    "/parking/skip-dates": os.path.join(PARKING_DIR, "skip-dates.txt"),
+    "/parking/last-status": os.path.join(PARKING_DIR, "last-status.json"),
+    "/parking/purchase-history": os.path.join(PARKING_DIR, "purchase-history.json"),
+}
+
+# ---------------------------------------------------------------------------
+# Server-side data storage (health + chat)
+# ---------------------------------------------------------------------------
+
+BRIDGE_DATA_DIR = os.path.expanduser("~/.ryanhub-data")
+os.makedirs(BRIDGE_DATA_DIR, exist_ok=True)
+
+DATA_FILES = {
+    "/health-data/weight": os.path.join(BRIDGE_DATA_DIR, "health_weight.json"),
+    "/health-data/food": os.path.join(BRIDGE_DATA_DIR, "health_food.json"),
+    "/health-data/activity": os.path.join(BRIDGE_DATA_DIR, "health_activity.json"),
+    "/chat/messages": os.path.join(BRIDGE_DATA_DIR, "chat_messages.json"),
+}
+
+# ---------------------------------------------------------------------------
+# Claude CLI analysis prompts
+# ---------------------------------------------------------------------------
 
 ACTIVITY_ANALYSIS_PROMPT_TEMPLATE = """\
 You are a fitness expert. Analyze this physical activity description and return a JSON object with estimates.
@@ -107,6 +141,10 @@ All nutritional values are in grams except calories (kcal).
 """
 
 
+# ---------------------------------------------------------------------------
+# Claude CLI helpers
+# ---------------------------------------------------------------------------
+
 def build_prompt(text, has_image):
     """Build the analysis prompt from text and/or image context."""
     if text and has_image:
@@ -131,7 +169,6 @@ def build_prompt(text, has_image):
 def run_claude_text(prompt: str) -> str:
     """Run claude CLI with a text-only prompt."""
     env = os.environ.copy()
-    # Remove Claude Code env vars to avoid nesting errors
     env.pop("CLAUDE_CODE", None)
     env.pop("CLAUDECODE", None)
 
@@ -150,25 +187,10 @@ def run_claude_text(prompt: str) -> str:
 
 
 def run_claude_with_image(prompt: str, image_path: str) -> str:
-    """Run claude CLI with a prompt that references an image file.
-
-    The claude CLI can read files mentioned in context. We pipe the prompt
-    via stdin and pass the image file path for it to read.
-    """
+    """Run claude CLI with a prompt that references an image file."""
     env = os.environ.copy()
     env.pop("CLAUDE_CODE", None)
     env.pop("CLAUDECODE", None)
-
-    # Claude CLI doesn't have a direct image flag, but we can reference
-    # the image file in the prompt. The CLI in print mode can read files
-    # from the working directory. We use a combined approach:
-    # pipe the prompt and let claude analyze.
-    # Actually, claude -p can take images via the Read tool if we
-    # give it permission. But for simplicity, let's use a text-based
-    # approach for image analysis — we describe what to do and pass
-    # the base64 in the prompt itself (claude can handle it).
-    # However, that would be very large. Instead, let's use the
-    # --allowedTools flag and let claude read the image file.
 
     full_prompt = (
         f"Read the image file at '{image_path}' and analyze it.\n\n{prompt}"
@@ -199,18 +221,12 @@ def run_claude_with_image(prompt: str, image_path: str) -> str:
 
 
 def extract_result(claude_output: str) -> dict:
-    """Extract the food analysis JSON from claude CLI output.
-
-    The --output-format json wraps the response in a JSON envelope.
-    We need to extract the actual content.
-    """
+    """Extract the analysis JSON from claude CLI output."""
     try:
         envelope = json.loads(claude_output)
     except json.JSONDecodeError:
-        # Maybe it's raw text, try to parse as food result directly
         return parse_food_json(claude_output)
 
-    # The JSON output format returns {"type": "result", "result": "...text content..."}
     if isinstance(envelope, dict):
         content = envelope.get("result", "")
         if isinstance(content, str):
@@ -224,7 +240,6 @@ def extract_result(claude_output: str) -> dict:
 def parse_food_json(text: str) -> dict:
     """Parse food analysis JSON from text, handling markdown code blocks."""
     text = text.strip()
-    # Remove markdown code block wrappers
     if text.startswith("```json"):
         text = text[7:]
     elif text.startswith("```"):
@@ -232,22 +247,41 @@ def parse_food_json(text: str) -> dict:
     if text.endswith("```"):
         text = text[:-3]
     text = text.strip()
-
     return json.loads(text)
 
 
-class FoodAnalysisHandler(http.server.BaseHTTPRequestHandler):
-    """HTTP request handler for food analysis requests."""
+# ---------------------------------------------------------------------------
+# HTTP Handler
+# ---------------------------------------------------------------------------
+
+class BridgeHandler(http.server.BaseHTTPRequestHandler):
+    """HTTP request handler for all RyanHub bridge endpoints."""
 
     def do_GET(self):
         path = urlparse(self.path).path
         if path == "/health":
             self._send_json(200, {"status": "ok"})
+        elif path in PARKING_FILES:
+            self._serve_parking_file(path)
+        elif path in DATA_FILES:
+            self._serve_data_file(path)
         else:
             self._send_json(404, {"error": "Not found"})
 
     def do_POST(self):
         path = urlparse(self.path).path
+
+        # Parking skip-dates write
+        if path == "/parking/skip-dates":
+            self._write_parking_skip_dates()
+            return
+
+        # Server-side data write (health + chat)
+        if path in DATA_FILES:
+            self._write_data_file(path)
+            return
+
+        # Analysis endpoints
         if path not in ("/analyze", "/analyze-activity"):
             self._send_json(404, {"error": "Not found"})
             return
@@ -264,6 +298,95 @@ class FoodAnalysisHandler(http.server.BaseHTTPRequestHandler):
             self._handle_activity_analysis(data)
         else:
             self._handle_food_analysis(data)
+
+    def do_DELETE(self):
+        path = urlparse(self.path).path
+        if path in DATA_FILES:
+            filepath = DATA_FILES[path]
+            if os.path.exists(filepath):
+                os.remove(filepath)
+            self._send_json(200, {"ok": True})
+        else:
+            self._send_json(404, {"error": "Not found"})
+
+    # -----------------------------------------------------------------------
+    # Data file endpoints (health + chat)
+    # -----------------------------------------------------------------------
+
+    def _serve_data_file(self, path):
+        """Serve a JSON data file. Returns [] if file doesn't exist."""
+        filepath = DATA_FILES[path]
+        if not os.path.exists(filepath):
+            self._send_json(200, [])
+            return
+        try:
+            with open(filepath, "r") as f:
+                content = f.read()
+            data = json.loads(content) if content.strip() else []
+            self._send_json(200, data)
+        except (json.JSONDecodeError, IOError):
+            self._send_json(200, [])
+
+    def _write_data_file(self, path):
+        """Write JSON data to a file. Body should be a JSON array."""
+        try:
+            content_length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(content_length)
+            data = json.loads(body) if body else []
+        except (json.JSONDecodeError, ValueError) as e:
+            self._send_json(400, {"error": f"Invalid body: {e}"})
+            return
+
+        filepath = DATA_FILES[path]
+        try:
+            with open(filepath, "w") as f:
+                json.dump(data, f, ensure_ascii=False)
+            self._send_json(200, {"ok": True, "count": len(data) if isinstance(data, list) else 1})
+        except IOError as e:
+            self._send_json(500, {"error": f"Failed to write: {e}"})
+
+    # -----------------------------------------------------------------------
+    # Parking endpoints
+    # -----------------------------------------------------------------------
+
+    def _serve_parking_file(self, path):
+        filepath = PARKING_FILES[path]
+        if not os.path.exists(filepath):
+            if filepath.endswith(".json"):
+                self._send_json(200, {} if "last-status" in path else [])
+            else:
+                self._send_raw(200, "", "text/plain")
+            return
+        with open(filepath, "r") as f:
+            content = f.read()
+        if filepath.endswith(".json"):
+            try:
+                data = json.loads(content) if content.strip() else (
+                    {} if "last-status" in path else []
+                )
+                self._send_json(200, data)
+            except json.JSONDecodeError:
+                self._send_json(200, {} if "last-status" in path else [])
+        else:
+            self._send_raw(200, content, "text/plain")
+
+    def _write_parking_skip_dates(self):
+        try:
+            content_length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(content_length)
+            data = json.loads(body) if body else {}
+        except (json.JSONDecodeError, ValueError) as e:
+            self._send_json(400, {"error": f"Invalid body: {e}"})
+            return
+        dates = data.get("dates", [])
+        filepath = PARKING_FILES["/parking/skip-dates"]
+        with open(filepath, "w") as f:
+            f.write("\n".join(dates) + "\n" if dates else "")
+        self._send_json(200, {"ok": True, "count": len(dates)})
+
+    # -----------------------------------------------------------------------
+    # Analysis endpoints
+    # -----------------------------------------------------------------------
 
     def _handle_activity_analysis(self, data):
         text = data.get("text")
@@ -302,7 +425,6 @@ class FoodAnalysisHandler(http.server.BaseHTTPRequestHandler):
         temp_image_path = None
         try:
             if has_image:
-                # Save image to temp file for claude to read
                 with tempfile.NamedTemporaryFile(
                     suffix=".jpg", delete=False
                 ) as tmp:
@@ -331,7 +453,20 @@ class FoodAnalysisHandler(http.server.BaseHTTPRequestHandler):
             if temp_image_path and os.path.exists(temp_image_path):
                 os.unlink(temp_image_path)
 
-    def _send_json(self, status: int, data: dict):
+    # -----------------------------------------------------------------------
+    # Response helpers
+    # -----------------------------------------------------------------------
+
+    def _send_raw(self, status: int, text: str, content_type: str):
+        encoded = text.encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(encoded)))
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.end_headers()
+        self.wfile.write(encoded)
+
+    def _send_json(self, status: int, data):
         response = json.dumps(data).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
@@ -344,30 +479,27 @@ class FoodAnalysisHandler(http.server.BaseHTTPRequestHandler):
         """Handle CORS preflight."""
         self.send_response(200)
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
+        self.send_header("Access-Control-Allow-Methods", "POST, GET, DELETE, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.end_headers()
 
     def log_message(self, format, *args):
         """Override to use a cleaner log format."""
         sys.stderr.write(
-            f"[food-analysis] {self.address_string()} - {format % args}\n"
+            f"[bridge] {self.address_string()} - {format % args}\n"
         )
 
 
 def main():
-    # Verify claude CLI exists
     if not os.path.isfile(CLAUDE_PATH):
-        print(f"Error: claude CLI not found at {CLAUDE_PATH}", file=sys.stderr)
-        print(
-            "Install Claude Code or set the path in this script.",
-            file=sys.stderr,
-        )
-        sys.exit(1)
+        print(f"Warning: claude CLI not found at {CLAUDE_PATH}", file=sys.stderr)
+        print("Analysis endpoints will fail, but data endpoints will work.", file=sys.stderr)
 
-    server = http.server.HTTPServer((HOST, PORT), FoodAnalysisHandler)
-    print(f"Food Analysis Bridge Server listening on http://{HOST}:{PORT}")
-    print(f"Using claude CLI at: {CLAUDE_PATH}")
+    server = http.server.HTTPServer((HOST, PORT), BridgeHandler)
+    print(f"RyanHub Bridge Server listening on http://{HOST}:{PORT}")
+    print(f"Data directory: {BRIDGE_DATA_DIR}")
+    if os.path.isfile(CLAUDE_PATH):
+        print(f"Claude CLI: {CLAUDE_PATH}")
     print("Press Ctrl+C to stop.")
 
     try:
