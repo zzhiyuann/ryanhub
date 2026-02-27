@@ -71,8 +71,13 @@ final class ParkingViewModel {
     /// Parses cron status timestamp + duration to compute end time.
     var parkingUntilTime: String {
         guard let cron = lastCronStatus, cron.isToday,
-              (cron.status == "purchased" || cron.status == "already_active"),
-              let duration = cron.duration else {
+              (cron.status == "purchased" || cron.status == "already_active") else {
+            return "Until --:--"
+        }
+        if cron.status == "already_active" {
+            return "Manually purchased — duration unknown"
+        }
+        guard let duration = cron.duration else {
             return "Until --:--"
         }
         // Parse duration like "5 Hours, 27 Minutes"
