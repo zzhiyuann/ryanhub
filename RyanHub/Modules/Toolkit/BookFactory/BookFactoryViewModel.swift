@@ -52,6 +52,11 @@ final class BookFactoryViewModel {
         do {
             let response: BooksResponse = try await api.get("/api/books")
             books = response.books
+            BookFactoryDataProvider.cachedBooks = books.map {
+                .init(title: $0.title, topic: $0.topic, date: $0.date,
+                      wordCount: $0.wordCount, hasAudio: $0.hasAudioBool,
+                      audioDuration: $0.audioDuration)
+            }
             // Check for in-progress audio jobs
             for book in books where !book.hasAudioBool {
                 await checkAudioStatus(bookId: book.id)

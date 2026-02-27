@@ -167,10 +167,10 @@ final class ChatViewModel {
         isTyping = true
         startProgressTimer()
 
-        // Build the content to send over the wire. If the message is health-related,
-        // prepend a structured health data context so the AI can answer questions
-        // about weight, food, activity, etc. without backend changes.
-        var contentToSend = Self.buildContentWithHealthContext(userText: text)
+        // Build the content to send over the wire. If the message matches any
+        // personal toolkit (health, parking, vocab, calendar, books), prepend
+        // relevant context so the AI can answer personal questions.
+        var contentToSend = Self.buildContentWithContext(userText: text)
 
         // Prepend language instruction so the AI responds in the user's chosen language.
         let language = appState?.language ?? .english
@@ -456,7 +456,7 @@ final class ChatViewModel {
             }
             return
         case .text:
-            contentToSend = Self.buildContentWithHealthContext(userText: message.content)
+            contentToSend = Self.buildContentWithContext(userText: message.content)
             let language = appState?.language ?? .english
             contentToSend = "\(language.responseLanguageInstruction)\n\n\(contentToSend)"
             let messageId = message.id
@@ -515,7 +515,7 @@ final class ChatViewModel {
         startProgressTimer()
 
         // Send as a regular new message
-        var contentToSend = Self.buildContentWithHealthContext(userText: trimmed)
+        var contentToSend = Self.buildContentWithContext(userText: trimmed)
         let language = appState?.language ?? .english
         contentToSend = "\(language.responseLanguageInstruction)\n\n\(contentToSend)"
         let languageCode = language.rawValue
@@ -628,19 +628,14 @@ final class ChatViewModel {
         }
     }
 
-    // MARK: - Health Context Injection
+    // MARK: - Personal Context Injection
 
-    /// If the user's message is health-related, prepend a structured summary of
-    /// their recent health data (weight, food, activity) so the AI can answer
-    /// questions like "What were my calories today?" without backend changes.
+    /// Prepend relevant personal data context (health, parking, vocab, calendar, books)
+    /// to the user's message so the AI can answer personal questions without backend changes.
     /// The context is only added to the wire content — the local ChatMessage
     /// stored in the UI always shows the original user text.
-    static func buildContentWithHealthContext(userText: String) -> String {
-        guard HealthDataProvider.isHealthRelated(userText),
-              let context = HealthDataProvider.buildContextSummary() else {
-            return userText
-        }
-        return "\(context)\n\n\(userText)"
+    static func buildContentWithContext(userText: String) -> String {
+        PersonalContext.buildContext(for: userText)
     }
 
     // MARK: - Private

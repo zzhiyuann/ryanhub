@@ -5,7 +5,23 @@ import Foundation
 /// Provides formatted health data summaries for injection into chat context.
 /// Reads directly from UserDefaults (same keys as HealthViewModel) so it can be
 /// used standalone without requiring a shared HealthViewModel instance.
-enum HealthDataProvider {
+enum HealthDataProvider: ToolkitDataProvider {
+
+    static let toolkitId = "health"
+    static let displayName = "Health Data"
+
+    static let relevanceKeywords: [String] = [
+        "calories", "calorie", "weight", "food", "ate", "eating", "eat",
+        "meal", "exercise", "activity", "workout", "health", "nutrition",
+        "protein", "carbs", "carb", "fat", "fitness", "bmi", "diet",
+        "breakfast", "lunch", "dinner", "snack",
+        "体重", "卡路里", "热量", "蛋白质", "碳水", "脂肪",
+        "运动", "锻炼", "健康", "饮食", "早餐", "午餐", "晚餐"
+    ]
+
+    static func isRelevant(to text: String) -> Bool {
+        isHealthRelated(text)
+    }
 
     // MARK: - Public API
 
@@ -27,11 +43,11 @@ enum HealthDataProvider {
             return nil
         }
 
-        var parts: [String] = ["[Health Data Context]"]
+        var parts: [String] = ["[\(displayName)]"]
         if let w = weightSection { parts.append(w) }
         if let f = foodSection { parts.append(f) }
         if let a = activitySection { parts.append(a) }
-        parts.append("[End Health Data]")
+        parts.append("[End \(displayName)]")
 
         return parts.joined(separator: "\n")
     }
