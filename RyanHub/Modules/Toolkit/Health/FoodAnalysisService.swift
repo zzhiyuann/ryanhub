@@ -7,7 +7,7 @@ import UIKit
 /// that shells out to the `claude` CLI. No API key required -- uses the host Mac's
 /// Claude Code subscription.
 ///
-/// The bridge server runs at `http://localhost:18790` by default (see `scripts/food-analysis-server.py`).
+/// The bridge server runs at `http://localhost:18790` by default (see `scripts/bridge-server.py`).
 /// The base URL is configurable via `AppState.foodAnalysisURL` to support connections
 /// from real devices on the local network.
 @MainActor @Observable
@@ -98,7 +98,7 @@ final class FoodAnalysisService {
         {
             let host = URL(string: bridgeBaseURL)?.host ?? "unknown"
             let port = URL(string: bridgeBaseURL)?.port.map { String($0) } ?? "18790"
-            analysisError = "Cannot reach analysis server at \(host):\(port). Make sure food-analysis-server.py is running."
+            analysisError = "Cannot reach analysis server at \(host):\(port). Make sure bridge-server.py is running."
             return nil
         } catch is DecodingError {
             analysisError = "Failed to parse nutritional data from analysis"
@@ -155,7 +155,7 @@ final class FoodAnalysisService {
         {
             let host = URL(string: bridgeBaseURL)?.host ?? "unknown"
             let port = URL(string: bridgeBaseURL)?.port.map { String($0) } ?? "18790"
-            analysisError = "Cannot reach analysis server at \(host):\(port). Make sure food-analysis-server.py is running."
+            analysisError = "Cannot reach analysis server at \(host):\(port). Make sure bridge-server.py is running."
             return nil
         } catch is DecodingError {
             analysisError = "Failed to parse activity analysis result"

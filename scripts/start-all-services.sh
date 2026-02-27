@@ -4,7 +4,7 @@
 #
 # Starts/stops/checks all backend services that the app depends on:
 #   1. Dispatcher (WebSocket on port 8765) — Chat backend
-#   2. Food Analysis Server (HTTP on port 18790) — Nutrition analysis bridge
+#   2. Bridge Server (HTTP on port 18790) — RyanHub bridge server
 #   3. Calendar Sync Server (HTTP on port 18791) — Google Calendar bridge
 #   4. Book Factory Server (HTTPS on port 3443 / HTTP on port 3000) — Book platform
 #
@@ -36,10 +36,10 @@ DISPATCHER_PORT=8765
 DISPATCHER_BIN="$REPO_ROOT/services/dispatcher/.venv/bin/dispatcher"
 DISPATCHER_LOG="/tmp/ryanhub-dispatcher.log"
 
-# Food Analysis Server
+# Bridge Server
 FOOD_NAME="food-analysis"
 FOOD_PORT=18790
-FOOD_SCRIPT="$REPO_ROOT/scripts/food-analysis-server.py"
+FOOD_SCRIPT="$REPO_ROOT/scripts/bridge-server.py"
 FOOD_LOG="/tmp/ryanhub-food-analysis.log"
 
 # Calendar Sync Server
@@ -213,7 +213,7 @@ status_dispatcher() {
 }
 
 # =============================================================================
-# Service: Food Analysis Server
+# Service: Bridge Server
 # =============================================================================
 
 start_food() {
