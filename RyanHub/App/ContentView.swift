@@ -44,8 +44,8 @@ struct ContentView: View {
     @State private var terminalViewModel = TerminalViewModel()
 
     var body: some View {
-        VStack(spacing: 0) {
-            // Content area — fills all available space above the tab bar
+        ZStack(alignment: .bottom) {
+            // Content area — fills all available space, respects keyboard
             ZStack {
                 switch selectedTab {
                 case .chat:
@@ -57,36 +57,38 @@ struct ContentView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(.bottom, 50) // Reserve space for tab bar
 
-            // Separator line above tab bar
-            AdaptiveColors.border(for: colorScheme)
-                .frame(height: 0.5)
+            // Tab bar — fixed at bottom, ignores keyboard
+            VStack(spacing: 0) {
+                AdaptiveColors.border(for: colorScheme)
+                    .frame(height: 0.5)
 
-            // Custom tab bar
-            HStack(spacing: 0) {
-                ForEach(MainTab.allCases, id: \.rawValue) { tab in
-                    Button {
-                        selectedTab = tab
-                    } label: {
-                        Image(systemName: tab.icon)
-                            .font(.system(size: 20, weight: selectedTab == tab ? .bold : .medium))
-                            .symbolRenderingMode(.monochrome)
-                            .foregroundStyle(selectedTab == tab ? Color.hubPrimary : AdaptiveColors.textSecondary(for: colorScheme))
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 50)
-                            .contentShape(Rectangle())
+                HStack(spacing: 0) {
+                    ForEach(MainTab.allCases, id: \.rawValue) { tab in
+                        Button {
+                            selectedTab = tab
+                        } label: {
+                            Image(systemName: tab.icon)
+                                .font(.system(size: 20, weight: selectedTab == tab ? .bold : .medium))
+                                .symbolRenderingMode(.monochrome)
+                                .foregroundStyle(selectedTab == tab ? Color.hubPrimary : AdaptiveColors.textSecondary(for: colorScheme))
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 50)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("tab_\(tab.rawValue)")
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("tab_\(tab.rawValue)")
                 }
             }
             .background(
                 AdaptiveColors.surface(for: colorScheme)
                     .ignoresSafeArea(edges: .bottom)
             )
+            .ignoresSafeArea(.keyboard)
         }
         .background(AdaptiveColors.background(for: colorScheme))
-        .ignoresSafeArea(.keyboard)
     }
 
 
