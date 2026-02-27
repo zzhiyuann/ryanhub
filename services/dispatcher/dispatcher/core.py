@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64 as b64mod
 import logging
 import os
 import html
@@ -294,15 +295,34 @@ class Dispatcher:
                 if not content or content == "[Voice message]":
                     content = "(audio could not be transcribed)"
 
-        # Attach image context if present
+        # Save image to temp file and build attachments (like Telegram path)
+        attachments: list[dict] = []
         if image_base64:
-            # Include the image as a note in the content for the AI
-            img_prefix = "[User sent an image"
-            if content and content not in ("[Image]",):
-                img_prefix += f" with caption: {content}]"
-            else:
-                img_prefix += "]"
-            content = img_prefix
+            try:
+                img_data = b64mod.b64decode(image_base64)
+                fd = tempfile.NamedTemporaryFile(
+                    suffix=".jpg", prefix="dispatch_ws_photo_", delete=False,
+                )
+                fd.write(img_data)
+                fd.close()
+                attachments.append({
+                    "kind": "file",
+                    "media_type": "photo",
+                    "path": fd.name,
+                })
+                log.info("[ws:%s] saved image to %s (%d bytes)", msg_id[:8], fd.name, len(img_data))
+                # Set content to caption or placeholder (like Telegram path)
+                if not content or content in ("[Image]",):
+                    content = "[User sent a photo]"
+            except Exception:
+                log.exception("[ws:%s] failed to decode/save image", msg_id[:8])
+                # Fallback: just note the image in text
+                img_prefix = "[User sent an image"
+                if content and content not in ("[Image]",):
+                    img_prefix += f" with caption: {content}]"
+                else:
+                    img_prefix += "]"
+                content = img_prefix
 
         log.info("[ws:%s] '%s' project=%s", msg_id[:8], content[:80], project)
 
@@ -405,6 +425,7 @@ class Dispatcher:
                         synthetic_mid, content, last, msg_id,
                         websocket=websocket,
                         model=model_override, model_sticky=is_sticky,
+                        attachments=attachments,
                     )
         self.sm.force_new = False
 
@@ -419,6 +440,7 @@ class Dispatcher:
                 synthetic_mid, content, oldest, msg_id,
                 websocket=websocket,
                 model=model_override, model_sticky=is_sticky,
+                attachments=attachments,
             )
 
         # Create new session
@@ -430,6 +452,7 @@ class Dispatcher:
         return await self._do_ws_session(
             synthetic_mid, session, content, msg_id,
             websocket=websocket, model=model_override,
+            attachments=attachments,
         )
 
     async def _do_ws_session(
@@ -440,6 +463,7 @@ class Dispatcher:
         ws_msg_id: str,
         websocket=None,
         model: str | None = None,
+        attachments: list[dict] | None = None,
     ) -> str:
         """Run a WebSocket-originated task through the agent pipeline."""
         # Store WS client reference for question routing
@@ -448,7 +472,7 @@ class Dispatcher:
         session.model_override = model
         self.transcript.append(session.conv_id, "user", text)
 
-        prompt = self._build_prompt(text, session.cwd)
+        prompt = self._build_prompt(text, session.cwd, attachments=attachments)
         max_turns = self.cfg.max_turns
 
         # Update WS session count
@@ -510,6 +534,7 @@ class Dispatcher:
         websocket=None,
         model: str | None = None,
         model_sticky: bool = False,
+        attachments: list[dict] | None = None,
     ) -> str:
         """Resume a conversation from a WebSocket message."""
         effective_model = model or self._sticky_model
@@ -530,7 +555,9 @@ class Dispatcher:
         session.ws_client = websocket
         session.ws_msg_id = ws_msg_id
 
-        prompt = self._build_prompt_with_history(text, session.cwd, session.conv_id)
+        prompt = self._build_prompt_with_history(
+            text, session.cwd, session.conv_id, attachments=attachments,
+        )
         self.transcript.append(session.conv_id, "user", text)
 
         max_turns = self.cfg.max_turns_followup
