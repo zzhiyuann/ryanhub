@@ -191,6 +191,8 @@ extension ChatMessage {
         if let data = try? JSONEncoder().encode(trimmed) {
             UserDefaults.standard.set(data, forKey: storageKey)
         }
+        // Sync to bridge server for cross-device availability
+        Task { await saveToServer(messages) }
     }
 
     /// Load messages from UserDefaults.
@@ -239,6 +241,8 @@ extension ChatMessage {
             deleteImageFromDisk(messageId: msg.id)
         }
         UserDefaults.standard.removeObject(forKey: storageKey)
+        // Also clear on bridge server
+        Task { await clearOnServer() }
     }
 
     /// Migrate messages from the old multi-session system into the new single-chat key.
@@ -286,5 +290,61 @@ extension ChatMessage {
     /// Minimal struct for decoding legacy session data during migration.
     private struct LegacySession: Codable {
         let id: String
+    }
+}
+
+// MARK: - Server Sync
+
+extension ChatMessage {
+    /// Derive bridge server base URL from the user's configured server URL.
+    private static var bridgeBaseURL: String {
+        UserDefaults.standard.string(forKey: "ryanhub_server_url")
+            .flatMap { URL(string: $0)?.host }
+            .map { "http://\($0):18790" }
+            ?? AppState.defaultFoodAnalysisURL
+    }
+
+    /// Load messages from the bridge server. Returns nil on failure.
+    static func loadFromServer() async -> [ChatMessage]? {
+        guard let url = URL(string: "\(bridgeBaseURL)/chat/messages") else { return nil }
+        do {
+            let (data, response) = try await URLSession.shared.data(from: url)
+            guard (response as? HTTPURLResponse)?.statusCode == 200 else { return nil }
+            return try JSONDecoder().decode([ChatMessage].self, from: data)
+        } catch {
+            return nil
+        }
+    }
+
+    /// Save messages to the bridge server (stripped of image/voice binary data).
+    static func saveToServer(_ messages: [ChatMessage]) async {
+        guard let url = URL(string: "\(bridgeBaseURL)/chat/messages") else { return }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        // Strip image and voice data before sending to server
+        let stripped = Array(messages.suffix(maxStoredMessages)).map { msg -> ChatMessage in
+            ChatMessage(
+                id: msg.id,
+                content: msg.content.isEmpty && msg.hasImageOnDisk ? "[Image]" : msg.content,
+                role: msg.role,
+                timestamp: msg.timestamp,
+                isStreaming: false,
+                hasImageOnDisk: msg.hasImageOnDisk,
+                replyToId: msg.replyToId,
+                replyToPreview: msg.replyToPreview
+            )
+        }
+        guard let body = try? JSONEncoder().encode(stripped) else { return }
+        request.httpBody = body
+        _ = try? await URLSession.shared.data(for: request)
+    }
+
+    /// Delete all messages on the bridge server.
+    static func clearOnServer() async {
+        guard let url = URL(string: "\(bridgeBaseURL)/chat/messages") else { return }
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        _ = try? await URLSession.shared.data(for: request)
     }
 }

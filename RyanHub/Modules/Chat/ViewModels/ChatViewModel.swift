@@ -99,6 +99,21 @@ final class ChatViewModel {
         ChatMessage.migrateFromMultiSession()
         messages = ChatMessage.loadSaved()
         setupWebSocketCallbacks()
+        // Sync from bridge server (source of truth for cross-device sync)
+        Task { @MainActor [weak self] in
+            if let serverMessages = await ChatMessage.loadFromServer(), !serverMessages.isEmpty {
+                // Restore image data from disk for messages that have it
+                let restored = serverMessages.map { msg -> ChatMessage in
+                    var m = msg
+                    if m.hasImageOnDisk && m.imageBase64 == nil,
+                       let imageData = ChatMessage.loadImageFromDisk(messageId: m.id) {
+                        m.imageBase64 = imageData.base64EncodedString()
+                    }
+                    return m
+                }
+                self?.messages = restored
+            }
+        }
     }
 
     // MARK: - Public API
