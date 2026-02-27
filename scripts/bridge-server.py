@@ -893,6 +893,10 @@ def main():
     print(f"Data directory: {BRIDGE_DATA_DIR}")
     if os.path.isfile(CLAUDE_PATH):
         print(f"Claude CLI: {CLAUDE_PATH}")
+    if OPENAI_AVAILABLE:
+        print("OpenAI: available (narration transcription + affect analysis enabled)")
+    else:
+        print("OpenAI: not available (narration analysis disabled)")
     print("Press Ctrl+C to stop.")
 
     try:
