@@ -37,6 +37,7 @@ Endpoints:
   POST     /popo/audio — Upload audio file (binary)
   GET      /popo/audio/<filename> — Retrieve audio file
   POST     /popo/narrations/analyze — Transcribe (Whisper) + affective analysis (local emotion model)
+  POST     /popo/analyze — Behavioral analysis: generate proactive nudges from sensing data (LLM or rule-based)
   POST     /popo/location/enrich — Reverse geocode + semantic place enrichment
   POST     /popo/location/learn-place — Teach the system a named place
   All GET endpoints support ?date=YYYY-MM-DD filtering.
@@ -57,8 +58,8 @@ import os
 import shutil
 import uuid
 import threading
-from datetime import datetime
-from typing import Optional, Dict, Any
+from datetime import datetime, timedelta
+from typing import Optional, Dict, Any, List
 from urllib.parse import urlparse, parse_qs
 
 PORT = 18790
@@ -603,6 +604,537 @@ def parse_food_json(text: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Anthropic SDK for behavioral analysis (LLM-based nudges)
+# ---------------------------------------------------------------------------
+
+ANTHROPIC_AVAILABLE = False
+_anthropic_client = None
+
+try:
+    import anthropic as _anthropic_module
+    ANTHROPIC_AVAILABLE = True
+    print("Anthropic SDK available for behavioral analysis.")
+except ImportError:
+    print("Warning: anthropic not installed. LLM-based nudge generation unavailable.",
+          file=sys.stderr)
+    print("  Install with: pip3 install anthropic", file=sys.stderr)
+
+
+def _get_anthropic_api_key():
+    # type: () -> Optional[str]
+    """Resolve the Anthropic API key from environment or config files."""
+    # 1. Environment variable (standard)
+    key = os.environ.get("ANTHROPIC_API_KEY")
+    if key:
+        return key
+
+    # 2. Dispatcher config.yaml
+    config_path = os.path.expanduser("~/.config/dispatcher/config.yaml")
+    if os.path.exists(config_path):
+        try:
+            import yaml
+            with open(config_path, "r") as f:
+                cfg = yaml.safe_load(f)
+            if isinstance(cfg, dict):
+                key = cfg.get("anthropic_api_key") or cfg.get("ANTHROPIC_API_KEY")
+                if key:
+                    return key
+        except Exception:
+            pass
+
+    # 3. Common .env files
+    for env_path in [
+        os.path.expanduser("~/.env"),
+        os.path.expanduser("~/projects/ryanhub/.env"),
+        os.path.expanduser("~/projects/ryanhub/scripts/.env"),
+    ]:
+        if os.path.exists(env_path):
+            try:
+                with open(env_path, "r") as f:
+                    for line in f:
+                        line = line.strip()
+                        if line.startswith("ANTHROPIC_API_KEY="):
+                            return line.split("=", 1)[1].strip().strip('"').strip("'")
+            except Exception:
+                pass
+
+    return None
+
+
+def get_anthropic_client():
+    # type: () -> Optional[Any]
+    """Get or create a singleton Anthropic client."""
+    global _anthropic_client
+    if _anthropic_client is not None:
+        return _anthropic_client
+
+    if not ANTHROPIC_AVAILABLE:
+        return None
+
+    api_key = _get_anthropic_api_key()
+    if not api_key:
+        print("[Analyze] No Anthropic API key found. LLM nudges disabled.",
+              file=sys.stderr)
+        return None
+
+    try:
+        _anthropic_client = _anthropic_module.Anthropic(api_key=api_key)
+        print("[Analyze] Anthropic client initialized.")
+        return _anthropic_client
+    except Exception as e:
+        print("[Analyze] Failed to create Anthropic client: %s" % e,
+              file=sys.stderr)
+        return None
+
+
+# ---------------------------------------------------------------------------
+# Behavioral analysis: data summarization + nudge generation
+# ---------------------------------------------------------------------------
+
+BEHAVIORAL_ANALYSIS_SYSTEM_PROMPT = """\
+You are Facai (发财), a proactive AI companion cat. You observe your human's behavioral data and generate caring, actionable nudges.
+
+Analyze the behavioral data and generate 1-3 nudges. Each nudge should be:
+- Specific (reference actual data: "you walked 8000 steps" not "great activity")
+- Caring but not preachy (friendly cat personality)
+- Actionable (suggest something concrete when appropriate)
+- Contextual (consider time of day, patterns, transitions)
+
+Types:
+- insight: Pattern observation ("You're more active in mornings than afternoons this week")
+- reminder: Gentle prompt ("You've been at your desk for 3 hours, stretch break?")
+- encouragement: Positive reinforcement ("8000 steps today - your best this week!")
+- alert: Health concern ("Elevated HR while stationary, try deep breathing")
+
+Return a JSON array of nudges. Each nudge must have exactly these fields:
+{ "type", "content", "trigger" (what data triggered this), "priority" ("normal" or "high"), "relatedModalities" (list of sensing modality strings like "motion", "steps", "heartRate", "location", "screen", "sleep", "battery") }
+
+Return ONLY the JSON array, no other text or markdown formatting."""
+
+
+def summarize_sensing_data(events, narrations, daily_summary=None):
+    # type: (List[Dict], List[Dict], Optional[Dict]) -> str
+    """Convert raw sensing events and narrations into a readable summary for the LLM.
+
+    Groups events by modality and extracts key metrics for each."""
+    lines = []  # type: List[str]
+    now = datetime.now()
+    lines.append("=== Behavioral Data Summary ===")
+    lines.append("Current time: %s" % now.strftime("%Y-%m-%d %H:%M"))
+    lines.append("")
+
+    if not events and not narrations and not daily_summary:
+        lines.append("No sensing data available for this period.")
+        return "\n".join(lines)
+
+    # Group events by modality
+    by_modality = {}  # type: Dict[str, List[Dict]]
+    for ev in events:
+        if not isinstance(ev, dict):
+            continue
+        modality = ev.get("modality", ev.get("type", "unknown"))
+        by_modality.setdefault(modality, []).append(ev)
+
+    # --- Motion ---
+    motion_events = by_modality.get("motion", [])
+    if motion_events:
+        lines.append("[Motion]")
+        # Latest activity
+        latest = max(motion_events, key=lambda e: e.get("timestamp", ""), default=None)
+        if latest:
+            activity = latest.get("activity", latest.get("data", {}).get("activity", "unknown"))
+            confidence = latest.get("confidence", latest.get("data", {}).get("confidence", ""))
+            lines.append("  Current activity: %s (confidence: %s)" % (activity, confidence))
+        # Count transitions
+        activities = [e.get("activity", e.get("data", {}).get("activity", "")) for e in motion_events]
+        transitions = sum(1 for i in range(1, len(activities)) if activities[i] != activities[i - 1])
+        lines.append("  Activity transitions in period: %d" % transitions)
+        # Detect sedentary streaks
+        stationary_events = [e for e in motion_events if
+                             e.get("activity", e.get("data", {}).get("activity", ""))
+                             in ("stationary", "still", "sitting", "unknown")]
+        if stationary_events and len(stationary_events) > 0:
+            first_ts = stationary_events[0].get("timestamp", "")
+            last_ts = stationary_events[-1].get("timestamp", "")
+            if first_ts and last_ts:
+                try:
+                    t0 = datetime.fromisoformat(first_ts.replace("Z", "+00:00"))
+                    t1 = datetime.fromisoformat(last_ts.replace("Z", "+00:00"))
+                    duration_min = (t1 - t0).total_seconds() / 60
+                    if duration_min > 30:
+                        lines.append("  Sedentary streak: ~%.0f minutes" % duration_min)
+                except (ValueError, TypeError):
+                    pass
+        lines.append("")
+
+    # --- Steps ---
+    step_events = by_modality.get("steps", by_modality.get("pedometer", []))
+    if step_events:
+        lines.append("[Steps]")
+        total_steps = 0
+        for ev in step_events:
+            count = ev.get("steps", ev.get("data", {}).get("steps", 0))
+            if isinstance(count, (int, float)):
+                total_steps += int(count)
+        if total_steps > 0:
+            lines.append("  Total steps: %d" % total_steps)
+        else:
+            # Try to get the latest cumulative count
+            latest = max(step_events, key=lambda e: e.get("timestamp", ""), default=None)
+            if latest:
+                count = latest.get("steps", latest.get("data", {}).get("steps", 0))
+                lines.append("  Latest step count: %s" % count)
+        lines.append("")
+
+    # --- Heart Rate ---
+    hr_events = by_modality.get("heartRate", by_modality.get("heart_rate", []))
+    if hr_events:
+        lines.append("[Heart Rate]")
+        bpm_values = []
+        for ev in hr_events:
+            bpm = ev.get("bpm", ev.get("data", {}).get("bpm"))
+            if isinstance(bpm, (int, float)):
+                bpm_values.append(bpm)
+        if bpm_values:
+            lines.append("  Latest: %.0f bpm" % bpm_values[-1])
+            lines.append("  Range: %.0f - %.0f bpm" % (min(bpm_values), max(bpm_values)))
+            lines.append("  Average: %.0f bpm" % (sum(bpm_values) / len(bpm_values)))
+        lines.append("")
+
+    # --- Location ---
+    loc_events = by_modality.get("location", [])
+    if loc_events:
+        lines.append("[Location]")
+        places = set()
+        for ev in loc_events:
+            place = (ev.get("place") or ev.get("data", {}).get("place")
+                     or ev.get("semanticPlace") or ev.get("data", {}).get("semanticPlace"))
+            if place:
+                places.add(place)
+        if places:
+            lines.append("  Places visited: %s" % ", ".join(sorted(places)))
+        else:
+            lines.append("  Location events: %d (no semantic places resolved)" % len(loc_events))
+        lines.append("")
+
+    # --- Screen ---
+    screen_events = by_modality.get("screen", by_modality.get("screenTime", []))
+    if screen_events:
+        lines.append("[Screen]")
+        total_fg_sec = 0
+        session_count = 0
+        for ev in screen_events:
+            fg = ev.get("foregroundDuration", ev.get("data", {}).get("foregroundDuration", 0))
+            if isinstance(fg, (int, float)):
+                total_fg_sec += fg
+            if ev.get("event", ev.get("data", {}).get("event")) in ("foreground", "unlock"):
+                session_count += 1
+        lines.append("  Total foreground time: %.0f min" % (total_fg_sec / 60.0))
+        if session_count:
+            lines.append("  Sessions: %d" % session_count)
+        lines.append("")
+
+    # --- Sleep ---
+    sleep_events = by_modality.get("sleep", [])
+    if sleep_events:
+        lines.append("[Sleep]")
+        latest = max(sleep_events, key=lambda e: e.get("timestamp", ""), default=None)
+        if latest:
+            duration = latest.get("duration", latest.get("data", {}).get("duration"))
+            quality = latest.get("quality", latest.get("data", {}).get("quality"))
+            if duration:
+                hours = duration / 3600.0 if isinstance(duration, (int, float)) else 0
+                lines.append("  Last night: %.1f hours" % hours)
+            if quality:
+                lines.append("  Quality: %s" % quality)
+        lines.append("")
+
+    # --- Battery ---
+    battery_events = by_modality.get("battery", [])
+    if battery_events:
+        lines.append("[Battery]")
+        latest = max(battery_events, key=lambda e: e.get("timestamp", ""), default=None)
+        if latest:
+            level = latest.get("level", latest.get("data", {}).get("level"))
+            charging = latest.get("charging", latest.get("data", {}).get("isCharging"))
+            if level is not None:
+                lines.append("  Level: %s%%" % level)
+            if charging is not None:
+                lines.append("  Charging: %s" % ("yes" if charging else "no"))
+        lines.append("")
+
+    # --- Any other modalities ---
+    known = {"motion", "steps", "pedometer", "heartRate", "heart_rate",
+             "location", "screen", "screenTime", "sleep", "battery"}
+    for modality, evts in by_modality.items():
+        if modality not in known and evts:
+            lines.append("[%s]" % modality.capitalize())
+            lines.append("  Events: %d" % len(evts))
+            lines.append("")
+
+    # --- Narrations ---
+    if narrations:
+        lines.append("[Voice Narrations]")
+        for nar in narrations[-5:]:  # Last 5 narrations
+            if not isinstance(nar, dict):
+                continue
+            transcript = nar.get("transcript", "")
+            mood = nar.get("extractedMood", "")
+            affect = nar.get("affectAnalysis", {})
+            ts = nar.get("timestamp", "")[:16]
+            if transcript:
+                lines.append('  [%s] "%s"' % (ts, transcript[:120]))
+                if mood:
+                    lines.append("    Mood: %s" % mood)
+                elif affect and isinstance(affect, dict):
+                    primary = affect.get("primary_emotion", "")
+                    if primary:
+                        lines.append("    Emotion: %s" % primary)
+        lines.append("")
+
+    # --- Daily summary (if provided) ---
+    if daily_summary and isinstance(daily_summary, dict):
+        lines.append("[Daily Summary]")
+        for key, val in daily_summary.items():
+            if key not in ("id", "date"):
+                lines.append("  %s: %s" % (key, val))
+        lines.append("")
+
+    return "\n".join(lines)
+
+
+def generate_nudges_llm(summary_text):
+    # type: (str) -> Optional[List[Dict]]
+    """Generate nudges using Claude API. Returns list of nudge dicts or None on failure."""
+    client = get_anthropic_client()
+    if client is None:
+        return None
+
+    try:
+        message = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=1024,
+            system=BEHAVIORAL_ANALYSIS_SYSTEM_PROMPT,
+            messages=[
+                {"role": "user", "content": summary_text}
+            ]
+        )
+
+        # Extract the text content
+        response_text = ""
+        for block in message.content:
+            if hasattr(block, "text"):
+                response_text += block.text
+
+        # Parse JSON from response
+        response_text = response_text.strip()
+        # Handle markdown code blocks
+        if response_text.startswith("```json"):
+            response_text = response_text[7:]
+        elif response_text.startswith("```"):
+            response_text = response_text[3:]
+        if response_text.endswith("```"):
+            response_text = response_text[:-3]
+        response_text = response_text.strip()
+
+        nudges = json.loads(response_text)
+        if isinstance(nudges, list):
+            return nudges
+        elif isinstance(nudges, dict) and "nudges" in nudges:
+            return nudges["nudges"]
+        else:
+            print("[Analyze] Unexpected LLM response format: %s" % type(nudges),
+                  file=sys.stderr)
+            return None
+
+    except Exception as e:
+        print("[Analyze] LLM nudge generation failed: %s" % e, file=sys.stderr)
+        return None
+
+
+def generate_nudges_rule_based(events, narrations, daily_summary=None):
+    # type: (List[Dict], List[Dict], Optional[Dict]) -> List[Dict]
+    """Simple rule-based nudge generation as fallback when LLM is unavailable."""
+    nudges = []  # type: List[Dict]
+    now = datetime.now()
+
+    # Group events by modality
+    by_modality = {}  # type: Dict[str, List[Dict]]
+    for ev in events:
+        if not isinstance(ev, dict):
+            continue
+        modality = ev.get("modality", ev.get("type", "unknown"))
+        by_modality.setdefault(modality, []).append(ev)
+
+    # Rule 1: Sedentary for too long (>2 hours)
+    motion_events = by_modality.get("motion", [])
+    if motion_events:
+        stationary = [e for e in motion_events if
+                      e.get("activity", e.get("data", {}).get("activity", ""))
+                      in ("stationary", "still", "sitting", "unknown")]
+        if len(stationary) >= 2:
+            first_ts = stationary[0].get("timestamp", "")
+            last_ts = stationary[-1].get("timestamp", "")
+            if first_ts and last_ts:
+                try:
+                    t0 = datetime.fromisoformat(first_ts.replace("Z", "+00:00"))
+                    t1 = datetime.fromisoformat(last_ts.replace("Z", "+00:00"))
+                    duration_min = (t1 - t0).total_seconds() / 60
+                    if duration_min >= 120:
+                        nudges.append({
+                            "type": "reminder",
+                            "content": "You've been sedentary for about %.0f minutes. How about a quick stretch or a short walk? Your body will thank you! 🐱" % duration_min,
+                            "trigger": "sedentary_duration",
+                            "priority": "normal",
+                            "relatedModalities": ["motion"]
+                        })
+                    elif duration_min >= 60:
+                        nudges.append({
+                            "type": "reminder",
+                            "content": "About an hour of sitting so far. Maybe stand up and stretch for a minute?",
+                            "trigger": "sedentary_duration",
+                            "priority": "normal",
+                            "relatedModalities": ["motion"]
+                        })
+                except (ValueError, TypeError):
+                    pass
+
+    # Rule 2: Step count milestones
+    step_events = by_modality.get("steps", by_modality.get("pedometer", []))
+    if step_events:
+        total_steps = 0
+        for ev in step_events:
+            count = ev.get("steps", ev.get("data", {}).get("steps", 0))
+            if isinstance(count, (int, float)):
+                total_steps += int(count)
+        if total_steps >= 10000:
+            nudges.append({
+                "type": "encouragement",
+                "content": "Amazing! %d steps today - you hit the 10K mark! Keep it up!" % total_steps,
+                "trigger": "steps_milestone",
+                "priority": "normal",
+                "relatedModalities": ["steps"]
+            })
+        elif total_steps >= 5000:
+            nudges.append({
+                "type": "encouragement",
+                "content": "%d steps so far today. Halfway to 10K - you're doing great!" % total_steps,
+                "trigger": "steps_progress",
+                "priority": "normal",
+                "relatedModalities": ["steps"]
+            })
+        elif now.hour >= 18 and total_steps < 3000:
+            nudges.append({
+                "type": "reminder",
+                "content": "Only %d steps today and it's already evening. An after-dinner walk could help!" % total_steps,
+                "trigger": "low_steps_evening",
+                "priority": "normal",
+                "relatedModalities": ["steps"]
+            })
+
+    # Rule 3: Elevated heart rate while stationary
+    hr_events = by_modality.get("heartRate", by_modality.get("heart_rate", []))
+    if hr_events and motion_events:
+        latest_hr = max(hr_events, key=lambda e: e.get("timestamp", ""), default=None)
+        latest_motion = max(motion_events, key=lambda e: e.get("timestamp", ""), default=None)
+        if latest_hr and latest_motion:
+            bpm = latest_hr.get("bpm", latest_hr.get("data", {}).get("bpm", 0))
+            activity = latest_motion.get("activity", latest_motion.get("data", {}).get("activity", ""))
+            if isinstance(bpm, (int, float)) and bpm > 100 and activity in ("stationary", "still", "sitting"):
+                nudges.append({
+                    "type": "alert",
+                    "content": "Your heart rate is %.0f bpm while you're stationary. Try some deep breathing to relax." % bpm,
+                    "trigger": "elevated_hr_stationary",
+                    "priority": "high",
+                    "relatedModalities": ["heartRate", "motion"]
+                })
+
+    # Rule 4: Negative mood from narrations
+    if narrations:
+        recent_narrations = narrations[-3:]  # Last 3
+        negative_count = 0
+        for nar in recent_narrations:
+            if not isinstance(nar, dict):
+                continue
+            mood = nar.get("extractedMood", "")
+            affect = nar.get("affectAnalysis", {})
+            if mood in ("sadness", "anger", "fear", "disgust"):
+                negative_count += 1
+            elif isinstance(affect, dict) and affect.get("primary_emotion") in ("sadness", "anger", "fear", "disgust"):
+                negative_count += 1
+        if negative_count >= 2:
+            nudges.append({
+                "type": "insight",
+                "content": "Your recent voice entries suggest you might be feeling down. Want to take a break or do something you enjoy?",
+                "trigger": "negative_mood_pattern",
+                "priority": "normal",
+                "relatedModalities": ["narration"]
+            })
+
+    # Rule 5: Low battery warning
+    battery_events = by_modality.get("battery", [])
+    if battery_events:
+        latest = max(battery_events, key=lambda e: e.get("timestamp", ""), default=None)
+        if latest:
+            level = latest.get("level", latest.get("data", {}).get("level"))
+            charging = latest.get("charging", latest.get("data", {}).get("isCharging", False))
+            if isinstance(level, (int, float)) and level <= 15 and not charging:
+                nudges.append({
+                    "type": "alert",
+                    "content": "Battery at %d%% - you might want to charge soon so I can keep watching over you!" % int(level),
+                    "trigger": "low_battery",
+                    "priority": "high",
+                    "relatedModalities": ["battery"]
+                })
+
+    # If no rules fired and we have data, generate a generic insight
+    if not nudges and (events or narrations):
+        modalities = list(by_modality.keys())
+        nudges.append({
+            "type": "insight",
+            "content": "I'm observing your %s data. Everything looks normal so far!" % ", ".join(modalities[:3]) if modalities else "I'm here watching over you. Send more sensing data so I can give you better insights!",
+            "trigger": "general_observation",
+            "priority": "normal",
+            "relatedModalities": modalities[:3] if modalities else []
+        })
+
+    return nudges[:3]  # Cap at 3 nudges
+
+
+def store_generated_nudges(nudge_records):
+    # type: (List[Dict]) -> None
+    """Store generated nudges into popo_nudges.json following existing storage pattern."""
+    nudges_file = DATA_FILES.get("/popo/nudges")
+    if not nudges_file:
+        return
+
+    # Load existing nudges
+    existing = []
+    if os.path.exists(nudges_file):
+        try:
+            with open(nudges_file, "r") as f:
+                content = f.read()
+            existing = json.loads(content) if content.strip() else []
+        except (json.JSONDecodeError, IOError):
+            existing = []
+
+    # Merge by id (same pattern as _write_data_file)
+    merged = {}  # type: Dict[str, Dict]
+    for item in existing:
+        if isinstance(item, dict) and "id" in item:
+            merged[item["id"]] = item
+    for item in nudge_records:
+        if isinstance(item, dict) and "id" in item:
+            merged[item["id"]] = item
+
+    try:
+        with open(nudges_file, "w") as f:
+            json.dump(list(merged.values()), f, ensure_ascii=False)
+    except IOError as e:
+        print("[Analyze] Failed to store nudges: %s" % e, file=sys.stderr)
+
+
+# ---------------------------------------------------------------------------
 # HTTP Handler
 # ---------------------------------------------------------------------------
 
@@ -653,6 +1185,11 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
         # POPO learn a named place
         if path == "/popo/location/learn-place":
             self._handle_learn_place()
+            return
+
+        # POPO behavioral analysis (nudge generation)
+        if path == "/popo/analyze":
+            self._handle_behavioral_analysis()
             return
 
         # Server-side data write (health + chat + popo)
@@ -939,6 +1476,100 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
             self._send_json(500, {"error": "Analysis failed: %s" % e})
 
     # -----------------------------------------------------------------------
+    # Behavioral analysis endpoint (nudge generation)
+    # -----------------------------------------------------------------------
+
+    def _handle_behavioral_analysis(self):
+        """Analyze behavioral sensing data and generate proactive nudges.
+        Uses Claude API (haiku) when available, falls back to rule-based system.
+
+        Expects JSON body:
+        {
+            "sensing_events": [...],  // Recent sensing events (last 6 hours)
+            "narrations": [...],      // Recent narrations with transcripts and affect
+            "daily_summary": {...}    // Optional aggregated stats
+        }
+        """
+        try:
+            content_length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(content_length)
+            data = json.loads(body) if body else {}
+        except (json.JSONDecodeError, ValueError) as e:
+            self._send_json(400, {"error": "Invalid request body: %s" % e})
+            return
+
+        sensing_events = data.get("sensing_events", [])
+        narrations = data.get("narrations", [])
+        daily_summary = data.get("daily_summary")
+
+        if not isinstance(sensing_events, list):
+            sensing_events = []
+        if not isinstance(narrations, list):
+            narrations = []
+
+        print("[Analyze] Received %d sensing events, %d narrations" %
+              (len(sensing_events), len(narrations)))
+
+        # Step 1: Summarize the sensing data
+        summary_text = summarize_sensing_data(sensing_events, narrations, daily_summary)
+        print("[Analyze] Summary:\n%s" % summary_text[:500])
+
+        # Step 2: Generate nudges (LLM first, then rule-based fallback)
+        method_used = "none"
+        raw_nudges = None
+
+        # Try LLM-based generation first
+        if ANTHROPIC_AVAILABLE:
+            raw_nudges = generate_nudges_llm(summary_text)
+            if raw_nudges is not None:
+                method_used = "llm"
+                print("[Analyze] Generated %d nudges via LLM" % len(raw_nudges))
+
+        # Fall back to rule-based
+        if raw_nudges is None:
+            raw_nudges = generate_nudges_rule_based(
+                sensing_events, narrations, daily_summary)
+            method_used = "rule_based"
+            print("[Analyze] Generated %d nudges via rule-based system" % len(raw_nudges))
+
+        # Step 3: Normalize nudge records (add id, timestamp, validate fields)
+        now_iso = datetime.now().isoformat()
+        nudge_records = []
+        for raw in raw_nudges:
+            if not isinstance(raw, dict):
+                continue
+            nudge = {
+                "id": str(uuid.uuid4()),
+                "timestamp": now_iso,
+                "type": raw.get("type", "insight"),
+                "content": raw.get("content", ""),
+                "trigger": raw.get("trigger", "unknown"),
+                "priority": raw.get("priority", "normal"),
+                "relatedModalities": raw.get("relatedModalities", []),
+            }
+            # Validate type
+            if nudge["type"] not in ("insight", "reminder", "encouragement", "alert"):
+                nudge["type"] = "insight"
+            # Validate priority
+            if nudge["priority"] not in ("normal", "high"):
+                nudge["priority"] = "normal"
+            # Ensure relatedModalities is a list
+            if not isinstance(nudge["relatedModalities"], list):
+                nudge["relatedModalities"] = []
+            nudge_records.append(nudge)
+
+        # Step 4: Store the nudges
+        if nudge_records:
+            store_generated_nudges(nudge_records)
+
+        self._send_json(200, {
+            "ok": True,
+            "nudges": nudge_records,
+            "method": method_used,
+            "summary_length": len(summary_text),
+        })
+
+    # -----------------------------------------------------------------------
     # Location enrichment endpoints
     # -----------------------------------------------------------------------
 
@@ -1196,6 +1827,14 @@ def main():
         print("Geopy: available (location enrichment enabled)")
     else:
         print("Geopy: not available (location enrichment disabled)")
+    if ANTHROPIC_AVAILABLE:
+        api_key = _get_anthropic_api_key()
+        if api_key:
+            print("Anthropic API: available (LLM nudge generation enabled)")
+        else:
+            print("Anthropic SDK: installed but no API key found (rule-based fallback)")
+    else:
+        print("Anthropic SDK: not installed (rule-based nudge generation only)")
     print("Press Ctrl+C to stop.")
 
     try:

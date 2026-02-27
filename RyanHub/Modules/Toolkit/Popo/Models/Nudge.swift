@@ -21,6 +21,8 @@ struct Nudge: Identifiable, Codable {
     let content: String
     let trigger: String
     let type: NudgeType
+    let priority: String
+    let relatedModalities: [String]?
     var acknowledged: Bool
 
     init(
@@ -29,6 +31,8 @@ struct Nudge: Identifiable, Codable {
         content: String,
         trigger: String,
         type: NudgeType,
+        priority: String = "normal",
+        relatedModalities: [String]? = nil,
         acknowledged: Bool = false
     ) {
         self.id = id
@@ -36,6 +40,8 @@ struct Nudge: Identifiable, Codable {
         self.content = content
         self.trigger = trigger
         self.type = type
+        self.priority = priority
+        self.relatedModalities = relatedModalities
         self.acknowledged = acknowledged
     }
 }

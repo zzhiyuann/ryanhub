@@ -1,5 +1,6 @@
 import Foundation
 import AVFoundation
+import UserNotifications
 
 // MARK: - Narration Recording State
 
@@ -68,8 +69,10 @@ final class PopoViewModel {
         didSet {
             if sensingEnabled {
                 engine.startSensing()
+                startNudgeTimer()
             } else {
                 engine.stopSensing()
+                stopNudgeTimer()
             }
             // Persist the preference
             UserDefaults.standard.set(sensingEnabled, forKey: StorageKeys.sensingEnabled)
@@ -106,6 +109,17 @@ final class PopoViewModel {
     var isRecordingNarration: Bool {
         narrationState == .recording
     }
+
+    // MARK: - Nudge Generation State
+
+    /// Whether nudge generation is currently in progress.
+    private(set) var isGeneratingNudges: Bool = false
+
+    /// Timer that triggers periodic nudge generation (every 2 hours).
+    private var nudgeTimer: Timer?
+
+    /// Interval between nudge generation runs (2 hours).
+    private static let nudgeInterval: TimeInterval = 7200
 
     // MARK: - Private Recording Properties
 
@@ -263,6 +277,114 @@ final class PopoViewModel {
         return summary
     }
 
+    // MARK: - Channel Status
+
+    /// Status information for each sensing channel.
+    struct ChannelStatus: Identifiable {
+        let id: SensingModality
+        let modality: SensingModality
+        let status: ChannelState
+        let lastEventTime: Date?
+        let eventCount: Int
+
+        enum ChannelState {
+            case active    // Received data in last 30 min
+            case stale     // Received data but >30 min ago
+            case inactive  // No data yet or sensing disabled
+        }
+    }
+
+    /// Status of all sensing channels for the status bar.
+    var channelStatuses: [ChannelStatus] {
+        let channelModalities: [SensingModality] = [
+            .motion, .steps, .heartRate, .hrv, .location,
+            .screen, .battery, .wifi, .bluetooth, .activeEnergy, .sleep
+        ]
+        let now = Date()
+        let thirtyMinAgo = now.addingTimeInterval(-1800)
+
+        return channelModalities.map { modality in
+            let events = engine.events(for: modality)
+            let latestTime = events.first?.timestamp
+            let count = events.count
+
+            let state: ChannelStatus.ChannelState
+            if !sensingEnabled || count == 0 {
+                state = .inactive
+            } else if let latest = latestTime, latest > thirtyMinAgo {
+                state = .active
+            } else {
+                state = .stale
+            }
+
+            return ChannelStatus(
+                id: modality,
+                modality: modality,
+                status: state,
+                lastEventTime: latestTime,
+                eventCount: count
+            )
+        }
+    }
+
+    /// Latest heart rate reading from today's events.
+    var latestHeartRate: String? {
+        eventsForSelectedDate
+            .first(where: { $0.modality == .heartRate })
+            .flatMap { $0.payload["bpm"] }
+    }
+
+    /// Latest battery level from today's events.
+    var latestBatteryLevel: String? {
+        eventsForSelectedDate
+            .first(where: { $0.modality == .battery })
+            .flatMap { $0.payload["level"] }
+    }
+
+    /// Current activity type from the most recent motion event today.
+    var currentActivityType: String? {
+        eventsForSelectedDate
+            .first(where: { $0.modality == .motion })
+            .flatMap { $0.payload["activityType"]?.capitalized }
+    }
+
+    /// Semantic location label from the most recent location event today.
+    var latestLocationLabel: String? {
+        guard let event = eventsForSelectedDate.first(where: { $0.modality == .location }) else { return nil }
+        if let desc = event.payload["description"], !desc.isEmpty, desc != "unknown" {
+            return desc
+        }
+        if let lat = event.payload["latitude"], let lon = event.payload["longitude"] {
+            return "(\(lat), \(lon))"
+        }
+        return nil
+    }
+
+    /// Primary mood emoji from the latest narration's affect analysis today.
+    var latestMoodEmoji: String? {
+        guard let narration = narrationsForSelectedDate.first,
+              let emotion = narration.affectAnalysis?.primaryEmotion ?? narration.extractedMood else {
+            return nil
+        }
+        return moodToEmoji(emotion)
+    }
+
+    /// Convert a mood/emotion string to a representative emoji.
+    private func moodToEmoji(_ mood: String) -> String {
+        switch mood.lowercased() {
+        case "joy", "happy", "happiness": return "😊"
+        case "sadness", "sad": return "😢"
+        case "anger", "angry": return "😤"
+        case "fear", "anxious", "anxiety": return "😰"
+        case "surprise", "surprised": return "😮"
+        case "disgust": return "😒"
+        case "neutral", "calm": return "😐"
+        case "love": return "🥰"
+        case "excitement", "excited": return "🤩"
+        default: return "🙂"
+        }
+    }
+
     // MARK: - Computed Properties
 
     /// Events filtered by the selected modality, or all events if no filter.
@@ -304,6 +426,7 @@ final class PopoViewModel {
         if wasEnabled {
             sensingEnabled = true
             engine.startSensing()
+            startNudgeTimer()
         }
 
         // Load narrations and nudges from local storage
@@ -605,6 +728,173 @@ final class PopoViewModel {
         }
     }
 
+    // MARK: - Nudge Generation Pipeline
+
+    /// Generate nudges by calling the bridge server's analysis endpoint.
+    /// Sends recent sensing events, narrations, and day summary for AI analysis.
+    func generateNudges() async {
+        guard sensingEnabled, !isGeneratingNudges else { return }
+        isGeneratingNudges = true
+        defer { isGeneratingNudges = false }
+
+        let endpoint = "\(Self.bridgeBaseURL)/popo/analyze"
+        guard let url = URL(string: endpoint) else { return }
+
+        // Gather recent sensing events (last 6 hours)
+        let sixHoursAgo = Date().addingTimeInterval(-6 * 3600)
+        let recentSensingEvents = engine.recentEvents
+            .filter { $0.timestamp > sixHoursAgo }
+            .prefix(200)
+
+        // Encode sensing events as simplified dictionaries
+        let eventDicts: [[String: String]] = recentSensingEvents.map { event in
+            var dict = event.payload
+            dict["modality"] = event.modality.rawValue
+            dict["timestamp"] = ISO8601DateFormatter().string(from: event.timestamp)
+            return dict
+        }
+
+        // Gather today's narrations
+        let narrationDicts: [[String: Any]] = narrationsForSelectedDate.map { narration in
+            var dict: [String: Any] = [
+                "timestamp": ISO8601DateFormatter().string(from: narration.timestamp),
+                "transcript": narration.transcript,
+                "duration": narration.duration
+            ]
+            if let mood = narration.extractedMood {
+                dict["mood"] = mood
+            }
+            if let affect = narration.affectAnalysis {
+                if let primaryEmotion = affect.primaryEmotion { dict["primary_emotion"] = primaryEmotion }
+                if let moodScore = affect.mood { dict["mood_score"] = moodScore }
+                if let energy = affect.energy { dict["energy"] = energy }
+                if let stress = affect.stress { dict["stress"] = stress }
+            }
+            return dict
+        }
+
+        // Day summary
+        let summary = daySummary
+        let summaryDict: [String: Any] = [
+            "total_steps": summary.totalSteps,
+            "activity_breakdown": summary.activityBreakdown,
+            "location_changes": summary.locationChanges,
+            "screen_events": summary.screenEvents,
+            "narration_count": summary.narrationCount,
+            "event_count": summary.eventCount
+        ]
+
+        let payload: [String: Any] = [
+            "events": eventDicts,
+            "narrations": narrationDicts,
+            "day_summary": summaryDict
+        ]
+
+        guard let body = try? JSONSerialization.data(withJSONObject: payload) else { return }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = body
+        request.timeoutInterval = 60
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse,
+                  (200..<300).contains(httpResponse.statusCode) else {
+                print("[PopoVM] Nudge generation server returned error")
+                return
+            }
+
+            let decoder = JSONDecoder()
+            decoder.keyDecodingStrategy = .convertFromSnakeCase
+            decoder.dateDecodingStrategy = .iso8601
+            let result = try decoder.decode(NudgeAnalysisResponse.self, from: data)
+
+            // Insert new nudges
+            for nudgeData in result.nudges {
+                let nudge = Nudge(
+                    content: nudgeData.content,
+                    trigger: nudgeData.trigger ?? "sensing_analysis",
+                    type: NudgeType(rawValue: nudgeData.type) ?? .insight,
+                    priority: nudgeData.priority ?? "normal",
+                    relatedModalities: nudgeData.relatedModalities
+                )
+                nudges.insert(nudge, at: 0)
+
+                // Send local push notification for high-priority nudges
+                if nudge.priority == "high" || nudge.type == .alert {
+                    sendNudgeNotification(nudge)
+                }
+            }
+
+            saveNudges()
+
+            // Update last generation time
+            UserDefaults.standard.set(
+                Date().timeIntervalSince1970,
+                forKey: StorageKeys.lastNudgeGeneration
+            )
+
+            print("[PopoVM] Generated \(result.nudges.count) nudges")
+        } catch {
+            print("[PopoVM] Nudge generation failed: \(error.localizedDescription)")
+        }
+    }
+
+    /// Check if nudge generation should run on foreground (>2 hours since last run).
+    func checkAndGenerateNudgesIfNeeded() async {
+        guard sensingEnabled else { return }
+        let lastGeneration = UserDefaults.standard.double(forKey: StorageKeys.lastNudgeGeneration)
+        let timeSinceLast = Date().timeIntervalSince1970 - lastGeneration
+        if lastGeneration == 0 || timeSinceLast > Self.nudgeInterval {
+            await generateNudges()
+        }
+    }
+
+    /// Acknowledge a nudge by marking it as read.
+    func acknowledgeNudge(_ nudge: Nudge) {
+        guard let index = nudges.firstIndex(where: { $0.id == nudge.id }) else { return }
+        nudges[index].acknowledged = true
+        saveNudges()
+    }
+
+    // MARK: - Nudge Timer
+
+    /// Start the periodic nudge generation timer (every 2 hours).
+    private func startNudgeTimer() {
+        stopNudgeTimer()
+        nudgeTimer = Timer.scheduledTimer(withTimeInterval: Self.nudgeInterval, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                await self?.generateNudges()
+            }
+        }
+    }
+
+    /// Stop the nudge generation timer.
+    private func stopNudgeTimer() {
+        nudgeTimer?.invalidate()
+        nudgeTimer = nil
+    }
+
+    /// Send a local push notification for a nudge.
+    private func sendNudgeNotification(_ nudge: Nudge) {
+        let content = UNMutableNotificationContent()
+        content.title = "Facai"
+        content.body = nudge.content
+        content.sound = .default
+        content.userInfo = ["destination": "popo"]
+
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
+        let request = UNNotificationRequest(
+            identifier: nudge.id.uuidString,
+            content: content,
+            trigger: trigger
+        )
+        UNUserNotificationCenter.current().add(request)
+    }
+
     // MARK: - Helpers
 
     private var isNarrationError: Bool {
@@ -644,12 +934,45 @@ final class PopoViewModel {
         nudges = (try? decoder.decode([Nudge].self, from: data)) ?? []
     }
 
+    /// Persist nudges to UserDefaults and sync to bridge server.
+    func saveNudges() {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        if let data = try? encoder.encode(nudges) {
+            UserDefaults.standard.set(data, forKey: StorageKeys.nudges)
+        }
+
+        // Sync to bridge server in background
+        Task {
+            await syncNudgesToServer()
+        }
+    }
+
+    /// Sync nudges to the bridge server.
+    private func syncNudgesToServer() async {
+        let endpoint = "\(Self.bridgeBaseURL)/popo/nudges"
+        guard let url = URL(string: endpoint) else { return }
+
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        guard let body = try? encoder.encode(nudges) else { return }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = body
+        request.timeoutInterval = 30
+
+        _ = try? await URLSession.shared.data(for: request)
+    }
+
     // MARK: - Storage Keys
 
     private enum StorageKeys {
         static let sensingEnabled = "ryanhub_popo_sensing_enabled"
         static let narrations = "ryanhub_popo_narrations"
         static let nudges = "ryanhub_popo_nudges"
+        static let lastNudgeGeneration = "ryanhub_popo_last_nudge_generation"
     }
 }
 
@@ -672,4 +995,20 @@ private struct NarrationAnalysisResponse: Decodable {
 private struct NarrationAnalysisResult {
     let transcript: String
     let affect: AffectAnalysis?
+}
+
+// MARK: - Nudge Analysis Response Models
+
+/// Response from the nudge analysis endpoint.
+private struct NudgeAnalysisResponse: Decodable {
+    let nudges: [NudgeData]
+}
+
+/// Individual nudge data from the server analysis response.
+private struct NudgeData: Decodable {
+    let content: String
+    let type: String
+    let trigger: String?
+    let priority: String?
+    let relatedModalities: [String]?
 }

@@ -3,148 +3,270 @@ import SwiftUI
 // MARK: - POPO View
 
 /// The main view for the POPO (Proactive Personal Observer) toolkit plugin.
-/// Displays a timeline-based view with day overview, chronological events,
-/// narrations, nudges, and sensing status controls.
+/// Displays Facai's insight card, current state dashboard, channel status,
+/// chronological timeline, and narration recording controls.
 struct PopoView: View {
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.scenePhase) private var scenePhase
     @State private var viewModel = PopoViewModel()
+    @State private var showChannelDetail = false
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: HubLayout.sectionSpacing) {
-                // Header
-                header
-
-                // Day navigation bar
+                // Section 1: Date Navigation
                 DateNavigationBar(selectedDate: $viewModel.selectedDate)
 
-                // Today overview card
                 if viewModel.sensingEnabled {
-                    overviewCard
-                }
+                    // Section 2: Facai Insight Card (Hero)
+                    facaiInsightCard
 
-                // Timeline section
-                if viewModel.sensingEnabled {
+                    // Section 3: Current State Dashboard
+                    currentStateDashboard
+
+                    // Section 4: Channel Status Bar
+                    channelStatusBar
+
+                    // Section 5: Timeline
                     timelineSection
+
+                    // Section 6: Record Narration
+                    NarrationRecordButton(viewModel: viewModel)
                 }
 
-                // Sensing status footer
+                // Sensing status footer (always visible)
                 sensingStatusFooter
             }
             .padding(HubLayout.standardPadding)
         }
         .background(AdaptiveColors.background(for: colorScheme))
-    }
-
-    // MARK: - Header
-
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("POPO")
-                .font(.hubTitle)
-                .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
-
-            Text("Proactive Personal Observer")
-                .font(.hubBody)
-                .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
-        }
-        .padding(.top, 8)
-    }
-
-    // MARK: - Overview Card
-
-    private var overviewCard: some View {
-        let summary = viewModel.daySummary
-
-        return HubCard {
-            VStack(spacing: 14) {
-                // Title row
-                HStack {
-                    Text(overviewTitle)
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
-                    Spacer()
-                    Text("\(summary.eventCount) events")
-                        .font(.hubCaption)
-                        .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
-                }
-
-                // Stats grid
-                HStack(spacing: 0) {
-                    overviewStat(
-                        icon: "shoeprints.fill",
-                        value: formatSteps(summary.totalSteps),
-                        label: "Steps",
-                        color: Color(red: 0.2, green: 0.6, blue: 1.0)
-                    )
-
-                    overviewDivider
-
-                    overviewStat(
-                        icon: "figure.walk",
-                        value: topActivity(from: summary.activityBreakdown),
-                        label: "Activity",
-                        color: Color.hubAccentGreen
-                    )
-
-                    overviewDivider
-
-                    overviewStat(
-                        icon: "mappin.and.ellipse",
-                        value: "\(summary.locationChanges)",
-                        label: "Locations",
-                        color: Color.hubAccentGreen
-                    )
-
-                    overviewDivider
-
-                    overviewStat(
-                        icon: "iphone",
-                        value: "\(summary.screenEvents)",
-                        label: "Screen",
-                        color: AdaptiveColors.textSecondary(for: colorScheme)
-                    )
+        .onChange(of: scenePhase) { _, newPhase in
+            if newPhase == .active {
+                Task {
+                    await viewModel.checkAndGenerateNudgesIfNeeded()
                 }
             }
         }
     }
 
-    private var overviewTitle: String {
-        let calendar = Calendar.current
-        if calendar.isDateInToday(viewModel.selectedDate) {
-            return "Today's Overview"
-        } else if calendar.isDateInYesterday(viewModel.selectedDate) {
-            return "Yesterday's Overview"
-        } else {
-            let formatter = DateFormatter()
-            formatter.dateFormat = "MMM d"
-            return "\(formatter.string(from: viewModel.selectedDate)) Overview"
+    // MARK: - Section 2: Facai Insight Card
+
+    private var facaiInsightCard: some View {
+        let todayNudges = viewModel.nudgesForSelectedDate
+
+        return HubCard {
+            if todayNudges.isEmpty {
+                // No nudges — observing state
+                facaiObservingState
+            } else {
+                // Show latest nudge as hero
+                facaiNudgeContent(todayNudges)
+            }
+        }
+        .overlay(
+            RoundedRectangle(cornerRadius: HubLayout.cardCornerRadius)
+                .stroke(Color.hubPrimary.opacity(0.2), lineWidth: 1)
+        )
+    }
+
+    private var facaiObservingState: some View {
+        HStack(spacing: 14) {
+            FacaiAvatar(size: 44)
+                .overlay(
+                    Circle()
+                        .stroke(Color.hubPrimary.opacity(0.3), lineWidth: 2)
+                )
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Facai")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+
+                HStack(spacing: 6) {
+                    PulsingObserveDot()
+
+                    Text("Observing your day...")
+                        .font(.hubCaption)
+                        .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                }
+            }
+
+            Spacer()
+
+            if viewModel.isGeneratingNudges {
+                ProgressView()
+                    .scaleEffect(0.7)
+                    .tint(Color.hubPrimary)
+            }
         }
     }
 
-    private func overviewStat(icon: String, value: String, label: String, color: Color) -> some View {
+    private func facaiNudgeContent(_ nudges: [Nudge]) -> some View {
+        let latest = nudges[0]
+        let remainingCount = nudges.count - 1
+
+        return VStack(alignment: .leading, spacing: 12) {
+            // Header: Avatar + name + type badge
+            HStack(spacing: 12) {
+                FacaiAvatar(size: 40)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Facai")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+
+                    Text(formatTimestamp(latest.timestamp))
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                }
+
+                Spacer()
+
+                nudgeTypeBadge(latest.type)
+            }
+
+            // Speech bubble content
+            Text(latest.content)
+                .font(.hubBody)
+                .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(12)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(AdaptiveColors.surfaceSecondary(for: colorScheme))
+                )
+
+            // "More insights" indicator
+            if remainingCount > 0 {
+                Button {
+                    // Scroll to timeline where all nudges are shown
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "ellipsis.bubble")
+                            .font(.system(size: 12, weight: .medium))
+                        Text("\(remainingCount) more insight\(remainingCount == 1 ? "" : "s")")
+                            .font(.system(size: 12, weight: .medium))
+                    }
+                    .foregroundStyle(Color.hubPrimary)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    private func nudgeTypeBadge(_ type: NudgeType) -> some View {
+        let (icon, color, label) = nudgeTypeInfo(type)
+        return HStack(spacing: 4) {
+            Image(systemName: icon)
+                .font(.system(size: 10))
+            Text(label)
+                .font(.system(size: 10, weight: .semibold))
+        }
+        .foregroundStyle(color)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(
+            Capsule().fill(color.opacity(0.12))
+        )
+    }
+
+    private func nudgeTypeInfo(_ type: NudgeType) -> (icon: String, color: Color, label: String) {
+        switch type {
+        case .insight: return ("lightbulb.fill", Color.hubAccentYellow, "Insight")
+        case .reminder: return ("bell.fill", Color.hubPrimary, "Reminder")
+        case .encouragement: return ("hand.thumbsup.fill", Color.hubAccentGreen, "Encouragement")
+        case .alert: return ("exclamationmark.triangle.fill", Color.hubAccentRed, "Alert")
+        }
+    }
+
+    // MARK: - Section 3: Current State Dashboard
+
+    private var currentStateDashboard: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 10) {
+                statePill(
+                    icon: "shoeprints.fill",
+                    value: formatSteps(viewModel.daySummary.totalSteps),
+                    label: "Steps",
+                    color: Color(red: 0.2, green: 0.6, blue: 1.0)
+                )
+
+                statePill(
+                    icon: "figure.walk",
+                    value: viewModel.currentActivityType ?? "--",
+                    label: "Activity",
+                    color: Color.hubAccentGreen
+                )
+
+                statePill(
+                    icon: "heart.fill",
+                    value: viewModel.latestHeartRate.map { "\($0) bpm" } ?? "--",
+                    label: "Heart Rate",
+                    color: Color.hubAccentRed
+                )
+
+                statePill(
+                    icon: "mappin",
+                    value: viewModel.latestLocationLabel ?? "--",
+                    label: "Location",
+                    color: Color.hubAccentGreen
+                )
+
+                statePill(
+                    icon: "battery.100",
+                    value: viewModel.latestBatteryLevel.map { "\($0)%" } ?? "--",
+                    label: "Battery",
+                    color: Color.hubAccentGreen
+                )
+
+                if let emoji = viewModel.latestMoodEmoji {
+                    statePillEmoji(
+                        emoji: emoji,
+                        label: "Mood"
+                    )
+                }
+            }
+            .padding(.horizontal, 2)
+        }
+    }
+
+    private func statePill(icon: String, value: String, label: String, color: Color) -> some View {
         VStack(spacing: 6) {
             Image(systemName: icon)
-                .font(.system(size: 16, weight: .medium))
+                .font(.system(size: 14, weight: .medium))
                 .foregroundStyle(color)
 
             Text(value)
-                .font(.system(size: 15, weight: .bold))
+                .font(.system(size: 13, weight: .bold))
                 .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
                 .lineLimit(1)
-                .minimumScaleFactor(0.8)
+                .minimumScaleFactor(0.7)
 
             Text(label)
-                .font(.system(size: 11, weight: .medium))
+                .font(.system(size: 10, weight: .medium))
                 .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
         }
-        .frame(maxWidth: .infinity)
+        .frame(width: 80, height: 72)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(AdaptiveColors.surfaceSecondary(for: colorScheme))
+        )
     }
 
-    private var overviewDivider: some View {
-        Rectangle()
-            .fill(AdaptiveColors.border(for: colorScheme))
-            .frame(width: 1, height: 40)
+    private func statePillEmoji(emoji: String, label: String) -> some View {
+        VStack(spacing: 6) {
+            Text(emoji)
+                .font(.system(size: 20))
+
+            Text(label)
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+        }
+        .frame(width: 80, height: 72)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(AdaptiveColors.surfaceSecondary(for: colorScheme))
+        )
     }
 
     private func formatSteps(_ steps: Int) -> String {
@@ -155,24 +277,160 @@ struct PopoView: View {
         return "\(steps)"
     }
 
-    private func topActivity(from breakdown: [String: Int]) -> String {
-        guard let top = breakdown.max(by: { $0.value < $1.value }) else {
-            return "None"
+    // MARK: - Section 4: Channel Status Bar
+
+    private var channelStatusBar: some View {
+        VStack(spacing: 8) {
+            // Compact dot row
+            Button {
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    showChannelDetail.toggle()
+                }
+            } label: {
+                HStack(spacing: 0) {
+                    Text("CHANNELS")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+
+                    Spacer()
+
+                    HStack(spacing: 6) {
+                        ForEach(viewModel.channelStatuses) { channel in
+                            channelDot(for: channel)
+                        }
+                    }
+
+                    Image(systemName: showChannelDetail ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                        .padding(.leading, 8)
+                }
+            }
+            .buttonStyle(.plain)
+
+            // Expanded detail view
+            if showChannelDetail {
+                channelDetailView
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
         }
-        return top.key.capitalized
+        .padding(.horizontal, 4)
     }
 
-    // MARK: - Timeline Section
+    private func channelDot(for channel: PopoViewModel.ChannelStatus) -> some View {
+        Circle()
+            .fill(channelDotColor(channel.status))
+            .frame(width: 8, height: 8)
+    }
+
+    private func channelDotColor(_ state: PopoViewModel.ChannelStatus.ChannelState) -> Color {
+        switch state {
+        case .active: return Color.hubAccentGreen
+        case .stale: return Color.hubAccentYellow
+        case .inactive: return AdaptiveColors.textSecondary(for: colorScheme).opacity(0.3)
+        }
+    }
+
+    private var channelDetailView: some View {
+        VStack(spacing: 6) {
+            ForEach(viewModel.channelStatuses) { channel in
+                HStack(spacing: 8) {
+                    Circle()
+                        .fill(channelDotColor(channel.status))
+                        .frame(width: 6, height: 6)
+
+                    Image(systemName: channelIcon(channel.modality))
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                        .frame(width: 16)
+
+                    Text(channelDisplayName(channel.modality))
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+
+                    Spacer()
+
+                    if let lastTime = channel.lastEventTime {
+                        Text(formatRelativeTime(lastTime))
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                    }
+
+                    Text("\(channel.eventCount)")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                        .frame(width: 30, alignment: .trailing)
+                }
+            }
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(AdaptiveColors.surfaceSecondary(for: colorScheme))
+        )
+    }
+
+    private func channelIcon(_ modality: SensingModality) -> String {
+        switch modality {
+        case .motion: return "figure.walk"
+        case .steps: return "shoeprints.fill"
+        case .heartRate: return "heart.fill"
+        case .hrv: return "waveform.path.ecg"
+        case .location: return "mappin.and.ellipse"
+        case .screen: return "iphone"
+        case .battery: return "battery.100"
+        case .wifi: return "wifi"
+        case .bluetooth: return "antenna.radiowaves.left.and.right"
+        case .activeEnergy: return "flame.fill"
+        case .sleep: return "moon.fill"
+        default: return "sensor"
+        }
+    }
+
+    private func channelDisplayName(_ modality: SensingModality) -> String {
+        switch modality {
+        case .motion: return "Motion"
+        case .steps: return "Steps"
+        case .heartRate: return "Heart Rate"
+        case .hrv: return "HRV"
+        case .location: return "Location"
+        case .screen: return "Screen"
+        case .battery: return "Battery"
+        case .wifi: return "Wi-Fi"
+        case .bluetooth: return "Bluetooth"
+        case .activeEnergy: return "Active Energy"
+        case .sleep: return "Sleep"
+        default: return modality.rawValue.capitalized
+        }
+    }
+
+    // MARK: - Section 5: Timeline
 
     private var timelineSection: some View {
         VStack(alignment: .leading, spacing: HubLayout.itemSpacing) {
-            SectionHeader(title: "TIMELINE")
+            // Section header with event count badge
+            HStack(spacing: 8) {
+                SectionHeader(title: "TIMELINE")
+
+                let itemCount = viewModel.timelineItems.count
+                if itemCount > 0 {
+                    Text("\(itemCount)")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(
+                            Capsule().fill(Color.hubPrimary)
+                        )
+                }
+
+                Spacer()
+            }
 
             let items = viewModel.timelineItems
             if items.isEmpty {
                 emptyTimelineState
             } else {
-                // Timeline list
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                         TimelineEventRow(
@@ -246,7 +504,6 @@ struct PopoView: View {
             // Auto-sync status row (only when sensing is on)
             if viewModel.sensingEnabled {
                 HStack(spacing: 12) {
-                    // Auto-sync status indicator
                     HStack(spacing: 4) {
                         if viewModel.isSyncing {
                             ProgressView()
@@ -274,7 +531,6 @@ struct PopoView: View {
 
                     Spacer()
 
-                    // De-emphasized manual refresh icon
                     Button {
                         Task { await viewModel.syncNow() }
                     } label: {
@@ -288,6 +544,41 @@ struct PopoView: View {
                 .padding(.horizontal, 4)
             }
         }
+    }
+
+    // MARK: - Formatting Helpers
+
+    private func formatTimestamp(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "h:mm a"
+        return formatter.string(from: date)
+    }
+
+    private func formatRelativeTime(_ date: Date) -> String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        return formatter.localizedString(for: date, relativeTo: Date())
+    }
+}
+
+// MARK: - Pulsing Observe Dot
+
+/// A subtle pulsing dot that indicates Facai is actively observing.
+private struct PulsingObserveDot: View {
+    @State private var isPulsing = false
+
+    var body: some View {
+        Circle()
+            .fill(Color.hubPrimary)
+            .frame(width: 6, height: 6)
+            .opacity(isPulsing ? 0.3 : 1.0)
+            .animation(
+                .easeInOut(duration: 1.2).repeatForever(autoreverses: true),
+                value: isPulsing
+            )
+            .onAppear {
+                isPulsing = true
+            }
     }
 }
 
