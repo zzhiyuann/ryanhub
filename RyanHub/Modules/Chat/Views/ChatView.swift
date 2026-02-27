@@ -13,6 +13,8 @@ struct ChatView: View {
     @State private var replyingTo: ChatMessage?
     /// Free-text input for answering agent questions.
     @State private var questionFreeTextInput: String = ""
+    /// Keyboard height for manually positioning input above the keyboard.
+    @State private var keyboardHeight: CGFloat = 0
 
     var body: some View {
         VStack(spacing: 0) {
@@ -64,8 +66,23 @@ struct ChatView: View {
                     viewModel.clearPendingImage()
                 }
             )
+            .padding(.bottom, keyboardHeight)
         }
         .background(AdaptiveColors.background(for: colorScheme))
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { notification in
+            if let frame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect {
+                withAnimation(.easeOut(duration: 0.25)) {
+                    // Subtract tab bar height (50) since the root view ignores keyboard
+                    // and the keyboard frame includes the area behind the tab bar
+                    keyboardHeight = frame.height - 50
+                }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+            withAnimation(.easeOut(duration: 0.25)) {
+                keyboardHeight = 0
+            }
+        }
         .task {
             if !viewModel.isConnected {
                 viewModel.connect(to: appState.serverURL, appState: appState)
