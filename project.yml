@@ -17,8 +17,9 @@ settings:
     SWIFT_VERSION: "5.9"
     MARKETING_VERSION: "1.0.0"
     CURRENT_PROJECT_VERSION: 1
-    DEVELOPMENT_TEAM: ""
+    DEVELOPMENT_TEAM: "WRR5PDXKX3"
     CODE_SIGN_IDENTITY: "Apple Development"
+    CODE_SIGN_STYLE: "Automatic"
     INFOPLIST_KEY_CFBundleDisplayName: "Ryan Hub"
 targets:
   RyanHub:
