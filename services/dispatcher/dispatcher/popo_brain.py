@@ -8,7 +8,7 @@ Architecture:
 - Runs as a background asyncio task inside the Dispatcher
 - Checks behavioral data every REVIEW_INTERVAL_HOURS hours
 - Only runs when at least one WebSocket client is connected
-- Uses gpt-4o-mini for cost-effective nudge generation
+- Uses Anthropic Claude (claude-sonnet-4-20250514) for nudge generation
 - Stores long-term behavioral baselines in a local JSON file
 - Gracefully degrades: if bridge server or LLM is unreachable, logs and skips
 """
@@ -34,7 +34,7 @@ log = logging.getLogger("dispatcher")
 BRIDGE_SERVER_URL = "http://100.89.67.80:18790"
 REVIEW_INTERVAL_HOURS = 3
 MAX_NUDGES_PER_DAY = 3  # 2 routine + 1 anomaly buffer
-LLM_MODEL = "gpt-4o-mini"
+LLM_MODEL = "claude-sonnet-4-20250514"
 LLM_TIMEOUT = 30  # seconds
 BRIDGE_TIMEOUT = 10  # seconds
 MEMORY_DIR = Path.home() / ".config" / "dispatcher"
@@ -72,8 +72,8 @@ If no nudge is warranted, respond with exactly: NO_NUDGE
 
 
 def _load_api_key() -> str:
-    """Load OpenAI API key from env or common .env files."""
-    val = os.environ.get("OPENAI_API_KEY", "")
+    """Load Anthropic API key from env or common .env files."""
+    val = os.environ.get("ANTHROPIC_API_KEY", "")
     if val:
         return val
     for p in (Path.home() / ".openclaw" / ".env", Path.home() / ".env"):
@@ -81,7 +81,7 @@ def _load_api_key() -> str:
             try:
                 for line in p.read_text().splitlines():
                     line = line.strip()
-                    if line.startswith("OPENAI_API_KEY="):
+                    if line.startswith("ANTHROPIC_API_KEY="):
                         return line.split("=", 1)[1].strip().strip("\"'")
             except Exception:
                 pass
@@ -119,7 +119,7 @@ class PopoBrain:
         self._last_review_time: float = 0
 
         if not self._enabled:
-            log.warning("PopoBrain disabled: no OPENAI_API_KEY found")
+            log.warning("PopoBrain disabled: no ANTHROPIC_API_KEY found")
         else:
             log.info("PopoBrain initialized (interval=%dh, max_nudges=%d/day)",
                      review_interval_hours, max_nudges_per_day)
@@ -413,29 +413,29 @@ class PopoBrain:
         return self._parse_nudge_response(response)
 
     def _call_llm(self, user_content: str) -> str:
-        """Synchronous OpenAI API call. Runs in a thread."""
+        """Synchronous Anthropic Claude API call. Runs in a thread."""
         payload = json.dumps({
             "model": LLM_MODEL,
             "max_tokens": 200,
-            "temperature": 0.7,
+            "system": _FACAI_SYSTEM,
             "messages": [
-                {"role": "system", "content": _FACAI_SYSTEM},
                 {"role": "user", "content": user_content},
             ],
         }).encode()
         req = Request(
-            "https://api.openai.com/v1/chat/completions",
+            "https://api.anthropic.com/v1/messages",
             data=payload,
             headers={
                 "Content-Type": "application/json",
-                "Authorization": f"Bearer {self._api_key}",
+                "x-api-key": self._api_key,
+                "anthropic-version": "2023-06-01",
             },
         )
         resp = urlopen(req, timeout=LLM_TIMEOUT)
         data = json.loads(resp.read())
-        choices = data.get("choices", [])
-        if choices:
-            return choices[0].get("message", {}).get("content", "")
+        content = data.get("content", [])
+        if content and isinstance(content, list):
+            return content[0].get("text", "")
         return ""
 
     def _parse_nudge_response(self, response: str) -> Optional[dict]:

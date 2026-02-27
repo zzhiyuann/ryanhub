@@ -11,14 +11,8 @@ struct TypingIndicator: View {
 
     var body: some View {
         HStack(alignment: .bottom, spacing: 6) {
-            // Bot avatar (matches MessageBubble style)
-            Text("\u{1F431}")
-                .font(.system(size: 22))
-                .frame(width: 30, height: 30)
-                .background(
-                    Circle()
-                        .fill(AdaptiveColors.surface(for: colorScheme))
-                )
+            // Bot avatar — Facai's actual photo (matches MessageBubble style)
+            FacaiAvatar(size: 30)
                 .offset(y: -2)
 
             // Dots bubble

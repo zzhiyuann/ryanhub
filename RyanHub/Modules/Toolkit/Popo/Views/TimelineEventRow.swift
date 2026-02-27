@@ -56,15 +56,19 @@ struct TimelineEventRow: View {
 
     private var timelineColumn: some View {
         VStack(spacing: 0) {
-            // Icon circle
-            ZStack {
-                Circle()
-                    .fill(itemColor.opacity(0.15))
-                    .frame(width: 32, height: 32)
+            // Icon circle (nudges use Facai's actual avatar)
+            if case .nudge = item {
+                FacaiAvatar(size: 32)
+            } else {
+                ZStack {
+                    Circle()
+                        .fill(itemColor.opacity(0.15))
+                        .frame(width: 32, height: 32)
 
-                Image(systemName: itemIcon)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(itemColor)
+                    Image(systemName: itemIcon)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(itemColor)
+                }
             }
 
             // Connecting line (hidden for last item)

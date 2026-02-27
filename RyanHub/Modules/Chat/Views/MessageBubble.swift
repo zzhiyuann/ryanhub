@@ -39,14 +39,8 @@ struct MessageBubble: View {
                 }
                 Spacer(minLength: 32)
             } else {
-                // Bot avatar
-                Text("\u{1F431}")
-                    .font(.system(size: 22))
-                    .frame(width: 30, height: 30)
-                    .background(
-                        Circle()
-                            .fill(AdaptiveColors.surface(for: colorScheme))
-                    )
+                // Bot avatar — Facai's actual photo
+                FacaiAvatar(size: 30)
                     .offset(y: -2)
             }
 

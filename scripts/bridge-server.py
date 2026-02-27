@@ -36,7 +36,7 @@ Endpoints:
   GET/POST /popo/daily-summary — Daily behavior summaries
   POST     /popo/audio — Upload audio file (binary)
   GET      /popo/audio/<filename> — Retrieve audio file
-  POST     /popo/narrations/analyze — Transcribe + affective analysis (OpenAI)
+  POST     /popo/narrations/analyze — Transcribe (Whisper) + affective analysis (Claude)
   All GET endpoints support ?date=YYYY-MM-DD filtering.
 
 Usage:
@@ -98,7 +98,7 @@ POPO_AUDIO_DIR = os.path.join(BRIDGE_DATA_DIR, "popo_audio")
 os.makedirs(POPO_AUDIO_DIR, exist_ok=True)
 
 # ---------------------------------------------------------------------------
-# OpenAI integration for narration transcription + affect analysis
+# OpenAI integration for narration transcription (Whisper only)
 # ---------------------------------------------------------------------------
 
 OPENAI_AVAILABLE = False
@@ -110,12 +110,33 @@ try:
     if api_key:
         openai_client = openai.OpenAI()
         OPENAI_AVAILABLE = True
-        print("OpenAI API available for narration transcription + affect analysis.")
+        print("OpenAI Whisper available for narration transcription.")
     else:
-        print("Warning: OPENAI_API_KEY not set. Narration analysis will be skipped.",
+        print("Warning: OPENAI_API_KEY not set. Narration transcription will be skipped.",
               file=sys.stderr)
 except ImportError:
-    print("Warning: openai package not installed. Narration analysis will be skipped.",
+    print("Warning: openai package not installed. Narration transcription will be skipped.",
+          file=sys.stderr)
+
+# ---------------------------------------------------------------------------
+# Anthropic Claude integration for text analysis (affect analysis)
+# ---------------------------------------------------------------------------
+
+ANTHROPIC_AVAILABLE = False
+anthropic_client = None
+
+try:
+    import anthropic
+    anthropic_key = os.environ.get("ANTHROPIC_API_KEY")
+    if anthropic_key:
+        anthropic_client = anthropic.Anthropic(api_key=anthropic_key)
+        ANTHROPIC_AVAILABLE = True
+        print("Anthropic Claude available for affect analysis.")
+    else:
+        print("Warning: ANTHROPIC_API_KEY not set. Affect analysis will be skipped.",
+              file=sys.stderr)
+except ImportError:
+    print("Warning: anthropic package not installed. Affect analysis will be skipped.",
           file=sys.stderr)
 
 
@@ -151,22 +172,26 @@ def transcribe_audio(audio_path):
 
 def analyze_affect(transcript_text):
     # type: (str) -> Optional[Dict[str, Any]]
-    """Analyze emotional affect from transcript text using GPT-4o-mini.
+    """Analyze emotional affect from transcript text using Anthropic Claude.
     Returns a dict with mood/energy/stress/emotion fields, or None."""
-    if not OPENAI_AVAILABLE or openai_client is None:
+    if not ANTHROPIC_AVAILABLE or anthropic_client is None:
         return None
     if not transcript_text or not transcript_text.strip():
         return None
     try:
-        response = openai_client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": AFFECT_ANALYSIS_SYSTEM_PROMPT},
-                {"role": "user", "content": transcript_text}
-            ],
-            response_format={"type": "json_object"}
+        response = anthropic_client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=500,
+            messages=[{
+                "role": "user",
+                "content": (
+                    AFFECT_ANALYSIS_SYSTEM_PROMPT
+                    + "\n\nReturn ONLY valid JSON, no other text.\n\n"
+                    + f"Transcript: {transcript_text}"
+                ),
+            }],
         )
-        content = response.choices[0].message.content
+        content = response.content[0].text
         return json.loads(content) if content else None
     except Exception as e:
         print(f"[Narration] Affect analysis failed: {e}", file=sys.stderr)
@@ -185,7 +210,7 @@ def run_narration_analysis(audio_path, narration_id=None):
     }  # type: Dict[str, Any]
 
     if not OPENAI_AVAILABLE:
-        result["status"] = "openai_unavailable"
+        result["status"] = "whisper_unavailable"
         return result
 
     # Step 1: Transcribe
@@ -627,6 +652,7 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
             }
 
             # If a narration ID was provided, trigger background analysis
+            # (needs Whisper for transcription; Claude for affect analysis is optional)
             narration_id = self.headers.get("X-Narration-Id")
             if narration_id and OPENAI_AVAILABLE:
                 response_data["analysis_queued"] = True
@@ -719,10 +745,10 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
 
         if not OPENAI_AVAILABLE:
             self._send_json(503, {
-                "error": "OpenAI not available (missing API key or package)",
+                "error": "Whisper not available (missing OpenAI API key or package)",
                 "transcript": None,
                 "affect": None,
-                "status": "openai_unavailable"
+                "status": "whisper_unavailable"
             })
             return
 
@@ -894,9 +920,13 @@ def main():
     if os.path.isfile(CLAUDE_PATH):
         print(f"Claude CLI: {CLAUDE_PATH}")
     if OPENAI_AVAILABLE:
-        print("OpenAI: available (narration transcription + affect analysis enabled)")
+        print("OpenAI Whisper: available (narration transcription enabled)")
     else:
-        print("OpenAI: not available (narration analysis disabled)")
+        print("OpenAI Whisper: not available (narration transcription disabled)")
+    if ANTHROPIC_AVAILABLE:
+        print("Anthropic Claude: available (affect analysis enabled)")
+    else:
+        print("Anthropic Claude: not available (affect analysis disabled)")
     print("Press Ctrl+C to stop.")
 
     try:
