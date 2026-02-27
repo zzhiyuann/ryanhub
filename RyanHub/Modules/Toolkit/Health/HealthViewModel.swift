@@ -176,11 +176,13 @@ final class HealthViewModel {
         let entry = ActivityEntry(
             date: date,
             type: result.type,
-            duration: 0,
+            duration: result.duration ?? 0,
             note: result.summary,
             rawDescription: description,
             caloriesBurned: result.caloriesBurned,
-            isAIAnalyzed: true
+            isAIAnalyzed: true,
+            exercises: result.exercises ?? [],
+            aiSummary: result.summary
         )
         activityEntries.append(entry)
         save(activityEntries, forKey: StorageKeys.activityEntries)

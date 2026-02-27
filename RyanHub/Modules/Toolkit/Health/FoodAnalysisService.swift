@@ -209,4 +209,6 @@ struct ActivityAnalysisResult: Codable {
     let type: String
     let caloriesBurned: Int
     let summary: String
+    let duration: Int?
+    let exercises: [ExerciseItem]?
 }

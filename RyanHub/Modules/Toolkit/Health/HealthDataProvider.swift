@@ -179,14 +179,44 @@ enum HealthDataProvider {
         if !todayEntries.isEmpty {
             lines.append("Today's Activity:")
             for entry in todayEntries {
-                var desc = "- \(entry.type): \(entry.duration) min"
-                if let note = entry.note, !note.isEmpty {
+                var desc = "- \(entry.type)"
+                if entry.duration > 0 {
+                    desc += ": \(entry.duration) min"
+                }
+                if let cal = entry.caloriesBurned, cal > 0 {
+                    desc += " (\(cal) cal)"
+                } else if let note = entry.note, !note.isEmpty {
                     desc += " (\(note))"
                 }
                 lines.append(desc)
+
+                // Include exercise breakdown when available
+                if !entry.exercises.isEmpty {
+                    for exercise in entry.exercises {
+                        var exDesc = "  · \(exercise.name)"
+                        if let sets = exercise.sets, let reps = exercise.reps {
+                            exDesc += ": \(sets) sets × \(reps) reps"
+                        }
+                        if let weight = exercise.weight {
+                            exDesc += " @ \(weight)"
+                        }
+                        if let dur = exercise.duration {
+                            exDesc += ": \(dur) min"
+                        }
+                        if let cal = exercise.caloriesBurned {
+                            exDesc += " (\(cal) cal)"
+                        }
+                        lines.append(exDesc)
+                    }
+                }
             }
             let totalMin = todayEntries.map(\.duration).reduce(0, +)
-            lines.append("Total activity today: \(totalMin) min")
+            let totalCal = todayEntries.compactMap(\.caloriesBurned).reduce(0, +)
+            var totalLine = "Total activity today: \(totalMin) min"
+            if totalCal > 0 {
+                totalLine += ", \(totalCal) cal burned"
+            }
+            lines.append(totalLine)
         }
 
         if !yesterdayEntries.isEmpty {

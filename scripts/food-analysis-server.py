@@ -48,21 +48,31 @@ CLAUDE_PATH = shutil.which("claude") or os.path.expanduser("~/.local/bin/claude"
 
 ACTIVITY_ANALYSIS_PROMPT_TEMPLATE = """\
 You are a fitness expert. Analyze this physical activity description and return a JSON object with estimates.
-The user might describe activities in any language (Chinese, English, etc).
+The user might describe activities in any language (Chinese, English, etc). Always return English output.
 Be practical and estimate realistic calorie burn based on typical body weight (~85 kg) and intensity.
 
 Activity description: "{description}"
 
 Return ONLY a valid JSON object in this exact format, no other text or markdown:
 {{
-  "type": "Running",
-  "caloriesBurned": 320,
-  "summary": "30 minute moderate jog"
+  "type": "Strength Training",
+  "caloriesBurned": 250,
+  "duration": 45,
+  "summary": "Upper body strength session with lat pulldowns and bench press",
+  "exercises": [
+    {{"name": "Lat Pulldown", "sets": 4, "reps": 12, "weight": "70 lb", "caloriesBurned": 75}},
+    {{"name": "Bench Press", "sets": 3, "reps": 8, "weight": "135 lb", "caloriesBurned": 85}}
+  ]
 }}
 
-type should be a concise activity name in English (e.g., Running, Walking, Gym Workout, Yoga, Swimming, Cycling).
-caloriesBurned is estimated kcal burned during the activity.
-summary is a brief one-line description of the activity in English.
+Rules:
+- type: concise activity category in English (e.g., "Strength Training", "Running", "HIIT", "Yoga", "Swimming", "Cycling", "Walking").
+- caloriesBurned: total estimated kcal burned across all exercises.
+- duration: estimated total duration in minutes, or null if unclear.
+- summary: brief one-line English description of the entire session.
+- exercises: array of individual exercises. For strength exercises include sets, reps, weight. For cardio exercises include duration instead. Each exercise gets an estimated caloriesBurned. If the description is a single simple activity (e.g., "ran 30 minutes"), use a single-item exercises array with duration.
+- weight should include units as given (lb, kg, etc). If not specified, omit weight.
+- Omit fields that don't apply (e.g., no "sets" for cardio, no "duration" for strength).
 """
 
 FOOD_ANALYSIS_PROMPT_TEMPLATE = """\

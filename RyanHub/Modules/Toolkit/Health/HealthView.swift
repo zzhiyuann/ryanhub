@@ -848,11 +848,67 @@ struct HealthView: View {
                 )
             }
 
+            // Exercise breakdown
+            if let exercises = result.exercises, !exercises.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    SectionHeader(title: "Exercises")
+                    ForEach(exercises) { exercise in
+                        exerciseItemRow(exercise)
+                    }
+                }
+            }
+
             // Save button
             HubButton("Save Activity", icon: "checkmark.circle.fill") {
                 saveActivityResult(result)
             }
         }
+    }
+
+    private func exerciseItemRow(_ exercise: ExerciseItem) -> some View {
+        HStack(spacing: 10) {
+            Circle()
+                .fill(Color.hubAccentGreen.opacity(0.3))
+                .frame(width: 6, height: 6)
+
+            Text(exercise.name)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+
+            Spacer()
+
+            HStack(spacing: 6) {
+                if let sets = exercise.sets, let reps = exercise.reps {
+                    Text("\(sets)×\(reps)")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Color.hubPrimary)
+                }
+
+                if let weight = exercise.weight {
+                    Text(weight)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                }
+
+                if let duration = exercise.duration {
+                    Text("\(duration) min")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                }
+
+                if let cal = exercise.caloriesBurned {
+                    Text("~\(cal) cal")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Color.hubAccentYellow)
+                }
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(AdaptiveColors.surface(for: colorScheme))
+        )
     }
 
     // MARK: - Activity Actions

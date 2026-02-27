@@ -140,6 +140,20 @@ enum MealType: String, Codable, CaseIterable, Identifiable {
     }
 }
 
+// MARK: - Exercise Item (sub-item within an activity)
+
+/// Individual exercise within a workout, typically from AI analysis.
+/// Supports both strength (sets/reps/weight) and cardio (duration).
+struct ExerciseItem: Codable, Identifiable {
+    var id: String { name }
+    let name: String        // "Lat Pulldown"
+    let sets: Int?          // 4
+    let reps: Int?          // 12
+    let weight: String?     // "70 lb"
+    let duration: Int?      // minutes (for cardio)
+    let caloriesBurned: Int?
+}
+
 // MARK: - Activity Entry
 
 /// A single physical activity record.
@@ -152,12 +166,14 @@ struct ActivityEntry: Codable, Identifiable {
     let rawDescription: String?
     let caloriesBurned: Int?
     let isAIAnalyzed: Bool
+    let exercises: [ExerciseItem]
+    let aiSummary: String?
 
     enum CodingKeys: String, CodingKey {
-        case id, date, type, duration, note, rawDescription, caloriesBurned, isAIAnalyzed
+        case id, date, type, duration, note, rawDescription, caloriesBurned, isAIAnalyzed, exercises, aiSummary
     }
 
-    init(id: UUID = UUID(), date: Date = Date(), type: String, duration: Int, note: String? = nil, rawDescription: String? = nil, caloriesBurned: Int? = nil, isAIAnalyzed: Bool = false) {
+    init(id: UUID = UUID(), date: Date = Date(), type: String, duration: Int, note: String? = nil, rawDescription: String? = nil, caloriesBurned: Int? = nil, isAIAnalyzed: Bool = false, exercises: [ExerciseItem] = [], aiSummary: String? = nil) {
         self.id = id
         self.date = date
         self.type = type
@@ -166,6 +182,8 @@ struct ActivityEntry: Codable, Identifiable {
         self.rawDescription = rawDescription
         self.caloriesBurned = caloriesBurned
         self.isAIAnalyzed = isAIAnalyzed
+        self.exercises = exercises
+        self.aiSummary = aiSummary
     }
 
     init(from decoder: Decoder) throws {
@@ -178,6 +196,8 @@ struct ActivityEntry: Codable, Identifiable {
         rawDescription = try container.decodeIfPresent(String.self, forKey: .rawDescription)
         caloriesBurned = try container.decodeIfPresent(Int.self, forKey: .caloriesBurned)
         isAIAnalyzed = try container.decodeIfPresent(Bool.self, forKey: .isAIAnalyzed) ?? false
+        exercises = try container.decodeIfPresent([ExerciseItem].self, forKey: .exercises) ?? []
+        aiSummary = try container.decodeIfPresent(String.self, forKey: .aiSummary)
     }
 
     /// Formatted duration string.
