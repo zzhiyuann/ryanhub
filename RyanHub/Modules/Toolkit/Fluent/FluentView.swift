@@ -84,6 +84,9 @@ struct FluentView: View {
             if tab == .dashboard {
                 viewModel.refreshDashboard()
             }
+            if tab == .review {
+                viewModel.startReviewSession()
+            }
         } label: {
             VStack(spacing: 4) {
                 Image(systemName: icon)
@@ -190,6 +193,7 @@ struct FluentView: View {
 
                     if viewModel.dueCardCount > 0 {
                         Button {
+                            viewModel.startReviewSession()
                             viewModel.selectedTab = .review
                         } label: {
                             Text("Start Review")

@@ -54,9 +54,6 @@ struct FluentReviewView: View {
             Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .onAppear {
-            viewModel.startReviewSession()
-        }
     }
 
     // MARK: - Session Complete
@@ -101,7 +98,7 @@ struct FluentReviewView: View {
                     }
 
                     HubSecondaryButton("Back to Home", icon: "house") {
-                        viewModel.selectedTab = .dashboard
+                        viewModel.goToDashboard()
                     }
                 }
                 .padding(.horizontal, HubLayout.standardPadding * 2)

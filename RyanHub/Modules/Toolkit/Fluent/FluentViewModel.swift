@@ -167,7 +167,8 @@ final class FluentViewModel {
 
         // Track session stats
         sessionReviewed += 1
-        if rating != .again {
+        let isCorrect = rating != .again
+        if isCorrect {
             sessionCorrect += 1
         }
 
@@ -181,22 +182,26 @@ final class FluentViewModel {
         )
         store.saveReview(record)
 
+        // Persist progress and daily stats immediately (per card, not batched)
+        store.updateProgressAfterReview(reviewed: 1, correct: isCorrect ? 1 : 0)
+        store.updateTodayStats(reviewed: 1, correct: isCorrect ? 1 : 0, timeSpent: 0, newCards: 0)
+
+        // Refresh in-memory state so dashboard is always current
+        progress = store.loadProgress()
+        todayStats = store.getTodayStats()
+        dueCardCount = store.getDueCards().count
+
         // Move to next card or finish
         let nextIndex = currentCardIndex + 1
         if nextIndex >= reviewCards.count {
-            // Session complete
             finishReviewSession()
         } else {
-            // Advance to next card
             currentCardIndex = nextIndex
             isFlipped = false
             if let nextCard = currentCard {
                 previewIntervals = FSRSEngine.previewIntervals(for: nextCard.fsrs)
             }
         }
-
-        // Update due count immediately so dashboard stays current
-        dueCardCount = store.getDueCards().count
 
         // Brief animation delay
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
@@ -207,21 +212,12 @@ final class FluentViewModel {
     private func finishReviewSession() {
         isReviewComplete = true
 
+        // Save session time (card counts already persisted per-card above)
         let timeSpent = sessionStartTime.map { Date().timeIntervalSince($0) } ?? 0
-
-        // Update progress
-        store.updateProgressAfterReview(reviewed: sessionReviewed, correct: sessionCorrect)
-        store.updateTodayStats(
-            reviewed: sessionReviewed,
-            correct: sessionCorrect,
-            timeSpent: timeSpent,
-            newCards: 0
-        )
-
-        // Refresh dashboard data
-        progress = store.loadProgress()
-        todayStats = store.getTodayStats()
-        dueCardCount = store.getDueCards().count
+        if timeSpent > 0 {
+            store.updateTodayStats(reviewed: 0, correct: 0, timeSpent: timeSpent, newCards: 0)
+            todayStats = store.getTodayStats()
+        }
     }
 
     // MARK: - TTS
@@ -241,6 +237,14 @@ final class FluentViewModel {
 
     func saveSettings() {
         store.saveSettings(settings)
+    }
+
+    // MARK: - Navigation Helpers
+
+    /// Switch to dashboard and refresh all stats from disk.
+    func goToDashboard() {
+        selectedTab = .dashboard
+        refreshDashboard()
     }
 
     // MARK: - Vocabulary Detail
