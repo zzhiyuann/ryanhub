@@ -106,6 +106,13 @@ final class FluentViewModel {
         }
     }
 
+    /// Refresh dashboard-visible stats (call when switching back to dashboard tab).
+    func refreshDashboard() {
+        progress = store.loadProgress()
+        todayStats = store.getTodayStats()
+        dueCardCount = store.getDueCards().count
+    }
+
     // MARK: - Word of the Day
 
     /// Pick a deterministic word of the day based on the current date.
@@ -187,6 +194,9 @@ final class FluentViewModel {
                 previewIntervals = FSRSEngine.previewIntervals(for: nextCard.fsrs)
             }
         }
+
+        // Update due count immediately so dashboard stays current
+        dueCardCount = store.getDueCards().count
 
         // Brief animation delay
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in

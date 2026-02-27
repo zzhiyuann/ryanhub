@@ -81,6 +81,9 @@ struct FluentView: View {
             withAnimation(.easeInOut(duration: 0.2)) {
                 viewModel.selectedTab = tab
             }
+            if tab == .dashboard {
+                viewModel.refreshDashboard()
+            }
         } label: {
             VStack(spacing: 4) {
                 Image(systemName: icon)
@@ -114,9 +117,6 @@ struct FluentView: View {
 
                 // Stats row
                 statsRow
-
-                // Quick actions
-                quickActions
             }
             .padding(.horizontal, HubLayout.standardPadding)
             .padding(.bottom, HubLayout.sectionSpacing)
@@ -336,70 +336,6 @@ struct FluentView: View {
         }
     }
 
-    // MARK: - Quick Actions
-
-    private var quickActions: some View {
-        VStack(alignment: .leading, spacing: HubLayout.itemSpacing) {
-            SectionHeader(title: "Quick Actions")
-
-            HStack(spacing: HubLayout.itemSpacing) {
-                quickActionButton(
-                    title: "Browse Words",
-                    icon: "text.book.closed.fill",
-                    color: Color.hubPrimaryLight
-                ) {
-                    viewModel.selectedTab = .vocabulary
-                }
-                .accessibilityIdentifier(AccessibilityID.fluentBrowseWords)
-
-                quickActionButton(
-                    title: "Review Cards",
-                    icon: "rectangle.stack.fill",
-                    color: Color.hubAccentGreen
-                ) {
-                    viewModel.selectedTab = .review
-                }
-                .accessibilityIdentifier(AccessibilityID.fluentReviewCards)
-            }
-        }
-    }
-
-    private func quickActionButton(title: String, icon: String, color: Color, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 10) {
-                Image(systemName: icon)
-                    .font(.system(size: 18, weight: .medium))
-                    .foregroundStyle(color)
-                    .frame(width: 36, height: 36)
-                    .background(
-                        RoundedRectangle(cornerRadius: 10)
-                            .fill(color.opacity(0.12))
-                    )
-
-                Text(title)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
-
-                Spacer()
-
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
-            }
-            .padding(HubLayout.cardInnerPadding)
-            .background(
-                RoundedRectangle(cornerRadius: HubLayout.cardCornerRadius)
-                    .fill(AdaptiveColors.surface(for: colorScheme))
-                    .shadow(
-                        color: colorScheme == .dark
-                            ? Color.black.opacity(0.3)
-                            : Color.black.opacity(0.06),
-                        radius: 8, x: 0, y: 2
-                    )
-            )
-        }
-        .buttonStyle(.plain)
-    }
 }
 
 // MARK: - Preview
