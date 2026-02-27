@@ -35,6 +35,7 @@ struct ChatView: View {
                 isConnected: viewModel.isConnected,
                 isRecording: viewModel.isRecording,
                 recordingDuration: viewModel.recordingDuration,
+                audioLevels: viewModel.audioLevels,
                 pendingImageData: viewModel.pendingImageData,
                 onSend: {
                     if let replying = replyingTo {

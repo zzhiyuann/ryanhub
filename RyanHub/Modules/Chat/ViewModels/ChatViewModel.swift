@@ -47,6 +47,9 @@ final class ChatViewModel {
 
     var isRecording: Bool = false
     var recordingDuration: TimeInterval = 0
+    /// Real-time audio level samples for waveform visualization (0.0 to 1.0).
+    /// New samples are appended during recording; the waveform view reads the tail.
+    var audioLevels: [CGFloat] = []
 
     // MARK: - AskUserQuestion State
 
@@ -301,15 +304,26 @@ final class ChatViewModel {
 
         do {
             audioRecorder = try AVAudioRecorder(url: url, settings: settings)
+            audioRecorder?.isMeteringEnabled = true
             audioRecorder?.record()
             isRecording = true
             recordingStartTime = Date()
             recordingDuration = 0
+            audioLevels = []
 
-            // Update duration periodically on the main actor
-            let timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+            // Sample audio levels at ~30fps and update duration
+            let timer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30.0, repeats: true) { [weak self] _ in
                 guard let self, let start = self.recordingStartTime else { return }
                 self.recordingDuration = Date().timeIntervalSince(start)
+
+                // Read real audio power from the microphone
+                self.audioRecorder?.updateMeters()
+                let power = self.audioRecorder?.averagePower(forChannel: 0) ?? -160
+                // Normalize: averagePower ranges from -160 (silence) to 0 (max).
+                // Map to 0.0 – 1.0 with a floor at -50 dB for visual range.
+                let clampedPower = max(power, -50)
+                let normalized = CGFloat((clampedPower + 50) / 50)
+                self.audioLevels.append(normalized)
             }
             recordingTimer = timer
         } catch {
@@ -323,6 +337,7 @@ final class ChatViewModel {
         recordingTimer = nil
         audioRecorder?.stop()
         isRecording = false
+        audioLevels = []
 
         guard let url = recordingURL,
               let data = try? Data(contentsOf: url) else {
@@ -378,6 +393,7 @@ final class ChatViewModel {
         audioRecorder?.stop()
         isRecording = false
         recordingDuration = 0
+        audioLevels = []
 
         if let url = recordingURL {
             try? FileManager.default.removeItem(at: url)

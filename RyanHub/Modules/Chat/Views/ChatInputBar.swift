@@ -10,6 +10,8 @@ struct ChatInputBar: View {
     let isConnected: Bool
     let isRecording: Bool
     let recordingDuration: TimeInterval
+    /// Real-time audio level samples (0.0 – 1.0) for waveform visualization.
+    let audioLevels: [CGFloat]
     /// Pending image data for preview. Non-nil when a photo is attached but not yet sent.
     let pendingImageData: Data?
     let onSend: () -> Void
@@ -140,6 +142,9 @@ struct ChatInputBar: View {
 
     // MARK: - Recording Bar
 
+    /// Number of waveform bars visible in the recording UI.
+    private let waveformBarCount = 30
+
     private var recordingBar: some View {
         HStack(spacing: 12) {
             // Cancel button
@@ -150,28 +155,26 @@ struct ChatInputBar: View {
             }
             .accessibilityIdentifier(AccessibilityID.chatRecordingCancelButton)
 
-            // Recording indicator
-            HStack(spacing: 8) {
-                Circle()
-                    .fill(Color.hubAccentRed)
-                    .frame(width: 10, height: 10)
+            // Recording indicator: red dot + duration
+            Circle()
+                .fill(Color.hubAccentRed)
+                .frame(width: 10, height: 10)
 
-                Text(formatDuration(recordingDuration))
-                    .font(.system(size: 16, weight: .medium, design: .monospaced))
-                    .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+            Text(formatDuration(recordingDuration))
+                .font(.system(size: 16, weight: .medium, design: .monospaced))
+                .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                .fixedSize()
 
-                // Waveform animation
-                HStack(spacing: 2) {
-                    ForEach(0..<12, id: \.self) { index in
-                        RoundedRectangle(cornerRadius: 1)
-                            .fill(Color.hubAccentRed.opacity(0.6))
-                            .frame(width: 3, height: recordingBarHeight(for: index))
-                    }
+            // Real-time waveform — fills remaining space, centered
+            HStack(spacing: 2) {
+                ForEach(0..<waveformBarCount, id: \.self) { index in
+                    RoundedRectangle(cornerRadius: 1.5)
+                        .fill(Color.hubAccentRed.opacity(0.7))
+                        .frame(width: 3, height: waveformBarHeight(for: index))
                 }
-                .frame(height: 24)
             }
-
-            Spacer()
+            .frame(maxWidth: .infinity)
+            .frame(height: 28)
 
             // Stop and send button
             Button(action: onStopRecording) {
@@ -252,10 +255,20 @@ struct ChatInputBar: View {
 
     // MARK: - Helpers
 
-    private func recordingBarHeight(for index: Int) -> CGFloat {
-        let time = recordingDuration
-        let phase = sin(time * 4 + Double(index) * 0.5)
-        return CGFloat(6 + phase * 9)
+    /// Returns the height for a waveform bar at the given index using real audio levels.
+    /// Shows the most recent `waveformBarCount` samples, so the waveform scrolls
+    /// from right to left as new audio data arrives.
+    private func waveformBarHeight(for index: Int) -> CGFloat {
+        let minHeight: CGFloat = 3
+        let maxHeight: CGFloat = 26
+        let count = audioLevels.count
+        // Map bar index to the tail of the audioLevels array
+        let sampleIndex = count - waveformBarCount + index
+        guard sampleIndex >= 0, sampleIndex < count else {
+            return minHeight
+        }
+        let level = audioLevels[sampleIndex]
+        return minHeight + level * (maxHeight - minHeight)
     }
 
     private func formatDuration(_ duration: TimeInterval) -> String {
@@ -273,6 +286,7 @@ struct ChatInputBar: View {
             isConnected: true,
             isRecording: false,
             recordingDuration: 0,
+            audioLevels: [],
             pendingImageData: nil,
             onSend: { print("Send") },
             onStartRecording: { print("Record") },
