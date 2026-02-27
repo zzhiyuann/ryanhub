@@ -15,6 +15,9 @@ struct ChatView: View {
     @State private var questionFreeTextInput: String = ""
     /// Keyboard height for manually positioning input above the keyboard.
     @State private var keyboardHeight: CGFloat = 0
+    /// Whether the user has manually scrolled up away from the bottom.
+    /// When true, auto-scroll on streaming content updates is suppressed.
+    @State private var userScrolledUp: Bool = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -190,10 +193,20 @@ struct ChatView: View {
                             .id("typing-indicator")
                     }
 
-                    // Invisible anchor for scrolling
+                    // Invisible anchor for scrolling.
+                    // Also acts as a visibility probe: when it's on screen the user
+                    // is at or near the bottom of the chat.
                     Color.clear
                         .frame(height: 1)
                         .id("bottom-anchor")
+                        .onAppear {
+                            // Bottom anchor became visible — user is at the bottom
+                            userScrolledUp = false
+                        }
+                        .onDisappear {
+                            // Bottom anchor scrolled out of view — user scrolled up
+                            userScrolledUp = true
+                        }
                 }
                 .padding(.horizontal, HubLayout.standardPadding)
                 .padding(.vertical, 6)
@@ -210,11 +223,26 @@ struct ChatView: View {
             .defaultScrollAnchor(.bottom)
             // React to ALL message mutations via the trigger counter.
             // This covers: new messages, streaming content updates, and deletions.
+            // Only auto-scroll if the user hasn't manually scrolled up.
             .onChange(of: viewModel.messageUpdateTrigger) {
-                scrollToBottom(proxy: proxy)
+                if !userScrolledUp {
+                    scrollToBottom(proxy: proxy)
+                }
             }
             .onChange(of: viewModel.isTyping) {
-                scrollToBottom(proxy: proxy)
+                if !userScrolledUp {
+                    scrollToBottom(proxy: proxy)
+                }
+            }
+            // When a new user message is sent (message count increases with a user message
+            // at the end), always scroll to bottom and reset the flag.
+            .onChange(of: viewModel.messages.count) { oldCount, newCount in
+                if newCount > oldCount,
+                   let lastMessage = viewModel.messages.last,
+                   lastMessage.role == .user {
+                    userScrolledUp = false
+                    scrollToBottom(proxy: proxy)
+                }
             }
         }
     }

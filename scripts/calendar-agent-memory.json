@@ -1,5 +1,10 @@
 {
-  "contacts": {},
+  "contacts": {
+    "Luyuan": {
+      "email": "gea8yw@virginia.edu",
+      "note": "UVA student at Copeley"
+    }
+  },
   "preferences": {
     "default_calendar": "primary",
     "default_timezone": "America/New_York",
