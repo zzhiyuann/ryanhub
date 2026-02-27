@@ -155,9 +155,43 @@ The Toolkit tab uses a macOS-style menu bar (not NavigationStack push/pop) for s
 - Voice messages: No playback (waveform is display-only)
 - CalendarViewModel: Requires calendar-sync-server.py running on port 18791 for real data
 
-## Agent Dispatch Rules
+## Agent Coordination — Leadership Learnings (continuously updated)
 
-1. **ALWAYS verify merge after agent completes.** Cherry-pick from worktree to main, then `git diff --stat HEAD` to confirm.
-2. **ALWAYS audit agent output before reporting success.** Read key files, verify logic, build + run.
-3. **Give agents FULL context.** Include: exact file paths, design system rules, @Observable patterns, build command, bundle ID.
-4. **Specify what NOT to do.** Common mistakes: `str | None` (needs 3.10+ compat), missing `@MainActor`, using `name` as `id`, missing `CodingKeys`.
+### Core Principle
+The coordinator's job is to THINK, not to CODE. Analyze the problem, decompose it, give each agent a crystal-clear mission with all context, then verify the output. Never touch code yourself in coordinator mode.
+
+### Context is Everything
+Agents fail when they lack context. Every dispatch must include:
+- **Exact file paths** — not "the view model" but `/Users/zwang/projects/ryanhub/RyanHub/Modules/Chat/ViewModels/ChatViewModel.swift`
+- **Design system rules** — colors (`Color.hubPrimary`, `AdaptiveColors.xxx(for: colorScheme)`), typography (`.hubTitle`, `.hubBody`), layout (`HubCard`, `HubButton`, `HubLayout.standardPadding`)
+- **Architecture patterns** — `@Observable` (NOT ObservableObject), `@MainActor` on ALL ViewModels, `async/await`, SwiftUI only
+- **Build + verification command** — `xcodegen generate && xcodebuild ...`
+- **What NOT to do** — common mistakes: missing `@MainActor`, using `ObservableObject`, `str | None` syntax (needs Python 3.10+), using `name` as Identifiable `id`, missing `CodingKeys`
+
+### Decomposition Strategy
+- Break large features into independent, parallelizable chunks (e.g., POPO: research / bridge server / sensing engine / notifications = 4 parallel agents)
+- Each agent should be self-contained — it can complete its task without waiting on another agent
+- If tasks have dependencies, run them sequentially or handle the merge yourself
+
+### Use Background Agents
+- Always `run_in_background: true` so the user can still chat
+- Never block the conversation on a long-running agent
+- When multiple agents are needed, launch them all in parallel in a single message
+
+### Verification Protocol
+1. **Read agent output** — don't just trust "BUILD SUCCEEDED"
+2. **Check key files** — verify the logic makes sense, patterns are followed
+3. **Build + install** — confirm it actually compiles and runs
+4. **Only then report success** — never tell user "done" before verifying
+
+### Worktree Merge Protocol
+- Worktree agents may leave new files as untracked (not committed)
+- To merge: copy new files + apply diffs to existing files on main
+- After merge, run xcodegen + full build before committing
+- Clean up worktrees after successful merge
+
+### Self-Assessment Signals
+- Lack of user feedback ≠ positive signal — stay neutral, don't over-interpret
+- Multiple back-and-forths on the same issue = system/process failure, reflect on root cause
+- User having to repeat instructions = failure to internalize, write it down immediately
+- These learnings must be continuously updated based on experience and user feedback

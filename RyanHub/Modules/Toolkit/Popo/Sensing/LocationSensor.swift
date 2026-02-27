@@ -19,7 +19,6 @@ final class LocationSensor: NSObject {
     override init() {
         super.init()
         locationManager.delegate = self
-        locationManager.allowsBackgroundLocationUpdates = true
         locationManager.pausesLocationUpdatesAutomatically = false
     }
 
@@ -52,6 +51,13 @@ final class LocationSensor: NSObject {
 
     /// Begin significant location change monitoring.
     private func beginMonitoring() {
+        // Only enable background location updates if the app has the
+        // "location" UIBackgroundModes capability. Setting this property
+        // without the capability causes an immediate crash.
+        if let modes = Bundle.main.object(forInfoDictionaryKey: "UIBackgroundModes") as? [String],
+           modes.contains("location") {
+            locationManager.allowsBackgroundLocationUpdates = true
+        }
         locationManager.startMonitoringSignificantLocationChanges()
     }
 }
