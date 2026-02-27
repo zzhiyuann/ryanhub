@@ -16,6 +16,11 @@ struct WeightTimelineChart: View {
         entries.sorted { $0.date < $1.date }
     }
 
+    /// Normalize a date to start-of-day so data points align precisely with x-axis labels.
+    private func chartDate(_ date: Date) -> Date {
+        Calendar.current.startOfDay(for: date)
+    }
+
     var body: some View {
         HubCard {
             VStack(alignment: .leading, spacing: 12) {
@@ -84,7 +89,7 @@ struct WeightTimelineChart: View {
             // Area gradient under the line
             ForEach(sortedEntries) { entry in
                 AreaMark(
-                    x: .value("Date", entry.date),
+                    x: .value("Date", chartDate(entry.date)),
                     y: .value("Weight", entry.weight)
                 )
                 .foregroundStyle(
@@ -103,7 +108,7 @@ struct WeightTimelineChart: View {
             // Main line
             ForEach(sortedEntries) { entry in
                 LineMark(
-                    x: .value("Date", entry.date),
+                    x: .value("Date", chartDate(entry.date)),
                     y: .value("Weight", entry.weight)
                 )
                 .foregroundStyle(Color.hubPrimary)
@@ -114,7 +119,7 @@ struct WeightTimelineChart: View {
             // Data points
             ForEach(sortedEntries) { entry in
                 PointMark(
-                    x: .value("Date", entry.date),
+                    x: .value("Date", chartDate(entry.date)),
                     y: .value("Weight", entry.weight)
                 )
                 .foregroundStyle(
@@ -127,14 +132,14 @@ struct WeightTimelineChart: View {
 
             // Selection rule mark
             if let selected = selectedEntry {
-                RuleMark(x: .value("Date", selected.date))
+                RuleMark(x: .value("Date", chartDate(selected.date)))
                     .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme).opacity(0.3))
                     .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
             }
         }
         .chartYScale(domain: yDomain)
         .chartXAxis {
-            AxisMarks(values: .automatic(desiredCount: xAxisCount)) { value in
+            AxisMarks(values: xAxisDates) { value in
                 AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5))
                     .foregroundStyle(AdaptiveColors.border(for: colorScheme))
                 AxisValueLabel {
@@ -185,8 +190,20 @@ struct WeightTimelineChart: View {
 
     // MARK: - Helpers
 
-    private var xAxisCount: Int {
-        min(sortedEntries.count, 6)
+    /// Evenly-spaced dates from actual data entries for x-axis labels.
+    /// Using real data dates ensures labels sit exactly on data points.
+    private var xAxisDates: [Date] {
+        let dates = sortedEntries.map { chartDate($0.date) }
+        let unique = Array(Set(dates)).sorted()
+        let desiredCount = min(unique.count, 6)
+        guard desiredCount >= 2 else { return unique }
+        // Pick evenly spaced indices including first and last
+        var selected: [Date] = []
+        for i in 0..<desiredCount {
+            let index = i * (unique.count - 1) / (desiredCount - 1)
+            selected.append(unique[index])
+        }
+        return selected
     }
 
     private func isLatestEntry(_ entry: WeightEntry) -> Bool {
@@ -247,9 +264,9 @@ struct WeightTimelineChart: View {
 
         guard let tappedDate: Date = proxy.value(atX: relativeX) else { return }
 
-        // Find the closest entry to the tapped date
+        // Find the closest entry to the tapped date using normalized chart dates
         let closest = sortedEntries.min(by: {
-            abs($0.date.timeIntervalSince(tappedDate)) < abs($1.date.timeIntervalSince(tappedDate))
+            abs(chartDate($0.date).timeIntervalSince(tappedDate)) < abs(chartDate($1.date).timeIntervalSince(tappedDate))
         })
 
         withAnimation(.easeOut(duration: 0.15)) {

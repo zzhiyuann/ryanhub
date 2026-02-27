@@ -79,6 +79,15 @@ struct FoodEntry: Codable, Identifiable {
         self.isAIAnalyzed = isAIAnalyzed
     }
 
+    /// Display name derived from extracted food items when available,
+    /// falling back to the raw description.
+    var displayName: String {
+        if let items, !items.isEmpty {
+            return items.map(\.name).joined(separator: ", ")
+        }
+        return description
+    }
+
     /// Formatted time string.
     var formattedTime: String {
         let formatter = DateFormatter()

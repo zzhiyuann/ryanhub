@@ -180,6 +180,15 @@ struct HealthView: View {
 
                     ForEach(Array(recentEntries)) { entry in
                         weightEntryRow(entry)
+                            .contextMenu {
+                                Button(role: .destructive) {
+                                    withAnimation {
+                                        viewModel.deleteWeight(entry)
+                                    }
+                                } label: {
+                                    Label("Delete", systemImage: "trash")
+                                }
+                            }
                     }
                 }
             }
@@ -457,9 +466,15 @@ struct HealthView: View {
                 }
             }
 
-            // Save button
-            HubButton("Save Meal", icon: "checkmark.circle.fill") {
-                saveFoodResult(result)
+            // Save / Decline buttons
+            HStack(spacing: 12) {
+                HubSecondaryButton("Decline") {
+                    declineFoodResult()
+                }
+
+                HubButton("Save Meal", icon: "checkmark.circle.fill") {
+                    saveFoodResult(result)
+                }
             }
         }
     }
@@ -525,7 +540,7 @@ struct HealthView: View {
                 )
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(entry.description)
+                Text(entry.displayName)
                     .font(.system(size: 15, weight: .medium))
                     .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
                     .lineLimit(1)
@@ -631,6 +646,15 @@ struct HealthView: View {
         selectedImage = nil
         selectedPhoto = nil
         quickMealText = ""
+    }
+
+    /// Decline the AI analysis result without saving.
+    private func declineFoodResult() {
+        foodAnalysisResult = nil
+        foodAnalysisError = nil
+        foodAnalysisDescription = ""
+        selectedImage = nil
+        selectedPhoto = nil
     }
 
     // MARK: - Activity Content
@@ -858,9 +882,15 @@ struct HealthView: View {
                 }
             }
 
-            // Save button
-            HubButton("Save Activity", icon: "checkmark.circle.fill") {
-                saveActivityResult(result)
+            // Save / Decline buttons
+            HStack(spacing: 12) {
+                HubSecondaryButton("Decline") {
+                    declineActivityResult()
+                }
+
+                HubButton("Save Activity", icon: "checkmark.circle.fill") {
+                    saveActivityResult(result)
+                }
             }
         }
     }
@@ -940,6 +970,13 @@ struct HealthView: View {
         activityAnalysisError = nil
         activityAnalysisDescription = ""
         quickActivityText = ""
+    }
+
+    /// Decline the AI activity analysis result without saving.
+    private func declineActivityResult() {
+        activityAnalysisResult = nil
+        activityAnalysisError = nil
+        activityAnalysisDescription = ""
     }
 
     // MARK: - Shared

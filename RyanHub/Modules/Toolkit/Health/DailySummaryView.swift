@@ -183,6 +183,15 @@ struct DailySummaryView: View {
 
             ForEach(viewModel.todayFoodEntries) { entry in
                 timelineRow(entry)
+                    .contextMenu {
+                        Button(role: .destructive) {
+                            withAnimation {
+                                viewModel.deleteFood(entry)
+                            }
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
+                    }
             }
         }
     }
@@ -221,7 +230,7 @@ struct DailySummaryView: View {
                         .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
                 }
 
-                Text(entry.description)
+                Text(entry.displayName)
                     .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
                     .lineLimit(2)
