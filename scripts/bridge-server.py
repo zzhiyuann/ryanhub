@@ -451,6 +451,11 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
             self._handle_audio_upload()
             return
 
+        # POPO narration analysis (transcription + affect)
+        if path == "/popo/narrations/analyze":
+            self._handle_narration_analysis()
+            return
+
         # Server-side data write (health + chat + popo)
         if path in DATA_FILES:
             self._write_data_file(path)
@@ -615,13 +620,33 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
             with open(filepath, "wb") as f:
                 f.write(body)
 
-            self._send_json(200, {
+            response_data = {
                 "ok": True,
                 "filename": filename,
                 "size": len(body),
-            })
+            }
+
+            # If a narration ID was provided, trigger background analysis
+            narration_id = self.headers.get("X-Narration-Id")
+            if narration_id and OPENAI_AVAILABLE:
+                response_data["analysis_queued"] = True
+
+                def _bg_analyze():
+                    try:
+                        result = run_narration_analysis(filepath, narration_id)
+                        if result.get("status") in ("transcribed", "analyzed"):
+                            update_narration_with_analysis(narration_id, result)
+                            print("[Narration] Background analysis complete for %s" % filename)
+                    except Exception as e:
+                        print("[Narration] Background analysis failed: %s" % e,
+                              file=sys.stderr)
+
+                bg_thread = threading.Thread(target=_bg_analyze, daemon=True)
+                bg_thread.start()
+
+            self._send_json(200, response_data)
         except IOError as e:
-            self._send_json(500, {"error": f"Failed to save audio: {e}"})
+            self._send_json(500, {"error": "Failed to save audio: %s" % e})
 
     def _serve_audio_file(self, path):
         """Serve a stored audio file from POPO audio directory.
@@ -661,6 +686,57 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
             self.wfile.write(data)
         except IOError as e:
             self._send_json(500, {"error": f"Failed to read audio: {e}"})
+
+    # -----------------------------------------------------------------------
+    # Narration analysis endpoint
+    # -----------------------------------------------------------------------
+
+    def _handle_narration_analysis(self):
+        """Transcribe and analyze emotional affect from a narration audio file.
+        Expects JSON body with 'filename' and optionally 'narration_id'."""
+        try:
+            content_length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(content_length)
+            data = json.loads(body) if body else {}
+        except (json.JSONDecodeError, ValueError) as e:
+            self._send_json(400, {"error": "Invalid request body: %s" % e})
+            return
+
+        filename = data.get("filename")
+        narration_id = data.get("narration_id")
+
+        if not filename:
+            self._send_json(400, {"error": "Missing 'filename' in request body"})
+            return
+
+        # Sanitize and locate the audio file
+        filename = os.path.basename(filename)
+        audio_path = os.path.join(POPO_AUDIO_DIR, filename)
+
+        if not os.path.exists(audio_path):
+            self._send_json(404, {"error": "Audio file not found: %s" % filename})
+            return
+
+        if not OPENAI_AVAILABLE:
+            self._send_json(503, {
+                "error": "OpenAI not available (missing API key or package)",
+                "transcript": None,
+                "affect": None,
+                "status": "openai_unavailable"
+            })
+            return
+
+        # Run the analysis pipeline
+        try:
+            result = run_narration_analysis(audio_path, narration_id)
+
+            # If we have a narration_id, update the stored narration entry
+            if narration_id and result.get("status") in ("transcribed", "analyzed"):
+                update_narration_with_analysis(narration_id, result)
+
+            self._send_json(200, result)
+        except Exception as e:
+            self._send_json(500, {"error": "Analysis failed: %s" % e})
 
     # -----------------------------------------------------------------------
     # Parking endpoints
