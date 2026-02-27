@@ -6,8 +6,6 @@ import SwiftUI
 struct MessageBubble: View {
     @Environment(\.colorScheme) private var colorScheme
     let message: ChatMessage
-    /// All messages in the conversation, used to look up quoted messages for scroll.
-    var allMessages: [ChatMessage] = []
     /// Per-message status (sending → acknowledged → processing → done).
     var messageStatus: ChatViewModel.MessageStatus?
     var onReply: ((ChatMessage) -> Void)?
@@ -21,6 +19,8 @@ struct MessageBubble: View {
     @State private var showFullScreenImage = false
     @State private var isEditing = false
     @State private var editText = ""
+    /// Cached UIImage decoded from base64, avoids re-decoding on every scroll frame.
+    @State private var cachedImage: UIImage?
 
     var body: some View {
         HStack(alignment: .bottom, spacing: 6) {
@@ -58,6 +58,7 @@ struct MessageBubble: View {
                     bubbleContent
                         .background(bubbleBackground)
                         .clipShape(BubbleShape(isUser: isUser))
+                        .drawingGroup()
                 }
 
                 // Timestamp + status + edit button
@@ -289,9 +290,7 @@ struct MessageBubble: View {
     @ViewBuilder
     private var imageBubbleContent: some View {
         VStack(alignment: .leading, spacing: 4) {
-            if let base64 = message.imageBase64,
-               let data = Data(base64Encoded: base64),
-               let uiImage = UIImage(data: data) {
+            if let uiImage = cachedImage {
                 Button {
                     showFullScreenImage = true
                 } label: {
@@ -306,6 +305,11 @@ struct MessageBubble: View {
                 .fullScreenCover(isPresented: $showFullScreenImage) {
                     FullScreenImageViewer(image: uiImage)
                 }
+            } else if message.imageBase64 != nil {
+                // Image is being decoded or failed to decode
+                ProgressView()
+                    .frame(width: 220, height: 120)
+                    .onAppear { decodeImageIfNeeded() }
             } else {
                 // Placeholder for images that were stripped from persistence
                 HStack(spacing: 6) {
@@ -325,6 +329,21 @@ struct MessageBubble: View {
                     .foregroundStyle(isUser ? .white.opacity(0.9) : AdaptiveColors.textPrimary(for: colorScheme))
                     .padding(.horizontal, 10)
                     .padding(.bottom, 6)
+            }
+        }
+        .onAppear { decodeImageIfNeeded() }
+    }
+
+    /// Decode base64 image data on a background thread and cache the result.
+    /// This prevents synchronous decoding from blocking the main thread during scroll.
+    private func decodeImageIfNeeded() {
+        guard cachedImage == nil,
+              let base64 = message.imageBase64 else { return }
+        Task.detached(priority: .userInitiated) {
+            guard let data = Data(base64Encoded: base64),
+                  let image = UIImage(data: data) else { return }
+            await MainActor.run {
+                cachedImage = image
             }
         }
     }

@@ -143,7 +143,6 @@ struct ChatView: View {
                         ForEach(viewModel.messages) { message in
                             MessageBubble(
                                 message: message,
-                                allMessages: viewModel.messages,
                                 messageStatus: viewModel.messageStatuses[message.id],
                                 onReply: { msg in
                                     withAnimation(.easeOut(duration: 0.15)) {
@@ -180,6 +179,13 @@ struct ChatView: View {
                 }
                 .padding(.horizontal, HubLayout.standardPadding)
                 .padding(.vertical, 6)
+            }
+            .onTapGesture {
+                // Dismiss keyboard when tapping empty space in the chat area
+                UIApplication.shared.sendAction(
+                    #selector(UIResponder.resignFirstResponder),
+                    to: nil, from: nil, for: nil
+                )
             }
             .accessibilityIdentifier(AccessibilityID.chatMessagesArea)
             .scrollDismissesKeyboard(.interactively)
