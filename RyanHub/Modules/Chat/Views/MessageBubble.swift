@@ -173,7 +173,7 @@ struct MessageBubble: View {
                             ? Color.white.opacity(0.7)
                             : AdaptiveColors.textSecondary(for: colorScheme)
                     )
-                    .lineLimit(1)
+                    .lineLimit(preview.hasPrefix("[audio]") ? 6 : 1)
                     .truncationMode(.tail)
             }
             .padding(.horizontal, 10)

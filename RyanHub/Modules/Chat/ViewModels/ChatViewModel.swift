@@ -939,8 +939,12 @@ final class ChatViewModel {
     static func buildReplyPreview(for message: ChatMessage) -> String {
         switch message.messageType {
         case .voice:
-            let seconds = Int(message.voiceDuration ?? 0)
-            return "[audio \(seconds)s]"
+            // Show [audio] followed by transcribed content if available
+            let prefix = "[audio]"
+            if !message.content.isEmpty && message.content != "[Voice message]" {
+                return "\(prefix) \(message.content)"
+            }
+            return prefix
         case .image:
             return message.content.isEmpty ? "[Image]" : String(message.content.prefix(80))
         case .text:

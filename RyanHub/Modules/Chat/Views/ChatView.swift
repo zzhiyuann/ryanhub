@@ -244,6 +244,11 @@ struct ChatView: View {
                     scrollToBottom(proxy: proxy)
                 }
             }
+            .onAppear {
+                // When switching back to the chat tab or chat mode,
+                // scroll to bottom so the user sees the latest messages.
+                scrollToBottom(proxy: proxy)
+            }
         }
     }
 
