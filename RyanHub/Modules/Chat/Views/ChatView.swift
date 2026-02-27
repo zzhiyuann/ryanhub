@@ -190,9 +190,10 @@ struct ChatView: View {
                         }
                     }
 
-                    // Show standalone typing indicator ONLY when waiting
-                    // for the first response chunk (no streaming message yet).
-                    if viewModel.isTyping && viewModel.currentStreamingMessageId == nil {
+                    // Show typing indicator when any user message is still
+                    // waiting for a response (sending or acknowledged), even if
+                    // another message's response is currently streaming.
+                    if viewModel.hasMessagesAwaitingResponse {
                         TypingIndicator()
                             .id("typing-indicator")
                     }
