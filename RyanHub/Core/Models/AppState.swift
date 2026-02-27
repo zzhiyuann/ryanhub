@@ -12,6 +12,9 @@ final class AppState {
             if !isCustomFoodAnalysisURL {
                 foodAnalysisURL = Self.deriveFoodAnalysisURL(from: serverURL)
             }
+            if !isCustomCalendarSyncURL {
+                calendarSyncURL = Self.deriveCalendarSyncURL(from: serverURL)
+            }
         }
     }
 
@@ -26,11 +29,25 @@ final class AppState {
         didSet { UserDefaults.standard.set(isCustomFoodAnalysisURL, forKey: Keys.isCustomFoodAnalysisURL) }
     }
 
+    /// Base URL for the calendar sync bridge server.
+    /// Defaults to the same host as the WebSocket server on port 18791.
+    var calendarSyncURL: String {
+        didSet { UserDefaults.standard.set(calendarSyncURL, forKey: Keys.calendarSyncURL) }
+    }
+
+    /// Whether the user has manually customized the calendar sync URL.
+    var isCustomCalendarSyncURL: Bool {
+        didSet { UserDefaults.standard.set(isCustomCalendarSyncURL, forKey: Keys.isCustomCalendarSyncURL) }
+    }
+
     /// Default WebSocket server URL.
     static let defaultServerURL = "ws://localhost:8765"
 
     /// Default food analysis bridge URL.
     static let defaultFoodAnalysisURL = "http://localhost:18790"
+
+    /// Default calendar sync bridge URL.
+    static let defaultCalendarSyncURL = "http://localhost:18791"
 
     /// Derive the food analysis URL from the WebSocket server URL.
     /// Extracts the host from the WS URL and uses port 18790 with http://.
@@ -39,6 +56,15 @@ final class AppState {
             return defaultFoodAnalysisURL
         }
         return "http://\(host):18790"
+    }
+
+    /// Derive the calendar sync URL from the WebSocket server URL.
+    /// Extracts the host from the WS URL and uses port 18791 with http://.
+    static func deriveCalendarSyncURL(from serverURL: String) -> String {
+        guard let url = URL(string: serverURL), let host = url.host else {
+            return defaultCalendarSyncURL
+        }
+        return "http://\(host):18791"
     }
 
     // MARK: - Appearance
@@ -85,6 +111,9 @@ final class AppState {
         self.isCustomFoodAnalysisURL = UserDefaults.standard.bool(forKey: Keys.isCustomFoodAnalysisURL)
         self.foodAnalysisURL = UserDefaults.standard.string(forKey: Keys.foodAnalysisURL)
             ?? Self.deriveFoodAnalysisURL(from: savedServerURL)
+        self.isCustomCalendarSyncURL = UserDefaults.standard.bool(forKey: Keys.isCustomCalendarSyncURL)
+        self.calendarSyncURL = UserDefaults.standard.string(forKey: Keys.calendarSyncURL)
+            ?? Self.deriveCalendarSyncURL(from: savedServerURL)
         let rawAppearance = UserDefaults.standard.string(forKey: Keys.appearanceMode) ?? AppearanceMode.system.rawValue
         self.appearanceMode = AppearanceMode(rawValue: rawAppearance) ?? .system
         let rawLanguage = UserDefaults.standard.string(forKey: Keys.language) ?? AppLanguage.english.rawValue
@@ -96,6 +125,8 @@ final class AppState {
         serverURL = Self.defaultServerURL
         foodAnalysisURL = Self.defaultFoodAnalysisURL
         isCustomFoodAnalysisURL = false
+        calendarSyncURL = Self.defaultCalendarSyncURL
+        isCustomCalendarSyncURL = false
     }
 
     // MARK: - Keys
@@ -104,6 +135,8 @@ final class AppState {
         static let serverURL = "ryanhub_server_url"
         static let foodAnalysisURL = "ryanhub_food_analysis_url"
         static let isCustomFoodAnalysisURL = "ryanhub_is_custom_food_analysis_url"
+        static let calendarSyncURL = "ryanhub_calendar_sync_url"
+        static let isCustomCalendarSyncURL = "ryanhub_is_custom_calendar_sync_url"
         static let appearanceMode = "ryanhub_appearance_mode"
         static let language = "ryanhub_language"
     }

@@ -19,13 +19,12 @@ enum PersonalContext {
         BookFactoryDataProvider.self,
     ]
 
-    /// Build context for a specific user message by filtering relevant providers.
-    /// Returns the original text unchanged if no providers match.
+    /// Build context by injecting ALL provider summaries into every message.
+    /// No keyword filtering — the agent always has the full picture and decides
+    /// what's relevant. Returns original text unchanged only if every provider
+    /// returns nil (no data at all).
     static func buildContext(for userText: String) -> String {
-        let relevant = providers.filter { $0.isRelevant(to: userText) }
-        guard !relevant.isEmpty else { return userText }
-
-        let sections = relevant.compactMap { $0.buildContextSummary() }
+        let sections = providers.compactMap { $0.buildContextSummary() }
         guard !sections.isEmpty else { return userText }
 
         var parts = ["[Personal Context]"]

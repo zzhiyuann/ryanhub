@@ -2,16 +2,21 @@ import SwiftUI
 
 // MARK: - Calendar Event
 
-/// Represents a single calendar event.
-struct CalendarEvent: Codable, Identifiable {
+/// Represents a single calendar event from Google Calendar.
+struct CalendarEvent: Codable, Identifiable, Hashable {
     let id: String
     let title: String
     let startTime: Date
     let endTime: Date
     let location: String?
     let notes: String?
-    let calendarColor: String? // hex color
+    let calendarId: String?
+    let calendarName: String?
+    let calendarColor: String?
     let isAllDay: Bool
+    let htmlLink: String?
+    let status: String?
+    let attendees: [EventAttendee]?
 
     init(
         id: String = UUID().uuidString,
@@ -20,8 +25,13 @@ struct CalendarEvent: Codable, Identifiable {
         endTime: Date,
         location: String? = nil,
         notes: String? = nil,
+        calendarId: String? = nil,
+        calendarName: String? = nil,
         calendarColor: String? = nil,
-        isAllDay: Bool = false
+        isAllDay: Bool = false,
+        htmlLink: String? = nil,
+        status: String? = nil,
+        attendees: [EventAttendee]? = nil
     ) {
         self.id = id
         self.title = title
@@ -29,8 +39,21 @@ struct CalendarEvent: Codable, Identifiable {
         self.endTime = endTime
         self.location = location
         self.notes = notes
+        self.calendarId = calendarId
+        self.calendarName = calendarName
         self.calendarColor = calendarColor
         self.isAllDay = isAllDay
+        self.htmlLink = htmlLink
+        self.status = status
+        self.attendees = attendees
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+    }
+
+    static func == (lhs: CalendarEvent, rhs: CalendarEvent) -> Bool {
+        lhs.id == rhs.id
     }
 
     /// Formatted time range string (e.g., "9:00 AM - 10:30 AM").
@@ -97,6 +120,71 @@ struct CalendarEvent: Codable, Identifiable {
         guard let location = location, !location.isEmpty else { return nil }
         let encoded = location.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
         return URL(string: "https://maps.apple.com/?q=\(encoded)")
+    }
+
+    /// Google Calendar URL for this event.
+    var googleCalendarURL: URL? {
+        guard let link = htmlLink else { return nil }
+        return URL(string: link)
+    }
+}
+
+// MARK: - Event Attendee
+
+struct EventAttendee: Codable, Hashable {
+    let email: String
+    let displayName: String?
+    let responseStatus: String
+
+    var statusLabel: String {
+        switch responseStatus {
+        case "accepted": return "Accepted"
+        case "declined": return "Declined"
+        case "tentative": return "Maybe"
+        case "needsAction": return "Pending"
+        default: return responseStatus.capitalized
+        }
+    }
+
+    var statusColor: Color {
+        switch responseStatus {
+        case "accepted": return .hubAccentGreen
+        case "declined": return .hubAccentRed
+        case "tentative": return .hubAccentYellow
+        default: return .secondary
+        }
+    }
+}
+
+// MARK: - Calendar Info
+
+/// Metadata about a Google Calendar.
+struct CalendarInfo: Codable, Identifiable {
+    let id: String
+    let summary: String
+    let backgroundColor: String
+    let primary: Bool
+    let accessRole: String
+
+    var resolvedColor: Color {
+        Color(hex: backgroundColor)
+    }
+}
+
+// MARK: - Agent Response
+
+/// Response from the calendar agent (natural language processing).
+struct AgentCalendarResponse: Codable {
+    let message: String
+    let action: String
+    let eventId: String?
+
+    var isError: Bool {
+        action == "error"
+    }
+
+    var isMutating: Bool {
+        ["created", "updated", "deleted"].contains(action)
     }
 }
 

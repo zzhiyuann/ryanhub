@@ -5,7 +5,8 @@
 # Starts/stops/checks all backend services that the app depends on:
 #   1. Dispatcher (WebSocket on port 8765) — Chat backend
 #   2. Food Analysis Server (HTTP on port 18790) — Nutrition analysis bridge
-#   3. Book Factory Server (HTTPS on port 3443 / HTTP on port 3000) — Book platform
+#   3. Calendar Sync Server (HTTP on port 18791) — Google Calendar bridge
+#   4. Book Factory Server (HTTPS on port 3443 / HTTP on port 3000) — Book platform
 #
 # Usage:
 #   ./start-all-services.sh start    # Start all services (default)
@@ -40,6 +41,13 @@ FOOD_NAME="food-analysis"
 FOOD_PORT=18790
 FOOD_SCRIPT="$REPO_ROOT/scripts/food-analysis-server.py"
 FOOD_LOG="/tmp/ryanhub-food-analysis.log"
+
+# Calendar Sync Server
+CALENDAR_NAME="calendar-sync"
+CALENDAR_PORT=18791
+CALENDAR_SCRIPT="$REPO_ROOT/scripts/calendar-sync-server.py"
+CALENDAR_PYTHON="/Users/zwang/Documents/gcal-mcp-server/.venv/bin/python3"
+CALENDAR_LOG="/tmp/ryanhub-calendar-sync.log"
 
 # Book Factory Server
 BOOKFACTORY_NAME="bookfactory"
@@ -272,6 +280,78 @@ status_food() {
 }
 
 # =============================================================================
+# Service: Calendar Sync Server
+# =============================================================================
+
+start_calendar() {
+    if port_in_use "$CALENDAR_PORT"; then
+        local existing_pid
+        existing_pid=$(get_pid_on_port "$CALENDAR_PORT")
+        log "$CALENDAR_NAME: Already running on port $CALENDAR_PORT (PID $existing_pid)"
+        save_pid "$CALENDAR_NAME" "$existing_pid"
+        return 0
+    fi
+
+    if [[ ! -f "$CALENDAR_SCRIPT" ]]; then
+        log_warn "$CALENDAR_NAME: Script not found at $CALENDAR_SCRIPT — skipping"
+        return 0
+    fi
+
+    if [[ ! -x "$CALENDAR_PYTHON" ]]; then
+        log_warn "$CALENDAR_NAME: Python not found at $CALENDAR_PYTHON — skipping"
+        return 0
+    fi
+
+    log "$CALENDAR_NAME: Starting on port $CALENDAR_PORT..."
+    nohup "$CALENDAR_PYTHON" "$CALENDAR_SCRIPT" >> "$CALENDAR_LOG" 2>&1 &
+    local pid=$!
+    disown "$pid" 2>/dev/null || true
+    save_pid "$CALENDAR_NAME" "$pid"
+
+    if wait_for_port "$CALENDAR_PORT" 10; then
+        log "$CALENDAR_NAME: Started successfully (PID $pid)"
+    else
+        log_error "$CALENDAR_NAME: Failed to start within timeout"
+        return 1
+    fi
+}
+
+stop_calendar() {
+    local pid
+    pid=$(read_pid "$CALENDAR_NAME")
+    if [[ -z "$pid" ]]; then
+        pid=$(get_pid_on_port "$CALENDAR_PORT")
+    fi
+
+    if [[ -n "$pid" ]] && is_alive "$pid"; then
+        log "$CALENDAR_NAME: Stopping (PID $pid)..."
+        kill "$pid" 2>/dev/null
+        local wait=0
+        while is_alive "$pid" && (( wait < 5 )); do
+            sleep 1
+            (( wait++ ))
+        done
+        if is_alive "$pid"; then
+            kill -9 "$pid" 2>/dev/null
+        fi
+        log "$CALENDAR_NAME: Stopped"
+    else
+        log "$CALENDAR_NAME: Not running"
+    fi
+    rm -f "$PID_DIR/$CALENDAR_NAME.pid"
+}
+
+status_calendar() {
+    if port_in_use "$CALENDAR_PORT"; then
+        local pid
+        pid=$(get_pid_on_port "$CALENDAR_PORT")
+        echo "  $CALENDAR_NAME: RUNNING on port $CALENDAR_PORT (PID $pid)"
+    else
+        echo "  $CALENDAR_NAME: STOPPED (port $CALENDAR_PORT)"
+    fi
+}
+
+# =============================================================================
 # Service: Book Factory Server
 # =============================================================================
 
@@ -368,6 +448,7 @@ do_start() {
 
     start_dispatcher  || (( failures++ )) || true
     start_food        || (( failures++ )) || true
+    start_calendar    || (( failures++ )) || true
     start_bookfactory || (( failures++ )) || true
 
     echo ""
@@ -388,6 +469,7 @@ do_stop() {
     log "=========================================="
 
     stop_bookfactory
+    stop_calendar
     stop_food
     stop_dispatcher
 
@@ -401,6 +483,7 @@ do_status() {
     echo "--------------------------"
     status_dispatcher
     status_food
+    status_calendar
     status_bookfactory
     echo ""
 }
@@ -436,8 +519,14 @@ case "$ACTION" in
     stop-food)
         stop_food
         ;;
+    start-calendar)
+        start_calendar
+        ;;
+    stop-calendar)
+        stop_calendar
+        ;;
     *)
-        echo "Usage: $0 {start|stop|status|restart|start-food|stop-food}"
+        echo "Usage: $0 {start|stop|status|restart|start-food|stop-food|start-calendar|stop-calendar}"
         exit 1
         ;;
 esac

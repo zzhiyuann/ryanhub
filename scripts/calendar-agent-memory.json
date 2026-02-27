@@ -1,0 +1,8 @@
+{
+  "contacts": {},
+  "preferences": {
+    "default_calendar": "primary",
+    "default_timezone": "America/New_York",
+    "default_duration_minutes": 60
+  }
+}

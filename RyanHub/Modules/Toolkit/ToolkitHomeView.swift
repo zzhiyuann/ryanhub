@@ -67,9 +67,7 @@ struct ToolkitHomeView: View {
         case .parking:
             ParkingView()
         case .calendar:
-            NavigationStack {
-                CalendarPluginView()
-            }
+            CalendarPluginView()
         case .health:
             HealthView()
         }

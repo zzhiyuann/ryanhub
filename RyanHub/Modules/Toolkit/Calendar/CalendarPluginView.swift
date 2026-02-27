@@ -2,90 +2,94 @@ import SwiftUI
 
 // MARK: - Calendar Plugin View
 
-/// Main calendar view showing upcoming events organized by day,
-/// with week overview, countdown timer, event details, and sync state.
+/// Main calendar view with real Google Calendar integration.
+/// Shows events organized by day with an AI-powered command input bar.
 struct CalendarPluginView: View {
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(AppState.self) private var appState
     @State private var viewModel = CalendarViewModel()
+    @FocusState private var isInputFocused: Bool
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: HubLayout.sectionSpacing) {
-                if !viewModel.hasSynced && !viewModel.hasAnyEvents {
-                    emptyStateView
-                } else {
+        VStack(spacing: 0) {
+            // Scrollable content
+            ScrollView {
+                VStack(spacing: HubLayout.sectionSpacing) {
+                    dateHeader
                     syncHeader
-                    countdownSection
-                    weekOverviewSection
-                    todaySection
-                    tomorrowSection
-                    thisWeekSection
-                }
-            }
-            .padding(HubLayout.standardPadding)
-        }
-        .background(AdaptiveColors.background(for: colorScheme))
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    viewModel.refresh()
-                } label: {
-                    if viewModel.isLoading {
-                        ProgressView()
-                            .tint(.hubPrimary)
+
+                    if !viewModel.hasSynced && !viewModel.hasAnyEvents {
+                        emptyStateView
                     } else {
-                        Image(systemName: "arrow.clockwise")
-                            .foregroundStyle(Color.hubPrimary)
+                        countdownSection
+                        weekOverviewSection
+                        agentResponseSection
+                        todaySection
+                        tomorrowSection
+                        thisWeekSection
                     }
                 }
-                .disabled(viewModel.isLoading)
-                .accessibilityIdentifier(AccessibilityID.calendarRefreshButton)
+                .padding(HubLayout.standardPadding)
             }
+            .scrollDismissesKeyboard(.interactively)
+            .refreshable {
+                await viewModel.syncEvents()
+            }
+
+            // Fixed bottom input bar
+            commandInputBar
         }
+        .background(AdaptiveColors.background(for: colorScheme))
         .sheet(isPresented: $viewModel.showEventDetail) {
             if let event = viewModel.selectedEvent {
-                EventDetailView(event: event, colorScheme: colorScheme)
-                    .presentationDetents([.medium])
-                    .presentationDragIndicator(.visible)
+                EventDetailView(
+                    event: event,
+                    colorScheme: colorScheme,
+                    onDelete: {
+                        Task { await viewModel.deleteEvent(event) }
+                    }
+                )
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
             }
+        }
+        .task {
+            viewModel.service.bridgeBaseURL = appState.calendarSyncURL
+            await viewModel.syncEvents()
         }
     }
 
-    // MARK: - Empty State
+    // MARK: - Date Header
 
-    private var emptyStateView: some View {
-        VStack(spacing: 24) {
-            Spacer()
-                .frame(height: 40)
-
-            Image(systemName: "calendar.badge.clock")
-                .font(.system(size: 56, weight: .light))
-                .foregroundStyle(Color.hubPrimary.opacity(0.6))
-
-            VStack(spacing: 8) {
-                Text("No Events Yet")
-                    .font(.hubHeading)
+    private var dateHeader: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(formattedMonthYear)
+                    .font(.hubTitle)
                     .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
-
-                Text("Sync with Google Calendar to see your schedule here. Events are fetched through the Dispatcher.")
+                Text(formattedToday)
                     .font(.hubBody)
                     .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 24)
             }
-
-            HubButton("Sync with Google Calendar", icon: "arrow.triangle.2.circlepath", isLoading: viewModel.isLoading) {
-                viewModel.syncEvents()
-            }
-            .padding(.horizontal, 40)
-            .padding(.top, 8)
-            .accessibilityIdentifier(AccessibilityID.calendarSyncButton)
 
             Spacer()
-                .frame(height: 40)
+
+            Button {
+                Task { await viewModel.syncEvents() }
+            } label: {
+                if viewModel.isLoading {
+                    ProgressView()
+                        .tint(Color.hubPrimary)
+                        .frame(width: 32, height: 32)
+                } else {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(Color.hubPrimary)
+                        .frame(width: 32, height: 32)
+                }
+            }
+            .disabled(viewModel.isLoading)
         }
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier(AccessibilityID.calendarEmptyState)
     }
 
     // MARK: - Sync Header
@@ -101,7 +105,50 @@ struct CalendarPluginView: View {
                     Spacer()
                 }
                 .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+            } else if case .error(let msg) = viewModel.syncState {
+                HStack(spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Color.hubAccentRed)
+                    Text(msg)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(Color.hubAccentRed)
+                        .lineLimit(1)
+                    Spacer()
+                }
             }
+        }
+    }
+
+    // MARK: - Empty State
+
+    private var emptyStateView: some View {
+        VStack(spacing: 24) {
+            Spacer().frame(height: 40)
+
+            Image(systemName: "calendar.badge.clock")
+                .font(.system(size: 56, weight: .light))
+                .foregroundStyle(Color.hubPrimary.opacity(0.6))
+
+            VStack(spacing: 8) {
+                Text("No Events Yet")
+                    .font(.hubHeading)
+                    .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+
+                Text("Sync with Google Calendar to see your schedule. Use the input bar below to add events.")
+                    .font(.hubBody)
+                    .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 24)
+            }
+
+            HubButton("Sync with Google Calendar", icon: "arrow.triangle.2.circlepath", isLoading: viewModel.isLoading) {
+                Task { await viewModel.syncEvents() }
+            }
+            .padding(.horizontal, 40)
+            .padding(.top, 8)
+
+            Spacer().frame(height: 40)
         }
     }
 
@@ -122,7 +169,6 @@ struct CalendarPluginView: View {
                             .font(.system(size: 11, weight: .semibold))
                             .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
                             .textCase(.uppercase)
-
                         Text(event.title)
                             .font(.system(size: 15, weight: .semibold))
                             .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
@@ -135,7 +181,6 @@ struct CalendarPluginView: View {
                         Text(countdown)
                             .font(.system(size: 14, weight: .bold))
                             .foregroundStyle(event.isOngoing ? Color.hubAccentGreen : Color.hubPrimary)
-
                         Text(event.formattedStartTime)
                             .font(.system(size: 11, weight: .medium))
                             .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
@@ -143,7 +188,6 @@ struct CalendarPluginView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .accessibilityIdentifier(AccessibilityID.calendarCountdown)
         }
     }
 
@@ -167,8 +211,6 @@ struct CalendarPluginView: View {
                     .frame(maxWidth: .infinity)
                 }
             }
-            .accessibilityElement(children: .contain)
-            .accessibilityIdentifier(AccessibilityID.calendarWeekOverview)
         }
     }
 
@@ -191,11 +233,9 @@ struct CalendarPluginView: View {
                 )
                 .frame(width: 28, height: 28)
                 .background(
-                    Circle()
-                        .fill(block.isToday ? Color.hubPrimary : Color.clear)
+                    Circle().fill(block.isToday ? Color.hubPrimary : Color.clear)
                 )
 
-            // Busy indicator
             RoundedRectangle(cornerRadius: 2)
                 .fill(busyColor(for: block))
                 .frame(width: 24, height: busyHeight(for: block))
@@ -212,15 +252,9 @@ struct CalendarPluginView: View {
     }
 
     private func busyColor(for block: WeekDayBlock) -> Color {
-        if block.events.isEmpty {
-            return AdaptiveColors.surfaceSecondary(for: colorScheme)
-        }
-        if block.busyHours >= 4 {
-            return Color.hubAccentRed.opacity(0.6)
-        }
-        if block.busyHours >= 2 {
-            return Color.hubAccentYellow.opacity(0.6)
-        }
+        if block.events.isEmpty { return AdaptiveColors.surfaceSecondary(for: colorScheme) }
+        if block.busyHours >= 4 { return Color.hubAccentRed.opacity(0.6) }
+        if block.busyHours >= 2 { return Color.hubAccentYellow.opacity(0.6) }
         return Color.hubAccentGreen.opacity(0.6)
     }
 
@@ -232,15 +266,78 @@ struct CalendarPluginView: View {
         return minHeight + CGFloat(ratio) * (maxHeight - minHeight)
     }
 
+    // MARK: - Agent Response Section
+
+    @ViewBuilder
+    private var agentResponseSection: some View {
+        if viewModel.isProcessingCommand {
+            HubCard {
+                HStack(spacing: 12) {
+                    ProgressView()
+                        .tint(Color.hubPrimary)
+                    Text("Processing command...")
+                        .font(.hubBody)
+                        .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                    Spacer()
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+
+        if let response = viewModel.agentResponse {
+            HubCard {
+                HStack(alignment: .top, spacing: 12) {
+                    Image(systemName: response.isError ? "exclamationmark.circle.fill" : "checkmark.circle.fill")
+                        .font(.system(size: 18))
+                        .foregroundStyle(response.isError ? Color.hubAccentRed : Color.hubAccentGreen)
+
+                    Text(response.message)
+                        .font(.hubBody)
+                        .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+
+                    Spacer()
+
+                    Button {
+                        viewModel.dismissAgentResponse()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+
+        if let error = viewModel.commandError {
+            HubCard {
+                HStack(spacing: 12) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(Color.hubAccentRed)
+                    Text(error)
+                        .font(.system(size: 13))
+                        .foregroundStyle(Color.hubAccentRed)
+                    Spacer()
+                    Button {
+                        viewModel.dismissAgentResponse()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+    }
+
     // MARK: - Today Section
 
     private var todaySection: some View {
         VStack(alignment: .leading, spacing: HubLayout.itemSpacing) {
             HStack {
                 SectionHeader(title: CalendarSection.today.displayTitle)
-
                 Spacer()
-
                 Text(formattedToday)
                     .font(.hubCaption)
                     .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
@@ -250,16 +347,12 @@ struct CalendarPluginView: View {
                 emptyDayCard(message: "No events today")
             } else {
                 ForEach(viewModel.todayEvents) { event in
-                    Button {
-                        viewModel.selectEvent(event)
-                    } label: {
+                    Button { viewModel.selectEvent(event) } label: {
                         eventCard(event)
                     }
                 }
             }
         }
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier(AccessibilityID.calendarTodaySection)
     }
 
     // MARK: - Tomorrow Section
@@ -268,9 +361,7 @@ struct CalendarPluginView: View {
         VStack(alignment: .leading, spacing: HubLayout.itemSpacing) {
             HStack {
                 SectionHeader(title: CalendarSection.tomorrow.displayTitle)
-
                 Spacer()
-
                 Text(formattedTomorrow)
                     .font(.hubCaption)
                     .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
@@ -280,16 +371,12 @@ struct CalendarPluginView: View {
                 emptyDayCard(message: "No events tomorrow")
             } else {
                 ForEach(viewModel.tomorrowEvents) { event in
-                    Button {
-                        viewModel.selectEvent(event)
-                    } label: {
+                    Button { viewModel.selectEvent(event) } label: {
                         eventCard(event)
                     }
                 }
             }
         }
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier(AccessibilityID.calendarTomorrowSection)
     }
 
     // MARK: - This Week Section
@@ -301,24 +388,28 @@ struct CalendarPluginView: View {
             if viewModel.weekEvents.isEmpty {
                 emptyDayCard(message: "No other events this week")
             } else {
-                ForEach(viewModel.weekEvents) { event in
-                    Button {
-                        viewModel.selectEvent(event)
-                    } label: {
-                        eventCard(event)
+                ForEach(viewModel.eventsByDay, id: \.date) { dayGroup in
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(dayGroup.date.formatted(.dateTime.weekday(.wide).month(.abbreviated).day()))
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                            .padding(.leading, 4)
+
+                        ForEach(dayGroup.events) { event in
+                            Button { viewModel.selectEvent(event) } label: {
+                                eventCard(event)
+                            }
+                        }
                     }
                 }
             }
         }
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier(AccessibilityID.calendarThisWeekSection)
     }
 
     // MARK: - Event Card
 
     private func eventCard(_ event: CalendarEvent) -> some View {
         HStack(spacing: 12) {
-            // Calendar color indicator
             RoundedRectangle(cornerRadius: 3)
                 .fill(event.resolvedColor)
                 .frame(width: 4)
@@ -346,33 +437,33 @@ struct CalendarPluginView: View {
                             .lineLimit(1)
                     }
                 }
+
+                if let calName = event.calendarName, !calName.isEmpty {
+                    Text(calName)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(event.resolvedColor.opacity(0.8))
+                }
             }
 
             Spacer()
 
             VStack(alignment: .trailing, spacing: 4) {
-                // Time badge for quick glance
                 if !event.isAllDay {
                     Text(event.formattedStartTime)
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(event.resolvedColor)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
-                        .background(
-                            Capsule().fill(event.resolvedColor.opacity(0.12))
-                        )
+                        .background(Capsule().fill(event.resolvedColor.opacity(0.12)))
                 } else {
                     Text("All Day")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(Color.hubAccentYellow)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
-                        .background(
-                            Capsule().fill(Color.hubAccentYellow.opacity(0.12))
-                        )
+                        .background(Capsule().fill(Color.hubAccentYellow.opacity(0.12)))
                 }
 
-                // Ongoing indicator
                 if event.isOngoing {
                     Text("Now")
                         .font(.system(size: 10, weight: .bold))
@@ -395,14 +486,12 @@ struct CalendarPluginView: View {
                     color: colorScheme == .dark
                         ? Color.black.opacity(0.3)
                         : Color.black.opacity(0.06),
-                    radius: 8,
-                    x: 0,
-                    y: 2
+                    radius: 8, x: 0, y: 2
                 )
         )
     }
 
-    // MARK: - Empty State
+    // MARK: - Empty Day Card
 
     private func emptyDayCard(message: String) -> some View {
         HubCard {
@@ -418,7 +507,58 @@ struct CalendarPluginView: View {
         }
     }
 
+    // MARK: - Command Input Bar
+
+    private var commandInputBar: some View {
+        VStack(spacing: 0) {
+            // Top border
+            AdaptiveColors.border(for: colorScheme)
+                .frame(height: 0.5)
+
+            HStack(spacing: 10) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(Color.hubPrimary)
+
+                TextField("Add event or ask about schedule...", text: $viewModel.commandText)
+                    .font(.system(size: 15))
+                    .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                    .focused($isInputFocused)
+                    .submitLabel(.send)
+                    .onSubmit {
+                        Task { await viewModel.processCommand() }
+                    }
+
+                if !viewModel.commandText.isEmpty || viewModel.isProcessingCommand {
+                    Button {
+                        Task { await viewModel.processCommand() }
+                    } label: {
+                        if viewModel.isProcessingCommand {
+                            ProgressView()
+                                .tint(Color.hubPrimary)
+                                .frame(width: 28, height: 28)
+                        } else {
+                            Image(systemName: "arrow.up.circle.fill")
+                                .font(.system(size: 28))
+                                .foregroundStyle(Color.hubPrimary)
+                        }
+                    }
+                    .disabled(viewModel.isProcessingCommand || viewModel.commandText.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background(.ultraThinMaterial)
+        }
+    }
+
     // MARK: - Date Helpers
+
+    private var formattedMonthYear: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMMM yyyy"
+        return formatter.string(from: Date())
+    }
 
     private var formattedToday: String {
         let formatter = DateFormatter()
@@ -440,6 +580,9 @@ struct CalendarPluginView: View {
 struct EventDetailView: View {
     let event: CalendarEvent
     let colorScheme: ColorScheme
+    var onDelete: (() -> Void)?
+    @State private var showDeleteConfirmation = false
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         NavigationStack {
@@ -450,42 +593,28 @@ struct EventDetailView: View {
                         RoundedRectangle(cornerRadius: 4)
                             .fill(event.resolvedColor)
                             .frame(width: 6)
-
-                        Text(event.title)
-                            .font(.hubTitle)
-                            .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(event.title)
+                                .font(.hubTitle)
+                                .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                            if let calName = event.calendarName {
+                                Text(calName)
+                                    .font(.hubCaption)
+                                    .foregroundStyle(event.resolvedColor)
+                            }
+                        }
                     }
-                    .frame(height: 40)
+                    .frame(minHeight: 40)
 
-                    // Time details
+                    // Details
                     VStack(alignment: .leading, spacing: 12) {
-                        detailRow(
-                            icon: "clock",
-                            title: "Time",
-                            value: event.formattedTimeRange
-                        )
+                        detailRow(icon: "clock", title: "Time", value: event.formattedTimeRange)
+                        detailRow(icon: "hourglass", title: "Duration", value: event.formattedDuration)
+                        detailRow(icon: "calendar", title: "Date", value: event.formattedFullDate)
 
-                        detailRow(
-                            icon: "hourglass",
-                            title: "Duration",
-                            value: event.formattedDuration
-                        )
-
-                        detailRow(
-                            icon: "calendar",
-                            title: "Date",
-                            value: event.formattedFullDate
-                        )
-
-                        // Location with map link
                         if let location = event.location, !location.isEmpty {
                             VStack(alignment: .leading, spacing: 6) {
-                                detailRow(
-                                    icon: "mappin.and.ellipse",
-                                    title: "Location",
-                                    value: location
-                                )
-
+                                detailRow(icon: "mappin.and.ellipse", title: "Location", value: location)
                                 if let url = event.mapsURL {
                                     Link(destination: url) {
                                         HStack(spacing: 4) {
@@ -501,57 +630,95 @@ struct EventDetailView: View {
                             }
                         }
 
-                        // Notes
                         if let notes = event.notes, !notes.isEmpty {
                             VStack(alignment: .leading, spacing: 6) {
-                                detailRow(
-                                    icon: "note.text",
-                                    title: "Notes",
-                                    value: ""
-                                )
-
+                                detailRow(icon: "note.text", title: "Notes", value: "")
                                 Text(notes)
                                     .font(.hubBody)
                                     .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
                                     .padding(.leading, 36)
                             }
                         }
+
+                        // Attendees
+                        if let attendees = event.attendees, !attendees.isEmpty {
+                            VStack(alignment: .leading, spacing: 8) {
+                                detailRow(icon: "person.2", title: "Attendees (\(attendees.count))", value: "")
+                                ForEach(attendees, id: \.email) { attendee in
+                                    HStack(spacing: 8) {
+                                        Circle()
+                                            .fill(attendee.statusColor.opacity(0.2))
+                                            .frame(width: 8, height: 8)
+                                        Text(attendee.displayName ?? attendee.email)
+                                            .font(.system(size: 14))
+                                            .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                                        Spacer()
+                                        Text(attendee.statusLabel)
+                                            .font(.system(size: 11, weight: .medium))
+                                            .foregroundStyle(attendee.statusColor)
+                                    }
+                                    .padding(.leading, 36)
+                                }
+                            }
+                        }
                     }
 
                     // Status badge
                     if event.isOngoing {
-                        HStack {
-                            Spacer()
-                            Text("Currently Happening")
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundStyle(Color.hubAccentGreen)
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 8)
-                                .background(
-                                    Capsule()
-                                        .fill(Color.hubAccentGreen.opacity(0.12))
-                                )
-                            Spacer()
-                        }
+                        statusBadge(text: "Currently Happening", color: .hubAccentGreen)
                     } else if event.hasEnded {
-                        HStack {
-                            Spacer()
-                            Text("Event Ended")
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                        statusBadge(text: "Event Ended", color: AdaptiveColors.textSecondary(for: colorScheme))
+                    }
+
+                    // Actions
+                    HStack(spacing: 12) {
+                        if let url = event.googleCalendarURL {
+                            Link(destination: url) {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "arrow.up.right.square")
+                                    Text("Open in Google Calendar")
+                                }
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundStyle(Color.hubPrimary)
                                 .padding(.horizontal, 16)
-                                .padding(.vertical, 8)
+                                .padding(.vertical, 10)
                                 .background(
-                                    Capsule()
-                                        .fill(AdaptiveColors.surfaceSecondary(for: colorScheme))
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .stroke(Color.hubPrimary.opacity(0.3), lineWidth: 1)
                                 )
-                            Spacer()
+                            }
+                        }
+
+                        Spacer()
+
+                        if onDelete != nil {
+                            Button(role: .destructive) {
+                                showDeleteConfirmation = true
+                            } label: {
+                                Image(systemName: "trash")
+                                    .font(.system(size: 14, weight: .medium))
+                                    .foregroundStyle(Color.hubAccentRed)
+                                    .padding(10)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 10)
+                                            .stroke(Color.hubAccentRed.opacity(0.3), lineWidth: 1)
+                                    )
+                            }
                         }
                     }
+                    .padding(.top, 8)
                 }
                 .padding(HubLayout.standardPadding)
             }
             .background(AdaptiveColors.background(for: colorScheme))
+            .alert("Delete Event", isPresented: $showDeleteConfirmation) {
+                Button("Delete", role: .destructive) {
+                    onDelete?()
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Are you sure you want to delete \"\(event.title)\"?")
+            }
         }
     }
 
@@ -576,12 +743,24 @@ struct EventDetailView: View {
             }
         }
     }
+
+    private func statusBadge(text: String, color: Color) -> some View {
+        HStack {
+            Spacer()
+            Text(text)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(color)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(Capsule().fill(color.opacity(0.12)))
+            Spacer()
+        }
+    }
 }
 
 // MARK: - Preview
 
 #Preview {
-    NavigationStack {
-        CalendarPluginView()
-    }
+    CalendarPluginView()
+        .environment(AppState())
 }

@@ -30,7 +30,9 @@ ryanhub/
 │       └── .venv/                   # (gitignored) Python venv
 ├── scripts/
 │   ├── start-all-services.sh        # Master service manager (start|stop|status|restart)
-│   └── food-analysis-server.py      # Nutrition analysis bridge (HTTP :18790)
+│   ├── food-analysis-server.py      # Nutrition analysis bridge (HTTP :18790)
+│   ├── calendar-sync-server.py     # Google Calendar bridge (HTTP :18791)
+│   └── calendar-agent-memory.json  # Calendar agent persistent memory
 ├── project.yml                      # XcodeGen project spec
 ├── CLAUDE.md                        # This file
 └── .gitignore
@@ -95,6 +97,7 @@ python3.13 -m venv .venv
 |---------|------|----------|-------------|
 | Dispatcher | 8765 | WebSocket | Chat backend for AI tab |
 | Food Analysis | 18790 | HTTP | Nutrition analysis bridge (calls `claude` CLI) |
+| Calendar Sync | 18791 | HTTP | Google Calendar bridge (direct API + AI agent) |
 | Book Factory | 3443 / 3000 | HTTPS / HTTP | Book platform API + web UI |
 
 ## Design System (MUST follow for all UI work)
@@ -150,7 +153,7 @@ The Toolkit tab uses a macOS-style menu bar (not NavigationStack push/pop) for s
 - Food Analysis: `AnalyzedFoodItem.id` uses `name` — duplicate ID collision risk
 - WebSocketClient: `@Observable` mutated from non-MainActor methods
 - Voice messages: No playback (waveform is display-only)
-- CalendarViewModel: `syncEvents()` marks complete but events stay empty (no real backend integration yet)
+- CalendarViewModel: Requires calendar-sync-server.py running on port 18791 for real data
 
 ## Agent Dispatch Rules
 

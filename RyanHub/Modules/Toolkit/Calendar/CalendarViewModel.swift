@@ -2,34 +2,59 @@ import Foundation
 
 // MARK: - Calendar View Model
 
-/// Manages calendar events and syncing with the Dispatcher.
-/// Starts with an empty state and syncs via Dispatcher chat commands.
-@Observable
+/// Manages calendar events with real Google Calendar integration via the sync server.
+@MainActor @Observable
 final class CalendarViewModel {
     // MARK: - State
 
-    var todayEvents: [CalendarEvent] = []
-    var tomorrowEvents: [CalendarEvent] = []
-    var weekEvents: [CalendarEvent] = []
+    var allEvents: [CalendarEvent] = []
+    var calendars: [CalendarInfo] = []
     var isLoading = false
     var lastSyncTime: Date?
     var syncState: CalendarSyncState = .idle
     var selectedEvent: CalendarEvent?
     var showEventDetail = false
 
-    // MARK: - Computed
+    // AI command input
+    var commandText = ""
+    var isProcessingCommand = false
+    var agentResponse: AgentCalendarResponse?
+    var commandError: String?
 
-    /// Whether the calendar has any events across all sections.
-    var hasAnyEvents: Bool {
-        !todayEvents.isEmpty || !tomorrowEvents.isEmpty || !weekEvents.isEmpty
+    // Service
+    let service: CalendarService
+
+    // MARK: - Computed: Filtered Event Lists
+
+    var todayEvents: [CalendarEvent] {
+        let calendar = Calendar.current
+        return allEvents.filter { calendar.isDateInToday($0.startTime) }
+            .sorted { $0.startTime < $1.startTime }
     }
 
-    /// Whether the calendar has ever been synced.
+    var tomorrowEvents: [CalendarEvent] {
+        let calendar = Calendar.current
+        return allEvents.filter { calendar.isDateInTomorrow($0.startTime) }
+            .sorted { $0.startTime < $1.startTime }
+    }
+
+    var weekEvents: [CalendarEvent] {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        guard let dayAfterTomorrow = calendar.date(byAdding: .day, value: 2, to: today),
+              let weekEnd = calendar.date(byAdding: .day, value: 7, to: today) else { return [] }
+        return allEvents.filter { $0.startTime >= dayAfterTomorrow && $0.startTime < weekEnd }
+            .sorted { $0.startTime < $1.startTime }
+    }
+
+    var hasAnyEvents: Bool {
+        !allEvents.isEmpty
+    }
+
     var hasSynced: Bool {
         lastSyncTime != nil
     }
 
-    /// Formatted last sync time label.
     var lastSyncLabel: String? {
         guard let syncTime = lastSyncTime else { return nil }
         let formatter = RelativeDateTimeFormatter()
@@ -37,36 +62,29 @@ final class CalendarViewModel {
         return "Synced \(formatter.localizedString(for: syncTime, relativeTo: Date()))"
     }
 
-    /// The next upcoming event (not yet started or currently ongoing).
     var nextUpcomingEvent: CalendarEvent? {
         let now = Date()
-        let allEvents = (todayEvents + tomorrowEvents + weekEvents)
+        return allEvents
             .filter { !$0.isAllDay && $0.endTime > now }
             .sorted { $0.startTime < $1.startTime }
-        return allEvents.first
+            .first
     }
 
-    /// Countdown string to the next event (e.g., "in 2h 15m").
     var countdownToNextEvent: String? {
         guard let event = nextUpcomingEvent else { return nil }
         let now = Date()
-
         if event.isOngoing {
-            let remaining = event.endTime.timeIntervalSince(now)
-            return "Ends \(formatInterval(remaining))"
+            return "Ends \(formatInterval(event.endTime.timeIntervalSince(now)))"
         }
-
         let interval = event.startTime.timeIntervalSince(now)
         guard interval > 0 else { return nil }
         return "Starts \(formatInterval(interval))"
     }
 
-    /// Week overview blocks for the current week (Mon-Sun).
     var weekOverview: [WeekDayBlock] {
         let calendar = Calendar.current
         let today = Date()
 
-        // Find the Monday of the current week
         var monday = today
         while calendar.component(.weekday, from: monday) != 2 {
             guard let prev = calendar.date(byAdding: .day, value: -1, to: monday) else { break }
@@ -74,55 +92,85 @@ final class CalendarViewModel {
         }
         monday = calendar.startOfDay(for: monday)
 
-        let allEvents = todayEvents + tomorrowEvents + weekEvents
-
         var blocks: [WeekDayBlock] = []
         for dayOffset in 0..<7 {
             guard let date = calendar.date(byAdding: .day, value: dayOffset, to: monday) else { continue }
             let dayStart = calendar.startOfDay(for: date)
-            let dayEvents = allEvents.filter {
-                calendar.isDate($0.startTime, inSameDayAs: dayStart)
-            }
+            let dayEvents = allEvents.filter { calendar.isDate($0.startTime, inSameDayAs: dayStart) }
             blocks.append(WeekDayBlock(date: dayStart, events: dayEvents))
         }
-
         return blocks
+    }
+
+    /// Events grouped by day (for "This Week" section).
+    var eventsByDay: [(date: Date, events: [CalendarEvent])] {
+        let calendar = Calendar.current
+        let grouped = Dictionary(grouping: weekEvents) { calendar.startOfDay(for: $0.startTime) }
+        return grouped.sorted { $0.key < $1.key }.map { (date: $0.key, events: $0.value) }
     }
 
     // MARK: - Init
 
-    init() {
+    init(service: CalendarService = CalendarService()) {
+        self.service = service
         loadCachedEvents()
     }
 
     // MARK: - Actions
 
-    /// Sync events by sending a command to the Dispatcher.
-    func syncEvents() {
+    /// Sync events from Google Calendar via the bridge server.
+    func syncEvents() async {
         isLoading = true
         syncState = .syncing
 
-        // Send a command through the chat system to request calendar data
-        NotificationCenter.default.post(
-            name: .sendChatCommand,
-            object: nil,
-            userInfo: ["command": "what's on my calendar this week"]
-        )
+        do {
+            let calendar = Calendar.current
+            let startOfToday = calendar.startOfDay(for: Date())
+            guard let endOfWeek = calendar.date(byAdding: .day, value: 8, to: startOfToday) else {
+                syncState = .error("Failed to compute date range")
+                isLoading = false
+                return
+            }
 
-        // Wait for response. In production, the Dispatcher response handler
-        // would call updateEvents(). For now, mark sync as complete.
-        Task { @MainActor in
-            try? await Task.sleep(for: .seconds(1.5))
+            // Fetch calendars and events in parallel
+            async let calendarsFetch = service.fetchCalendars()
+            async let eventsFetch = service.fetchEvents(start: startOfToday, end: endOfWeek)
+
+            calendars = try await calendarsFetch
+            allEvents = try await eventsFetch
             lastSyncTime = Date()
-            isLoading = false
             syncState = .synced
             saveCachedEvents()
+        } catch {
+            syncState = .error(error.localizedDescription)
         }
+
+        isLoading = false
     }
 
-    /// Refresh events (called on pull-to-refresh or manual sync).
-    func refresh() {
-        syncEvents()
+    /// Process a natural language command via the AI agent.
+    func processCommand() async {
+        let text = commandText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+
+        isProcessingCommand = true
+        commandError = nil
+        agentResponse = nil
+        commandText = ""
+
+        do {
+            let response = try await service.processNaturalLanguage(text)
+            agentResponse = response
+
+            // If the agent mutated something, re-sync
+            if response.isMutating {
+                await syncEvents()
+            }
+        } catch {
+            commandError = error.localizedDescription
+        }
+
+        isProcessingCommand = false
     }
 
     /// Select an event to show its detail view.
@@ -137,15 +185,33 @@ final class CalendarViewModel {
         selectedEvent = nil
     }
 
-    // MARK: - Persistence (MVP: UserDefaults cache)
+    /// Delete an event.
+    func deleteEvent(_ event: CalendarEvent) async {
+        do {
+            try await service.deleteEvent(
+                eventId: event.id,
+                calendarId: event.calendarId ?? "primary"
+            )
+            dismissEventDetail()
+            await syncEvents()
+        } catch {
+            commandError = "Failed to delete: \(error.localizedDescription)"
+        }
+    }
+
+    /// Dismiss the agent response card.
+    func dismissAgentResponse() {
+        agentResponse = nil
+        commandError = nil
+    }
+
+    // MARK: - Persistence (UserDefaults cache)
 
     private func saveCachedEvents() {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         if let data = try? encoder.encode(CachedCalendarData(
-            todayEvents: todayEvents,
-            tomorrowEvents: tomorrowEvents,
-            weekEvents: weekEvents,
+            allEvents: allEvents,
             lastSyncTime: lastSyncTime
         )) {
             UserDefaults.standard.set(data, forKey: StorageKeys.cachedEvents)
@@ -157,9 +223,7 @@ final class CalendarViewModel {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         guard let cached = try? decoder.decode(CachedCalendarData.self, from: data) else { return }
-        todayEvents = cached.todayEvents
-        tomorrowEvents = cached.tomorrowEvents
-        weekEvents = cached.weekEvents
+        allEvents = cached.allEvents
         lastSyncTime = cached.lastSyncTime
         if lastSyncTime != nil {
             syncState = .synced
@@ -168,7 +232,6 @@ final class CalendarViewModel {
 
     // MARK: - Private Helpers
 
-    /// Format a time interval into a human-readable string.
     private func formatInterval(_ interval: TimeInterval) -> String {
         let totalMinutes = Int(interval / 60)
         let hours = totalMinutes / 60
@@ -185,8 +248,6 @@ final class CalendarViewModel {
         }
     }
 
-    // MARK: - Storage Keys
-
     private enum StorageKeys {
         static let cachedEvents = "ryanhub_calendar_cached"
     }
@@ -195,8 +256,6 @@ final class CalendarViewModel {
 // MARK: - Cached Data Container
 
 private struct CachedCalendarData: Codable {
-    let todayEvents: [CalendarEvent]
-    let tomorrowEvents: [CalendarEvent]
-    let weekEvents: [CalendarEvent]
+    let allEvents: [CalendarEvent]
     let lastSyncTime: Date?
 }
