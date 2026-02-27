@@ -27,11 +27,6 @@ enum ParkingDataProvider: ToolkitDataProvider {
         let lastStatus = loadLastStatus()
         let history = loadPurchaseHistory()
 
-        // If no data at all, nothing to inject
-        if skipDates.isEmpty && lastStatus == nil && history.isEmpty {
-            return nil
-        }
-
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
         let dateFormatter = DateFormatter()
