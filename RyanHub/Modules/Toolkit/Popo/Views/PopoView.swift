@@ -248,9 +248,9 @@ struct PopoView: View {
                 HStack(spacing: 12) {
                     // Last sync
                     HStack(spacing: 4) {
-                        Image(systemName: "icloud.and.arrow.up.fill")
+                        Image(systemName: viewModel.lastSyncError != nil ? "exclamationmark.icloud.fill" : "icloud.and.arrow.up.fill")
                             .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                            .foregroundStyle(viewModel.lastSyncError != nil ? Color.hubAccentRed : AdaptiveColors.textSecondary(for: colorScheme))
                         Text("Synced \(viewModel.lastSyncTimeString ?? "never")")
                             .font(.system(size: 11, weight: .medium))
                             .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
@@ -258,21 +258,33 @@ struct PopoView: View {
 
                     Spacer()
 
-                    // Pending count + sync button
-                    if viewModel.engine.pendingEventCount > 0 {
-                        Button {
-                            Task { await viewModel.syncNow() }
-                        } label: {
-                            HStack(spacing: 4) {
+                    // Sync button — always visible when sensing is on
+                    Button {
+                        Task { await viewModel.syncNow() }
+                    } label: {
+                        HStack(spacing: 4) {
+                            if viewModel.isSyncing {
+                                ProgressView()
+                                    .scaleEffect(0.6)
+                                    .frame(width: 12, height: 12)
+                                Text("Syncing...")
+                                    .font(.system(size: 11, weight: .medium))
+                            } else if viewModel.engine.pendingEventCount > 0 {
                                 Text("\(viewModel.engine.pendingEventCount) pending")
                                     .font(.system(size: 11, weight: .medium))
                                 Image(systemName: "arrow.triangle.2.circlepath")
                                     .font(.system(size: 10, weight: .medium))
+                            } else {
+                                Text("Sync Now")
+                                    .font(.system(size: 11, weight: .medium))
+                                Image(systemName: "arrow.triangle.2.circlepath")
+                                    .font(.system(size: 10, weight: .medium))
                             }
-                            .foregroundStyle(Color.hubPrimary)
                         }
-                        .buttonStyle(.plain)
+                        .foregroundStyle(Color.hubPrimary)
                     }
+                    .buttonStyle(.plain)
+                    .disabled(viewModel.isSyncing)
                 }
                 .padding(.horizontal, 4)
             }

@@ -14,13 +14,25 @@ final class SensingEngine {
     var isRunning: Bool = false
 
     /// Timestamp of the last successful sync to the server.
-    var lastSyncTime: Date?
+    var lastSyncTime: Date? {
+        didSet {
+            if let time = lastSyncTime {
+                UserDefaults.standard.set(time.timeIntervalSince1970, forKey: "ryanhub_popo_last_sync_time")
+            }
+        }
+    }
 
     /// Most recent events for UI display (capped at 100).
     var recentEvents: [SensingEvent] = []
 
     /// Number of events pending sync.
     var pendingEventCount: Int = 0
+
+    /// Whether a sync operation is currently in progress.
+    var isSyncing: Bool = false
+
+    /// Error message from the last failed sync attempt (nil if last sync succeeded).
+    var lastSyncError: String?
 
     // MARK: - Sensors
 
@@ -75,6 +87,12 @@ final class SensingEngine {
         locationSensor.start()
         screenSensor.start()
 
+        // Restore last sync time from disk
+        let savedSyncTime = UserDefaults.standard.double(forKey: "ryanhub_popo_last_sync_time")
+        if savedSyncTime > 0 {
+            lastSyncTime = Date(timeIntervalSince1970: savedSyncTime)
+        }
+
         // Load existing events from store
         recentEvents = Array(dataStore.recentEvents(hours: 24).prefix(Self.maxRecentEvents))
         pendingEventCount = dataStore.pendingCount
@@ -127,13 +145,26 @@ final class SensingEngine {
     /// Sync all pending events to the bridge server.
     func syncPendingEvents() async {
         let pending = dataStore.pendingEvents()
-        guard !pending.isEmpty else { return }
+        guard !pending.isEmpty else {
+            // Nothing to sync — still counts as a successful "check"
+            lastSyncError = nil
+            return
+        }
+        guard !isSyncing else { return }
+
+        isSyncing = true
+        defer { isSyncing = false }
 
         let syncedIDs = await syncService.syncEvents(pending)
         if !syncedIDs.isEmpty {
             dataStore.markSynced(syncedIDs)
             lastSyncTime = Date()
             pendingEventCount = dataStore.pendingCount
+            lastSyncError = nil
+            print("[SensingEngine] Sync succeeded: \(syncedIDs.count) events synced")
+        } else {
+            lastSyncError = "Sync failed — server unreachable or returned error"
+            print("[SensingEngine] Sync failed for \(pending.count) events")
         }
     }
 

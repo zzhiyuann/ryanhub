@@ -249,6 +249,18 @@ final class PopoViewModel {
         expandedItemIDs.contains(id)
     }
 
+    // MARK: - Sync State
+
+    /// Whether a sync operation is currently in progress (mirrors engine state).
+    var isSyncing: Bool {
+        engine.isSyncing
+    }
+
+    /// Error from the last sync attempt, if any.
+    var lastSyncError: String? {
+        engine.lastSyncError
+    }
+
     // MARK: - Actions
 
     /// Force an immediate sync of pending events.

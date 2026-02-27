@@ -98,25 +98,30 @@ POPO_AUDIO_DIR = os.path.join(BRIDGE_DATA_DIR, "popo_audio")
 os.makedirs(POPO_AUDIO_DIR, exist_ok=True)
 
 # ---------------------------------------------------------------------------
-# OpenAI integration for narration transcription (Whisper only)
+# Local Whisper integration for narration transcription
 # ---------------------------------------------------------------------------
 
-OPENAI_AVAILABLE = False
-openai_client = None
+WHISPER_AVAILABLE = False
+_whisper_model = None
 
 try:
-    import openai
-    api_key = os.environ.get("OPENAI_API_KEY")
-    if api_key:
-        openai_client = openai.OpenAI()
-        OPENAI_AVAILABLE = True
-        print("OpenAI Whisper available for narration transcription.")
-    else:
-        print("Warning: OPENAI_API_KEY not set. Narration transcription will be skipped.",
-              file=sys.stderr)
+    import whisper
+    WHISPER_AVAILABLE = True
+    print("Local Whisper available for narration transcription.")
 except ImportError:
-    print("Warning: openai package not installed. Narration transcription will be skipped.",
+    print("Warning: openai-whisper not installed. Narration transcription will be skipped.",
           file=sys.stderr)
+    print("  Install with: pip install openai-whisper", file=sys.stderr)
+
+
+def get_whisper_model():
+    """Lazily load the Whisper model (large-v3-turbo for best quality)."""
+    global _whisper_model
+    if _whisper_model is None:
+        print("[Whisper] Loading model large-v3-turbo (first call, may take a moment)...")
+        _whisper_model = whisper.load_model("large-v3-turbo")
+        print("[Whisper] Model loaded successfully.")
+    return _whisper_model
 
 # ---------------------------------------------------------------------------
 # Anthropic Claude integration for text analysis (affect analysis)
@@ -154,19 +159,19 @@ Return JSON with the following fields:
 
 def transcribe_audio(audio_path):
     # type: (str) -> Optional[str]
-    """Transcribe an audio file using OpenAI Whisper API.
+    """Transcribe an audio file using local Whisper model.
     Returns the transcript text, or None if unavailable."""
-    if not OPENAI_AVAILABLE or openai_client is None:
+    if not WHISPER_AVAILABLE:
         return None
     try:
-        with open(audio_path, "rb") as f:
-            transcript = openai_client.audio.transcriptions.create(
-                model="whisper-1",
-                file=f
-            )
-        return transcript.text
+        model = get_whisper_model()
+        result = model.transcribe(str(audio_path))
+        text = result["text"].strip()
+        if text:
+            print(f"[Whisper] Transcribed {os.path.basename(audio_path)}: {text[:80]}...")
+        return text if text else None
     except Exception as e:
-        print(f"[Narration] Transcription failed: {e}", file=sys.stderr)
+        print(f"[Whisper] Local transcription failed: {e}", file=sys.stderr)
         return None
 
 
@@ -209,7 +214,7 @@ def run_narration_analysis(audio_path, narration_id=None):
         "status": "skipped"
     }  # type: Dict[str, Any]
 
-    if not OPENAI_AVAILABLE:
+    if not WHISPER_AVAILABLE:
         result["status"] = "whisper_unavailable"
         return result
 
@@ -652,9 +657,9 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
             }
 
             # If a narration ID was provided, trigger background analysis
-            # (needs Whisper for transcription; Claude for affect analysis is optional)
+            # (needs local Whisper for transcription; Claude for affect analysis is optional)
             narration_id = self.headers.get("X-Narration-Id")
-            if narration_id and OPENAI_AVAILABLE:
+            if narration_id and WHISPER_AVAILABLE:
                 response_data["analysis_queued"] = True
 
                 def _bg_analyze():
@@ -743,9 +748,9 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
             self._send_json(404, {"error": "Audio file not found: %s" % filename})
             return
 
-        if not OPENAI_AVAILABLE:
+        if not WHISPER_AVAILABLE:
             self._send_json(503, {
-                "error": "Whisper not available (missing OpenAI API key or package)",
+                "error": "Local Whisper not available (openai-whisper package not installed)",
                 "transcript": None,
                 "affect": None,
                 "status": "whisper_unavailable"
@@ -899,7 +904,7 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "POST, GET, DELETE, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Filename")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Filename, X-Narration-Id")
         self.end_headers()
 
     def log_message(self, format, *args):
@@ -919,10 +924,10 @@ def main():
     print(f"Data directory: {BRIDGE_DATA_DIR}")
     if os.path.isfile(CLAUDE_PATH):
         print(f"Claude CLI: {CLAUDE_PATH}")
-    if OPENAI_AVAILABLE:
-        print("OpenAI Whisper: available (narration transcription enabled)")
+    if WHISPER_AVAILABLE:
+        print("Local Whisper: available (narration transcription enabled)")
     else:
-        print("OpenAI Whisper: not available (narration transcription disabled)")
+        print("Local Whisper: not available (narration transcription disabled)")
     if ANTHROPIC_AVAILABLE:
         print("Anthropic Claude: available (affect analysis enabled)")
     else:
