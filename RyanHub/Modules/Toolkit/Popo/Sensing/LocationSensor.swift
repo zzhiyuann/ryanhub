@@ -3,16 +3,20 @@ import CoreLocation
 
 // MARK: - Location Sensor
 
-/// Observes significant location changes using CoreLocation.
+/// Observes significant location changes and visits using CoreLocation.
 /// Uses `startMonitoringSignificantLocationChanges()` for battery-efficient
-/// monitoring (~500m threshold). Requires `.authorizedAlways` permission
-/// for background location updates.
+/// monitoring (~500m threshold) and `startMonitoringVisits()` for detecting
+/// arrivals/departures at meaningful places.
+/// Requires `.authorizedAlways` permission for background location updates.
 final class LocationSensor: NSObject {
     private let locationManager = CLLocationManager()
     private var isRunning = false
 
     /// Callback invoked when a new sensing event is captured.
     var onEvent: ((SensingEvent) -> Void)?
+
+    /// Bridge server endpoint for semantic location enrichment.
+    private let enrichEndpoint = "http://100.89.67.80:18790/popo/location/enrich"
 
     // MARK: - Init
 
@@ -24,7 +28,7 @@ final class LocationSensor: NSObject {
 
     // MARK: - Lifecycle
 
-    /// Request location authorization and start monitoring significant changes.
+    /// Request location authorization and start monitoring significant changes + visits.
     func start() {
         guard !isRunning else { return }
         isRunning = true
@@ -40,16 +44,17 @@ final class LocationSensor: NSObject {
         }
     }
 
-    /// Stop monitoring location changes.
+    /// Stop monitoring location changes and visits.
     func stop() {
         guard isRunning else { return }
         isRunning = false
         locationManager.stopMonitoringSignificantLocationChanges()
+        locationManager.stopMonitoringVisits()
     }
 
     // MARK: - Private
 
-    /// Begin significant location change monitoring.
+    /// Begin significant location change monitoring and visit monitoring.
     private func beginMonitoring() {
         // Only enable background location updates if the app has the
         // "location" UIBackgroundModes capability. Setting this property
@@ -59,6 +64,42 @@ final class LocationSensor: NSObject {
             locationManager.allowsBackgroundLocationUpdates = true
         }
         locationManager.startMonitoringSignificantLocationChanges()
+        locationManager.startMonitoringVisits()
+    }
+
+    // MARK: - Semantic Enrichment
+
+    /// Fire-and-forget HTTP POST to the bridge server for semantic location enrichment.
+    private func enrichLocation(latitude: Double, longitude: Double, timestamp: Date) {
+        Task {
+            guard let url = URL(string: enrichEndpoint) else { return }
+
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.timeoutInterval = 10
+
+            let body: [String: Any] = [
+                "latitude": latitude,
+                "longitude": longitude,
+                "timestamp": ISO8601DateFormatter().string(from: timestamp)
+            ]
+            request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+
+            do {
+                let (data, _) = try await URLSession.shared.data(for: request)
+                if let result = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let enrichment = result["enrichment"] as? [String: Any] {
+                    let label = enrichment["semantic_label"] as? String
+                        ?? enrichment["address"] as? String
+                        ?? "unknown"
+                    print("[LocationSensor] Enriched: \(label)")
+                }
+            } catch {
+                // Fire-and-forget — log but do not propagate errors
+                print("[LocationSensor] Enrichment request failed: \(error.localizedDescription)")
+            }
+        }
     }
 }
 
@@ -80,12 +121,50 @@ extension LocationSensor: CLLocationManagerDelegate {
             payload: [
                 "latitude": String(format: "%.6f", location.coordinate.latitude),
                 "longitude": String(format: "%.6f", location.coordinate.longitude),
-                "accuracy": String(format: "%.1f", location.horizontalAccuracy),
-                "speed": String(format: "%.1f", max(0, location.speed)),
-                "altitude": String(format: "%.1f", location.altitude)
+                "horizontalAccuracy": String(format: "%.1f", location.horizontalAccuracy),
+                "altitude": String(format: "%.1f", location.altitude),
+                "speed": String(format: "%.1f", max(0, location.speed))
             ]
         )
         onEvent?(event)
+
+        // Fire-and-forget enrichment call to bridge server
+        enrichLocation(
+            latitude: location.coordinate.latitude,
+            longitude: location.coordinate.longitude,
+            timestamp: location.timestamp
+        )
+    }
+
+    func locationManager(_ manager: CLLocationManager, didVisit visit: CLVisit) {
+        // CLVisit with distantFuture departure means the user has arrived but not left yet
+        let arrivalStr = ISO8601DateFormatter().string(from: visit.arrivalDate)
+        let departureStr: String
+        if visit.departureDate == .distantFuture {
+            departureStr = "ongoing"
+        } else {
+            departureStr = ISO8601DateFormatter().string(from: visit.departureDate)
+        }
+
+        let event = SensingEvent(
+            modality: .location,
+            payload: [
+                "latitude": String(format: "%.6f", visit.coordinate.latitude),
+                "longitude": String(format: "%.6f", visit.coordinate.longitude),
+                "horizontalAccuracy": String(format: "%.1f", visit.horizontalAccuracy),
+                "visit": "true",
+                "arrivalDate": arrivalStr,
+                "departureDate": departureStr
+            ]
+        )
+        onEvent?(event)
+
+        // Enrich the visit location as well
+        enrichLocation(
+            latitude: visit.coordinate.latitude,
+            longitude: visit.coordinate.longitude,
+            timestamp: visit.arrivalDate
+        )
     }
 
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
