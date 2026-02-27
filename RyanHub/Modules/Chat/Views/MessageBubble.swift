@@ -37,7 +37,7 @@ struct MessageBubble: View {
                         .foregroundStyle(Color.hubPrimary.opacity(0.7))
                         .transition(.scale.combined(with: .opacity))
                 }
-                Spacer(minLength: 48)
+                Spacer(minLength: 32)
             } else {
                 // Bot avatar
                 Text("\u{1F431}")
@@ -126,7 +126,7 @@ struct MessageBubble: View {
             .offset(x: swipeOffset)
 
             if !isUser {
-                Spacer(minLength: 48)
+                Spacer(minLength: 32)
                 // Reply icon appears on swipe
                 if swipeOffset > 30 {
                     Image(systemName: "arrowshape.turn.up.left.fill")

@@ -570,7 +570,9 @@ final class ChatViewModel {
 
     /// Delete a message from the chat history, cleaning up any associated disk resources.
     func deleteMessage(_ message: ChatMessage) {
-        messages.removeAll { $0.id == message.id }
+        withAnimation(.easeOut(duration: 0.25)) {
+            messages.removeAll { $0.id == message.id }
+        }
         if message.hasImageOnDisk {
             ChatMessage.deleteImageFromDisk(messageId: message.id)
         }

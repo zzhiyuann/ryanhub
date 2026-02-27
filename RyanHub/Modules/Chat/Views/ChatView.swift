@@ -186,6 +186,7 @@ struct ChatView: View {
                                 }
                             )
                             .id(message.id)
+                            .transition(.opacity.combined(with: .move(edge: .trailing)))
                         }
                     }
 
