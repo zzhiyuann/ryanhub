@@ -566,6 +566,18 @@ final class ChatViewModel {
         saveMessages()
     }
 
+    // MARK: - Message Deletion
+
+    /// Delete a message from the chat history, cleaning up any associated disk resources.
+    func deleteMessage(_ message: ChatMessage) {
+        messages.removeAll { $0.id == message.id }
+        if message.hasImageOnDisk {
+            ChatMessage.deleteImageFromDisk(messageId: message.id)
+        }
+        saveMessages()
+        messageUpdateTrigger += 1
+    }
+
     // MARK: - Slash Commands
 
     /// Known slash commands that the Dispatcher recognizes.

@@ -14,6 +14,8 @@ struct MessageBubble: View {
     var onRetry: ((ChatMessage) -> Void)?
     /// Called when the user edits a message: (originalMessage, newContent).
     var onEdit: ((ChatMessage, String) -> Void)?
+    /// Called when the user long-presses and selects Delete from the context menu.
+    var onDelete: ((ChatMessage) -> Void)?
 
     private var isUser: Bool { message.role == .user }
     @State private var swipeOffset: CGFloat = 0
@@ -62,6 +64,13 @@ struct MessageBubble: View {
                         .background(bubbleBackground)
                         .clipShape(BubbleShape(isUser: isUser))
                         .drawingGroup()
+                        .contextMenu {
+                            Button(role: .destructive) {
+                                onDelete?(message)
+                            } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
+                        }
                 }
 
                 // Timestamp + status + edit button

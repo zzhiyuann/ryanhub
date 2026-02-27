@@ -180,6 +180,9 @@ struct ChatView: View {
                                 },
                                 onEdit: { msg, newContent in
                                     viewModel.editMessage(msg, newContent: newContent)
+                                },
+                                onDelete: { msg in
+                                    viewModel.deleteMessage(msg)
                                 }
                             )
                             .id(message.id)
