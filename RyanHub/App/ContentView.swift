@@ -63,12 +63,37 @@ struct ContentView: View {
                 .frame(height: 0.5)
 
             // Custom tab bar — flush against bottom edge
-            CustomTabBar(
-                selectedTab: $selectedTab,
-                isCompact: appState.isInToolkitModule
+            HStack(spacing: 0) {
+                ForEach(MainTab.allCases, id: \.rawValue) { tab in
+                    Button {
+                        selectedTab = tab
+                    } label: {
+                        Image(systemName: tab.icon)
+                            .font(.system(size: 17, weight: selectedTab == tab ? .bold : .medium))
+                            .symbolRenderingMode(.monochrome)
+                            .foregroundStyle(selectedTab == tab ? Color.hubPrimary : AdaptiveColors.textSecondary(for: colorScheme))
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("tab_\(tab.rawValue)")
+                }
+            }
+            .frame(height: 32)
+            .padding(.bottom, safeAreaBottomInset)
+            .background(
+                AdaptiveColors.surface(for: colorScheme)
+                    .ignoresSafeArea(edges: .bottom)
             )
         }
         .background(AdaptiveColors.background(for: colorScheme))
+    }
+
+    private var safeAreaBottomInset: CGFloat {
+        let scenes = UIApplication.shared.connectedScenes
+        let windowScene = scenes.first as? UIWindowScene
+        return windowScene?.windows.first?.safeAreaInsets.bottom ?? 0
     }
 
     // MARK: - Chat / Terminal Content
@@ -145,56 +170,6 @@ struct ContentView: View {
     }
 }
 
-// MARK: - Custom Tab Bar
-
-/// A custom tab bar that sits flush against the bottom edge of the screen.
-/// Supports a compact mode (icon-only, shorter height) when inside a toolkit module.
-struct CustomTabBar: View {
-    @Environment(\.colorScheme) private var colorScheme
-    @Binding var selectedTab: MainTab
-    var isCompact: Bool
-
-    var body: some View {
-        HStack(spacing: 0) {
-            ForEach(MainTab.allCases, id: \.rawValue) { tab in
-                tabButton(for: tab)
-            }
-        }
-        .frame(height: 32)
-        .padding(.bottom, safeAreaBottomInset)
-        .background(
-            AdaptiveColors.surface(for: colorScheme)
-                .ignoresSafeArea(edges: .bottom)
-        )
-    }
-
-    // MARK: - Tab Button
-
-    @ViewBuilder
-    private func tabButton(for tab: MainTab) -> some View {
-        Button {
-            selectedTab = tab
-        } label: {
-            Image(systemName: tab.icon)
-                .font(.system(size: 17, weight: selectedTab == tab ? .bold : .medium))
-                .symbolRenderingMode(.monochrome)
-                .foregroundStyle(selectedTab == tab ? Color.hubPrimary : AdaptiveColors.textSecondary(for: colorScheme))
-                .frame(maxWidth: .infinity)
-                .frame(height: 44)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier("tab_\(tab.rawValue)")
-    }
-
-    // MARK: - Safe Area
-
-    private var safeAreaBottomInset: CGFloat {
-        let scenes = UIApplication.shared.connectedScenes
-        let windowScene = scenes.first as? UIWindowScene
-        return windowScene?.windows.first?.safeAreaInsets.bottom ?? 0
-    }
-}
 
 // MARK: - Preview
 

@@ -84,7 +84,7 @@ struct MonthlyParkingStats {
 struct CronPurchaseStatus: Codable {
     let timestamp: String
     let date: String
-    let status: String  // "purchased", "skipped", "price_too_high", "error", "login_failed"
+    let status: String  // "purchased", "already_active", "skipped", "price_too_high", "error", "login_failed"
     let price: Double?
     let duration: String?
     let zone: String?
@@ -105,6 +105,8 @@ struct CronPurchaseStatus: Codable {
         switch status {
         case "purchased":
             return "Purchased at $\(String(format: "%.2f", price ?? 0))"
+        case "already_active":
+            return "Already parked (manual purchase)"
         case "skipped":
             return "Skipped (in skip list)"
         case "price_too_high":
@@ -121,7 +123,7 @@ struct CronPurchaseStatus: Codable {
     /// SF Symbol icon name.
     var iconName: String {
         switch status {
-        case "purchased": return "checkmark.circle.fill"
+        case "purchased", "already_active": return "checkmark.circle.fill"
         case "skipped": return "arrow.right.circle.fill"
         case "price_too_high": return "exclamationmark.triangle.fill"
         case "login_failed", "error": return "xmark.circle.fill"
@@ -132,7 +134,7 @@ struct CronPurchaseStatus: Codable {
     /// Icon color.
     var iconColorName: String {
         switch status {
-        case "purchased": return "green"
+        case "purchased", "already_active": return "green"
         case "skipped": return "yellow"
         case "price_too_high": return "orange"
         case "login_failed", "error": return "red"

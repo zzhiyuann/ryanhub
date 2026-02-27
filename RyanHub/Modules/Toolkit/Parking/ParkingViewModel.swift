@@ -62,7 +62,7 @@ final class ParkingViewModel {
         formatter.dateFormat = "yyyy-MM"
         let currentMonth = formatter.string(from: Date())
         return purchaseHistory
-            .filter { $0.status == "purchased" && $0.date.hasPrefix(currentMonth) }
+            .filter { ($0.status == "purchased" || $0.status == "already_active") && $0.date.hasPrefix(currentMonth) }
             .compactMap(\.price)
             .reduce(0, +)
     }
@@ -70,7 +70,8 @@ final class ParkingViewModel {
     /// Estimated "until" time for today's active parking.
     /// Parses cron status timestamp + duration to compute end time.
     var parkingUntilTime: String {
-        guard let cron = lastCronStatus, cron.isToday, cron.status == "purchased",
+        guard let cron = lastCronStatus, cron.isToday,
+              (cron.status == "purchased" || cron.status == "already_active"),
               let duration = cron.duration else {
             return "Until --:--"
         }
@@ -108,7 +109,8 @@ final class ParkingViewModel {
 
     /// Remaining parking time as a fraction (0.0 to 1.0), for progress display.
     var parkingTimeRemaining: (fraction: Double, label: String) {
-        guard let cron = lastCronStatus, cron.isToday, cron.status == "purchased",
+        guard let cron = lastCronStatus, cron.isToday,
+              (cron.status == "purchased" || cron.status == "already_active"),
               let duration = cron.duration else {
             return (0, "--:--")
         }
@@ -270,7 +272,7 @@ final class ParkingViewModel {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"
         let dateStr = formatter.string(from: date)
-        return purchaseHistory.contains { $0.date == dateStr && $0.status == "purchased" }
+        return purchaseHistory.contains { $0.date == dateStr && ($0.status == "purchased" || $0.status == "already_active") }
     }
 
     /// Get all days of the displayed month arranged as a grid (with leading empty slots).
@@ -360,7 +362,7 @@ final class ParkingViewModel {
         } else if let cron = lastCronStatus, cron.isToday {
             // Use actual cron job result to determine status
             switch cron.status {
-            case "purchased":
+            case "purchased", "already_active":
                 todayStatus = .active
             case "skipped":
                 todayStatus = .skipped
@@ -384,7 +386,7 @@ final class ParkingViewModel {
 
         // Purchased/skipped from actual logs
         let monthEntries = purchaseHistory.filter { $0.date.hasPrefix(monthPrefix) }
-        let purchasedDays = monthEntries.filter { $0.status == "purchased" }.count
+        let purchasedDays = monthEntries.filter { $0.status == "purchased" || $0.status == "already_active" }.count
         let logSkippedDays = monthEntries.filter { $0.status == "skipped" }.count
 
         // Future skip dates in this month (from skip-dates.txt, not yet in logs)
