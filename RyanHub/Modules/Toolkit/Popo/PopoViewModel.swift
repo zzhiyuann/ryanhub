@@ -146,12 +146,91 @@ final class PopoViewModel {
     }
 
     /// All timeline items for the selected date, merged and sorted chronologically (newest first).
+    /// Sensing events are filtered to remove noise (duplicate motion, redundant location, raw steps).
     var timelineItems: [TimelineItem] {
         var items: [TimelineItem] = []
-        items.append(contentsOf: eventsForSelectedDate.map { .sensing($0) })
+        items.append(contentsOf: filteredSensingEvents.map { .sensing($0) })
         items.append(contentsOf: narrationsForSelectedDate.map { .narration($0) })
         items.append(contentsOf: nudgesForSelectedDate.map { .nudge($0) })
         return items.sorted { $0.timestamp > $1.timestamp }
+    }
+
+    // MARK: - Smart Timeline Filtering
+
+    /// Filters sensing events to show only semantically meaningful entries.
+    /// - Steps: removed entirely (shown in overview card via daySummary.totalSteps)
+    /// - Motion: only kept when activityType changes from previous event
+    /// - Location: only kept when position changed (>~100m) or 1+ hour gap since last
+    /// - Screen, health, and other modalities: kept as-is
+    private var filteredSensingEvents: [SensingEvent] {
+        let dayEvents = eventsForSelectedDate
+
+        // Separate events by modality for independent filtering
+        let motionEvents = dayEvents
+            .filter { $0.modality == .motion }
+            .sorted { $0.timestamp < $1.timestamp }
+        let locationEvents = dayEvents
+            .filter { $0.modality == .location }
+            .sorted { $0.timestamp < $1.timestamp }
+        let passthroughEvents = dayEvents.filter {
+            $0.modality != .steps && $0.modality != .motion && $0.modality != .location
+        }
+
+        // Motion: keep only when activity type changes from previous
+        var filteredMotion: [SensingEvent] = []
+        var lastActivityType: String?
+        for event in motionEvents {
+            let activityType = event.payload["activityType"] ?? "unknown"
+            if activityType != lastActivityType {
+                filteredMotion.append(event)
+                lastActivityType = activityType
+            }
+        }
+
+        // Location: keep only when position changed significantly or 1h+ gap
+        let locationDistanceThreshold: Double = 0.001  // ~100m in degrees
+        let locationTimeGap: TimeInterval = 3600       // 1 hour
+        var filteredLocation: [SensingEvent] = []
+        var lastLat: Double?
+        var lastLng: Double?
+        var lastLocationTime: Date?
+        for event in locationEvents {
+            guard let latStr = event.payload["latitude"],
+                  let lngStr = event.payload["longitude"],
+                  let lat = Double(latStr),
+                  let lng = Double(lngStr) else {
+                continue
+            }
+
+            var shouldKeep = false
+
+            if let prevLat = lastLat, let prevLng = lastLng, let prevTime = lastLocationTime {
+                let latDelta = abs(lat - prevLat)
+                let lngDelta = abs(lng - prevLng)
+                let timeDelta = event.timestamp.timeIntervalSince(prevTime)
+
+                // Position changed significantly
+                if latDelta > locationDistanceThreshold || lngDelta > locationDistanceThreshold {
+                    shouldKeep = true
+                }
+                // No location update for over an hour — show "still here"
+                if timeDelta >= locationTimeGap {
+                    shouldKeep = true
+                }
+            } else {
+                // First location event of the day — always keep
+                shouldKeep = true
+            }
+
+            if shouldKeep {
+                filteredLocation.append(event)
+                lastLat = lat
+                lastLng = lng
+                lastLocationTime = event.timestamp
+            }
+        }
+
+        return filteredMotion + filteredLocation + passthroughEvents
     }
 
     /// Aggregated overview summary for the selected date.
