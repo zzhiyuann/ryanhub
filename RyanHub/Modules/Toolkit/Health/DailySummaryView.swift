@@ -1,17 +1,136 @@
 import SwiftUI
 
+// MARK: - Date Navigation Bar
+
+/// A reusable day picker with left/right arrows and a centered date label.
+/// Shows "Today", "Yesterday", or a formatted date string.
+struct DateNavigationBar: View {
+    @Binding var selectedDate: Date
+    @Environment(\.colorScheme) private var colorScheme
+
+    private let calendar = Calendar.current
+
+    /// Whether the selected date is today (disables forward arrow).
+    private var isToday: Bool {
+        calendar.isDateInToday(selectedDate)
+    }
+
+    /// Human-readable label for the selected date.
+    private var dateLabel: String {
+        if calendar.isDateInToday(selectedDate) {
+            return "Today"
+        } else if calendar.isDateInYesterday(selectedDate) {
+            return "Yesterday"
+        } else {
+            let formatter = DateFormatter()
+            // Show year only if not the current year
+            if calendar.component(.year, from: selectedDate) == calendar.component(.year, from: Date()) {
+                formatter.dateFormat = "MMM d"
+            } else {
+                formatter.dateFormat = "MMM d, yyyy"
+            }
+            return formatter.string(from: selectedDate)
+        }
+    }
+
+    var body: some View {
+        HStack(spacing: 16) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    selectedDate = calendar.date(byAdding: .day, value: -1, to: selectedDate) ?? selectedDate
+                }
+            } label: {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(Color.hubPrimary)
+                    .frame(width: 36, height: 36)
+                    .background(
+                        Circle()
+                            .fill(Color.hubPrimary.opacity(0.1))
+                    )
+            }
+
+            Spacer()
+
+            VStack(spacing: 2) {
+                Text(dateLabel)
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+
+                if !isToday {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            selectedDate = Date()
+                        }
+                    } label: {
+                        Text("Back to Today")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(Color.hubPrimary)
+                    }
+                }
+            }
+
+            Spacer()
+
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    selectedDate = calendar.date(byAdding: .day, value: 1, to: selectedDate) ?? selectedDate
+                }
+            } label: {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(isToday ? AdaptiveColors.textSecondary(for: colorScheme).opacity(0.3) : Color.hubPrimary)
+                    .frame(width: 36, height: 36)
+                    .background(
+                        Circle()
+                            .fill(isToday ? AdaptiveColors.surfaceSecondary(for: colorScheme) : Color.hubPrimary.opacity(0.1))
+                    )
+            }
+            .disabled(isToday)
+        }
+        .padding(.horizontal, 4)
+    }
+}
+
 // MARK: - Daily Summary View
 
 /// Beautiful daily nutrition summary showing meals timeline, macros breakdown, and calorie ring.
+/// Supports browsing historical days via a bound selectedDate.
 struct DailySummaryView: View {
     @Environment(\.colorScheme) private var colorScheme
     let viewModel: HealthViewModel
+    @Binding var selectedDate: Date
+
+    /// Food entries for the selected day.
+    private var dayFoodEntries: [FoodEntry] {
+        viewModel.foodEntries(for: selectedDate)
+    }
+
+    /// Total calories for the selected day.
+    private var dayCalories: Int {
+        viewModel.calories(for: selectedDate)
+    }
+
+    /// Total protein for the selected day.
+    private var dayProtein: Int {
+        viewModel.protein(for: selectedDate)
+    }
+
+    /// Total carbs for the selected day.
+    private var dayCarbs: Int {
+        viewModel.carbs(for: selectedDate)
+    }
+
+    /// Total fat for the selected day.
+    private var dayFat: Int {
+        viewModel.fat(for: selectedDate)
+    }
 
     var body: some View {
         VStack(spacing: HubLayout.sectionSpacing) {
             calorieRingCard
             macrosBreakdown
-            if !viewModel.todayFoodEntries.isEmpty {
+            if !dayFoodEntries.isEmpty {
                 mealTimeline
             }
         }
@@ -40,7 +159,7 @@ struct DailySummaryView: View {
                         .animation(.spring(response: 0.8), value: calorieProgress)
 
                     VStack(spacing: 2) {
-                        Text("\(viewModel.todayCalories)")
+                        Text("\(dayCalories)")
                             .font(.system(size: 24, weight: .bold))
                             .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
                         Text("kcal")
@@ -51,12 +170,12 @@ struct DailySummaryView: View {
                 .frame(width: 100, height: 100)
 
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Today's Intake")
+                    Text(intakeLabel)
                         .font(.hubCaption)
                         .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
 
                     HStack(alignment: .firstTextBaseline, spacing: 4) {
-                        Text("\(viewModel.todayCalories)")
+                        Text("\(dayCalories)")
                             .font(.system(size: 32, weight: .bold))
                             .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
                         Text("/ \(calorieGoal) cal")
@@ -64,11 +183,11 @@ struct DailySummaryView: View {
                             .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
                     }
 
-                    Text("\(viewModel.todayFoodEntries.count) meals logged")
+                    Text("\(dayFoodEntries.count) meals logged")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
 
-                    if viewModel.todayCalories > 0 {
+                    if dayCalories > 0 {
                         Text(calorieStatusText)
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(calorieRingColor)
@@ -81,15 +200,29 @@ struct DailySummaryView: View {
         }
     }
 
+    /// Label for the intake card — "Today's Intake" or date-specific.
+    private var intakeLabel: String {
+        let calendar = Calendar.current
+        if calendar.isDateInToday(selectedDate) {
+            return "Today's Intake"
+        } else if calendar.isDateInYesterday(selectedDate) {
+            return "Yesterday's Intake"
+        } else {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "MMM d"
+            return "\(formatter.string(from: selectedDate)) Intake"
+        }
+    }
+
     private var calorieGoal: Int { 2000 }
 
     private var calorieProgress: Double {
         guard calorieGoal > 0 else { return 0 }
-        return min(Double(viewModel.todayCalories) / Double(calorieGoal), 1.0)
+        return min(Double(dayCalories) / Double(calorieGoal), 1.0)
     }
 
     private var calorieRingColor: Color {
-        let ratio = Double(viewModel.todayCalories) / Double(calorieGoal)
+        let ratio = Double(dayCalories) / Double(calorieGoal)
         if ratio < 0.5 { return Color.hubAccentGreen }
         if ratio < 0.8 { return Color.hubPrimary }
         if ratio < 1.0 { return Color.hubAccentYellow }
@@ -97,7 +230,7 @@ struct DailySummaryView: View {
     }
 
     private var calorieStatusText: String {
-        let remaining = calorieGoal - viewModel.todayCalories
+        let remaining = calorieGoal - dayCalories
         if remaining > 0 {
             return "\(remaining) cal remaining"
         } else {
@@ -111,21 +244,21 @@ struct DailySummaryView: View {
         HStack(spacing: 10) {
             macroBar(
                 label: "Protein",
-                value: viewModel.todayProtein,
+                value: dayProtein,
                 goal: 120,
                 unit: "g",
                 color: Color.hubAccentRed
             )
             macroBar(
                 label: "Carbs",
-                value: viewModel.todayCarbs,
+                value: dayCarbs,
                 goal: 250,
                 unit: "g",
                 color: Color.hubPrimary
             )
             macroBar(
                 label: "Fat",
-                value: viewModel.todayFat,
+                value: dayFat,
                 goal: 65,
                 unit: "g",
                 color: Color.hubAccentGreen
@@ -177,11 +310,25 @@ struct DailySummaryView: View {
 
     // MARK: - Meal Timeline
 
+    /// Section header reflecting the selected date.
+    private var mealsSectionTitle: String {
+        let calendar = Calendar.current
+        if calendar.isDateInToday(selectedDate) {
+            return "Today's Meals"
+        } else if calendar.isDateInYesterday(selectedDate) {
+            return "Yesterday's Meals"
+        } else {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "MMM d"
+            return "Meals on \(formatter.string(from: selectedDate))"
+        }
+    }
+
     private var mealTimeline: some View {
         VStack(alignment: .leading, spacing: HubLayout.itemSpacing) {
-            SectionHeader(title: "Today's Meals")
+            SectionHeader(title: mealsSectionTitle)
 
-            ForEach(viewModel.todayFoodEntries) { entry in
+            ForEach(dayFoodEntries) { entry in
                 timelineRow(entry)
                     .contextMenu {
                         Button(role: .destructive) {
@@ -289,7 +436,7 @@ struct DailySummaryView: View {
 
 #Preview {
     ScrollView {
-        DailySummaryView(viewModel: HealthViewModel())
+        DailySummaryView(viewModel: HealthViewModel(), selectedDate: .constant(Date()))
             .padding()
     }
 }

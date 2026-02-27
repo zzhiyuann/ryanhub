@@ -116,6 +116,7 @@ enum AccessibilityID {
     static let healthQuickActivitySubmit = "health_quick_activity_submit"
     static let healthStructuredLogButton = "health_structured_log_button"
     static let healthTodayActivity = "health_today_activity"
+    static let healthStepsCard = "health_steps_card"
 
     // MARK: - Settings
 

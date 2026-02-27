@@ -21,6 +21,7 @@
 		194ECBCB064E544FE7C478F7 /* ParkingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 459EF3910E2F8897601D5792 /* ParkingView.swift */; };
 		19A40196DB4A648973051BD3 /* FluentVocabularyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 026DF5BE84A6E963CAEDFCFE /* FluentVocabularyView.swift */; };
 		1B7F833C1C817EED819CB44E /* FluentStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21DAA3F09BEB33DF0B836FFF /* FluentStore.swift */; };
+		1CE896816E79C98434C97347 /* HealthKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 54F5DDF9901F52B04883C031 /* HealthKit.framework */; };
 		23A7028770DC5CFB2E22DBA1 /* ChatTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6ECC6AFCDE8904CCEAD9EBBE /* ChatTests.swift */; };
 		26463C7B7CDCD1B15AD42709 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33CAB4BF0FA7C79E224110B1 /* Theme.swift */; };
 		2B23A45EAEAEEDCF51246BA4 /* CalendarDataProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7472CC1730F9A0F806EABBB4 /* CalendarDataProvider.swift */; };
@@ -127,6 +128,7 @@
 		459EF3910E2F8897601D5792 /* ParkingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParkingView.swift; sourceTree = "<group>"; };
 		4AD0CBF73B859088687163F3 /* HealthModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthModels.swift; sourceTree = "<group>"; };
 		544DEFE89CD15A88D94AFAA8 /* RyanHubUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = RyanHubUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		54F5DDF9901F52B04883C031 /* HealthKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = HealthKit.framework; path = System/Library/Frameworks/HealthKit.framework; sourceTree = SDKROOT; };
 		5A8BAE87477C77371E777370 /* FluentModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FluentModels.swift; sourceTree = "<group>"; };
 		5B48D812DEA834E3D69D19FF /* AgenticExplorer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgenticExplorer.swift; sourceTree = "<group>"; };
 		5D007D7410A51D7175402589 /* SettingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsTests.swift; sourceTree = "<group>"; };
@@ -188,6 +190,7 @@
 		E58926E0B8755BD153826FD8 /* TabNavigationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabNavigationTests.swift; sourceTree = "<group>"; };
 		E5AC6E4C1F353A83F301D80A /* CalendarTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarTests.swift; sourceTree = "<group>"; };
 		E65564252C7D5721D9784435 /* HubTextField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubTextField.swift; sourceTree = "<group>"; };
+		E70BCC4BACE0FB0168599D51 /* RyanHub.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = RyanHub.entitlements; sourceTree = "<group>"; };
 		E8910F5210CD277F57B58223 /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
 		E908A0DA905304B83016364C /* SwiftTermView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftTermView.swift; sourceTree = "<group>"; };
 		EA43F407F77E3EA89CBB0F10 /* BookLibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookLibraryView.swift; sourceTree = "<group>"; };
@@ -205,6 +208,7 @@
 			files = (
 				2DC64949E9D9CDA532DBFB16 /* SwiftTerm in Frameworks */,
 				81F1409EBE3971344F74F2F5 /* NIOSSH in Frameworks */,
+				1CE896816E79C98434C97347 /* HealthKit.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -360,6 +364,14 @@
 			path = Terminal;
 			sourceTree = "<group>";
 		};
+		7FD0F1F2B627851F674E44BB /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				54F5DDF9901F52B04883C031 /* HealthKit.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		91499C240728B537229E0982 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
@@ -458,6 +470,7 @@
 			children = (
 				E5E55C5892869A09E22D4DF6 /* RyanHub */,
 				7C593548F04C05E94E2AFA83 /* RyanHubUITests */,
+				7FD0F1F2B627851F674E44BB /* Frameworks */,
 				244FC5BD6EC74E5A3C294ECD /* Products */,
 			);
 			sourceTree = "<group>";
@@ -484,6 +497,7 @@
 			isa = PBXGroup;
 			children = (
 				834BECFA48894B5E6684F1DF /* Info.plist */,
+				E70BCC4BACE0FB0168599D51 /* RyanHub.entitlements */,
 				CE5CBCFA91B8C983B8347046 /* App */,
 				CAF0C4A80C13F2A94A39711A /* Core */,
 				AE11552CA71348525034C86D /* Modules */,
@@ -844,6 +858,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGNING_ALLOWED = NO;
 				CODE_SIGNING_REQUIRED = NO;
+				CODE_SIGN_ENTITLEMENTS = RyanHub/RyanHub.entitlements;
 				CODE_SIGN_IDENTITY = "";
 				INFOPLIST_FILE = RyanHub/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -862,6 +877,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGNING_ALLOWED = NO;
 				CODE_SIGNING_REQUIRED = NO;
+				CODE_SIGN_ENTITLEMENTS = RyanHub/RyanHub.entitlements;
 				CODE_SIGN_IDENTITY = "";
 				INFOPLIST_FILE = RyanHub/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (

@@ -1,4 +1,5 @@
 import Foundation
+import HealthKit
 
 // MARK: - Health View Model
 
@@ -13,6 +14,25 @@ final class HealthViewModel {
     var foodEntries: [FoodEntry] = []
     var activityEntries: [ActivityEntry] = []
     var selectedTab: HealthTab = .weight
+
+    // MARK: - HealthKit State
+
+    /// Today's step count from Apple Health.
+    var todaySteps: Int = 0
+
+    /// Estimated calories burned from steps (steps * 0.04).
+    var stepsCaloriesBurned: Int {
+        Int(Double(todaySteps) * 0.04)
+    }
+
+    /// Whether HealthKit authorization has been granted.
+    var healthKitAuthorized: Bool = false
+
+    /// Whether a HealthKit query is in progress.
+    var isLoadingSteps: Bool = false
+
+    /// The HealthKit store instance (nil if HealthKit is unavailable).
+    private let healthStore: HKHealthStore? = HKHealthStore.isHealthDataAvailable() ? HKHealthStore() : nil
 
     // MARK: - Bridge Server
 
@@ -62,10 +82,7 @@ final class HealthViewModel {
 
     /// Today's food entries sorted by time.
     var todayFoodEntries: [FoodEntry] {
-        let calendar = Calendar.current
-        return foodEntries
-            .filter { calendar.isDateInToday($0.date) }
-            .sorted { $0.date < $1.date }
+        foodEntries(for: Date())
     }
 
     /// Total calories consumed today (only from entries with calorie data).
@@ -75,10 +92,7 @@ final class HealthViewModel {
 
     /// Today's activity entries sorted by time.
     var todayActivityEntries: [ActivityEntry] {
-        let calendar = Calendar.current
-        return activityEntries
-            .filter { calendar.isDateInToday($0.date) }
-            .sorted { $0.date < $1.date }
+        activityEntries(for: Date())
     }
 
     /// Total activity duration today in minutes.
@@ -91,10 +105,109 @@ final class HealthViewModel {
         todayActivityEntries.compactMap(\.caloriesBurned).reduce(0, +)
     }
 
+    // MARK: - Date-Filtered Queries
+
+    /// Food entries for a specific date, sorted by time.
+    func foodEntries(for date: Date) -> [FoodEntry] {
+        let calendar = Calendar.current
+        return foodEntries
+            .filter { calendar.isDate($0.date, inSameDayAs: date) }
+            .sorted { $0.date < $1.date }
+    }
+
+    /// Total calories for a specific date.
+    func calories(for date: Date) -> Int {
+        foodEntries(for: date).compactMap(\.calories).reduce(0, +)
+    }
+
+    /// Total protein for a specific date.
+    func protein(for date: Date) -> Int {
+        foodEntries(for: date).compactMap(\.protein).reduce(0, +)
+    }
+
+    /// Total carbs for a specific date.
+    func carbs(for date: Date) -> Int {
+        foodEntries(for: date).compactMap(\.carbs).reduce(0, +)
+    }
+
+    /// Total fat for a specific date.
+    func fat(for date: Date) -> Int {
+        foodEntries(for: date).compactMap(\.fat).reduce(0, +)
+    }
+
+    /// Activity entries for a specific date, sorted by time.
+    func activityEntries(for date: Date) -> [ActivityEntry] {
+        let calendar = Calendar.current
+        return activityEntries
+            .filter { calendar.isDate($0.date, inSameDayAs: date) }
+            .sorted { $0.date < $1.date }
+    }
+
+    /// Total activity duration for a specific date in minutes.
+    func activityMinutes(for date: Date) -> Int {
+        activityEntries(for: date).map(\.duration).reduce(0, +)
+    }
+
+    /// Total calories burned for a specific date.
+    func activityCalories(for date: Date) -> Int {
+        activityEntries(for: date).compactMap(\.caloriesBurned).reduce(0, +)
+    }
+
     // MARK: - Init
 
     init() {
         loadAll()
+    }
+
+    // MARK: - HealthKit
+
+    /// Request HealthKit authorization and fetch today's step count.
+    func requestHealthKitAccess() {
+        guard let healthStore else { return }
+        guard let stepType = HKQuantityType.quantityType(forIdentifier: .stepCount) else { return }
+
+        let readTypes: Set<HKObjectType> = [stepType]
+
+        healthStore.requestAuthorization(toShare: nil, read: readTypes) { [weak self] success, error in
+            Task { @MainActor in
+                guard let self else { return }
+                if success {
+                    self.healthKitAuthorized = true
+                    self.fetchTodaySteps()
+                } else {
+                    print("[HealthVM] HealthKit authorization failed: \(error?.localizedDescription ?? "unknown")")
+                }
+            }
+        }
+    }
+
+    /// Fetch today's step count from HealthKit.
+    func fetchTodaySteps() {
+        guard let healthStore else { return }
+        guard let stepType = HKQuantityType.quantityType(forIdentifier: .stepCount) else { return }
+
+        let calendar = Calendar.current
+        let startOfDay = calendar.startOfDay(for: Date())
+        let predicate = HKQuery.predicateForSamples(withStart: startOfDay, end: Date(), options: .strictStartDate)
+
+        let query = HKStatisticsQuery(
+            quantityType: stepType,
+            quantitySamplePredicate: predicate,
+            options: .cumulativeSum
+        ) { [weak self] _, result, error in
+            Task { @MainActor in
+                guard let self else { return }
+                self.isLoadingSteps = false
+                if let sum = result?.sumQuantity() {
+                    self.todaySteps = Int(sum.doubleValue(for: .count()))
+                } else {
+                    print("[HealthVM] Step query error: \(error?.localizedDescription ?? "no data")")
+                }
+            }
+        }
+
+        isLoadingSteps = true
+        healthStore.execute(query)
     }
 
     // MARK: - Weight Actions

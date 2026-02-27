@@ -10,6 +10,7 @@ struct HealthView: View {
     @Environment(\.colorScheme) private var colorScheme
     @State private var viewModel = HealthViewModel()
     @State private var showWeightLog = false
+    @State private var selectedDate: Date = Date()
 
     // Quick meal input
     @State private var quickMealText = ""
@@ -61,6 +62,7 @@ struct HealthView: View {
         }
         .onAppear {
             foodAnalysisService.updateBaseURL(appState.foodAnalysisURL)
+            viewModel.requestHealthKitAccess()
         }
     }
 
@@ -255,6 +257,9 @@ struct HealthView: View {
 
     private var foodContent: some View {
         VStack(spacing: HubLayout.sectionSpacing) {
+            // Day navigation
+            DateNavigationBar(selectedDate: $selectedDate)
+
             // Quick meal input with photo/camera
             quickMealLogSection
 
@@ -278,15 +283,29 @@ struct HealthView: View {
                 foodAnalysisResultView(result)
             }
 
-            // AI-powered daily summary
-            DailySummaryView(viewModel: viewModel)
+            // AI-powered daily summary (date-aware)
+            DailySummaryView(viewModel: viewModel, selectedDate: $selectedDate)
 
-            if viewModel.todayFoodEntries.isEmpty && foodAnalysisResult == nil {
+            if viewModel.foodEntries(for: selectedDate).isEmpty && foodAnalysisResult == nil {
                 emptyStateCard(
                     icon: "fork.knife",
-                    message: "No meals logged today"
+                    message: noMealsMessage
                 )
             }
+        }
+    }
+
+    /// Empty state message for meals, reflecting the selected date.
+    private var noMealsMessage: String {
+        let calendar = Calendar.current
+        if calendar.isDateInToday(selectedDate) {
+            return "No meals logged today"
+        } else if calendar.isDateInYesterday(selectedDate) {
+            return "No meals logged yesterday"
+        } else {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "MMM d"
+            return "No meals logged on \(formatter.string(from: selectedDate))"
         }
     }
 
@@ -659,8 +678,63 @@ struct HealthView: View {
 
     // MARK: - Activity Content
 
+    /// Activity entries for the selected day.
+    private var selectedDayActivityEntries: [ActivityEntry] {
+        viewModel.activityEntries(for: selectedDate)
+    }
+
+    /// Activity summary label reflecting the selected date.
+    private var activitySummaryLabel: String {
+        let calendar = Calendar.current
+        if calendar.isDateInToday(selectedDate) {
+            return "Today's Activity"
+        } else if calendar.isDateInYesterday(selectedDate) {
+            return "Yesterday's Activity"
+        } else {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "MMM d"
+            return "\(formatter.string(from: selectedDate)) Activity"
+        }
+    }
+
+    /// Section header for activities list.
+    private var activitiesSectionTitle: String {
+        let calendar = Calendar.current
+        if calendar.isDateInToday(selectedDate) {
+            return "Today's Activities"
+        } else if calendar.isDateInYesterday(selectedDate) {
+            return "Yesterday's Activities"
+        } else {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "MMM d"
+            return "Activities on \(formatter.string(from: selectedDate))"
+        }
+    }
+
+    /// Empty state message for activities.
+    private var noActivitiesMessage: String {
+        let calendar = Calendar.current
+        if calendar.isDateInToday(selectedDate) {
+            return "No activities logged today"
+        } else if calendar.isDateInYesterday(selectedDate) {
+            return "No activities logged yesterday"
+        } else {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "MMM d"
+            return "No activities logged on \(formatter.string(from: selectedDate))"
+        }
+    }
+
     private var activityContent: some View {
         VStack(spacing: HubLayout.sectionSpacing) {
+            // Day navigation
+            DateNavigationBar(selectedDate: $selectedDate)
+
+            // Apple Health step count card (only show for today)
+            if Calendar.current.isDateInToday(selectedDate) {
+                stepsCard
+            }
+
             // Quick activity input
             quickActivityLogSection
 
@@ -679,16 +753,16 @@ struct HealthView: View {
                 activityAnalysisResultView(result)
             }
 
-            // Today's summary
+            // Day summary
             HubCard {
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Today's Activity")
+                        Text(activitySummaryLabel)
                             .font(.hubCaption)
                             .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
 
                         HStack(alignment: .firstTextBaseline, spacing: 4) {
-                            Text("\(viewModel.todayActivityCalories)")
+                            Text("\(viewModel.activityCalories(for: selectedDate))")
                                 .font(.system(size: 34, weight: .bold))
                                 .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
                             Text("kcal")
@@ -700,11 +774,12 @@ struct HealthView: View {
                     Spacer()
 
                     VStack(alignment: .trailing, spacing: 4) {
-                        Text("\(viewModel.todayActivityEntries.count) activities")
+                        Text("\(selectedDayActivityEntries.count) activities")
                             .font(.hubCaption)
                             .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
-                        if viewModel.todayActivityMinutes > 0 {
-                            Text("\(viewModel.todayActivityMinutes) min")
+                        let actMinutes = viewModel.activityMinutes(for: selectedDate)
+                        if actMinutes > 0 {
+                            Text("\(actMinutes) min")
                                 .font(.hubCaption)
                                 .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
                         }
@@ -714,22 +789,89 @@ struct HealthView: View {
             }
             .accessibilityIdentifier(AccessibilityID.healthTodayActivity)
 
-            // Today's activities
-            if !viewModel.todayActivityEntries.isEmpty {
+            // Day's activities
+            if !selectedDayActivityEntries.isEmpty {
                 VStack(alignment: .leading, spacing: HubLayout.itemSpacing) {
-                    SectionHeader(title: "Today's Activities")
+                    SectionHeader(title: activitiesSectionTitle)
 
-                    ForEach(viewModel.todayActivityEntries) { entry in
+                    ForEach(selectedDayActivityEntries) { entry in
                         activityEntryRow(entry)
+                            .contextMenu {
+                                Button(role: .destructive) {
+                                    withAnimation {
+                                        viewModel.deleteActivity(entry)
+                                    }
+                                } label: {
+                                    Label("Delete", systemImage: "trash")
+                                }
+                            }
                     }
                 }
             } else if activityAnalysisResult == nil {
                 emptyStateCard(
                     icon: "figure.run",
-                    message: "No activities logged today"
+                    message: noActivitiesMessage
                 )
             }
         }
+    }
+
+    // MARK: - Steps Card (Apple Health)
+
+    /// Card displaying today's step count and estimated calories from HealthKit.
+    private var stepsCard: some View {
+        HubCard {
+            HStack(spacing: 16) {
+                // Step icon
+                ZStack {
+                    Circle()
+                        .fill(Color.hubAccentGreen.opacity(0.12))
+                        .frame(width: 48, height: 48)
+
+                    Image(systemName: "figure.walk")
+                        .font(.system(size: 22, weight: .medium))
+                        .foregroundStyle(Color.hubAccentGreen)
+                }
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Today's Steps")
+                        .font(.hubCaption)
+                        .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+
+                    if viewModel.isLoadingSteps {
+                        ProgressView()
+                            .tint(Color.hubAccentGreen)
+                    } else {
+                        HStack(alignment: .firstTextBaseline, spacing: 6) {
+                            Text(viewModel.todaySteps.formatted())
+                                .font(.system(size: 28, weight: .bold))
+                                .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+
+                            Text("steps")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                        }
+                    }
+                }
+
+                Spacer()
+
+                // Estimated calories from steps
+                if !viewModel.isLoadingSteps && viewModel.todaySteps > 0 {
+                    VStack(alignment: .trailing, spacing: 4) {
+                        Text("~\(viewModel.stepsCaloriesBurned)")
+                            .font(.system(size: 20, weight: .bold))
+                            .foregroundStyle(Color.hubAccentYellow)
+
+                        Text("kcal")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(Color.hubAccentYellow.opacity(0.7))
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .accessibilityIdentifier(AccessibilityID.healthStepsCard)
     }
 
     /// AI-powered activity input.
