@@ -36,7 +36,7 @@ struct SettingsView: View {
             HubCard {
                 VStack(spacing: HubLayout.itemSpacing) {
                     // WebSocket URL input
-                    TextField("ws://localhost:8765 or ws://192.168.1.x:8765", text: Bindable(appState).serverURL)
+                    TextField("ws://100.89.67.80:8765", text: Bindable(appState).serverURL)
                         .font(.hubBody)
                         .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
                         .keyboardType(.URL)

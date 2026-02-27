@@ -41,13 +41,13 @@ final class AppState {
     }
 
     /// Default WebSocket server URL.
-    static let defaultServerURL = "ws://localhost:8765"
+    static let defaultServerURL = "ws://100.89.67.80:8765"
 
     /// Default food analysis bridge URL.
-    static let defaultFoodAnalysisURL = "http://localhost:18790"
+    static let defaultFoodAnalysisURL = "http://100.89.67.80:18790"
 
     /// Default calendar sync bridge URL.
-    static let defaultCalendarSyncURL = "http://localhost:18791"
+    static let defaultCalendarSyncURL = "http://100.89.67.80:18791"
 
     /// Derive the food analysis URL from the WebSocket server URL.
     /// Extracts the host from the WS URL and uses port 18790 with http://.
