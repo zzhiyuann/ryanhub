@@ -1,38 +1,101 @@
-# Ryan Hub — Personal Assistant iOS App
+# Ryan Hub — Personal Assistant Monorepo
 
 ## Overview
 
-Ryan Hub is a unified personal assistant iOS app built with SwiftUI. It combines an AI chat interface (connected to a Python Dispatcher via WebSocket), a toolkit of personal tools, and a settings panel — all in a single native iOS application.
+Ryan Hub is a self-contained monorepo for a personal assistant iOS app and its backend services. It combines:
+- **iOS app** (SwiftUI) — AI chat, toolkit with plugins, settings
+- **Book Factory server** (Next.js) — Book platform API on HTTPS :3443
+- **Dispatcher** (Python) — WebSocket chat backend on :8765
 
-The Dispatcher lives in a separate project (`/Users/zwang/projects/cortex/packages/dispatcher/`) and provides the WebSocket backend for chat.
-
-## Architecture
+## Repository Structure
 
 ```
-RyanHub/
-├── App/                        # Entry point, root TabView
-├── Core/
-│   ├── Design/                 # Theme (colors, fonts, layout) + reusable components
-│   ├── Networking/             # WebSocketClient, APIClient (native URLSession only)
-│   ├── Localization/           # L10n manager + en/zh-Hans .strings files
-│   └── Models/                 # AppState (global observable state)
-└── Modules/
-    ├── Chat/                   # AI chat interface (single-chat flow, no multi-session)
-    ├── Toolkit/                # Personal tools grid + plugin modules
-    │   ├── BookFactory/        # Book generation & audio playback
-    │   ├── Fluent/             # Language learning (WebView wrapper for PWA)
-    │   ├── Parking/            # ParkMobile management
-    │   ├── Calendar/           # Schedule & events
-    │   └── Health/             # Wellness & fitness tracking
-    └── Settings/               # Server config, appearance, language, about
+ryanhub/
+├── RyanHub/                         # iOS app source
+│   ├── App/                         # Entry point, root TabView
+│   ├── Core/                        # Design, Networking, Localization, Models
+│   └── Modules/                     # Chat, Toolkit (BookFactory, Fluent, Parking, Calendar, Health), Settings
+├── RyanHubUITests/                  # UI tests (XCUITest)
+├── services/
+│   ├── bookfactory/                 # Book Factory Next.js server
+│   │   ├── src/                     # Next.js App Router source
+│   │   ├── server.mjs              # Custom HTTPS server wrapper
+│   │   ├── package.json
+│   │   ├── certs/                   # (gitignored) mkcert TLS certs
+│   │   └── .env                     # (gitignored) secrets
+│   └── dispatcher/                  # Dispatcher Python package
+│       ├── dispatcher/              # Python source
+│       ├── pyproject.toml
+│       ├── config.example.yaml
+│       └── .venv/                   # (gitignored) Python venv
+├── scripts/
+│   ├── start-all-services.sh        # Master service manager (start|stop|status|restart)
+│   └── food-analysis-server.py      # Nutrition analysis bridge (HTTP :18790)
+├── project.yml                      # XcodeGen project spec
+├── CLAUDE.md                        # This file
+└── .gitignore
 ```
 
-## Relationship to Other Projects
+## External Data (NOT in repo)
 
-- **Dispatcher** (`cortex/packages/dispatcher/`): Provides WebSocket backend for Chat tab. NOT part of this repo.
-- **Book Factory** (`bookfactory/server/`): Provides API backend for the Book Factory plugin. iOS code lives HERE in RyanHub, not in the bookfactory repo (that iOS code is archived).
-- **Fluent** (`fluent/`): PWA deployed on Vercel. RyanHub just wraps it in a WebView.
-- **Parking** (`parkmobile-auto/`): Commands sent via Dispatcher chat. No direct API dependency.
+- **Book source files**: `/Users/zwang/bookfactory/` (generated books, `topic_backlog.md`)
+- **Database + audio**: `/Users/zwang/projects/bookfactory/data/` (`bookfactory.db`, `audio/`)
+- **Dispatcher config**: `~/.config/dispatcher/config.yaml`
+
+Environment variables used by services:
+- `BOOKFACTORY_DATA_DIR` — path to DB + audio dir (default: `../data` relative to server)
+- `BOOK_SOURCE_DIR` — path to generated book files (default: `/Users/zwang/bookfactory`)
+- `BACKLOG_PATH` — path to `topic_backlog.md` (default: `/Users/zwang/bookfactory/topic_backlog.md`)
+
+## Build Instructions
+
+### iOS App
+```bash
+cd /Users/zwang/projects/ryanhub
+xcodegen generate
+xcodebuild -scheme RyanHub -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build
+open RyanHub.xcodeproj
+```
+Bundle ID: `com.zwang.ryanhub.RyanHub`
+
+### Backend Services
+```bash
+# Start all services
+./scripts/start-all-services.sh start
+
+# Individual service management
+./scripts/start-all-services.sh status
+./scripts/start-all-services.sh stop
+./scripts/start-all-services.sh restart
+```
+
+Services are also managed by LaunchAgents:
+- `com.zwang.ryanhub-services` — master start script (RunAtLoad)
+- `com.dispatcher.agent` — dispatcher with KeepAlive
+
+### Book Factory Server (standalone)
+```bash
+cd services/bookfactory
+npm install
+npm run build
+node server.mjs   # HTTPS :3443, HTTP :3000
+```
+
+### Dispatcher (standalone)
+```bash
+cd services/dispatcher
+python3.13 -m venv .venv
+.venv/bin/pip install -e .
+.venv/bin/dispatcher start
+```
+
+## Backend Services
+
+| Service | Port | Protocol | Description |
+|---------|------|----------|-------------|
+| Dispatcher | 8765 | WebSocket | Chat backend for AI tab |
+| Food Analysis | 18790 | HTTP | Nutrition analysis bridge (calls `claude` CLI) |
+| Book Factory | 3443 / 3000 | HTTPS / HTTP | Book platform API + web UI |
 
 ## Design System (MUST follow for all UI work)
 
@@ -58,12 +121,8 @@ Always use `Color.hubPrimary` (not `.hubPrimary`) in `.foregroundStyle()` contex
 - `.hubCaption`: 13pt medium
 
 ### Layout Constants (`HubLayout`)
-- `standardPadding`: 16pt
-- `sectionSpacing`: 24pt
-- `itemSpacing`: 12pt
-- `cardCornerRadius`: 16pt
-- `buttonCornerRadius`: 12pt
-- `buttonHeight`: 48pt
+- `standardPadding`: 16pt, `sectionSpacing`: 24pt, `itemSpacing`: 12pt
+- `cardCornerRadius`: 16pt, `buttonCornerRadius`: 12pt, `buttonHeight`: 48pt
 
 ### Reusable Components
 - `HubCard` — Surface card with shadow
@@ -72,31 +131,10 @@ Always use `Color.hubPrimary` (not `.hubPrimary`) in `.foregroundStyle()` contex
 - `HubTextField` — Styled text input (secure mode support)
 - `SectionHeader` — Uppercased caption label
 
-## Build Instructions
-
-```bash
-cd /Users/zwang/projects/cortex-app
-xcodegen generate
-xcodebuild -scheme RyanHub -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build
-open RyanHub.xcodeproj
-```
-
-## Backend Services
-
-The app depends on three local services. All managed by a unified LaunchAgent:
-
-| Service | Port | Start Command |
-|---------|------|---------------|
-| Dispatcher (WebSocket) | 8765 | `cd /Users/zwang/projects/cortex/packages/dispatcher && node dist/index.js` |
-| Food Analysis Bridge | 18790 | `python3 scripts/food-analysis-server.py` (calls `claude` CLI) |
-| Book Factory Server | 3443 | `cd /Users/zwang/projects/bookfactory/server && node dist/index.js` |
-
-Master script: `scripts/start-all-services.sh [start|stop|status|restart]`
-LaunchAgent: `com.zwang.ryanhub-services` (runs at login)
-
-## Technical Requirements
+## Technical Requirements (iOS)
 - iOS 17.0+, Swift 5.9+, SwiftUI only
-- `@Observable` macro for ViewModels
+- `@Observable` macro for ViewModels (NOT ObservableObject)
+- `@MainActor` on ALL ViewModels
 - `async/await` for networking
 - NO external dependencies
 - All code and comments in English
@@ -106,64 +144,17 @@ LaunchAgent: `com.zwang.ryanhub-services` (runs at login)
 
 The Toolkit tab uses a macOS-style menu bar (not NavigationStack push/pop) for switching between tools. `ToolkitHomeView` owns a `@State selectedPlugin: ToolkitPlugin?` — `nil` shows the desktop grid, non-nil renders the tool in-place below the menu bar. BookFactory is the ONLY tool NOT wrapped in NavigationStack (it manages its own internally).
 
-## Agent Dispatch Playbook (Lessons Learned 2026-02-25)
+## Known Issues
 
-### Critical Rules for Dispatching Sub-Agents
+- Food Analysis: JSON decoder needs `keyDecodingStrategy = .convertFromSnakeCase`
+- Food Analysis: `AnalyzedFoodItem.id` uses `name` — duplicate ID collision risk
+- WebSocketClient: `@Observable` mutated from non-MainActor methods
+- Voice messages: No playback (waveform is display-only)
+- CalendarViewModel: `syncEvents()` marks complete but events stay empty (no real backend integration yet)
 
-1. **ALWAYS verify merge after agent completes.** Cherry-pick from worktree to main, then `git diff --stat HEAD` to confirm changes landed. Don't trust `git log` alone — the commit may be on a worktree branch, not main.
+## Agent Dispatch Rules
 
-2. **ALWAYS audit agent output before reporting success.** Read key files the agent changed, verify logic, build + run. Agents can claim "BUILD SUCCEEDED" while producing subtly broken code.
-
-3. **Give agents FULL context.** Agents start with zero knowledge. Every dispatch must include:
-   - Exact file paths to read first
-   - Design system rules (AdaptiveColors, HubLayout, Color.hubPrimary)
-   - @Observable patterns (NOT ObservableObject)
-   - Known crash patterns (sheets don't inherit @Observable env; navigationDestination needs explicit .environment())
-   - Build command with -project flag
-   - Bundle ID: `com.zwang.ryanhub.RyanHub`
-
-4. **Specify what NOT to do.** Common agent mistakes:
-   - Using `str | None` Python syntax (needs 3.9 compat)
-   - Using `@MainActor` inconsistently — should be on ALL ViewModels
-   - Using `name` as Identifiable `id` instead of UUID (causes SwiftUI duplicate ID bugs)
-   - Not adding `CodingKeys` or `keyDecodingStrategy` for JSON from LLM output (Claude may return snake_case randomly)
-   - Adding NotificationCenter observers without removeObserver in deinit
-   - Hardcoding "/5" for max reconnect attempts instead of reading from constant
-
-5. **Track worktree → main merge status.** After each agent completes:
-   ```
-   ✅ Agent done → Audit code → Cherry-pick/copy to main → Build → Install → Verify → Push
-   ```
-
-### Known Issues Backlog (from audits)
-
-**High Priority:**
-- [x] Chat: User messages disappear — FIXED: `resp-` prefix to assistant IDs
-- [x] FluentView: NotificationCenter observers — FIXED: Rebuilt as native SwiftUI
-- [ ] Food Analysis: JSON decoder needs `keyDecodingStrategy = .convertFromSnakeCase` (Claude Haiku may return snake_case)
-- [ ] Food Analysis: `AnalyzedFoodItem.id` uses `name` — duplicate ID collision risk
-
-**Medium Priority:**
-- [x] ChatViewModel: Missing `@MainActor` — FIXED
-- [x] ParkingViewModel: `date(bySetting:)` month boundary bug — FIXED: Use `date(byAdding:)` instead
-- [x] Parking weekday headers: T/T, S/S ambiguity — FIXED: Two-letter abbreviations (Mo/Tu/We/Th/Fr/Sa/Su)
-- [x] ParkingViewModel: Missing `@MainActor` — FIXED
-- [x] SettingsViewModel: Missing `@MainActor` — FIXED
-- [x] Chat photo library: PhotosPicker re-selection broken — FIXED: `.onChange(of:)` + reset to nil
-- [ ] WebSocketClient: `@Observable` mutated from non-MainActor methods
-- [ ] Voice messages: No playback (waveform is display-only)
-- [ ] CalendarViewModel: `syncEvents()` marks complete but events stay empty (no real backend integration yet)
-
-**Low Priority:**
-- [ ] Calendar: DateFormatter created on every computed property access
-- [ ] Recording waveform: choppy 100ms discrete updates
-- [ ] Stale CortexApp.xcodeproj should be removed
-
-### Agent Dispatch Log (2026-02-25, Session 2)
-
-Dispatched 7 agents in parallel for UI/UX improvements. Key lessons:
-- **Agents that push directly to remote** can fast-forward main — always `git pull` before merging other agents
-- **AppState.swift is a merge hotspot** — multiple agents modify it (tab bar, settings). Manual merge required.
-- **Worktrees with xcodegen**: Agents in worktrees can't run `xcodegen generate` if `project.yml` paths are relative. Some agents create their own test Xcode projects as workaround.
-- **project.yml changes**: When agent adds Info.plist or modifies project.yml, must copy BOTH files to main.
-- **7 parallel agents worked well**: No destructive conflicts because modules are well-separated. Only AppState.swift needed manual merge.
+1. **ALWAYS verify merge after agent completes.** Cherry-pick from worktree to main, then `git diff --stat HEAD` to confirm.
+2. **ALWAYS audit agent output before reporting success.** Read key files, verify logic, build + run.
+3. **Give agents FULL context.** Include: exact file paths, design system rules, @Observable patterns, build command, bundle ID.
+4. **Specify what NOT to do.** Common mistakes: `str | None` (needs 3.10+ compat), missing `@MainActor`, using `name` as `id`, missing `CodingKeys`.

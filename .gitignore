@@ -16,3 +16,22 @@ build/
 .build/
 Packages/
 .claude/worktrees/
+
+# Services: Book Factory (Next.js)
+services/bookfactory/node_modules/
+services/bookfactory/.next/
+services/bookfactory/certs/
+services/bookfactory/.env
+
+# Services: Dispatcher (Python)
+services/dispatcher/.venv/
+services/dispatcher/__pycache__/
+services/dispatcher/*.egg-info/
+services/dispatcher/dispatcher/__pycache__/
+services/dispatcher/scripts/node_modules/
+
+# Database files
+*.db
+*.db-wal
+*.db-shm
+*.db.bak

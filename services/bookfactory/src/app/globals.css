@@ -1,0 +1,77 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #ffffff;
+  --bg-secondary: #f4f4f5;
+  --bg-tertiary: #e4e4e7;
+  --fg: #09090b;
+  --fg-secondary: #52525b;
+  --fg-muted: #a1a1aa;
+  --border: #e4e4e7;
+  --border-subtle: #f4f4f5;
+  --input-bg: #ffffff;
+  --card-bg: #f9fafb;
+  --card-hover: #f4f4f5;
+  --accent: #d97706;
+  --accent-hover: #b45309;
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #09090b;
+    --bg-secondary: #18181b;
+    --bg-tertiary: #27272a;
+    --fg: #fafafa;
+    --fg-secondary: #a1a1aa;
+    --fg-muted: #52525b;
+    --border: #27272a;
+    --border-subtle: #18181b;
+    --input-bg: #18181b;
+    --card-bg: rgba(24, 24, 27, 0.5);
+    --card-hover: #18181b;
+    --accent: #d97706;
+    --accent-hover: #f59e0b;
+  }
+}
+
+@theme inline {
+  --color-background: var(--bg);
+  --color-foreground: var(--fg);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+}
+
+/* Semantic utility classes */
+.bg-page { background: var(--bg); }
+.bg-card { background: var(--card-bg); }
+.bg-card-hover { background: var(--card-hover); }
+.bg-secondary { background: var(--bg-secondary); }
+.bg-tertiary { background: var(--bg-tertiary); }
+.bg-input { background: var(--input-bg); }
+.text-primary { color: var(--fg); }
+.text-secondary { color: var(--fg-secondary); }
+.text-muted { color: var(--fg-muted); }
+.border-default { border-color: var(--border); }
+.border-subtle { border-color: var(--border-subtle); }
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--bg-tertiary);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--fg-muted);
+}

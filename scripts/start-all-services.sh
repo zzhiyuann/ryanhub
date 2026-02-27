@@ -22,6 +22,9 @@ set -euo pipefail
 # Configuration
 # =============================================================================
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_ROOT="$(dirname "$SCRIPT_DIR")"
+
 MASTER_LOG="/tmp/ryanhub-services.log"
 PID_DIR="/tmp/ryanhub-pids"
 
@@ -29,24 +32,29 @@ PID_DIR="/tmp/ryanhub-pids"
 # Dispatcher
 DISPATCHER_NAME="dispatcher"
 DISPATCHER_PORT=8765
-DISPATCHER_BIN="/Users/zwang/projects/cortex/.venv/bin/dispatcher"
+DISPATCHER_BIN="$REPO_ROOT/services/dispatcher/.venv/bin/dispatcher"
 DISPATCHER_LOG="/tmp/ryanhub-dispatcher.log"
 
 # Food Analysis Server
 FOOD_NAME="food-analysis"
 FOOD_PORT=18790
-FOOD_SCRIPT="/Users/zwang/projects/cortex-app/scripts/food-analysis-server.py"
+FOOD_SCRIPT="$REPO_ROOT/scripts/food-analysis-server.py"
 FOOD_LOG="/tmp/ryanhub-food-analysis.log"
 
 # Book Factory Server
 BOOKFACTORY_NAME="bookfactory"
 BOOKFACTORY_PORT=3443
 BOOKFACTORY_HTTP_PORT=3000
-BOOKFACTORY_DIR="/Users/zwang/projects/bookfactory/server"
+BOOKFACTORY_DIR="$REPO_ROOT/services/bookfactory"
 BOOKFACTORY_LOG="/tmp/ryanhub-bookfactory.log"
 
+# Data directories (external to repo)
+export BOOKFACTORY_DATA_DIR="/Users/zwang/projects/bookfactory/data"
+export BOOK_SOURCE_DIR="/Users/zwang/bookfactory"
+export BACKLOG_PATH="/Users/zwang/bookfactory/topic_backlog.md"
+
 # PATH setup — ensure we have access to homebrew, node, python, lsof, etc.
-export PATH="/usr/sbin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/Users/zwang/.local/bin:/Users/zwang/.npm-global/bin:/Users/zwang/projects/cortex/.venv/bin:$PATH"
+export PATH="/usr/sbin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/Users/zwang/.local/bin:/Users/zwang/.npm-global/bin:$REPO_ROOT/services/dispatcher/.venv/bin:$PATH"
 export HOME="/Users/zwang"
 
 # Remove Claude Code env vars to prevent nesting issues with food analysis server

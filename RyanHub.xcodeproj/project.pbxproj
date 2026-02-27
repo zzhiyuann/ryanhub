@@ -87,6 +87,7 @@
 		F336238395BFA892A3ACD299 /* FluentReviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E5DFE94BFC993641FAAE8FB /* FluentReviewView.swift */; };
 		F44DF37E2E4D1C5BD5A73F73 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 335BA591A35FB41B6FD8EEC1 /* Localizable.strings */; };
 		F69C522701B2FFBE3A78C36A /* SectionHeader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9AE49953418A97242254CFD7 /* SectionHeader.swift */; };
+		F7941B41AF2A1F733DFC7EFB /* SmartActivityLogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72AD74DBC1E70073311F1072 /* SmartActivityLogView.swift */; };
 		F8D8E97DE66120A10A1D9EE1 /* QueueManagerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF2B5DB752ACC5184B6FC043 /* QueueManagerView.swift */; };
 /* End PBXBuildFile section */
 
@@ -132,6 +133,7 @@
 		6D083DD2A5B38D1F4C3A9A64 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		6D81FD1D4462E12FF6BD418D /* AudioPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPlayerView.swift; sourceTree = "<group>"; };
 		6ECC6AFCDE8904CCEAD9EBBE /* ChatTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatTests.swift; sourceTree = "<group>"; };
+		72AD74DBC1E70073311F1072 /* SmartActivityLogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmartActivityLogView.swift; sourceTree = "<group>"; };
 		75BD223A2DD8D357BDBA7F54 /* CalendarModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarModels.swift; sourceTree = "<group>"; };
 		7A46AB9A86B2866494F8AD84 /* BookReaderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookReaderView.swift; sourceTree = "<group>"; };
 		7BB6AD55A1E11D383B6345C4 /* FluentSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FluentSettingsView.swift; sourceTree = "<group>"; };
@@ -494,6 +496,7 @@
 				4AD0CBF73B859088687163F3 /* HealthModels.swift */,
 				D06AEB0354C4C85106A24AE1 /* HealthView.swift */,
 				0ECA4BEE320B57F9B1EBD6EF /* HealthViewModel.swift */,
+				72AD74DBC1E70073311F1072 /* SmartActivityLogView.swift */,
 				8B97135A287819FDC740700E /* SmartFoodLogView.swift */,
 				45981F3DD312C51871008ACC /* WeightLogView.swift */,
 				CF08A389291EC57C9A1078D4 /* WeightTimelineChart.swift */,
@@ -667,6 +670,7 @@
 				F69C522701B2FFBE3A78C36A /* SectionHeader.swift in Sources */,
 				B6989682EC1AC53E552E4517 /* SettingsView.swift in Sources */,
 				4E03D04048BEB3D5621E4279 /* SettingsViewModel.swift in Sources */,
+				F7941B41AF2A1F733DFC7EFB /* SmartActivityLogView.swift in Sources */,
 				1DB52E90E6CB0CDB510B31EA /* SmartFoodLogView.swift in Sources */,
 				6073B03F55243B3E6E723E00 /* SwiftTermView.swift in Sources */,
 				EEABA9A1DDBF6F9612295792 /* TerminalView.swift in Sources */,

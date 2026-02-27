@@ -10,6 +10,7 @@ struct SmartFoodLogView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dismiss) private var dismiss
     let viewModel: HealthViewModel
+    var initialText: String = ""
 
     @State private var foodDescription = ""
     @State private var selectedPhoto: PhotosPickerItem?
@@ -54,8 +55,13 @@ struct SmartFoodLogView: View {
                 }
             }
             .onAppear {
-                isInputFocused = true
                 analysisService.updateBaseURL(appState.foodAnalysisURL)
+                if !initialText.isEmpty {
+                    foodDescription = initialText
+                    Task { await analyzeCurrentInput() }
+                } else {
+                    isInputFocused = true
+                }
             }
             .onChange(of: selectedPhoto) { _, newValue in
                 Task { await loadPhoto(newValue) }
@@ -429,5 +435,5 @@ struct CameraView: UIViewControllerRepresentable {
 }
 
 #Preview {
-    SmartFoodLogView(viewModel: HealthViewModel())
+    SmartFoodLogView(viewModel: HealthViewModel(), initialText: "")
 }
