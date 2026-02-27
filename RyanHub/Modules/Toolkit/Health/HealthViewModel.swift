@@ -3,7 +3,8 @@ import Foundation
 // MARK: - Health View Model
 
 /// Manages health tracking data including weight, food, and activity entries.
-/// Persists data locally using UserDefaults (JSON encoded) for MVP.
+/// Persists data locally using UserDefaults as a cache, with bridge server as source of truth.
+@MainActor
 @Observable
 final class HealthViewModel {
     // MARK: - State
@@ -12,6 +13,16 @@ final class HealthViewModel {
     var foodEntries: [FoodEntry] = []
     var activityEntries: [ActivityEntry] = []
     var selectedTab: HealthTab = .weight
+
+    // MARK: - Bridge Server
+
+    /// Base URL for the bridge server (same pattern as ParkingViewModel).
+    private static var bridgeBaseURL: String {
+        UserDefaults.standard.string(forKey: "ryanhub_server_url")
+            .flatMap { URL(string: $0)?.host }
+            .map { "http://\($0):18790" }
+            ?? AppState.defaultFoodAnalysisURL
+    }
 
     // MARK: - Computed Properties
 
@@ -92,13 +103,13 @@ final class HealthViewModel {
     func addWeight(weight: Double, date: Date = Date(), note: String? = nil) {
         let entry = WeightEntry(date: date, weight: weight, note: note)
         weightEntries.append(entry)
-        save(weightEntries, forKey: StorageKeys.weightEntries)
+        saveAndSync(weightEntries, forKey: StorageKeys.weightEntries, endpoint: "/health-data/weight")
     }
 
     /// Delete a weight entry.
     func deleteWeight(_ entry: WeightEntry) {
         weightEntries.removeAll { $0.id == entry.id }
-        save(weightEntries, forKey: StorageKeys.weightEntries)
+        saveAndSync(weightEntries, forKey: StorageKeys.weightEntries, endpoint: "/health-data/weight")
     }
 
     /// Today's macros totals.
@@ -120,7 +131,7 @@ final class HealthViewModel {
     func addFood(mealType: MealType, description: String, calories: Int? = nil, date: Date = Date()) {
         let entry = FoodEntry(date: date, mealType: mealType, description: description, calories: calories)
         foodEntries.append(entry)
-        save(foodEntries, forKey: StorageKeys.foodEntries)
+        saveAndSync(foodEntries, forKey: StorageKeys.foodEntries, endpoint: "/health-data/food")
     }
 
     /// Add a food entry from AI analysis result.
@@ -142,7 +153,7 @@ final class HealthViewModel {
             isAIAnalyzed: true
         )
         foodEntries.append(entry)
-        save(foodEntries, forKey: StorageKeys.foodEntries)
+        saveAndSync(foodEntries, forKey: StorageKeys.foodEntries, endpoint: "/health-data/food")
     }
 
     /// Suggest a meal type based on the current hour.
@@ -159,7 +170,7 @@ final class HealthViewModel {
     /// Delete a food entry.
     func deleteFood(_ entry: FoodEntry) {
         foodEntries.removeAll { $0.id == entry.id }
-        save(foodEntries, forKey: StorageKeys.foodEntries)
+        saveAndSync(foodEntries, forKey: StorageKeys.foodEntries, endpoint: "/health-data/food")
     }
 
     // MARK: - Activity Actions
@@ -168,7 +179,7 @@ final class HealthViewModel {
     func addActivity(type: String, duration: Int, date: Date = Date(), note: String? = nil, rawDescription: String? = nil) {
         let entry = ActivityEntry(date: date, type: type, duration: duration, note: note, rawDescription: rawDescription)
         activityEntries.append(entry)
-        save(activityEntries, forKey: StorageKeys.activityEntries)
+        saveAndSync(activityEntries, forKey: StorageKeys.activityEntries, endpoint: "/health-data/activity")
     }
 
     /// Add an activity from AI analysis result.
@@ -185,7 +196,7 @@ final class HealthViewModel {
             aiSummary: result.summary
         )
         activityEntries.append(entry)
-        save(activityEntries, forKey: StorageKeys.activityEntries)
+        saveAndSync(activityEntries, forKey: StorageKeys.activityEntries, endpoint: "/health-data/activity")
     }
 
     /// Add an activity from a natural language description.
@@ -200,25 +211,32 @@ final class HealthViewModel {
             rawDescription: description
         )
         activityEntries.append(entry)
-        save(activityEntries, forKey: StorageKeys.activityEntries)
+        saveAndSync(activityEntries, forKey: StorageKeys.activityEntries, endpoint: "/health-data/activity")
     }
 
     /// Delete an activity entry.
     func deleteActivity(_ entry: ActivityEntry) {
         activityEntries.removeAll { $0.id == entry.id }
-        save(activityEntries, forKey: StorageKeys.activityEntries)
+        saveAndSync(activityEntries, forKey: StorageKeys.activityEntries, endpoint: "/health-data/activity")
     }
 
-    // MARK: - Persistence
+    // MARK: - Persistence (Local Cache)
 
-    /// Load all data from UserDefaults.
+    /// Load all data from local cache, then async refresh from server.
     func loadAll() {
+        loadFromCache()
+        Task { await loadFromServer() }
+    }
+
+    /// Load all data from UserDefaults cache (fast, synchronous).
+    private func loadFromCache() {
         weightEntries = load(forKey: StorageKeys.weightEntries) ?? []
         foodEntries = load(forKey: StorageKeys.foodEntries) ?? []
         activityEntries = load(forKey: StorageKeys.activityEntries) ?? []
     }
 
-    private func save<T: Encodable>(_ items: T, forKey key: String) {
+    /// Save to local UserDefaults cache only.
+    private func saveLocal<T: Encodable>(_ items: T, forKey key: String) {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         if let data = try? encoder.encode(items) {
@@ -226,11 +244,76 @@ final class HealthViewModel {
         }
     }
 
+    /// Save to local cache AND async sync to bridge server.
+    private func saveAndSync<T: Encodable>(_ items: T, forKey key: String, endpoint: String) {
+        saveLocal(items, forKey: key)
+        Task { await postToServer(items, endpoint: endpoint) }
+    }
+
     private func load<T: Decodable>(forKey key: String) -> T? {
         guard let data = UserDefaults.standard.data(forKey: key) else { return nil }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         return try? decoder.decode(T.self, from: data)
+    }
+
+    // MARK: - Server Sync
+
+    /// Fetch all health data from the bridge server and update in-memory + local cache.
+    private func loadFromServer() async {
+        if let weights: [WeightEntry] = await fetchFromServer(endpoint: "/health-data/weight") {
+            weightEntries = weights
+            saveLocal(weights, forKey: StorageKeys.weightEntries)
+        }
+
+        if let food: [FoodEntry] = await fetchFromServer(endpoint: "/health-data/food") {
+            foodEntries = food
+            saveLocal(food, forKey: StorageKeys.foodEntries)
+        }
+
+        if let activities: [ActivityEntry] = await fetchFromServer(endpoint: "/health-data/activity") {
+            activityEntries = activities
+            saveLocal(activities, forKey: StorageKeys.activityEntries)
+        }
+    }
+
+    /// Generic GET from bridge server, returning decoded JSON or nil on failure.
+    private func fetchFromServer<T: Decodable>(endpoint: String) async -> T? {
+        guard let url = URL(string: "\(Self.bridgeBaseURL)\(endpoint)") else { return nil }
+        do {
+            let (data, response) = try await URLSession.shared.data(from: url)
+            guard let httpResponse = response as? HTTPURLResponse,
+                  (200..<300).contains(httpResponse.statusCode),
+                  !data.isEmpty else {
+                return nil
+            }
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            return try decoder.decode(T.self, from: data)
+        } catch {
+            print("[HealthVM] Failed to fetch \(endpoint): \(error.localizedDescription)")
+            return nil
+        }
+    }
+
+    /// Generic POST to bridge server, encoding items as JSON body.
+    private func postToServer<T: Encodable>(_ items: T, endpoint: String) async {
+        guard let url = URL(string: "\(Self.bridgeBaseURL)\(endpoint)") else { return }
+        do {
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            request.httpBody = try encoder.encode(items)
+            let (_, response) = try await URLSession.shared.data(for: request)
+            if let httpResponse = response as? HTTPURLResponse,
+               !(200..<300).contains(httpResponse.statusCode) {
+                print("[HealthVM] Server returned \(httpResponse.statusCode) for POST \(endpoint)")
+            }
+        } catch {
+            print("[HealthVM] Failed to post \(endpoint): \(error.localizedDescription)")
+        }
     }
 
     // MARK: - Storage Keys
