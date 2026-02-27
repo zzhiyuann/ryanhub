@@ -42,6 +42,8 @@ struct PopoView: View {
         .background(AdaptiveColors.background(for: colorScheme))
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active {
+                // Refresh health data from UserDefaults (may have been updated by Health module)
+                viewModel.refreshHealthData()
                 Task {
                     await viewModel.checkAndGenerateNudgesIfNeeded()
                 }
@@ -218,6 +220,36 @@ struct PopoView: View {
                     label: "Battery",
                     color: Color.hubAccentGreen
                 )
+
+                // Health module stats: calories consumed
+                if viewModel.daySummary.totalCaloriesConsumed > 0 {
+                    statePill(
+                        icon: "fork.knife",
+                        value: "\(viewModel.daySummary.totalCaloriesConsumed)",
+                        label: "Calories In",
+                        color: Color.hubAccentYellow
+                    )
+                }
+
+                // Health module stats: activity minutes
+                if viewModel.daySummary.totalActivityMinutes > 0 {
+                    statePill(
+                        icon: "figure.run",
+                        value: "\(viewModel.daySummary.totalActivityMinutes)m",
+                        label: "Active",
+                        color: Color.hubAccentGreen
+                    )
+                }
+
+                // Health module stats: calories burned
+                if viewModel.daySummary.totalCaloriesBurned > 0 {
+                    statePill(
+                        icon: "flame.fill",
+                        value: "\(viewModel.daySummary.totalCaloriesBurned)",
+                        label: "Burned",
+                        color: Color.hubAccentRed
+                    )
+                }
 
                 if let emoji = viewModel.latestMoodEmoji {
                     statePillEmoji(

@@ -20,7 +20,7 @@ struct TimelineEventRow: View {
 
                 // Content column
                 VStack(alignment: .leading, spacing: 6) {
-                    // Header row: title + timestamp
+                    // Header row: title + badge + timestamp
                     HStack(alignment: .top) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(itemTitle)
@@ -35,9 +35,22 @@ struct TimelineEventRow: View {
 
                         Spacer()
 
-                        Text(formattedTime)
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                        VStack(alignment: .trailing, spacing: 4) {
+                            Text(formattedTime)
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+
+                            if let badge = itemBadge {
+                                Text(badge)
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundStyle(itemColor)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(
+                                        Capsule().fill(itemColor.opacity(0.12))
+                                    )
+                            }
+                        }
                     }
 
                     // Expanded detail section
@@ -93,6 +106,10 @@ struct TimelineEventRow: View {
             narrationDetail(narration)
         case .nudge(let nudge):
             nudgeDetail(nudge)
+        case .meal(let food):
+            mealDetail(food)
+        case .activity(let activity):
+            activityDetail(activity)
         }
     }
 
@@ -219,6 +236,134 @@ struct TimelineEventRow: View {
         .padding(.top, 4)
     }
 
+    private func mealDetail(_ food: FoodEntry) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // AI summary or description
+            if let summary = food.aiSummary, !summary.isEmpty {
+                Text(summary)
+                    .font(.system(size: 13, weight: .regular))
+                    .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            // Individual food items
+            if let items = food.items, !items.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(items) { item in
+                        HStack(spacing: 8) {
+                            Circle()
+                                .fill(Color.hubAccentYellow.opacity(0.5))
+                                .frame(width: 5, height: 5)
+
+                            Text(item.name)
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+
+                            Spacer()
+
+                            if item.calories > 0 {
+                                Text("\(item.calories) cal")
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Macros badges
+            HStack(spacing: 8) {
+                if let cal = food.calories, cal > 0 {
+                    detailBadge(icon: "flame.fill", text: "\(cal) cal", color: Color.hubAccentYellow)
+                }
+                if let protein = food.protein, protein > 0 {
+                    detailBadge(icon: "p.circle.fill", text: "\(protein)g P", color: Color.hubAccentGreen)
+                }
+                if let carbs = food.carbs, carbs > 0 {
+                    detailBadge(icon: "c.circle.fill", text: "\(carbs)g C", color: Color(red: 0.2, green: 0.6, blue: 1.0))
+                }
+                if let fat = food.fat, fat > 0 {
+                    detailBadge(icon: "f.circle.fill", text: "\(fat)g F", color: Color.hubAccentRed)
+                }
+            }
+        }
+        .padding(.top, 4)
+    }
+
+    private func activityDetail(_ activity: ActivityEntry) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // AI summary or note
+            if let summary = activity.aiSummary, !summary.isEmpty {
+                Text(summary)
+                    .font(.system(size: 13, weight: .regular))
+                    .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                    .fixedSize(horizontal: false, vertical: true)
+            } else if let note = activity.note, !note.isEmpty {
+                Text(note)
+                    .font(.system(size: 13, weight: .regular))
+                    .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            // Individual exercises
+            if !activity.exercises.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(activity.exercises) { exercise in
+                        HStack(spacing: 8) {
+                            Circle()
+                                .fill(Color.hubAccentGreen.opacity(0.5))
+                                .frame(width: 5, height: 5)
+
+                            Text(exercise.name)
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+
+                            Spacer()
+
+                            // Sets x reps @ weight for strength exercises
+                            if let sets = exercise.sets, let reps = exercise.reps {
+                                HStack(spacing: 2) {
+                                    Text("\(sets)x\(reps)")
+                                        .font(.system(size: 11, weight: .medium))
+                                        .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+
+                                    if let weight = exercise.weight {
+                                        Text("@ \(weight)")
+                                            .font(.system(size: 11, weight: .medium))
+                                            .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                                    }
+                                }
+                            }
+                            // Duration for cardio exercises
+                            else if let duration = exercise.duration {
+                                Text("\(duration) min")
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Summary badges
+            HStack(spacing: 8) {
+                detailBadge(
+                    icon: "clock",
+                    text: activity.formattedDuration,
+                    color: Color.hubAccentGreen
+                )
+                if let cal = activity.caloriesBurned, cal > 0 {
+                    detailBadge(
+                        icon: "flame.fill",
+                        text: "\(cal) cal burned",
+                        color: Color.hubAccentYellow
+                    )
+                }
+            }
+        }
+        .padding(.top, 4)
+    }
+
     // MARK: - Detail Badge
 
     private func detailBadge(icon: String, text: String, color: Color) -> some View {
@@ -244,8 +389,12 @@ struct TimelineEventRow: View {
             return modalityDisplayName(event.modality)
         case .narration:
             return "Voice Narration"
-        case .nudge(let nudge):
+        case .nudge:
             return "Facai says"
+        case .meal(let food):
+            return food.mealType.displayName
+        case .activity(let activity):
+            return activity.type
         }
     }
 
@@ -257,6 +406,15 @@ struct TimelineEventRow: View {
             return narration.transcript
         case .nudge(let nudge):
             return nudge.content
+        case .meal(let food):
+            return food.aiSummary ?? food.displayName
+        case .activity(let activity):
+            var parts: [String] = []
+            parts.append(activity.formattedDuration)
+            if let cal = activity.caloriesBurned, cal > 0 {
+                parts.append("\(cal) cal burned")
+            }
+            return parts.joined(separator: " \u{00B7} ")
         }
     }
 
@@ -268,6 +426,10 @@ struct TimelineEventRow: View {
             return "mic.fill"
         case .nudge:
             return "cat.fill"
+        case .meal:
+            return "fork.knife"
+        case .activity(let activity):
+            return ActivityParser.icon(for: activity.type)
         }
     }
 
@@ -279,6 +441,25 @@ struct TimelineEventRow: View {
             return Color.purple
         case .nudge:
             return Color.hubPrimary
+        case .meal:
+            return Color.hubAccentYellow
+        case .activity:
+            return Color.hubAccentGreen
+        }
+    }
+
+    /// Badge text shown alongside the timestamp for meal and activity items.
+    private var itemBadge: String? {
+        switch item {
+        case .meal(let food):
+            if let cal = food.calories, cal > 0 {
+                return "\(cal) cal"
+            }
+            return nil
+        case .activity(let activity):
+            return activity.formattedDuration
+        default:
+            return nil
         }
     }
 

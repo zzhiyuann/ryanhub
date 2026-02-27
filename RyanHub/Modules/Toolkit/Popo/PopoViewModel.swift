@@ -16,17 +16,21 @@ enum NarrationRecordingState: Equatable {
 // MARK: - Timeline Item
 
 /// A unified timeline item that wraps any type of POPO event for chronological display.
-/// Enables rendering sensing events, narrations, and nudges in a single timeline.
+/// Enables rendering sensing events, narrations, nudges, meals, and activities in a single timeline.
 enum TimelineItem: Identifiable {
     case sensing(SensingEvent)
     case narration(Narration)
     case nudge(Nudge)
+    case meal(FoodEntry)
+    case activity(ActivityEntry)
 
     var id: UUID {
         switch self {
         case .sensing(let event): return event.id
         case .narration(let narration): return narration.id
         case .nudge(let nudge): return nudge.id
+        case .meal(let food): return food.id
+        case .activity(let activity): return activity.id
         }
     }
 
@@ -35,6 +39,8 @@ enum TimelineItem: Identifiable {
         case .sensing(let event): return event.timestamp
         case .narration(let narration): return narration.timestamp
         case .nudge(let nudge): return nudge.timestamp
+        case .meal(let food): return food.date
+        case .activity(let activity): return activity.date
         }
     }
 }
@@ -50,6 +56,9 @@ struct DayOverviewSummary {
     var narrationCount: Int = 0
     var nudgeCount: Int = 0
     var eventCount: Int = 0
+    var totalCaloriesConsumed: Int = 0
+    var totalActivityMinutes: Int = 0
+    var totalCaloriesBurned: Int = 0
 }
 
 // MARK: - POPO View Model
@@ -93,6 +102,12 @@ final class PopoViewModel {
 
     /// Nudges loaded from local storage.
     var nudges: [Nudge] = []
+
+    /// Food entries loaded from Health module's UserDefaults storage.
+    var foodEntries: [FoodEntry] = []
+
+    /// Activity entries loaded from Health module's UserDefaults storage.
+    var activityEntries: [ActivityEntry] = []
 
     // MARK: - Narration Recording State
 
@@ -159,17 +174,85 @@ final class PopoViewModel {
             .sorted { $0.timestamp > $1.timestamp }
     }
 
+    /// Food entries for the selected date, sorted newest first.
+    var foodEntriesForSelectedDate: [FoodEntry] {
+        let calendar = Calendar.current
+        return foodEntries
+            .filter { calendar.isDate($0.date, inSameDayAs: selectedDate) }
+            .sorted { $0.date > $1.date }
+    }
+
+    /// Activity entries for the selected date, sorted newest first.
+    var activityEntriesForSelectedDate: [ActivityEntry] {
+        let calendar = Calendar.current
+        return activityEntries
+            .filter { calendar.isDate($0.date, inSameDayAs: selectedDate) }
+            .sorted { $0.date > $1.date }
+    }
+
+    /// Deduplicated activity entries — all Health activities are kept (richer data).
+    /// Motion sensing events that overlap with walking/running/cycling Health activities
+    /// are removed from the filtered sensing events instead.
+    var deduplicatedActivitiesForSelectedDate: [ActivityEntry] {
+        activityEntriesForSelectedDate
+    }
+
     /// All timeline items for the selected date, merged and sorted chronologically (newest first).
     /// Sensing events are filtered to remove noise (duplicate motion, redundant location, raw steps).
+    /// Health module meals and activities are included. Motion events overlapping with Health
+    /// activities (walking, running, cycling) are removed to avoid duplication.
     var timelineItems: [TimelineItem] {
         var items: [TimelineItem] = []
-        items.append(contentsOf: filteredSensingEvents.map { .sensing($0) })
+        items.append(contentsOf: deduplicatedSensingEvents.map { .sensing($0) })
         items.append(contentsOf: narrationsForSelectedDate.map { .narration($0) })
         items.append(contentsOf: nudgesForSelectedDate.map { .nudge($0) })
+        items.append(contentsOf: foodEntriesForSelectedDate.map { .meal($0) })
+        items.append(contentsOf: deduplicatedActivitiesForSelectedDate.map { .activity($0) })
         return items.sorted { $0.timestamp > $1.timestamp }
     }
 
     // MARK: - Smart Timeline Filtering
+
+    /// Activity types from Health module that overlap with motion sensor data.
+    private static let overlappingActivityTypes = ["walking", "running", "cycling"]
+
+    /// Sensing events after both noise filtering and Health activity deduplication.
+    /// Motion events that overlap (within +/-10 minutes) with a Health module activity
+    /// of a matching type (walking, running, cycling) are removed.
+    private var deduplicatedSensingEvents: [SensingEvent] {
+        let activities = activityEntriesForSelectedDate
+        let overlapActivities = activities.filter { activity in
+            Self.overlappingActivityTypes.contains(where: { activity.type.lowercased().contains($0) })
+        }
+
+        // If no overlapping Health activities, return the filtered events as-is
+        guard !overlapActivities.isEmpty else { return filteredSensingEvents }
+
+        let overlapWindow: TimeInterval = 600 // 10 minutes
+
+        return filteredSensingEvents.filter { event in
+            // Only check motion events for overlap
+            guard event.modality == .motion else { return true }
+
+            let motionActivityType = (event.payload["activityType"] ?? "").lowercased()
+
+            // Check if this motion event overlaps with any Health activity
+            for activity in overlapActivities {
+                let activityTypeLower = activity.type.lowercased()
+                let typesMatch = Self.overlappingActivityTypes.contains(where: { overlapType in
+                    motionActivityType.contains(overlapType) && activityTypeLower.contains(overlapType)
+                })
+
+                if typesMatch {
+                    let timeDiff = abs(event.timestamp.timeIntervalSince(activity.date))
+                    if timeDiff <= overlapWindow {
+                        return false // Remove this motion event — covered by Health activity
+                    }
+                }
+            }
+            return true
+        }
+    }
 
     /// Filters sensing events to show only semantically meaningful entries.
     /// - Steps: removed entirely (shown in overview card via daySummary.totalSteps)
@@ -272,6 +355,17 @@ final class PopoViewModel {
             default:
                 break
             }
+        }
+
+        // Health module data: calories consumed from food entries
+        for food in foodEntriesForSelectedDate {
+            summary.totalCaloriesConsumed += food.calories ?? 0
+        }
+
+        // Health module data: activity minutes and calories burned from activity entries
+        for activity in activityEntriesForSelectedDate {
+            summary.totalActivityMinutes += activity.duration
+            summary.totalCaloriesBurned += activity.caloriesBurned ?? 0
         }
 
         return summary
@@ -429,9 +523,11 @@ final class PopoViewModel {
             startNudgeTimer()
         }
 
-        // Load narrations and nudges from local storage
+        // Load narrations, nudges, and health data from local storage
         loadNarrations()
         loadNudges()
+        loadFoodEntries()
+        loadActivityEntries()
     }
 
     // MARK: - Day Navigation
@@ -964,6 +1060,32 @@ final class PopoViewModel {
         request.timeoutInterval = 30
 
         _ = try? await URLSession.shared.data(for: request)
+    }
+
+    // MARK: - Health Data Loading
+
+    /// Load food entries from the Health module's UserDefaults storage.
+    private func loadFoodEntries() {
+        guard let data = UserDefaults.standard.data(forKey: "ryanhub_health_food") else { return }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        foodEntries = (try? decoder.decode([FoodEntry].self, from: data)) ?? []
+    }
+
+    /// Load activity entries from the Health module's UserDefaults storage.
+    private func loadActivityEntries() {
+        guard let data = UserDefaults.standard.data(forKey: "ryanhub_health_activity") else { return }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        activityEntries = (try? decoder.decode([ActivityEntry].self, from: data)) ?? []
+    }
+
+    /// Refresh health data from UserDefaults (called when app becomes active).
+    func refreshHealthData() {
+        loadFoodEntries()
+        loadActivityEntries()
     }
 
     // MARK: - Storage Keys
