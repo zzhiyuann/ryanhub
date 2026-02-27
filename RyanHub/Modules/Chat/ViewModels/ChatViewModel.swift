@@ -169,7 +169,7 @@ final class ChatViewModel {
             }
         }
 
-        let replyPreview = replyingTo.map { String($0.content.prefix(80)) }
+        let replyPreview = replyingTo.map { Self.buildReplyPreview(for: $0) }
         let userMessage = ChatMessage(
             content: text,
             role: .user,
@@ -212,7 +212,7 @@ final class ChatViewModel {
     /// Send an image message from photo picker data, with an optional user caption.
     func sendImageMessage(data: Data, caption: String = "", replyingTo: ChatMessage? = nil) {
         let base64 = data.base64EncodedString()
-        let replyPreview = replyingTo.map { String($0.content.prefix(80)) }
+        let replyPreview = replyingTo.map { Self.buildReplyPreview(for: $0) }
         let userMessage = ChatMessage(
             content: caption,
             role: .user,
@@ -790,7 +790,7 @@ final class ChatViewModel {
 
         // Find the original user message to auto-link the reply
         let userMessage = messages.first(where: { $0.id == id && $0.role == .user })
-        let replyPreview = userMessage.map { String($0.content.prefix(60)) }
+        let replyPreview = userMessage.map { Self.buildReplyPreview(for: $0) }
 
         if let existingIndex = messages.firstIndex(where: { $0.id == assistantId && $0.role == .assistant }) {
             // Update existing streaming message in place
@@ -931,6 +931,20 @@ final class ChatViewModel {
                     self.progressTimer = nil
                 }
             }
+        }
+    }
+
+    /// Build a short preview string for a message being replied to.
+    /// Handles text, image, and voice message types appropriately.
+    static func buildReplyPreview(for message: ChatMessage) -> String {
+        switch message.messageType {
+        case .voice:
+            let seconds = Int(message.voiceDuration ?? 0)
+            return "[audio \(seconds)s]"
+        case .image:
+            return message.content.isEmpty ? "[Image]" : String(message.content.prefix(80))
+        case .text:
+            return String(message.content.prefix(80))
         }
     }
 

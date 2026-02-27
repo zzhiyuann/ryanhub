@@ -383,7 +383,7 @@ struct ChatView: View {
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(Color.hubPrimary)
 
-                Text(message.content.isEmpty ? "[Media]" : String(message.content.prefix(80)))
+                Text(ChatViewModel.buildReplyPreview(for: message))
                     .font(.system(size: 12))
                     .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
                     .lineLimit(1)

@@ -1,4 +1,5 @@
 import SwiftUI
+import AVFoundation
 
 /// Renders a single chat message bubble with Telegram-like styling.
 /// User messages: right-aligned, hubPrimary background, white text with tail.
@@ -21,6 +22,8 @@ struct MessageBubble: View {
     @State private var editText = ""
     /// Cached UIImage decoded from base64, avoids re-decoding on every scroll frame.
     @State private var cachedImage: UIImage?
+    /// Audio playback controller for voice messages.
+    @State private var audioPlayer: VoiceMessagePlayer?
 
     var body: some View {
         HStack(alignment: .bottom, spacing: 6) {
@@ -350,32 +353,69 @@ struct MessageBubble: View {
 
     @ViewBuilder
     private var voiceBubbleContent: some View {
-        HStack(spacing: 8) {
-            // Play icon
-            Image(systemName: "waveform")
-                .font(.system(size: 18))
-                .foregroundStyle(isUser ? .white.opacity(0.9) : Color.hubPrimary)
+        let isPlaying = audioPlayer?.isPlaying ?? false
+        let progress = audioPlayer?.progress ?? 0
 
-            // Waveform bars
+        HStack(spacing: 10) {
+            // Play/Pause button
+            Button {
+                toggleVoicePlayback()
+            } label: {
+                Image(systemName: isPlaying ? "pause.fill" : "play.fill")
+                    .font(.system(size: 20))
+                    .foregroundStyle(isUser ? .white : Color.hubPrimary)
+                    .frame(width: 32, height: 32)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            // Waveform bars with progress overlay
             HStack(spacing: 2) {
                 ForEach(0..<20, id: \.self) { index in
                     let height = waveformHeight(for: index)
+                    let barProgress = CGFloat(index) / 20.0
+                    let isPlayed = barProgress < progress
                     RoundedRectangle(cornerRadius: 1)
-                        .fill(isUser ? Color.white.opacity(0.6) : Color.hubPrimary.opacity(0.5))
+                        .fill(
+                            isUser
+                                ? (isPlayed ? Color.white.opacity(0.9) : Color.white.opacity(0.35))
+                                : (isPlayed ? Color.hubPrimary : Color.hubPrimary.opacity(0.3))
+                        )
                         .frame(width: 2.5, height: height)
                 }
             }
             .frame(height: 24)
 
-            // Duration
+            // Duration label
             if let duration = message.voiceDuration {
-                Text(formatDuration(duration))
+                let displayTime = isPlaying
+                    ? (audioPlayer?.currentTime ?? 0)
+                    : duration
+                Text(formatDuration(displayTime))
                     .font(.system(size: 12, weight: .medium, design: .monospaced))
                     .foregroundStyle(isUser ? .white.opacity(0.8) : AdaptiveColors.textSecondary(for: colorScheme))
             }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
+    }
+
+    /// Toggle voice message playback (play/pause).
+    private func toggleVoicePlayback() {
+        if let player = audioPlayer {
+            if player.isPlaying {
+                player.pause()
+            } else {
+                player.play()
+            }
+        } else {
+            // Create player from Base64 data
+            guard let base64 = message.voiceBase64,
+                  let data = Data(base64Encoded: base64) else { return }
+            let player = VoiceMessagePlayer(data: data)
+            audioPlayer = player
+            player.play()
+        }
     }
 
     // MARK: - Message Status Icon
@@ -657,6 +697,75 @@ struct FullScreenImageViewer: View {
             dismiss()
         }
         .statusBarHidden()
+    }
+}
+
+// MARK: - Voice Message Audio Player
+
+/// Lightweight audio player for voice message playback within a chat bubble.
+/// Uses @Observable for SwiftUI reactivity — progress and isPlaying update the view.
+@MainActor
+@Observable
+final class VoiceMessagePlayer: NSObject, AVAudioPlayerDelegate {
+    private var player: AVAudioPlayer?
+    private var displayLink: CADisplayLink?
+    private(set) var isPlaying: Bool = false
+    private(set) var progress: Double = 0
+    private(set) var currentTime: TimeInterval = 0
+
+    init(data: Data) {
+        super.init()
+        do {
+            let session = AVAudioSession.sharedInstance()
+            try session.setCategory(.playback, mode: .default)
+            try session.setActive(true)
+            player = try AVAudioPlayer(data: data)
+            player?.delegate = self
+            player?.prepareToPlay()
+        } catch {
+            // Silently fail if audio data is invalid
+        }
+    }
+
+    func play() {
+        player?.play()
+        isPlaying = true
+        startDisplayLink()
+    }
+
+    func pause() {
+        player?.pause()
+        isPlaying = false
+        stopDisplayLink()
+    }
+
+    private func startDisplayLink() {
+        stopDisplayLink()
+        let link = CADisplayLink(target: self, selector: #selector(tick))
+        link.add(to: .main, forMode: .common)
+        displayLink = link
+    }
+
+    private func stopDisplayLink() {
+        displayLink?.invalidate()
+        displayLink = nil
+    }
+
+    @objc private func tick() {
+        guard let player else { return }
+        currentTime = player.currentTime
+        progress = player.duration > 0 ? player.currentTime / player.duration : 0
+    }
+
+    // AVAudioPlayerDelegate — playback finished
+    nonisolated func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
+        Task { @MainActor in
+            self.isPlaying = false
+            self.progress = 0
+            self.currentTime = 0
+            self.player?.currentTime = 0
+            self.stopDisplayLink()
+        }
     }
 }
 
