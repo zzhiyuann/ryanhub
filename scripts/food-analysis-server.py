@@ -41,7 +41,7 @@ import shutil
 from urllib.parse import urlparse
 
 PORT = 18790
-HOST = "127.0.0.1"
+HOST = "0.0.0.0"
 
 # Locate the claude CLI binary
 CLAUDE_PATH = shutil.which("claude") or os.path.expanduser("~/.local/bin/claude")
