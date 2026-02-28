@@ -11,6 +11,7 @@ struct PopoView: View {
     @State private var viewModel = PopoViewModel()
     @State private var showChannelDetail = false
     @State private var isPressingMic = false
+    @State private var isTimelineExpanded = false
     @FocusState private var isTextDiaryFocused: Bool
 
     var body: some View {
@@ -678,14 +679,18 @@ struct PopoView: View {
     // MARK: - Section 5: Timeline
 
     private var timelineSection: some View {
-        VStack(alignment: .leading, spacing: HubLayout.itemSpacing) {
+        let items = viewModel.timelineItems
+        let totalCount = items.count
+        let previewLimit = 4
+        let displayedItems = isTimelineExpanded ? items : Array(items.prefix(previewLimit))
+
+        return VStack(alignment: .leading, spacing: HubLayout.itemSpacing) {
             // Section header with event count badge
             HStack(spacing: 8) {
                 SectionHeader(title: "TIMELINE")
 
-                let itemCount = viewModel.timelineItems.count
-                if itemCount > 0 {
-                    Text("\(itemCount)")
+                if totalCount > 0 {
+                    Text("\(totalCount)")
                         .font(.system(size: 10, weight: .bold))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 6)
@@ -698,46 +703,50 @@ struct PopoView: View {
                 Spacer()
             }
 
-            let items = viewModel.timelineItems
             if items.isEmpty {
-                emptyTimelineState
+                // Empty state: subtle inline message
+                Text("No events yet")
+                    .font(.hubCaption)
+                    .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 20)
             } else {
-                VStack(alignment: .leading, spacing: 0) {
-                    ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
-                        TimelineEventRow(
-                            item: item,
-                            isExpanded: viewModel.isExpanded(item.id),
-                            isLast: index == items.count - 1
-                        ) {
-                            withAnimation(.easeInOut(duration: 0.25)) {
-                                viewModel.toggleExpanded(item.id)
+                HubCard {
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(Array(displayedItems.enumerated()), id: \.element.id) { index, item in
+                            TimelineEventRow(
+                                item: item,
+                                isExpanded: viewModel.isExpanded(item.id),
+                                isLast: index == displayedItems.count - 1
+                            ) {
+                                withAnimation(.easeInOut(duration: 0.25)) {
+                                    viewModel.toggleExpanded(item.id)
+                                }
                             }
+                        }
+
+                        // Show expand/collapse button when there are more items than the preview limit
+                        if totalCount > previewLimit {
+                            Button {
+                                withAnimation(.easeInOut(duration: 0.25)) {
+                                    isTimelineExpanded.toggle()
+                                }
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Text(isTimelineExpanded ? "Show less" : "Show all (\(totalCount))")
+                                        .font(.system(size: 13, weight: .medium))
+                                    Image(systemName: isTimelineExpanded ? "chevron.up" : "chevron.down")
+                                        .font(.system(size: 11, weight: .semibold))
+                                }
+                                .foregroundStyle(Color.hubPrimary)
+                                .padding(.vertical, 8)
+                                .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(.plain)
                         }
                     }
                 }
-                .padding(.horizontal, 4)
             }
-        }
-    }
-
-    private var emptyTimelineState: some View {
-        HubCard {
-            VStack(spacing: 10) {
-                Image(systemName: "clock.arrow.circlepath")
-                    .font(.system(size: 28, weight: .light))
-                    .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme).opacity(0.5))
-
-                Text("No events yet")
-                    .font(.hubBody)
-                    .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
-
-                Text("Events will appear here as sensors collect data")
-                    .font(.hubCaption)
-                    .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme).opacity(0.7))
-                    .multilineTextAlignment(.center)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
         }
     }
 
