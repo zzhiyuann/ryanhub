@@ -72,6 +72,11 @@ MAX_SEGMENT_DURATION = 30.0   # Maximum speech segment duration in seconds
 # Thread pool for CPU/GPU-bound model inference
 _executor = ThreadPoolExecutor(max_workers=4)
 
+# Lock to serialize mlx-whisper transcription calls. Even though mlx-whisper
+# uses Metal (Apple Silicon GPU), concurrent transcriptions can cause resource
+# contention and produce corrupted output. Serialize to one-at-a-time.
+_whisper_lock = threading.Lock()
+
 logging.basicConfig(
     level=logging.INFO,
     format="[%(asctime)s] %(levelname)s %(message)s",
@@ -296,7 +301,8 @@ def identify_speaker(embedding: np.ndarray) -> tuple[str, float]:
 # ============================================================
 
 def transcribe_audio(audio_path: str, language: Optional[str] = None) -> dict:
-    """Transcribe audio using mlx-whisper."""
+    """Transcribe audio using mlx-whisper.
+    Acquires _whisper_lock to serialize calls (model is not thread-safe)."""
     whisper = get_whisper()
 
     kwargs = {
@@ -306,7 +312,8 @@ def transcribe_audio(audio_path: str, language: Optional[str] = None) -> dict:
     if language:
         kwargs["language"] = language
 
-    result = whisper.transcribe(audio_path, **kwargs)
+    with _whisper_lock:
+        result = whisper.transcribe(audio_path, **kwargs)
     return result
 
 

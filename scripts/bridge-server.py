@@ -107,6 +107,16 @@ os.makedirs(POPO_AUDIO_DIR, exist_ok=True)
 
 WHISPER_AVAILABLE = False
 _whisper_model = None
+# Lock to serialize all Whisper transcription calls. The model (GPU/CPU) cannot
+# handle concurrent inference safely — concurrent calls can crash or produce
+# garbage output. All callers (narration analysis, chat voice, audio upload
+# background thread) must acquire this lock before calling model.transcribe().
+_whisper_lock = threading.Lock()
+
+# Lock to protect concurrent reads/writes of the narrations JSON file.
+# With ThreadingHTTPServer, multiple handlers can run concurrently, and the
+# background analysis thread also writes to this file.
+_narrations_file_lock = threading.Lock()
 
 try:
     import whisper
@@ -207,12 +217,14 @@ def _emotion_to_stress(emotion):
 def transcribe_audio(audio_path):
     # type: (str) -> Optional[str]
     """Transcribe an audio file using local Whisper model.
+    Acquires _whisper_lock to serialize calls (model is not thread-safe).
     Returns the transcript text, or None if unavailable."""
     if not WHISPER_AVAILABLE:
         return None
     try:
-        model = get_whisper_model()
-        result = model.transcribe(str(audio_path))
+        with _whisper_lock:
+            model = get_whisper_model()
+            result = model.transcribe(str(audio_path))
         text = result["text"].strip()
         if text:
             print(f"[Whisper] Transcribed {os.path.basename(audio_path)}: {text[:80]}...")
@@ -295,38 +307,45 @@ def run_narration_analysis(audio_path, narration_id=None):
 
 def update_narration_with_analysis(narration_id, analysis_result):
     # type: (str, Dict[str, Any]) -> None
-    """Update the stored narration entry with transcript and affect data."""
+    """Update the stored narration entry with transcript and affect data.
+    Thread-safe: acquires _narrations_file_lock to prevent concurrent R/W."""
     narrations_file = DATA_FILES.get("/popo/narrations")
     if not narrations_file or not os.path.exists(narrations_file):
+        print("[Narration] Cannot update: narrations file does not exist yet", file=sys.stderr)
         return
 
-    try:
-        with open(narrations_file, "r") as f:
-            content = f.read()
-        narrations = json.loads(content) if content.strip() else []
-    except (json.JSONDecodeError, IOError):
-        return
-
-    updated = False
-    for narration in narrations:
-        if isinstance(narration, dict) and narration.get("id") == narration_id:
-            if analysis_result.get("transcript"):
-                narration["transcript"] = analysis_result["transcript"]
-            if analysis_result.get("affect"):
-                narration["affectAnalysis"] = analysis_result["affect"]
-                # Also set legacy extractedMood field
-                primary = analysis_result["affect"].get("primary_emotion")
-                if primary:
-                    narration["extractedMood"] = primary
-            updated = True
-            break
-
-    if updated:
+    with _narrations_file_lock:
         try:
-            with open(narrations_file, "w") as f:
-                json.dump(narrations, f, ensure_ascii=False)
-        except IOError as e:
-            print(f"[Narration] Failed to update narration file: {e}", file=sys.stderr)
+            with open(narrations_file, "r") as f:
+                content = f.read()
+            narrations = json.loads(content) if content.strip() else []
+        except (json.JSONDecodeError, IOError):
+            return
+
+        updated = False
+        for narration in narrations:
+            if isinstance(narration, dict) and narration.get("id") == narration_id:
+                if analysis_result.get("transcript"):
+                    narration["transcript"] = analysis_result["transcript"]
+                if analysis_result.get("affect"):
+                    narration["affectAnalysis"] = analysis_result["affect"]
+                    # Also set legacy extractedMood field
+                    primary = analysis_result["affect"].get("primary_emotion")
+                    if primary:
+                        narration["extractedMood"] = primary
+                updated = True
+                break
+
+        if not updated:
+            print("[Narration] Narration %s not found in file — "
+                  "may not have been synced yet" % narration_id, file=sys.stderr)
+
+        if updated:
+            try:
+                with open(narrations_file, "w") as f:
+                    json.dump(narrations, f, ensure_ascii=False)
+            except IOError as e:
+                print(f"[Narration] Failed to update narration file: {e}", file=sys.stderr)
 
 
 # ---------------------------------------------------------------------------
@@ -1341,7 +1360,9 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
 
     def _write_data_file(self, path):
         """Write JSON data to a file. Merges by 'id' field so multi-device
-        sync works correctly (no data loss from concurrent writes)."""
+        sync works correctly (no data loss from concurrent writes).
+        For /popo/narrations, acquires _narrations_file_lock to prevent
+        conflicts with background analysis updates."""
         try:
             content_length = int(self.headers.get("Content-Length", 0))
             body = self.rfile.read(content_length)
@@ -1352,6 +1373,20 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
 
         filepath = DATA_FILES[path]
 
+        # Use narrations file lock for /popo/narrations to prevent conflicts
+        # with update_narration_with_analysis running in background threads.
+        lock = _narrations_file_lock if path == "/popo/narrations" else None
+        if lock:
+            lock.acquire()
+
+        try:
+            self._merge_and_write(filepath, incoming, path)
+        finally:
+            if lock:
+                lock.release()
+
+    def _merge_and_write(self, filepath, incoming, path):
+        """Internal helper: merge incoming data with existing file and write."""
         # Load existing data for merge
         existing = []
         if os.path.exists(filepath):
@@ -1364,6 +1399,9 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
 
         # Merge by 'id' — incoming entries override existing ones with same id,
         # and existing entries not in incoming are preserved.
+        # IMPORTANT: for narrations, preserve server-side fields (transcript,
+        # affectAnalysis) that the iOS client may not have yet. Only override
+        # if the incoming entry has a non-empty transcript.
         if isinstance(incoming, list) and isinstance(existing, list):
             merged = {}
             for item in existing:
@@ -1371,7 +1409,21 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
                     merged[item["id"]] = item
             for item in incoming:
                 if isinstance(item, dict) and "id" in item:
-                    merged[item["id"]] = item
+                    item_id = item["id"]
+                    if path == "/popo/narrations" and item_id in merged:
+                        # Preserve server-side transcript and affect if the
+                        # incoming entry has empty/missing transcript
+                        existing_item = merged[item_id]
+                        if (not item.get("transcript")
+                                and existing_item.get("transcript")):
+                            item["transcript"] = existing_item["transcript"]
+                        if (not item.get("affectAnalysis")
+                                and existing_item.get("affectAnalysis")):
+                            item["affectAnalysis"] = existing_item["affectAnalysis"]
+                        if (not item.get("extractedMood")
+                                and existing_item.get("extractedMood")):
+                            item["extractedMood"] = existing_item["extractedMood"]
+                    merged[item_id] = item
             data = list(merged.values())
         else:
             data = incoming
@@ -1458,24 +1510,14 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
                 "size": len(body),
             }
 
-            # If a narration ID was provided, trigger background analysis
-            # (needs local Whisper for transcription; Claude for affect analysis is optional)
+            # Background analysis removed from audio upload. The iOS client
+            # sends an explicit POST /popo/narrations/analyze after upload,
+            # which is the primary transcription path. Running Whisper here
+            # caused race conditions (concurrent model inference, file writes)
+            # and double-transcription waste.
             narration_id = self.headers.get("X-Narration-Id")
-            if narration_id and WHISPER_AVAILABLE:
-                response_data["analysis_queued"] = True
-
-                def _bg_analyze():
-                    try:
-                        result = run_narration_analysis(filepath, narration_id)
-                        if result.get("status") in ("transcribed", "analyzed"):
-                            update_narration_with_analysis(narration_id, result)
-                            print("[Narration] Background analysis complete for %s" % filename)
-                    except Exception as e:
-                        print("[Narration] Background analysis failed: %s" % e,
-                              file=sys.stderr)
-
-                bg_thread = threading.Thread(target=_bg_analyze, daemon=True)
-                bg_thread.start()
+            if narration_id:
+                response_data["narration_id"] = narration_id
 
             self._send_json(200, response_data)
         except IOError as e:
@@ -1951,7 +1993,10 @@ def main():
         print(f"Warning: claude CLI not found at {CLAUDE_PATH}", file=sys.stderr)
         print("Analysis endpoints will fail, but data endpoints will work.", file=sys.stderr)
 
-    server = http.server.HTTPServer((HOST, PORT), BridgeHandler)
+    # Use ThreadingHTTPServer so the server can accept new requests while
+    # a long-running handler (e.g. Whisper transcription) is processing.
+    # Without threading, a 30+ second Whisper call blocks ALL other requests.
+    server = http.server.ThreadingHTTPServer((HOST, PORT), BridgeHandler)
     print(f"RyanHub Bridge Server listening on http://{HOST}:{PORT}")
     print(f"Data directory: {BRIDGE_DATA_DIR}")
     if os.path.isfile(CLAUDE_PATH):

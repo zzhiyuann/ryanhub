@@ -116,7 +116,7 @@ struct TimelineEventRow: View {
     private func sensingDetail(_ event: SensingEvent) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             // Audio events get a specialized expanded view
-            if event.modality == .audio, event.payload["status"] == "completed" {
+            if event.modality == .audio, event.payload["status"] == "transcript" {
                 audioTranscriptDetail(event)
             } else {
                 // Payload key-value pairs
@@ -151,37 +151,44 @@ struct TimelineEventRow: View {
         .padding(.top, 4)
     }
 
-    /// Specialized expanded view for completed audio transcription events.
+    /// Specialized expanded view for audio transcript events from WebSocket streaming.
     private func audioTranscriptDetail(_ event: SensingEvent) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            // Full transcript
-            if let transcript = event.payload["transcript"], !transcript.isEmpty {
-                Text(transcript)
+            // Full transcript text
+            if let text = event.payload["text"], !text.isEmpty {
+                Text(text)
                     .font(.system(size: 13, weight: .regular))
                     .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            // Info badges
+            // Info badges row
             HStack(spacing: 8) {
-                if let speakers = event.payload["speakers"], !speakers.isEmpty {
+                // Speaker badge (available after speaker_update enrichment)
+                if let speaker = event.payload["speaker"], !speaker.isEmpty {
                     detailBadge(
-                        icon: "person.2.fill",
-                        text: speakers,
+                        icon: "person.fill",
+                        text: speaker.capitalized,
                         color: Color.hubPrimary
                     )
                 }
-                if let segmentCount = event.payload["segmentCount"] {
+
+                // Timing info (start–end)
+                if let startStr = event.payload["start"],
+                   let endStr = event.payload["end"] {
                     detailBadge(
-                        icon: "text.quote",
-                        text: "\(segmentCount) segments",
+                        icon: "clock",
+                        text: "\(startStr)s – \(endStr)s",
                         color: Color.hubPrimaryLight
                     )
                 }
-                if let processingTime = event.payload["processingTime"] {
+
+                // Speaker identification confidence
+                if let confStr = event.payload["confidence"],
+                   let conf = Double(confStr), conf > 0 {
                     detailBadge(
-                        icon: "clock",
-                        text: "\(processingTime)s",
+                        icon: "checkmark.seal",
+                        text: String(format: "%.0f%%", conf * 100),
                         color: AdaptiveColors.textSecondary(for: colorScheme)
                     )
                 }
@@ -508,7 +515,9 @@ struct TimelineEventRow: View {
         case .sensing(let event):
             return modalityDisplayName(event.modality)
         case .narration(let narration):
-            return narration.audioFileRef != nil ? "Voice Narration" : "Text Narration"
+            // Voice narrations have duration > 0 (audio was recorded);
+            // text narrations have duration == 0.
+            return narration.duration > 0 ? "Voice Narration" : "Text Narration"
         case .nudge:
             return "Facai says"
         case .meal(let food):
@@ -523,6 +532,18 @@ struct TimelineEventRow: View {
         case .sensing(let event):
             return sensingEventSummary(event)
         case .narration(let narration):
+            if narration.transcript.isEmpty {
+                // Show a fallback subtitle for narrations pending transcription
+                if narration.duration > 0 {
+                    let durationText = formatDuration(narration.duration) + " recorded"
+                    if narration.audioFileRef != nil {
+                        return "\(durationText) \u{00B7} Transcribing..."
+                    } else {
+                        return "\(durationText) \u{00B7} Uploading..."
+                    }
+                }
+                return "Text entry"
+            }
             return narration.transcript
         case .nudge(let nudge):
             return nudge.content
@@ -543,7 +564,7 @@ struct TimelineEventRow: View {
         case .sensing(let event):
             return modalityIcon(event.modality)
         case .narration(let narration):
-            return narration.audioFileRef != nil ? "mic.fill" : "text.bubble.fill"
+            return narration.duration > 0 ? "mic.fill" : "text.bubble.fill"
         case .nudge:
             return "cat.fill"
         case .meal:
@@ -558,7 +579,7 @@ struct TimelineEventRow: View {
         case .sensing(let event):
             return modalityColor(event.modality)
         case .narration(let narration):
-            return narration.audioFileRef != nil ? Color.purple : Color.indigo
+            return narration.duration > 0 ? Color.purple : Color.indigo
         case .nudge:
             return Color.hubPrimary
         case .meal:
@@ -784,19 +805,24 @@ struct TimelineEventRow: View {
             let place = event.payload["description"] ?? "unknown"
             return place
         case .audio:
-            if event.payload["status"] == "processing" {
+            let status = event.payload["status"] ?? ""
+            switch status {
+            case "listening":
                 return "Listening..."
-            }
-            let transcript = event.payload["transcript"] ?? ""
-            let speakers = event.payload["speakers"] ?? ""
-            if !transcript.isEmpty {
-                let preview = transcript.prefix(60)
-                if !speakers.isEmpty {
-                    return "\(speakers): \(preview)\(transcript.count > 60 ? "..." : "")"
+            case "transcript":
+                let text = event.payload["text"] ?? ""
+                let speaker = event.payload["speaker"]
+                let preview = text.prefix(60)
+                let suffix = text.count > 60 ? "..." : ""
+                if let speaker, !speaker.isEmpty {
+                    return "\(speaker.capitalized): \(preview)\(suffix)"
                 }
-                return String(preview) + (transcript.count > 60 ? "..." : "")
+                return String(preview) + suffix
+            case "error":
+                return event.payload["error"] ?? "Audio error"
+            default:
+                return "Audio Segment"
             }
-            return "Audio Segment"
         }
     }
 
