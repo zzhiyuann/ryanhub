@@ -141,19 +141,25 @@ final class HealthSensor {
 
     /// Request HealthKit authorization and start observer queries.
     func start() {
-        guard !isRunning else { return }
+        guard !isRunning else {
+            print("[HealthSensor] Already running, skipping start")
+            return
+        }
         guard let healthStore else {
             print("[HealthSensor] HealthKit not available on this device")
             return
         }
         isRunning = true
+        print("[HealthSensor] Starting — requesting authorization for \(Self.readTypes.count) types")
 
         healthStore.requestAuthorization(toShare: nil, read: Self.readTypes as Set<HKObjectType>) { [weak self] success, error in
+            print("[HealthSensor] Authorization callback: success=\(success), error=\(error?.localizedDescription ?? "none")")
             if success {
                 self?.enableBackgroundDelivery()
                 self?.startObservers()
                 self?.fetchRecentSamples()
                 self?.startPeriodicFlush()
+                print("[HealthSensor] All observers + fetch started")
             } else {
                 print("[HealthSensor] Authorization failed: \(error?.localizedDescription ?? "unknown")")
             }
@@ -381,7 +387,11 @@ final class HealthSensor {
             limit: HKObjectQueryNoLimit,
             sortDescriptors: [sortDescriptor]
         ) { [weak self] _, samples, error in
+            if let error {
+                print("[HealthSensor] HR fetch error: \(error.localizedDescription)")
+            }
             guard let self, let samples = samples as? [HKQuantitySample], error == nil else { return }
+            print("[HealthSensor] HR fetch returned \(samples.count) samples")
             guard !samples.isEmpty else {
                 self.recordFetch(for: fetchKey)
                 return
@@ -411,6 +421,7 @@ final class HealthSensor {
                             "source": source
                         ]
                     )
+                    print("[HealthSensor] Emitting HR anomaly: bpm=\(bpm)")
                     self.onEvent?(event)
                     continue
                 }
@@ -440,6 +451,7 @@ final class HealthSensor {
                             "source": source
                         ]
                     )
+                    print("[HealthSensor] Emitting HR aggregate: avg=\(String(format: "%.0f", avg)) bpm, count=\(bpms.count)")
                     self.onEvent?(event)
                     self.previousMinuteAvgBPM = avg
                 }

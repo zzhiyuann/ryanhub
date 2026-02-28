@@ -685,6 +685,9 @@ final class BoboViewModel {
     // MARK: - Init
 
     init() {
+        // Migrate UserDefaults keys from popo → bobo (one-time after rename)
+        Self.migrateStorageKeys()
+
         // Restore persisted preference
         let wasEnabled = UserDefaults.standard.bool(forKey: StorageKeys.sensingEnabled)
         if wasEnabled {
@@ -698,6 +701,40 @@ final class BoboViewModel {
         loadNudges()
         loadFoodEntries()
         loadActivityEntries()
+    }
+
+    /// Migrate UserDefaults keys from the old "popo" naming to "bobo".
+    /// Only runs once; subsequent calls are no-ops.
+    private static func migrateStorageKeys() {
+        let ud = UserDefaults.standard
+        let migrationKey = "ryanhub_bobo_migrated_from_popo"
+        guard !ud.bool(forKey: migrationKey) else { return }
+
+        let keyMap: [(old: String, new: String)] = [
+            ("ryanhub_popo_sensing_enabled", StorageKeys.sensingEnabled),
+            ("ryanhub_popo_narrations", StorageKeys.narrations),
+            ("ryanhub_popo_nudges", StorageKeys.nudges),
+            ("ryanhub_popo_last_nudge_generation", StorageKeys.lastNudgeGeneration),
+            ("ryanhub_popo_last_sync_time", "ryanhub_bobo_last_sync_time"),
+            // HealthSensor fetch timestamps
+            ("popo_health_lastFetch_heartRate", "bobo_health_lastFetch_heartRate"),
+            ("popo_health_lastFetch_hrv", "bobo_health_lastFetch_hrv"),
+            ("popo_health_lastFetch_sleep", "bobo_health_lastFetch_sleep"),
+            ("popo_health_lastFetch_workout", "bobo_health_lastFetch_workout"),
+            ("popo_health_lastFetch_activeEnergy", "bobo_health_lastFetch_activeEnergy"),
+            ("popo_health_lastFetch_basalEnergy", "bobo_health_lastFetch_basalEnergy"),
+            ("popo_health_lastFetch_respiratoryRate", "bobo_health_lastFetch_respiratoryRate"),
+            ("popo_health_lastFetch_bloodOxygen", "bobo_health_lastFetch_bloodOxygen"),
+            ("popo_health_lastFetch_noiseExposure", "bobo_health_lastFetch_noiseExposure"),
+        ]
+
+        for (old, new) in keyMap {
+            if ud.object(forKey: old) != nil && ud.object(forKey: new) == nil {
+                ud.set(ud.object(forKey: old), forKey: new)
+                print("[BoBo] Migrated key: \(old) → \(new)")
+            }
+        }
+        ud.set(true, forKey: migrationKey)
     }
 
     // MARK: - Day Navigation

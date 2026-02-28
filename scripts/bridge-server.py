@@ -1198,6 +1198,9 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         parsed = urlparse(self.path)
         path = parsed.path
+        # Alias /bobo/ → /popo/ after iOS module rename
+        if path.startswith("/bobo/"):
+            path = "/popo/" + path[len("/bobo/"):]
         if path == "/health":
             self._send_json(200, {"status": "ok"})
         elif path in PARKING_FILES:
@@ -1215,6 +1218,9 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = urlparse(self.path).path
+        # Alias /bobo/ → /popo/ after iOS module rename
+        if path.startswith("/bobo/"):
+            path = "/popo/" + path[len("/bobo/"):]
 
         # Parking skip-dates write
         if path == "/parking/skip-dates":

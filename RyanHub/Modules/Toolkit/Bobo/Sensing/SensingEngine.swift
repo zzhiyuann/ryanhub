@@ -127,7 +127,7 @@ final class SensingEngine {
         // Start periodic sync timer
         startSyncTimer()
 
-        print("[SensingEngine] Started all sensors")
+        print("[SensingEngine] Started all sensors — loaded \(recentEvents.count) events for today, \(pendingEventCount) pending sync")
     }
 
     /// Stop all sensors and cancel the sync timer.
@@ -202,6 +202,7 @@ final class SensingEngine {
     /// For audio "speaker_update" events, the matching transcript event is enriched
     /// with speaker info instead of creating a new timeline row.
     func recordEvent(_ event: SensingEvent) {
+        print("[SensingEngine] recordEvent: modality=\(event.modality), payload=\(event.payload.keys.sorted())")
         // Screen off events enrich the previous screen on event
         if event.modality == .screen, event.payload["state"] == "off",
            let onDuration = event.payload["onDuration"] {

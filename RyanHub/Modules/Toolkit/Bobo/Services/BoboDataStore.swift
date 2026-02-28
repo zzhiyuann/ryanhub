@@ -26,14 +26,38 @@ final class BoboDataStore {
     init() {
         let documentsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
         let boboDir = documentsDir.appendingPathComponent("bobo", isDirectory: true)
+        let popoDir = documentsDir.appendingPathComponent("popo", isDirectory: true)
+
+        // Migrate data from old "popo" directory if it exists and "bobo" doesn't
+        let fm = FileManager.default
+        if fm.fileExists(atPath: popoDir.path) && !fm.fileExists(atPath: boboDir.path) {
+            do {
+                try fm.moveItem(at: popoDir, to: boboDir)
+                // Rename data files inside
+                let oldEvents = boboDir.appendingPathComponent("popo_events.json")
+                let newEvents = boboDir.appendingPathComponent("bobo_events.json")
+                if fm.fileExists(atPath: oldEvents.path) {
+                    try fm.moveItem(at: oldEvents, to: newEvents)
+                }
+                let oldSynced = boboDir.appendingPathComponent("popo_synced_ids.json")
+                let newSynced = boboDir.appendingPathComponent("bobo_synced_ids.json")
+                if fm.fileExists(atPath: oldSynced.path) {
+                    try fm.moveItem(at: oldSynced, to: newSynced)
+                }
+                print("[BoboDataStore] Migrated popo/ → bobo/ directory")
+            } catch {
+                print("[BoboDataStore] Migration failed: \(error.localizedDescription)")
+            }
+        }
 
         // Ensure the directory exists
-        try? FileManager.default.createDirectory(at: boboDir, withIntermediateDirectories: true)
+        try? fm.createDirectory(at: boboDir, withIntermediateDirectories: true)
 
         self.eventsFilePath = boboDir.appendingPathComponent("bobo_events.json")
         self.syncedIDsFilePath = boboDir.appendingPathComponent("bobo_synced_ids.json")
 
         loadFromDisk()
+        print("[BoboDataStore] Loaded \(events.count) events from disk")
     }
 
     // MARK: - Public API
