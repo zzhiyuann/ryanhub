@@ -42,6 +42,11 @@ struct PopoView: View {
             }
             .padding(HubLayout.standardPadding)
         }
+        .scrollDismissesKeyboard(.interactively)
+        .onTapGesture {
+            // Dismiss keyboard when tapping anywhere outside the text field
+            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        }
         .background(AdaptiveColors.background(for: colorScheme))
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active {
@@ -451,13 +456,6 @@ struct PopoView: View {
                     icon: "mappin",
                     value: viewModel.latestLocationLabel ?? "--",
                     label: "Location",
-                    color: Color.hubAccentGreen
-                )
-
-                statePill(
-                    icon: "battery.100",
-                    value: viewModel.latestBatteryLevel.map { "\($0)%" } ?? "--",
-                    label: "Battery",
                     color: Color.hubAccentGreen
                 )
 
