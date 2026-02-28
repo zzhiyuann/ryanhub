@@ -641,13 +641,21 @@ struct TimelineEventRow: View {
             let stage = event.payload["stage"] ?? "unknown"
             return "Stage: \(stage)"
         case .location:
-            // Prefer semantic label and address from enrichment
+            // Prefer semantic label from known places
             if let label = event.payload["semanticLabel"], !label.isEmpty {
                 let address = event.payload["address"] ?? ""
                 if !address.isEmpty {
                     return "\(label) \u{00B7} \(address)"
                 }
                 return label
+            }
+            // Show neighborhood + address from enrichment
+            if let address = event.payload["address"], !address.isEmpty {
+                let neighborhood = event.payload["neighborhood"] ?? ""
+                if !neighborhood.isEmpty {
+                    return "\(neighborhood) \u{00B7} \(address)"
+                }
+                return address
             }
             // Fallback to coordinates
             let lat = event.payload["latitude"] ?? "?"

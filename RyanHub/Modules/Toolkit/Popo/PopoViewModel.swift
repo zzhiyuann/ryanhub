@@ -738,8 +738,20 @@ final class PopoViewModel {
                 // Sync narration entry to server
                 await syncNarrationToServer(narration)
 
-                // Request server-side analysis (transcription + affect)
-                if let analysis = await requestNarrationAnalysis(filename: filename, narrationId: narrationId) {
+                // Request server-side analysis (transcription + affect).
+                // The /popo/narrations/analyze endpoint runs Whisper + emotion model
+                // synchronously and returns the result inline.
+                var analysisResult = await requestNarrationAnalysis(filename: filename, narrationId: narrationId)
+
+                // If the synchronous call failed (server busy, Whisper unavailable, etc.),
+                // the audio upload may have triggered background analysis. Poll the server
+                // for the updated narration until transcript appears (up to 60s).
+                if analysisResult == nil {
+                    print("[PopoVM] Synchronous analysis returned nil, polling for background result...")
+                    analysisResult = await pollForNarrationAnalysis(narrationId: narrationId, maxAttempts: 12, intervalSeconds: 5)
+                }
+
+                if let analysis = analysisResult {
                     narration.transcript = analysis.transcript
                     narration.affectAnalysis = analysis.affect
                     narration.extractedMood = analysis.affect?.primaryEmotion
@@ -856,11 +868,12 @@ final class PopoViewModel {
 
             guard let httpResponse = response as? HTTPURLResponse,
                   (200..<300).contains(httpResponse.statusCode) else {
+                print("[PopoVM] Text analysis server returned status \((response as? HTTPURLResponse)?.statusCode ?? -1)")
                 return nil
             }
 
+            // Do NOT use .convertFromSnakeCase — AffectAnalysis has explicit CodingKeys
             let decoder = JSONDecoder()
-            decoder.keyDecodingStrategy = .convertFromSnakeCase
             let result = try decoder.decode(NarrationAnalysisResponse.self, from: data)
 
             return NarrationAnalysisResult(
@@ -948,11 +961,16 @@ final class PopoViewModel {
 
             guard let httpResponse = response as? HTTPURLResponse,
                   (200..<300).contains(httpResponse.statusCode) else {
+                print("[PopoVM] Analysis server returned status \((response as? HTTPURLResponse)?.statusCode ?? -1)")
                 return nil
             }
 
+            // Do NOT use .convertFromSnakeCase here — AffectAnalysis already has
+            // explicit CodingKeys mapping snake_case JSON keys (e.g. "primary_emotion").
+            // Combining .convertFromSnakeCase with custom CodingKeys causes double-
+            // conversion: the strategy converts "primary_emotion" -> "primaryEmotion",
+            // then tries to match against CodingKey.stringValue "primary_emotion" — no match.
             let decoder = JSONDecoder()
-            decoder.keyDecodingStrategy = .convertFromSnakeCase
             let result = try decoder.decode(NarrationAnalysisResponse.self, from: data)
 
             return NarrationAnalysisResult(
@@ -963,6 +981,57 @@ final class PopoViewModel {
             print("[PopoVM] Analysis request failed: \(error.localizedDescription)")
             return nil
         }
+    }
+
+    /// Poll the server for a narration's analysis results.
+    /// The audio upload endpoint triggers background Whisper transcription; this method
+    /// fetches all narrations from `/popo/narrations` and checks if the target narration
+    /// has a non-empty transcript, retrying up to `maxAttempts` times.
+    private func pollForNarrationAnalysis(
+        narrationId: UUID,
+        maxAttempts: Int,
+        intervalSeconds: UInt64
+    ) async -> NarrationAnalysisResult? {
+        let endpoint = "\(Self.bridgeBaseURL)/popo/narrations"
+        guard let url = URL(string: endpoint) else { return nil }
+
+        for attempt in 1...maxAttempts {
+            try? await Task.sleep(nanoseconds: intervalSeconds * 1_000_000_000)
+
+            do {
+                var request = URLRequest(url: url)
+                request.timeoutInterval = 15
+
+                let (data, response) = try await URLSession.shared.data(for: request)
+
+                guard let httpResponse = response as? HTTPURLResponse,
+                      (200..<300).contains(httpResponse.statusCode) else {
+                    continue
+                }
+
+                // Server stores narrations as JSON with snake_case keys matching
+                // AffectAnalysis.CodingKeys — decode without key conversion strategy.
+                let decoder = JSONDecoder()
+                decoder.dateDecodingStrategy = .iso8601
+                let serverNarrations = try decoder.decode([Narration].self, from: data)
+
+                if let match = serverNarrations.first(where: { $0.id == narrationId }),
+                   !match.transcript.isEmpty {
+                    print("[PopoVM] Poll attempt \(attempt): found transcript for \(narrationId)")
+                    return NarrationAnalysisResult(
+                        transcript: match.transcript,
+                        affect: match.affectAnalysis
+                    )
+                }
+
+                print("[PopoVM] Poll attempt \(attempt)/\(maxAttempts): transcript still empty")
+            } catch {
+                print("[PopoVM] Poll attempt \(attempt) error: \(error.localizedDescription)")
+            }
+        }
+
+        print("[PopoVM] Polling exhausted for narration \(narrationId)")
+        return nil
     }
 
     // MARK: - Nudge Generation Pipeline

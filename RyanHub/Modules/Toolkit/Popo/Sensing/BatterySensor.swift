@@ -25,8 +25,8 @@ final class BatterySensor {
         // Report initial state
         reportBatteryState()
 
-        // Check every 5 minutes for changes
-        timer = Timer.scheduledTimer(withTimeInterval: 300, repeats: true) { [weak self] _ in
+        // Check every 10 minutes for changes
+        timer = Timer.scheduledTimer(withTimeInterval: 600, repeats: true) { [weak self] _ in
             self?.reportBatteryState()
         }
     }

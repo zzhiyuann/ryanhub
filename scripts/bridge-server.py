@@ -1429,8 +1429,14 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
     # -----------------------------------------------------------------------
 
     def _handle_narration_analysis(self):
-        """Transcribe and analyze emotional affect from a narration audio file.
-        Expects JSON body with 'filename' and optionally 'narration_id'."""
+        """Transcribe and analyze emotional affect from a narration.
+
+        Supports two modes:
+        1. Audio mode: JSON body with 'filename' (and optionally 'narration_id').
+           Runs Whisper transcription then affect analysis.
+        2. Text-only mode: JSON body with 'transcript' and 'text_only'='true'.
+           Skips Whisper, runs affect analysis directly on the provided text.
+        """
         try:
             content_length = int(self.headers.get("Content-Length", 0))
             body = self.rfile.read(content_length)
@@ -1439,8 +1445,35 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
             self._send_json(400, {"error": "Invalid request body: %s" % e})
             return
 
-        filename = data.get("filename")
         narration_id = data.get("narration_id")
+
+        # --- Text-only mode: skip Whisper, run affect on provided transcript ---
+        if data.get("text_only") == "true":
+            transcript = data.get("transcript", "").strip()
+            if not transcript:
+                self._send_json(400, {"error": "Missing 'transcript' for text_only analysis"})
+                return
+
+            result = {
+                "narration_id": narration_id,
+                "transcript": transcript,
+                "affect": None,
+                "status": "text_only"
+            }
+
+            affect = analyze_affect(transcript)
+            if affect:
+                result["affect"] = affect
+                result["status"] = "analyzed"
+
+            if narration_id and result.get("status") == "analyzed":
+                update_narration_with_analysis(narration_id, result)
+
+            self._send_json(200, result)
+            return
+
+        # --- Audio mode: require filename, run Whisper + affect ---
+        filename = data.get("filename")
 
         if not filename:
             self._send_json(400, {"error": "Missing 'filename' in request body"})
