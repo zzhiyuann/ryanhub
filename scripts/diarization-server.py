@@ -136,12 +136,33 @@ def save_profile(name: str, embedding: np.ndarray):
     log.info(f"Saved speaker profile: {name} ({embedding.shape})")
 
 
+def _convert_to_wav(audio_path: str) -> str:
+    """Convert any audio format to 16kHz mono WAV using ffmpeg.
+    Returns path to temp WAV file (caller must clean up)."""
+    import subprocess
+    tmp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
+    tmp.close()
+    subprocess.run(
+        ["ffmpeg", "-y", "-i", audio_path, "-ar", "16000", "-ac", "1", tmp.name],
+        capture_output=True, check=True,
+    )
+    return tmp.name
+
+
 def _load_audio(audio_path: str):
-    """Load audio, resample to 16kHz mono. Returns (waveform, sample_rate)."""
+    """Load audio, resample to 16kHz mono. Returns (waveform, sample_rate).
+    Handles m4a, mp3, ogg, etc. via ffmpeg conversion."""
     import torch
     import torchaudio
 
-    waveform, sr = torchaudio.load(audio_path)
+    # Try direct load first, fall back to ffmpeg conversion
+    tmp_wav = None
+    try:
+        waveform, sr = torchaudio.load(audio_path)
+    except Exception:
+        # Convert via ffmpeg (handles m4a, mp3, ogg, aac, etc.)
+        tmp_wav = _convert_to_wav(audio_path)
+        waveform, sr = torchaudio.load(tmp_wav)
 
     if sr != SAMPLE_RATE:
         resampler = torchaudio.transforms.Resample(sr, SAMPLE_RATE)
@@ -149,6 +170,9 @@ def _load_audio(audio_path: str):
 
     if waveform.shape[0] > 1:
         waveform = waveform.mean(dim=0, keepdim=True)
+
+    if tmp_wav:
+        os.unlink(tmp_wav)
 
     return waveform, SAMPLE_RATE
 
@@ -773,17 +797,20 @@ def main():
     # Load existing speaker profiles
     load_profiles()
 
-    # Pre-check HuggingFace auth
-    try:
-        from huggingface_hub import HfApi
-        api = HfApi()
-        user = api.whoami()
-        log.info(f"HuggingFace authenticated as: {user.get('name', 'unknown')}")
-    except Exception:
-        log.warning("HuggingFace not authenticated! Run: huggingface-cli login")
-        log.warning("Required for pyannote model download.")
-
+    # Start server first, then check HF auth in background
     server = HTTPServer((HOST, PORT), DiarizationHandler)
+    log.info(f"Server listening on {HOST}:{PORT}")
+
+    # Non-blocking HuggingFace auth check
+    import threading
+    def _check_hf():
+        try:
+            from huggingface_hub import HfApi
+            user = HfApi().whoami()
+            log.info(f"HuggingFace authenticated as: {user.get('name', 'unknown')}")
+        except Exception:
+            log.warning("HuggingFace not authenticated! Run: huggingface-cli login")
+    threading.Thread(target=_check_hf, daemon=True).start()
     try:
         server.serve_forever()
     except KeyboardInterrupt:
