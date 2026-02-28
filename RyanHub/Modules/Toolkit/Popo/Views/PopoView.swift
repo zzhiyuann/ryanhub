@@ -18,6 +18,7 @@ struct PopoView: View {
             VStack(alignment: .leading, spacing: HubLayout.sectionSpacing) {
                 // Section 1: Date Navigation
                 DateNavigationBar(selectedDate: $viewModel.selectedDate)
+                    .padding(.bottom, -12)
 
                 // Section 2: Facai Control Hub Card (always visible)
                 facaiInsightCard

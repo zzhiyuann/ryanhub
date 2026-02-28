@@ -54,7 +54,7 @@ struct DateNavigationBar: View {
 
             VStack(spacing: 2) {
                 Text(dateLabel)
-                    .font(.system(size: 17, weight: .semibold))
+                    .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
 
                 if !isToday {
