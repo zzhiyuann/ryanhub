@@ -3,149 +3,244 @@ import AVFoundation
 
 // MARK: - Audio Stream Sensor
 
-/// Always-on microphone sensor that streams audio chunks to a diarization server
-/// for transcription and speaker identification.
+/// Always-on microphone sensor that streams audio to a diarization server via WebSocket.
 ///
-/// Records audio in configurable chunks (default 30s) using AVAudioEngine,
-/// then POSTs each chunk as a raw WAV file to the diarization server's
-/// `/process` endpoint. Results are emitted as SensingEvents with transcription
-/// and speaker information.
+/// Uses Silero VAD on the server side to detect speech segments, runs Whisper for
+/// fast transcription, then async diarization for speaker labels. Results arrive
+/// as separate messages: "transcript" first (~2-3s), then "speaker" enrichment (~5-10s).
 ///
-/// This sensor operates independently from the main sensing toggle due to its
-/// battery and privacy implications — it requires explicit user opt-in.
+/// Protocol:
+/// - Client sends `{"type": "start"}` to begin a streaming session.
+/// - Client sends raw 16kHz mono 16-bit PCM binary frames every ~0.5s.
+/// - Client sends `{"type": "stop"}` to end the session.
+/// - Server replies with transcript, speaker, vad, status, and error JSON messages.
 final class AudioStreamSensor {
     private var isRunning = false
+
+    /// Tracks whether the WebSocket connection is alive.
+    /// Set to false when the receive loop encounters an error or cancellation.
+    private var isWebSocketConnected = false
+
+    /// Tracks whether the audio engine needs a restart (e.g. after an interruption).
+    private var needsAudioRestart = false
 
     /// Callback invoked when a new sensing event is captured.
     var onEvent: ((SensingEvent) -> Void)?
 
     // MARK: - Configuration
 
-    /// Duration of each audio chunk in seconds.
-    private let chunkDuration: TimeInterval = 30
-
     /// Audio format: 16kHz mono 16-bit PCM (required by diarization server).
     private let sampleRate: Double = 16000
     private let channelCount: AVAudioChannelCount = 1
 
+    /// Interval at which buffered PCM data is sent via WebSocket (~0.5s).
+    private let sendInterval: TimeInterval = 0.5
+
     // MARK: - Audio Engine
 
     private let audioEngine = AVAudioEngine()
-    private var chunkTimer: Timer?
-    private var currentChunkIndex: Int = 0
 
-    /// Buffer that accumulates raw PCM samples for the current chunk.
+    /// Buffer that accumulates raw PCM samples between send intervals.
     private var pcmBuffer: [Int16] = []
 
     /// Lock to protect pcmBuffer access from the audio tap callback.
     private let bufferLock = NSLock()
 
-    /// Serial queue for processing completed chunks without blocking recording.
-    private let processingQueue = DispatchQueue(
-        label: "com.ryanhub.popo.audiostream",
-        qos: .utility
-    )
+    /// Timer that periodically drains the PCM buffer and sends it over WebSocket.
+    private var sendTimer: Timer?
+
+    // MARK: - WebSocket
+
+    private var webSocketTask: URLSessionWebSocketTask?
+    private var urlSession: URLSession?
+    private var receiveTask: Task<Void, Never>?
 
     // MARK: - Server URL
 
-    /// Base URL for the diarization server, derived from the shared server URL setting.
-    /// Extracts the host from the bridge server URL and uses port 18793.
-    private static var diarizationBaseURL: String {
-        UserDefaults.standard.string(forKey: "ryanhub_server_url")
+    /// WebSocket URL for the streaming diarization server.
+    /// Extracts the host from the shared bridge server URL and uses port 18794.
+    private static var streamURL: URL? {
+        let host = UserDefaults.standard.string(forKey: "ryanhub_server_url")
             .flatMap { URL(string: $0)?.host }
-            .map { "http://\($0):18793" }
-            ?? "http://localhost:18793"
+            ?? "localhost"
+        return URL(string: "ws://\(host):18794/ws/stream")
     }
 
     // MARK: - Lifecycle
 
-    /// Start recording audio in chunks and streaming to the diarization server.
+    /// Start the WebSocket connection and audio capture.
     /// Requests microphone permission if not already granted.
     func start() {
         guard !isRunning else { return }
 
+        #if os(iOS)
         AVAudioApplication.requestRecordPermission { [weak self] granted in
             guard granted else {
                 print("[AudioStreamSensor] Microphone permission denied")
                 return
             }
             DispatchQueue.main.async {
-                self?.beginRecording()
+                self?.beginStreaming()
             }
         }
+        #else
+        print("[AudioStreamSensor] Audio capture is only supported on iOS")
+        #endif
     }
 
-    /// Stop recording and cancel any pending chunk processing.
+    /// Stop audio capture and disconnect the WebSocket.
     func stop() {
         guard isRunning else { return }
         isRunning = false
+        isWebSocketConnected = false
+        needsAudioRestart = false
 
-        chunkTimer?.invalidate()
-        chunkTimer = nil
+        // Remove audio session interruption observer
+        NotificationCenter.default.removeObserver(self, name: AVAudioSession.interruptionNotification, object: nil)
 
+        // Stop the send timer
+        sendTimer?.invalidate()
+        sendTimer = nil
+
+        // Stop audio engine
         if audioEngine.isRunning {
             audioEngine.inputNode.removeTap(onBus: 0)
             audioEngine.stop()
         }
 
-        // Process any remaining buffered audio
-        finalizeCurrentChunk()
+        // Send stop message and disconnect
+        sendStopAndDisconnect()
 
         print("[AudioStreamSensor] Stopped")
     }
 
-    // MARK: - Recording
+    /// Resume the sensor if it should be running but the WebSocket or AudioEngine has died.
+    /// This handles the case where iOS suspends the app in the background, killing the
+    /// WebSocket connection and audio engine tap. On foreground return, `isRunning` is
+    /// still true but everything is dead — this method performs a clean restart.
+    func resumeIfNeeded() {
+        guard isRunning else { return }
 
-    /// Configure the audio session, install the tap, and start the engine.
-    private func beginRecording() {
+        let wsAlive = isWebSocketConnected
+        let engineAlive = audioEngine.isRunning
+
+        if wsAlive && engineAlive && !needsAudioRestart {
+            // Everything is fine, nothing to do
+            return
+        }
+
+        print("[AudioStreamSensor] Resuming — ws=\(wsAlive), engine=\(engineAlive), needsRestart=\(needsAudioRestart)")
+
+        // Clean restart: stop everything, then start fresh
+        stop()
+        start()
+    }
+
+    // MARK: - Streaming Setup
+
+    /// Connect to the WebSocket, send a start message, and begin audio capture.
+    private func beginStreaming() {
+        // Connect WebSocket
+        guard let url = Self.streamURL else {
+            print("[AudioStreamSensor] Invalid stream URL")
+            return
+        }
+
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 10
+        let session = URLSession(configuration: config)
+        self.urlSession = session
+
+        let task = session.webSocketTask(with: url)
+        self.webSocketTask = task
+        task.resume()
+        isWebSocketConnected = true
+
+        // Send start message
+        let startMessage = "{\"type\": \"start\"}"
+        task.send(.string(startMessage)) { [weak self] error in
+            if let error {
+                print("[AudioStreamSensor] Failed to send start message: \(error.localizedDescription)")
+                self?.emitErrorEvent(message: "WebSocket start failed: \(error.localizedDescription)")
+                return
+            }
+            print("[AudioStreamSensor] Sent start message")
+        }
+
+        // Start receiving server messages
+        startReceiving()
+
+        // Set up audio engine and begin capture
         do {
-            let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.playAndRecord, mode: .default, options: [.mixWithOthers, .defaultToSpeaker])
-            try session.setActive(true)
-
-            let inputNode = audioEngine.inputNode
-            let inputFormat = inputNode.outputFormat(forBus: 0)
-
-            // Create the target format: 16kHz mono 16-bit PCM
-            guard let targetFormat = AVAudioFormat(
-                commonFormat: .pcmFormatInt16,
-                sampleRate: sampleRate,
-                channels: channelCount,
-                interleaved: true
-            ) else {
-                print("[AudioStreamSensor] Failed to create target audio format")
-                return
-            }
-
-            // Install a converter if the hardware format differs from our target
-            guard let converter = AVAudioConverter(from: inputFormat, to: targetFormat) else {
-                print("[AudioStreamSensor] Failed to create audio converter")
-                return
-            }
-
-            // Reset state
-            bufferLock.lock()
-            pcmBuffer.removeAll()
-            bufferLock.unlock()
-            currentChunkIndex = 0
-
-            // Install tap on the input node
-            inputNode.installTap(onBus: 0, bufferSize: 4096, format: inputFormat) { [weak self] buffer, _ in
-                self?.processAudioBuffer(buffer, converter: converter, targetFormat: targetFormat)
-            }
-
-            audioEngine.prepare()
-            try audioEngine.start()
-
+            try setupAudioEngine()
             isRunning = true
+            needsAudioRestart = false
 
-            // Start chunk rotation timer
-            startChunkTimer()
+            // Listen for audio session interruptions (e.g. phone call, Siri)
+            // so we can mark the sensor as needing a restart on foreground resume.
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(handleAudioInterruption(_:)),
+                name: AVAudioSession.interruptionNotification,
+                object: nil
+            )
 
-            print("[AudioStreamSensor] Started recording — chunk duration: \(chunkDuration)s")
+            // Emit a "listening" event to indicate streaming is active
+            let listeningEvent = SensingEvent(
+                modality: .audio,
+                payload: ["status": "listening"]
+            )
+            onEvent?(listeningEvent)
+
+            // Start the periodic send timer
+            startSendTimer()
+
+            print("[AudioStreamSensor] Started streaming to \(url.absoluteString)")
         } catch {
             print("[AudioStreamSensor] Failed to start audio engine: \(error.localizedDescription)")
+            emitErrorEvent(message: "Audio engine failed: \(error.localizedDescription)")
+            disconnectWebSocket()
         }
+    }
+
+    /// Configure AVAudioEngine with a tap for 16kHz mono Int16 PCM capture.
+    private func setupAudioEngine() throws {
+        #if os(iOS)
+        let session = AVAudioSession.sharedInstance()
+        try session.setCategory(.playAndRecord, mode: .default, options: [.mixWithOthers, .defaultToSpeaker])
+        try session.setActive(true)
+        #endif
+
+        let inputNode = audioEngine.inputNode
+        let inputFormat = inputNode.outputFormat(forBus: 0)
+
+        // Create the target format: 16kHz mono 16-bit PCM
+        guard let targetFormat = AVAudioFormat(
+            commonFormat: .pcmFormatInt16,
+            sampleRate: sampleRate,
+            channels: channelCount,
+            interleaved: true
+        ) else {
+            throw AudioStreamError.formatCreationFailed
+        }
+
+        // Create converter from hardware format to target format
+        guard let converter = AVAudioConverter(from: inputFormat, to: targetFormat) else {
+            throw AudioStreamError.converterCreationFailed
+        }
+
+        // Reset buffer
+        bufferLock.lock()
+        pcmBuffer.removeAll()
+        bufferLock.unlock()
+
+        // Install tap on input node
+        inputNode.installTap(onBus: 0, bufferSize: 4096, format: inputFormat) { [weak self] buffer, _ in
+            self?.processAudioBuffer(buffer, converter: converter, targetFormat: targetFormat)
+        }
+
+        audioEngine.prepare()
+        try audioEngine.start()
     }
 
     /// Process incoming audio buffer: convert to 16kHz mono Int16 and append to pcmBuffer.
@@ -187,21 +282,20 @@ final class AudioStreamSensor {
         }
     }
 
-    // MARK: - Chunk Rotation
+    // MARK: - Periodic Send
 
-    /// Start the timer that rotates chunks at the configured interval.
-    private func startChunkTimer() {
-        chunkTimer?.invalidate()
-        chunkTimer = Timer.scheduledTimer(withTimeInterval: chunkDuration, repeats: true) { [weak self] _ in
-            self?.rotateChunk()
+    /// Start a timer that drains the PCM buffer and sends data over WebSocket every ~0.5s.
+    private func startSendTimer() {
+        sendTimer?.invalidate()
+        sendTimer = Timer.scheduledTimer(withTimeInterval: sendInterval, repeats: true) { [weak self] _ in
+            self?.drainAndSendBuffer()
         }
     }
 
-    /// Finalize the current chunk and start a new one.
-    private func rotateChunk() {
-        guard isRunning else { return }
+    /// Drain the PCM buffer and send its contents as a binary WebSocket frame.
+    private func drainAndSendBuffer() {
+        guard isRunning, let task = webSocketTask else { return }
 
-        // Grab the current buffer contents
         bufferLock.lock()
         let samples = pcmBuffer
         pcmBuffer.removeAll()
@@ -209,198 +303,205 @@ final class AudioStreamSensor {
 
         guard !samples.isEmpty else { return }
 
-        let chunkIndex = currentChunkIndex
-        currentChunkIndex += 1
+        // Convert Int16 samples to raw bytes (little-endian, native on iOS)
+        let data = samples.withUnsafeBytes { Data($0) }
 
-        // Emit a "processing" event immediately
-        let processingEvent = SensingEvent(
-            modality: .audio,
-            payload: [
-                "status": "processing",
-                "chunkIndex": "\(chunkIndex)"
-            ]
-        )
-        onEvent?(processingEvent)
-
-        // Process the chunk asynchronously
-        processingQueue.async { [weak self] in
-            self?.processChunk(samples: samples, chunkIndex: chunkIndex)
-        }
-    }
-
-    /// Finalize any remaining audio when stopping.
-    private func finalizeCurrentChunk() {
-        bufferLock.lock()
-        let samples = pcmBuffer
-        pcmBuffer.removeAll()
-        bufferLock.unlock()
-
-        guard !samples.isEmpty else { return }
-
-        let chunkIndex = currentChunkIndex
-
-        processingQueue.async { [weak self] in
-            self?.processChunk(samples: samples, chunkIndex: chunkIndex)
-        }
-    }
-
-    // MARK: - WAV File Creation
-
-    /// Create a WAV file from raw Int16 PCM samples.
-    /// Returns the URL of the temporary WAV file.
-    private func createWAVFile(from samples: [Int16]) -> URL? {
-        let tempDir = FileManager.default.temporaryDirectory
-        let fileName = "audiostream_chunk_\(UUID().uuidString).wav"
-        let fileURL = tempDir.appendingPathComponent(fileName)
-
-        let dataSize = samples.count * MemoryLayout<Int16>.size
-        let fileSize = 44 + dataSize  // WAV header is 44 bytes
-
-        var header = Data()
-
-        // RIFF header
-        header.append(contentsOf: "RIFF".utf8)
-        header.append(contentsOf: withUnsafeBytes(of: UInt32(fileSize - 8).littleEndian) { Array($0) })
-        header.append(contentsOf: "WAVE".utf8)
-
-        // fmt sub-chunk
-        header.append(contentsOf: "fmt ".utf8)
-        header.append(contentsOf: withUnsafeBytes(of: UInt32(16).littleEndian) { Array($0) })  // Sub-chunk size
-        header.append(contentsOf: withUnsafeBytes(of: UInt16(1).littleEndian) { Array($0) })   // PCM format
-        header.append(contentsOf: withUnsafeBytes(of: UInt16(channelCount).littleEndian) { Array($0) })
-        header.append(contentsOf: withUnsafeBytes(of: UInt32(sampleRate).littleEndian) { Array($0) })
-        let byteRate = UInt32(sampleRate) * UInt32(channelCount) * 2  // 16-bit = 2 bytes
-        header.append(contentsOf: withUnsafeBytes(of: byteRate.littleEndian) { Array($0) })
-        let blockAlign = UInt16(channelCount) * 2
-        header.append(contentsOf: withUnsafeBytes(of: blockAlign.littleEndian) { Array($0) })
-        header.append(contentsOf: withUnsafeBytes(of: UInt16(16).littleEndian) { Array($0) })  // Bits per sample
-
-        // data sub-chunk
-        header.append(contentsOf: "data".utf8)
-        header.append(contentsOf: withUnsafeBytes(of: UInt32(dataSize).littleEndian) { Array($0) })
-
-        // Combine header + PCM data
-        var fileData = header
-        samples.withUnsafeBufferPointer { ptr in
-            fileData.append(UnsafeBufferPointer(start: UnsafeRawPointer(ptr.baseAddress!).assumingMemoryBound(to: UInt8.self), count: dataSize))
-        }
-
-        do {
-            try fileData.write(to: fileURL)
-            return fileURL
-        } catch {
-            print("[AudioStreamSensor] Failed to write WAV file: \(error.localizedDescription)")
-            return nil
-        }
-    }
-
-    // MARK: - Server Communication
-
-    /// Process a completed chunk: create WAV, upload to server, emit result event.
-    private func processChunk(samples: [Int16], chunkIndex: Int) {
-        guard let wavURL = createWAVFile(from: samples) else {
-            print("[AudioStreamSensor] Failed to create WAV for chunk \(chunkIndex)")
-            return
-        }
-
-        // Clean up the temp file when done
-        defer {
-            try? FileManager.default.removeItem(at: wavURL)
-        }
-
-        // Read the WAV file data
-        guard let wavData = try? Data(contentsOf: wavURL) else {
-            print("[AudioStreamSensor] Failed to read WAV file for chunk \(chunkIndex)")
-            return
-        }
-
-        // Upload to diarization server
-        let endpoint = "\(Self.diarizationBaseURL)/process"
-        guard let url = URL(string: endpoint) else {
-            print("[AudioStreamSensor] Invalid diarization URL: \(endpoint)")
-            return
-        }
-
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("audio/wav", forHTTPHeaderField: "Content-Type")
-        request.timeoutInterval = 60  // Diarization can take 10-30s
-        request.httpBody = wavData
-
-        let semaphore = DispatchSemaphore(value: 0)
-        var responseData: Data?
-        var responseError: Error?
-
-        let task = URLSession.shared.dataTask(with: request) { data, _, error in
-            responseData = data
-            responseError = error
-            semaphore.signal()
-        }
-        task.resume()
-        semaphore.wait()
-
-        if let error = responseError {
-            print("[AudioStreamSensor] Server request failed for chunk \(chunkIndex): \(error.localizedDescription)")
-            // Emit error event
-            let errorEvent = SensingEvent(
-                modality: .audio,
-                payload: [
-                    "status": "error",
-                    "chunkIndex": "\(chunkIndex)",
-                    "error": error.localizedDescription
-                ]
-            )
-            onEvent?(errorEvent)
-            return
-        }
-
-        guard let data = responseData else {
-            print("[AudioStreamSensor] No response data for chunk \(chunkIndex)")
-            return
-        }
-
-        // Parse JSON response
-        do {
-            guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-                print("[AudioStreamSensor] Invalid JSON response for chunk \(chunkIndex)")
-                return
+        task.send(.data(data)) { error in
+            if let error {
+                print("[AudioStreamSensor] Failed to send audio data: \(error.localizedDescription)")
             }
+        }
+    }
 
-            let transcript = json["transcript"] as? String ?? ""
-            let processingTime = json["processing_time"] as? Double ?? 0
+    // MARK: - WebSocket Receiving
 
-            // Extract speaker names from the speakers dictionary
-            var speakerNames: [String] = []
-            if let speakers = json["speakers"] as? [String: [String: Any]] {
-                for (_, info) in speakers {
-                    if let identifiedAs = info["identified_as"] as? String {
-                        speakerNames.append(identifiedAs)
+    /// Start a loop that receives and processes messages from the server.
+    private func startReceiving() {
+        receiveTask?.cancel()
+        receiveTask = Task { [weak self] in
+            while !Task.isCancelled {
+                guard let self, let task = self.webSocketTask else { break }
+                do {
+                    let message = try await task.receive()
+                    await MainActor.run {
+                        self.handleServerMessage(message)
                     }
+                } catch {
+                    if !Task.isCancelled {
+                        print("[AudioStreamSensor] WebSocket receive error: \(error.localizedDescription)")
+                    }
+                    await MainActor.run {
+                        self.isWebSocketConnected = false
+                    }
+                    break
                 }
             }
+        }
+    }
 
-            // Count segments
-            let segments = json["segments"] as? [[String: Any]] ?? []
-            let segmentCount = segments.count
+    /// Parse and handle a message received from the diarization server.
+    private func handleServerMessage(_ message: URLSessionWebSocketTask.Message) {
+        guard case .string(let text) = message,
+              let data = text.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let type = json["type"] as? String else {
+            return
+        }
 
-            // Emit completed event with full results
-            let resultEvent = SensingEvent(
-                modality: .audio,
-                payload: [
-                    "status": "completed",
-                    "transcript": transcript,
-                    "speakers": speakerNames.joined(separator: ", "),
-                    "segmentCount": "\(segmentCount)",
-                    "processingTime": String(format: "%.1f", processingTime),
-                    "chunkIndex": "\(chunkIndex)"
-                ]
-            )
-            onEvent?(resultEvent)
+        switch type {
+        case "transcript":
+            handleTranscriptMessage(json)
+        case "speaker":
+            handleSpeakerMessage(json)
+        case "vad":
+            handleVADMessage(json)
+        case "status":
+            handleStatusMessage(json)
+        case "error":
+            handleErrorMessage(json)
+        default:
+            print("[AudioStreamSensor] Unknown message type: \(type)")
+        }
+    }
 
-            print("[AudioStreamSensor] Chunk \(chunkIndex) processed: \(segmentCount) segments, \(speakerNames.count) speakers, \(String(format: "%.1f", processingTime))s")
+    /// Handle a transcript message: emit a SensingEvent with the transcribed text.
+    private func handleTranscriptMessage(_ json: [String: Any]) {
+        let text = json["text"] as? String ?? ""
+        let segmentId = json["segment_id"] as? String ?? ""
+        let start = json["start"] as? Double ?? 0.0
+        let end = json["end"] as? Double ?? 0.0
+        let isPartial = json["is_partial"] as? Bool ?? false
 
-        } catch {
-            print("[AudioStreamSensor] Failed to parse response for chunk \(chunkIndex): \(error.localizedDescription)")
+        // Skip empty or partial transcripts
+        guard !text.isEmpty, !isPartial else { return }
+
+        let event = SensingEvent(
+            modality: .audio,
+            payload: [
+                "status": "transcript",
+                "text": text,
+                "segmentId": segmentId,
+                "start": String(format: "%.1f", start),
+                "end": String(format: "%.1f", end)
+            ]
+        )
+        onEvent?(event)
+
+        print("[AudioStreamSensor] Transcript [seg=\(segmentId)]: \(text.prefix(60))")
+    }
+
+    /// Handle a speaker identification message: emit a speaker_update event.
+    private func handleSpeakerMessage(_ json: [String: Any]) {
+        let segmentId = json["segment_id"] as? String ?? ""
+        let speaker = json["speaker"] as? String ?? "unknown"
+        let confidence = json["confidence"] as? Double ?? 0.0
+
+        let event = SensingEvent(
+            modality: .audio,
+            payload: [
+                "status": "speaker_update",
+                "segmentId": segmentId,
+                "speaker": speaker,
+                "confidence": String(format: "%.3f", confidence)
+            ]
+        )
+        onEvent?(event)
+
+        print("[AudioStreamSensor] Speaker [seg=\(segmentId)]: \(speaker) (conf=\(String(format: "%.2f", confidence)))")
+    }
+
+    /// Handle a VAD (voice activity detection) event.
+    private func handleVADMessage(_ json: [String: Any]) {
+        let isSpeech = json["speech"] as? Bool ?? false
+        print("[AudioStreamSensor] VAD: speech=\(isSpeech)")
+    }
+
+    /// Handle a status message from the server.
+    private func handleStatusMessage(_ json: [String: Any]) {
+        let statusMessage = json["message"] as? String ?? ""
+        let profiles = json["profiles"] as? [String] ?? []
+        print("[AudioStreamSensor] Status: \(statusMessage), profiles: \(profiles)")
+    }
+
+    /// Handle an error message from the server.
+    private func handleErrorMessage(_ json: [String: Any]) {
+        let message = json["message"] as? String ?? "Unknown server error"
+        print("[AudioStreamSensor] Server error: \(message)")
+        emitErrorEvent(message: message)
+    }
+
+    // MARK: - Audio Session Interruption
+
+    /// Handle AVAudioSession interruption notifications (e.g. phone call, Siri).
+    /// Marks the sensor as needing a restart so `resumeIfNeeded()` can recover it
+    /// when the app returns to the foreground.
+    @objc private func handleAudioInterruption(_ notification: Notification) {
+        guard let userInfo = notification.userInfo,
+              let typeValue = userInfo[AVAudioSessionInterruptionTypeKey] as? UInt,
+              let type = AVAudioSession.InterruptionType(rawValue: typeValue) else {
+            return
+        }
+
+        switch type {
+        case .began:
+            print("[AudioStreamSensor] Audio session interrupted")
+            needsAudioRestart = true
+        case .ended:
+            print("[AudioStreamSensor] Audio session interruption ended — will restart on foreground resume")
+            needsAudioRestart = true
+        @unknown default:
+            break
+        }
+    }
+
+    // MARK: - WebSocket Disconnect
+
+    /// Send a stop message and close the WebSocket connection.
+    private func sendStopAndDisconnect() {
+        guard let task = webSocketTask else { return }
+
+        let stopMessage = "{\"type\": \"stop\"}"
+        task.send(.string(stopMessage)) { [weak self] _ in
+            self?.disconnectWebSocket()
+        }
+    }
+
+    /// Close the WebSocket connection and clean up.
+    private func disconnectWebSocket() {
+        receiveTask?.cancel()
+        receiveTask = nil
+        webSocketTask?.cancel(with: .goingAway, reason: nil)
+        webSocketTask = nil
+        isWebSocketConnected = false
+    }
+
+    // MARK: - Event Helpers
+
+    /// Emit an error event via the onEvent callback.
+    private func emitErrorEvent(message: String) {
+        let event = SensingEvent(
+            modality: .audio,
+            payload: [
+                "status": "error",
+                "error": message
+            ]
+        )
+        onEvent?(event)
+    }
+}
+
+// MARK: - Errors
+
+private enum AudioStreamError: LocalizedError {
+    case formatCreationFailed
+    case converterCreationFailed
+
+    var errorDescription: String? {
+        switch self {
+        case .formatCreationFailed:
+            return "Failed to create target audio format"
+        case .converterCreationFailed:
+            return "Failed to create audio converter"
         }
     }
 }

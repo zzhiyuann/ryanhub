@@ -224,9 +224,17 @@ final class PopoViewModel {
     /// activities (walking, running, cycling) are removed to avoid duplication.
     var timelineItems: [TimelineItem] {
         var items: [TimelineItem] = []
-        // Filter out screen "off" events — only "on" events appear in timeline
+        // Filter out non-display events from the timeline:
+        // - Screen "off" events (data folded into preceding "on" event)
+        // - Audio "listening" status (transient indicator, not a real event)
+        // - Audio "speaker_update" (enriches existing transcript, not a row)
         let visibleSensingEvents = deduplicatedSensingEvents.filter { event in
-            !(event.modality == .screen && event.payload["state"] == "off")
+            if event.modality == .screen && event.payload["state"] == "off" { return false }
+            if event.modality == .audio {
+                let status = event.payload["status"] ?? ""
+                if status == "listening" || status == "speaker_update" { return false }
+            }
+            return true
         }
         items.append(contentsOf: visibleSensingEvents.map { .sensing($0) })
         items.append(contentsOf: narrationsForSelectedDate.map { .narration($0) })
@@ -735,25 +743,39 @@ final class PopoViewModel {
 
         let narrationId = UUID()
 
+        // Insert a placeholder narration IMMEDIATELY so it appears in the timeline
+        // right away — before the async upload/analysis begins.
+        let narration = Narration(
+            id: narrationId,
+            timestamp: Date(),
+            transcript: "",
+            duration: duration,
+            audioFileRef: nil  // Will be set after upload
+        )
+        narrations.insert(narration, at: 0)
+        saveNarrations()
+        print("[PopoVM] Voice narration \(narrationId) inserted into timeline (pending upload)")
+
         Task {
             do {
+                // Sync the placeholder narration to the server FIRST so it exists
+                // in popo_narrations.json before any background analysis tries to
+                // update it with the transcript.
+                if let index = narrations.firstIndex(where: { $0.id == narrationId }) {
+                    await syncNarrationToServer(narrations[index])
+                }
+
                 let filename = try await uploadNarrationAudio(data: data, narrationId: narrationId)
+                print("[PopoVM] Audio uploaded: \(filename)")
 
-                // Create the narration entry (transcript filled later by server analysis)
-                var narration = Narration(
-                    id: narrationId,
-                    timestamp: Date(),
-                    transcript: "",
-                    duration: duration,
-                    audioFileRef: filename
-                )
+                // Update the placeholder with the server-assigned filename
+                if let index = narrations.firstIndex(where: { $0.id == narrationId }) {
+                    narrations[index].audioFileRef = filename
+                    saveNarrations()
 
-                // Save locally
-                narrations.insert(narration, at: 0)
-                saveNarrations()
-
-                // Sync narration entry to server
-                await syncNarrationToServer(narration)
+                    // Re-sync with filename so the server copy has it too
+                    await syncNarrationToServer(narrations[index])
+                }
 
                 // Request server-side analysis (transcription + affect).
                 // The /popo/narrations/analyze endpoint runs Whisper + emotion model
@@ -769,18 +791,19 @@ final class PopoViewModel {
                 }
 
                 if let analysis = analysisResult {
-                    narration.transcript = analysis.transcript
-                    narration.affectAnalysis = analysis.affect
-                    narration.extractedMood = analysis.affect?.primaryEmotion
-
-                    // Update the local entry
+                    // Update the local entry with transcript and affect data
                     if let index = narrations.firstIndex(where: { $0.id == narrationId }) {
-                        narrations[index] = narration
+                        narrations[index].transcript = analysis.transcript
+                        narrations[index].affectAnalysis = analysis.affect
+                        narrations[index].extractedMood = analysis.affect?.primaryEmotion
                         saveNarrations()
-                    }
+                        print("[PopoVM] Narration \(narrationId) updated with transcript: \(analysis.transcript.prefix(80))...")
 
-                    // Re-sync updated narration
-                    await syncNarrationToServer(narration)
+                        // Re-sync updated narration
+                        await syncNarrationToServer(narrations[index])
+                    }
+                } else {
+                    print("[PopoVM] WARNING: No analysis result for narration \(narrationId) — transcript will remain empty")
                 }
 
                 narrationState = .done
@@ -793,6 +816,9 @@ final class PopoViewModel {
                     narrationAudioLevels = []
                 }
             } catch {
+                print("[PopoVM] Upload failed for narration \(narrationId): \(error.localizedDescription)")
+                // Upload failed but the narration placeholder is already in the timeline.
+                // Keep it there so the user can see it was recorded, even if upload failed.
                 narrationState = .error("Upload failed: \(error.localizedDescription)")
             }
 
@@ -1313,6 +1339,12 @@ final class PopoViewModel {
     func refreshHealthData() {
         loadFoodEntries()
         loadActivityEntries()
+    }
+
+    /// Resume the audio stream sensor if it was enabled but died during background suspension.
+    /// Called when the app returns to the foreground.
+    func resumeAudioStreamIfNeeded() {
+        engine.resumeAudioStreamIfNeeded()
     }
 
     // MARK: - Storage Keys

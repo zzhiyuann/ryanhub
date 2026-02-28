@@ -176,6 +176,13 @@ final class SensingEngine {
         print("[SensingEngine] Audio stream stopped")
     }
 
+    /// Resume the audio stream sensor if it was enabled but the connection/engine died.
+    /// Called on foreground resume to recover from iOS background suspension.
+    func resumeAudioStreamIfNeeded() {
+        guard isAudioStreamEnabled else { return }
+        audioStreamSensor.resumeIfNeeded()
+    }
+
     // MARK: - Event Recording
 
     /// Called by each sensor when new data arrives.
@@ -184,11 +191,25 @@ final class SensingEngine {
     /// For screen "off" events, instead of just storing the event, we also enrich
     /// the most recent screen "on" event with the `onDuration` so the timeline
     /// shows how long the screen was on in a single consolidated row.
+    ///
+    /// For audio "speaker_update" events, the matching transcript event is enriched
+    /// with speaker info instead of creating a new timeline row.
     func recordEvent(_ event: SensingEvent) {
         // Screen off events enrich the previous screen on event
         if event.modality == .screen, event.payload["state"] == "off",
            let onDuration = event.payload["onDuration"] {
             enrichLastScreenOnEvent(onDuration: onDuration)
+        }
+
+        // Audio speaker_update events enrich the matching transcript event
+        if event.modality == .audio, event.payload["status"] == "speaker_update",
+           let segmentId = event.payload["segmentId"] {
+            enrichAudioTranscript(
+                segmentId: segmentId,
+                speaker: event.payload["speaker"] ?? "unknown",
+                confidence: event.payload["confidence"] ?? "0"
+            )
+            return  // Don't create a new timeline row
         }
 
         // Add to UI display list (newest first)
@@ -213,6 +234,23 @@ final class SensingEngine {
             recentEvents[index].payload["onDuration"] = onDuration
             // Also update in the persisted data store
             dataStore.updateEventPayload(id: recentEvents[index].id, merge: ["onDuration": onDuration])
+        }
+    }
+
+    /// Find the audio transcript event matching `segmentId` and merge speaker info.
+    private func enrichAudioTranscript(segmentId: String, speaker: String, confidence: String) {
+        if let index = recentEvents.firstIndex(where: {
+            $0.modality == .audio
+                && $0.payload["status"] == "transcript"
+                && $0.payload["segmentId"] == segmentId
+        }) {
+            recentEvents[index].payload["speaker"] = speaker
+            recentEvents[index].payload["confidence"] = confidence
+            // Also update in the persisted data store
+            dataStore.updateEventPayload(
+                id: recentEvents[index].id,
+                merge: ["speaker": speaker, "confidence": confidence]
+            )
         }
     }
 
