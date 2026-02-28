@@ -136,30 +136,82 @@ def save_profile(name: str, embedding: np.ndarray):
     log.info(f"Saved speaker profile: {name} ({embedding.shape})")
 
 
-def compute_embedding(audio_path: str) -> np.ndarray:
-    """Compute speaker embedding for an audio file."""
+def _load_audio(audio_path: str):
+    """Load audio, resample to 16kHz mono. Returns (waveform, sample_rate)."""
     import torch
     import torchaudio
 
-    model = get_speaker_model()
-
-    # Load audio
     waveform, sr = torchaudio.load(audio_path)
 
-    # Resample to 16kHz if needed
     if sr != SAMPLE_RATE:
         resampler = torchaudio.transforms.Resample(sr, SAMPLE_RATE)
         waveform = resampler(waveform)
 
-    # Convert to mono if stereo
     if waveform.shape[0] > 1:
         waveform = waveform.mean(dim=0, keepdim=True)
 
-    # Compute embedding
+    return waveform, SAMPLE_RATE
+
+
+def compute_embedding(audio_path: str) -> np.ndarray:
+    """Compute speaker embedding for an audio file."""
+    import torch
+
+    model = get_speaker_model()
+    waveform, sr = _load_audio(audio_path)
+
     with torch.no_grad():
         embedding = model.encode_batch(waveform)
 
     return embedding.squeeze().cpu().numpy()
+
+
+# Sliding window config for enrollment
+WINDOW_SECS = 10    # Each window is 10 seconds
+HOP_SECS = 5        # 5 second overlap (hop = 5s)
+MIN_SEGMENT_SECS = 3 # Minimum usable segment length
+
+
+def compute_embeddings_sliding_window(audio_path: str) -> list[np.ndarray]:
+    """Compute multiple embeddings from one audio file using sliding windows.
+
+    For short files (< 15s): returns a single embedding.
+    For longer files: slides a 10s window with 5s hop, producing many embeddings.
+    This makes enrollment from a single long recording very robust."""
+    import torch
+
+    model = get_speaker_model()
+    waveform, sr = _load_audio(audio_path)
+
+    duration_secs = waveform.shape[1] / sr
+    window_samples = WINDOW_SECS * sr
+    hop_samples = HOP_SECS * sr
+    min_samples = MIN_SEGMENT_SECS * sr
+
+    # Short file: just one embedding
+    if duration_secs < WINDOW_SECS + HOP_SECS:
+        if waveform.shape[1] < min_samples:
+            return []  # Too short
+        with torch.no_grad():
+            emb = model.encode_batch(waveform)
+        return [emb.squeeze().cpu().numpy()]
+
+    # Sliding window
+    embeddings = []
+    offset = 0
+    while offset + min_samples <= waveform.shape[1]:
+        end = min(offset + window_samples, waveform.shape[1])
+        chunk = waveform[:, offset:end]
+
+        if chunk.shape[1] < min_samples:
+            break
+
+        with torch.no_grad():
+            emb = model.encode_batch(chunk)
+        embeddings.append(emb.squeeze().cpu().numpy())
+        offset += hop_samples
+
+    return embeddings
 
 
 def identify_speaker(embedding: np.ndarray) -> tuple[str, float]:
@@ -606,9 +658,9 @@ class DiarizationHandler(BaseHTTPRequestHandler):
             tmp_files.append(tmp.name)
 
             try:
-                emb = compute_embedding(tmp.name)
-                embeddings.append(emb)
-                log.info(f"  Computed embedding from enrollment sample: {filename}")
+                embs = compute_embeddings_sliding_window(tmp.name)
+                embeddings.extend(embs)
+                log.info(f"  {filename}: {len(embs)} embedding segments")
             except Exception as e:
                 log.warning(f"  Failed to process enrollment sample {filename}: {e}")
 
@@ -641,12 +693,14 @@ class DiarizationHandler(BaseHTTPRequestHandler):
         })
 
     def _handle_enroll_batch(self):
-        """Batch enroll from a directory of audio files."""
-        length = int(self.headers.get("Content-Length", 0))
-        body = json.loads(self.rfile.read(length)) if length else {}
+        """Batch enroll from a directory of audio files.
+        Uses sliding window (10s window, 5s hop) to automatically slice
+        long recordings into many embedding samples for robust profiles."""
+        body = self._read_body()
+        body_json = json.loads(body) if body else {}
 
-        speaker_name = body.get("speaker_name", "").strip()
-        directory = body.get("directory", "").strip()
+        speaker_name = body_json.get("speaker_name", "").strip()
+        directory = body_json.get("directory", "").strip()
 
         if not speaker_name:
             self._send_error("speaker_name is required")
@@ -666,32 +720,38 @@ class DiarizationHandler(BaseHTTPRequestHandler):
             return
 
         log.info(f"Batch enrolling '{speaker_name}' from {len(audio_files)} files in {directory}")
+        log.info(f"Using sliding window: {WINDOW_SECS}s window, {HOP_SECS}s hop")
 
-        embeddings = []
+        all_embeddings = []
         failed = []
+        file_stats = []
 
         for audio_file in audio_files:
             try:
-                emb = compute_embedding(str(audio_file))
-                embeddings.append(emb)
-                log.info(f"  Processed: {audio_file.name}")
+                embs = compute_embeddings_sliding_window(str(audio_file))
+                all_embeddings.extend(embs)
+                file_stats.append({"file": audio_file.name, "segments": len(embs)})
+                log.info(f"  {audio_file.name}: {len(embs)} embedding segments")
             except Exception as e:
                 log.warning(f"  Failed: {audio_file.name}: {e}")
                 failed.append(str(audio_file.name))
 
-        if not embeddings:
+        if not all_embeddings:
             self._send_error("No valid audio samples processed")
             return
 
-        centroid = np.mean(embeddings, axis=0)
+        centroid = np.mean(all_embeddings, axis=0)
         save_profile(speaker_name, centroid)
 
+        log.info(f"Enrolled '{speaker_name}': {len(all_embeddings)} total embeddings from {len(audio_files)} files")
+
         self._send_json({
-            "message": f"Enrolled speaker '{speaker_name}' from {len(embeddings)} files",
+            "message": f"Enrolled speaker '{speaker_name}' from {len(all_embeddings)} segments across {len(audio_files)} files",
             "speaker_name": speaker_name,
-            "samples_processed": len(embeddings),
-            "samples_failed": failed,
-            "total_files": len(audio_files),
+            "total_embedding_segments": len(all_embeddings),
+            "files_processed": len(audio_files) - len(failed),
+            "files_failed": failed,
+            "file_details": file_stats,
         })
 
 
