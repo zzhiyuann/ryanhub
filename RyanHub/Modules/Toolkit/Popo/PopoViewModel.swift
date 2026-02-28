@@ -1133,7 +1133,7 @@ final class PopoViewModel {
     /// Generate nudges by calling the bridge server's analysis endpoint.
     /// Sends recent sensing events, narrations, and day summary for AI analysis.
     func generateNudges() async {
-        guard sensingEnabled, !isGeneratingNudges else { return }
+        guard !isGeneratingNudges else { return }
         isGeneratingNudges = true
         defer { isGeneratingNudges = false }
 

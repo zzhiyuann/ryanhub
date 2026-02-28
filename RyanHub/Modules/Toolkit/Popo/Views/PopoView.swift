@@ -95,6 +95,14 @@ struct PopoView: View {
                             lineWidth: 2
                         )
                 )
+                .onLongPressGesture {
+                    showFacaiMenu = true
+                }
+                .confirmationDialog("Facai", isPresented: $showFacaiMenu) {
+                    Button("Generate Insights") {
+                        Task { await viewModel.generateNudges() }
+                    }
+                }
 
             VStack(alignment: .leading, spacing: 2) {
                 Text("Facai")
@@ -165,6 +173,7 @@ struct PopoView: View {
 
     /// Whether the nudge card is expanded to show all nudges.
     @State private var nudgesExpanded = false
+    @State private var showFacaiMenu = false
 
     private func facaiNudgeContent(_ nudges: [Nudge]) -> some View {
         let latest = nudges[0]
