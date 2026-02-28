@@ -730,13 +730,13 @@ struct HealthView: View {
             // Day navigation
             DateNavigationBar(selectedDate: $selectedDate)
 
+            // Quick activity input
+            quickActivityLogSection
+
             // Apple Health step count card (only show for today)
             if Calendar.current.isDateInToday(selectedDate) {
                 stepsCard
             }
-
-            // Quick activity input
-            quickActivityLogSection
 
             // Inline analyzing indicator
             if isActivityAnalyzing {
@@ -762,7 +762,9 @@ struct HealthView: View {
                             .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
 
                         HStack(alignment: .firstTextBaseline, spacing: 4) {
-                            Text("\(viewModel.activityCalories(for: selectedDate))")
+                            let loggedCal = viewModel.activityCalories(for: selectedDate)
+                            let stepsCal = Calendar.current.isDateInToday(selectedDate) ? viewModel.stepsCaloriesBurned : 0
+                            Text("\(loggedCal + stepsCal)")
                                 .font(.system(size: 34, weight: .bold))
                                 .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
                             Text("kcal")
