@@ -87,7 +87,7 @@ def get_diarization_pipeline():
 
         _diarization_pipeline = Pipeline.from_pretrained(
             "pyannote/speaker-diarization-3.1",
-            use_auth_token=True,
+            token=True,
         )
         # Use MPS if available for GPU acceleration
         if torch.backends.mps.is_available():
@@ -285,16 +285,30 @@ def diarize_audio(audio_path: str) -> list[dict]:
     Returns list of segments: [{start, end, speaker}]."""
     pipeline = get_diarization_pipeline()
 
-    diarization = pipeline(audio_path)
+    # Pass pre-loaded waveform dict to avoid torchcodec AudioDecoder dependency
+    waveform, sr = _load_audio(audio_path)
+    output = pipeline({"waveform": waveform, "sample_rate": sr})
 
+    # pyannote 4.x returns DiarizeOutput; use .speaker_diarization Annotation
+    annotation = getattr(output, "speaker_diarization", None)
+    if annotation is not None:
+        segments = []
+        for turn, _, speaker in annotation.itertracks(yield_label=True):
+            segments.append({
+                "start": round(turn.start, 3),
+                "end": round(turn.end, 3),
+                "speaker": speaker,
+            })
+        return segments
+
+    # Fallback: older pyannote returns Annotation directly
     segments = []
-    for turn, _, speaker in diarization.itertracks(yield_label=True):
+    for turn, _, speaker in output.itertracks(yield_label=True):
         segments.append({
             "start": round(turn.start, 3),
             "end": round(turn.end, 3),
             "speaker": speaker,
         })
-
     return segments
 
 
