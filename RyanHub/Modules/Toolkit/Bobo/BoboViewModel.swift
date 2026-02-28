@@ -80,9 +80,11 @@ final class BoboViewModel {
             if sensingEnabled {
                 engine.startSensing()
                 startNudgeTimer()
+                startHealthKitRefreshTimer()
             } else {
                 engine.stopSensing()
                 stopNudgeTimer()
+                stopHealthKitRefreshTimer()
             }
             // Persist the preference
             UserDefaults.standard.set(sensingEnabled, forKey: StorageKeys.sensingEnabled)
@@ -160,6 +162,9 @@ final class BoboViewModel {
 
     /// Interval between nudge generation runs (2 hours).
     private static let nudgeInterval: TimeInterval = 7200
+
+    /// Timer that re-queries HealthKit while the app is in the foreground.
+    private var healthKitRefreshTimer: Timer?
 
     // MARK: - Private Recording Properties
 
@@ -713,6 +718,7 @@ final class BoboViewModel {
             sensingEnabled = true
             engine.startSensing()
             startNudgeTimer()
+            startHealthKitRefreshTimer()
         }
 
         // Load narrations, nudges, and health data from local storage
@@ -1404,6 +1410,24 @@ final class BoboViewModel {
     private func stopNudgeTimer() {
         nudgeTimer?.invalidate()
         nudgeTimer = nil
+    }
+
+    // MARK: - HealthKit Refresh Timer
+
+    /// Start a periodic timer that re-fetches HealthKit data every 30 seconds while in foreground.
+    private func startHealthKitRefreshTimer() {
+        stopHealthKitRefreshTimer()
+        healthKitRefreshTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.fetchHealthKitEvents()
+            }
+        }
+    }
+
+    /// Stop the HealthKit refresh timer.
+    private func stopHealthKitRefreshTimer() {
+        healthKitRefreshTimer?.invalidate()
+        healthKitRefreshTimer = nil
     }
 
     /// Send a local push notification for a nudge.
