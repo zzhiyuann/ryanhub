@@ -115,17 +115,22 @@ struct TimelineEventRow: View {
 
     private func sensingDetail(_ event: SensingEvent) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            // Payload key-value pairs
-            ForEach(event.payload.sorted(by: { $0.key < $1.key }), id: \.key) { key, value in
-                HStack(spacing: 8) {
-                    Text(key.camelCaseToWords)
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
-                        .frame(width: 80, alignment: .trailing)
+            // Audio events get a specialized expanded view
+            if event.modality == .audio, event.payload["status"] == "completed" {
+                audioTranscriptDetail(event)
+            } else {
+                // Payload key-value pairs
+                ForEach(event.payload.sorted(by: { $0.key < $1.key }), id: \.key) { key, value in
+                    HStack(spacing: 8) {
+                        Text(key.camelCaseToWords)
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                            .frame(width: 80, alignment: .trailing)
 
-                    Text(value)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                        Text(value)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                    }
                 }
             }
 
@@ -144,6 +149,44 @@ struct TimelineEventRow: View {
             )
         }
         .padding(.top, 4)
+    }
+
+    /// Specialized expanded view for completed audio transcription events.
+    private func audioTranscriptDetail(_ event: SensingEvent) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // Full transcript
+            if let transcript = event.payload["transcript"], !transcript.isEmpty {
+                Text(transcript)
+                    .font(.system(size: 13, weight: .regular))
+                    .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            // Info badges
+            HStack(spacing: 8) {
+                if let speakers = event.payload["speakers"], !speakers.isEmpty {
+                    detailBadge(
+                        icon: "person.2.fill",
+                        text: speakers,
+                        color: Color.hubPrimary
+                    )
+                }
+                if let segmentCount = event.payload["segmentCount"] {
+                    detailBadge(
+                        icon: "text.quote",
+                        text: "\(segmentCount) segments",
+                        color: Color.hubPrimaryLight
+                    )
+                }
+                if let processingTime = event.payload["processingTime"] {
+                    detailBadge(
+                        icon: "clock",
+                        text: "\(processingTime)s",
+                        color: AdaptiveColors.textSecondary(for: colorScheme)
+                    )
+                }
+            }
+        }
     }
 
     private func narrationDetail(_ narration: Narration) -> some View {
@@ -568,6 +611,7 @@ struct TimelineEventRow: View {
         case .wifi: return "wifi"
         case .bluetooth: return "antenna.radiowaves.left.and.right"
         case .visit: return "building.2.fill"
+        case .audio: return "waveform"
         }
     }
 
@@ -591,6 +635,7 @@ struct TimelineEventRow: View {
         case .wifi: return Color.hubPrimaryLight
         case .bluetooth: return Color.hubPrimary
         case .visit: return Color.hubAccentGreen
+        case .audio: return Color.hubAccentRed
         }
     }
 
@@ -614,6 +659,7 @@ struct TimelineEventRow: View {
         case .wifi: return "Wi-Fi"
         case .bluetooth: return "Bluetooth"
         case .visit: return "Visit"
+        case .audio: return "Audio"
         }
     }
 
@@ -737,6 +783,20 @@ struct TimelineEventRow: View {
         case .visit:
             let place = event.payload["description"] ?? "unknown"
             return place
+        case .audio:
+            if event.payload["status"] == "processing" {
+                return "Listening..."
+            }
+            let transcript = event.payload["transcript"] ?? ""
+            let speakers = event.payload["speakers"] ?? ""
+            if !transcript.isEmpty {
+                let preview = transcript.prefix(60)
+                if !speakers.isEmpty {
+                    return "\(speakers): \(preview)\(transcript.count > 60 ? "..." : "")"
+                }
+                return String(preview) + (transcript.count > 60 ? "..." : "")
+            }
+            return "Audio Segment"
         }
     }
 

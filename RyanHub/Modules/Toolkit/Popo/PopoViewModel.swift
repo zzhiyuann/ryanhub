@@ -88,6 +88,18 @@ final class PopoViewModel {
         }
     }
 
+    /// Whether the always-on audio stream sensor is enabled.
+    /// Independent from main sensing toggle due to battery and privacy concerns.
+    var audioStreamEnabled: Bool = false {
+        didSet {
+            if audioStreamEnabled {
+                engine.startAudioStream()
+            } else {
+                engine.stopAudioStream()
+            }
+        }
+    }
+
     /// The currently selected modality filter for the event list (nil = all).
     var selectedModality: SensingModality?
 

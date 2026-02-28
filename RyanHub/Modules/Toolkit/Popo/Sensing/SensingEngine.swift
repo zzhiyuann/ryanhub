@@ -50,6 +50,7 @@ final class SensingEngine {
     private let callSensor = CallSensor()
     private let wifiSensor = WiFiSensor()
     private let bluetoothSensor = BluetoothSensor()
+    private let audioStreamSensor = AudioStreamSensor()
 
     // MARK: - Services
 
@@ -147,6 +148,32 @@ final class SensingEngine {
         syncTimer = nil
 
         print("[SensingEngine] Stopped all sensors")
+    }
+
+    // MARK: - Audio Stream (Independent Toggle)
+
+    /// Whether the audio stream sensor is actively recording.
+    /// This sensor is independent from the main sensing toggle due to
+    /// battery and privacy concerns — it requires explicit user opt-in.
+    var isAudioStreamEnabled = false
+
+    /// Start the audio stream sensor independently of the main sensing toggle.
+    func startAudioStream() {
+        guard !isAudioStreamEnabled else { return }
+        isAudioStreamEnabled = true
+        audioStreamSensor.onEvent = { [weak self] event in
+            Task { @MainActor in self?.recordEvent(event) }
+        }
+        audioStreamSensor.start()
+        print("[SensingEngine] Audio stream started")
+    }
+
+    /// Stop the audio stream sensor.
+    func stopAudioStream() {
+        guard isAudioStreamEnabled else { return }
+        isAudioStreamEnabled = false
+        audioStreamSensor.stop()
+        print("[SensingEngine] Audio stream stopped")
     }
 
     // MARK: - Event Recording

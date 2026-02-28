@@ -118,6 +118,17 @@ struct PopoView: View {
                     .tint(Color.hubPrimary)
             }
 
+            // Audio stream toggle — independent always-on mic sensor
+            Button {
+                viewModel.audioStreamEnabled.toggle()
+            } label: {
+                Image(systemName: viewModel.audioStreamEnabled ? "mic.circle.fill" : "mic.slash.circle")
+                    .font(.system(size: 22, weight: .medium))
+                    .foregroundStyle(viewModel.audioStreamEnabled ? Color.hubAccentRed : Color.gray)
+                    .symbolEffect(.pulse, isActive: viewModel.audioStreamEnabled)
+            }
+            .buttonStyle(.plain)
+
             Toggle("", isOn: $viewModel.sensingEnabled)
                 .labelsHidden()
                 .tint(Color.hubPrimary)
@@ -645,6 +656,7 @@ struct PopoView: View {
         case .bluetooth: return "antenna.radiowaves.left.and.right"
         case .activeEnergy: return "flame.fill"
         case .sleep: return "moon.fill"
+        case .audio: return "waveform"
         default: return "sensor"
         }
     }
@@ -662,6 +674,7 @@ struct PopoView: View {
         case .bluetooth: return "Bluetooth"
         case .activeEnergy: return "Active Energy"
         case .sleep: return "Sleep"
+        case .audio: return "Audio Stream"
         default: return modality.rawValue.capitalized
         }
     }

@@ -88,6 +88,7 @@
 		B3DA11875470725BE119C406 /* ChatViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16AA3B6CD78A2A3E597642C3 /* ChatViewModel.swift */; };
 		B5C925AB99A9F237B1002FDF /* TabNavigationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E58926E0B8755BD153826FD8 /* TabNavigationTests.swift */; };
 		B6989682EC1AC53E552E4517 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D083DD2A5B38D1F4C3A9A64 /* SettingsView.swift */; };
+		BA23CA732A9970E43CA41780 /* AudioStreamSensor.swift in Sources */ = {isa = PBXBuildFile; fileRef = B51E63D01B0D0F24085E7F5F /* AudioStreamSensor.swift */; };
 		BA8C6A0DFCBCF4F103F76329 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = D720AA4B2C547EB4CD326ABC /* Assets.xcassets */; };
 		BA8D417172B67DF5CFA7834D /* FacaiAvatar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A0EFB9011850B100C47479A /* FacaiAvatar.swift */; };
 		BC1701F119FFEAD1DCD870DD /* HealthTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F9E5F6E83F4DF6A3364CE3E /* HealthTests.swift */; };
@@ -205,6 +206,7 @@
 		AD94D3E0824640F6802F86A4 /* RyanHubApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RyanHubApp.swift; sourceTree = "<group>"; };
 		AE159CAB3E17CFF110C6A594 /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/Localizable.strings"; sourceTree = "<group>"; };
 		B2BD9A50AFEFA22CD60FADBF /* TerminalTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalTests.swift; sourceTree = "<group>"; };
+		B51E63D01B0D0F24085E7F5F /* AudioStreamSensor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioStreamSensor.swift; sourceTree = "<group>"; };
 		B8D7E3DA7975CCD073CD370A /* ParkingDataProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParkingDataProvider.swift; sourceTree = "<group>"; };
 		BB537DF37440FEF82FAEF5D4 /* BookFactoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookFactoryView.swift; sourceTree = "<group>"; };
 		BD7704742E67AD44D943A435 /* TerminalViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalViewModel.swift; sourceTree = "<group>"; };
@@ -459,6 +461,7 @@
 		A0EC5ED3F863E036A841968E /* Sensing */ = {
 			isa = PBXGroup;
 			children = (
+				B51E63D01B0D0F24085E7F5F /* AudioStreamSensor.swift */,
 				301D1B48052E9787ED616984 /* BatterySensor.swift */,
 				19AFE35CA37D180D1C481879 /* BluetoothSensor.swift */,
 				FD1C3D6071A03B157D014D0E /* CallSensor.swift */,
@@ -769,6 +772,7 @@
 				008880036391E1E208A2E09D /* AudioPlayerView.swift in Sources */,
 				E88867AC68FF45A6A6A139D4 /* AudioPlayerViewModel.swift in Sources */,
 				2F12B1E3D1F5BAB4E37AC793 /* AudioService.swift in Sources */,
+				BA23CA732A9970E43CA41780 /* AudioStreamSensor.swift in Sources */,
 				7E0A48B4AC5D113A118999A2 /* BatterySensor.swift in Sources */,
 				BCBD928AD8D9D00DE8C3D483 /* BluetoothSensor.swift in Sources */,
 				13FACF85A9E387D573951F01 /* BookFactoryAPI.swift in Sources */,
