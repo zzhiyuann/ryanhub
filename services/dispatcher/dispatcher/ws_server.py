@@ -77,6 +77,10 @@ class WebSocketServer:
         self._clients: set[ServerConnection] = set()
         self._status_task: asyncio.Task | None = None
         self._active_sessions_count: int = 0
+        # Cache of final responses that failed to deliver (client disconnected).
+        # List of dicts: {"type": "response", "id": msg_id, "content": ..., "streaming": False, "ts": ...}
+        # Replayed to the next client that connects. Single-user app so no keying needed.
+        self._pending_deliveries: list[dict] = []
 
     async def start(self) -> None:
         """Start the WebSocket server."""
@@ -142,6 +146,13 @@ class WebSocketServer:
 
         # Send initial status
         await self.send_status(websocket)
+
+        # Replay any responses that failed to deliver while the client was away
+        if self._pending_deliveries:
+            log.info("ws replaying %d pending deliveries to reconnected client", len(self._pending_deliveries))
+            for msg in self._pending_deliveries:
+                await self._send(websocket, msg)
+            self._pending_deliveries.clear()
 
         try:
             async for raw_message in websocket:
@@ -394,13 +405,31 @@ class WebSocketServer:
     # -- Sending helpers --
 
     async def _send(self, websocket: ServerConnection, data: dict) -> None:
-        """Send a JSON message to a single client. Silently handles errors."""
+        """Send a JSON message to a single client. Silently handles errors.
+
+        If the send fails for a final (non-streaming) response, the message
+        is cached in ``_pending_deliveries`` and replayed when the next client
+        connects.
+        """
         try:
             await websocket.send(json.dumps(data, ensure_ascii=False))
         except websockets.exceptions.ConnectionClosed:
             self._clients.discard(websocket)
+            self._cache_if_important(data)
         except Exception:
             log.debug("ws send failed", exc_info=True)
+            self._cache_if_important(data)
+
+    def _cache_if_important(self, data: dict) -> None:
+        """Cache a message for later delivery if it's a final response or error."""
+        msg_type = data.get("type")
+        is_final_response = msg_type == "response" and not data.get("streaming", False)
+        is_error = msg_type == "error"
+        is_question = msg_type == "question"
+        if is_final_response or is_error or is_question:
+            data["_cached_at"] = time.time()
+            self._pending_deliveries.append(data)
+            log.info("ws cached undelivered %s (id=%s) for replay", msg_type, data.get("id", "?")[:8])
 
     async def send_response(
         self,

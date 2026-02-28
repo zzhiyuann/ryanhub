@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import UIKit
 import AVFoundation
 import PhotosUI
 
@@ -92,6 +93,9 @@ final class ChatViewModel {
 
     /// Maps user message ID -> when the message was sent (for progress phases).
     private var messageSendTimes: [String: Date] = [:]
+
+    /// Background task identifier for keeping the app alive while awaiting a response.
+    @ObservationIgnored private var backgroundTaskID: UIBackgroundTaskIdentifier = .invalid
 
     /// Timer that periodically triggers UI updates while messages are pending,
     /// so the progress phase text refreshes as time elapses.
@@ -964,9 +968,32 @@ final class ChatViewModel {
 
     /// Update global isTyping based on whether any messages are still pending.
     private func updateGlobalTypingState() {
+        let wasTyping = isTyping
         isTyping = messageStatuses.values.contains(where: {
             $0 == .sending || $0 == .acknowledged || $0 == .processing
         })
+        // Manage background task: keep app alive while waiting for responses
+        if isTyping && !wasTyping {
+            beginBackgroundProcessing()
+        } else if !isTyping && wasTyping {
+            endBackgroundProcessing()
+        }
+    }
+
+    /// Request extended background execution time while a response is in flight.
+    private func beginBackgroundProcessing() {
+        guard backgroundTaskID == .invalid else { return }
+        backgroundTaskID = UIApplication.shared.beginBackgroundTask(withName: "ChatResponse") { [weak self] in
+            // System is about to suspend — clean up
+            self?.endBackgroundProcessing()
+        }
+    }
+
+    /// End the background execution request.
+    private func endBackgroundProcessing() {
+        guard backgroundTaskID != .invalid else { return }
+        UIApplication.shared.endBackgroundTask(backgroundTaskID)
+        backgroundTaskID = .invalid
     }
 
     /// Start a repeating timer that forces a view update every 5 seconds
