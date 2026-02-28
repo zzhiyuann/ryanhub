@@ -304,12 +304,12 @@ final class PopoViewModel {
             .filter { $0.modality == .location }
             .sorted { $0.timestamp < $1.timestamp }
         // Modalities that need time-window dedup (keep at most 1 per interval).
-        // Blood Oxygen is user-triggered (ad-hoc) so it passes through unfiltered.
         let timeWindowModalities: [SensingModality: TimeInterval] = [
             .heartRate: 60,         // 1 per minute
             .activeEnergy: 300,     // 1 per 5 minutes
             .basalEnergy: 300,      // 1 per 5 minutes
             .respiratoryRate: 600,  // 1 per 10 minutes
+            .bloodOxygen: 60,       // 1 per minute (Watch writes multiple samples per measurement)
             .noiseExposure: 600,    // 1 per 10 minutes (anomaly: 1 per minute)
         ]
 
