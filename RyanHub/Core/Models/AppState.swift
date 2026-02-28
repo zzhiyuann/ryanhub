@@ -93,6 +93,9 @@ final class AppState {
     /// Used by the custom tab bar to switch to compact (icon-only) mode.
     var isInToolkitModule: Bool = false
 
+    /// Incremented to signal ToolkitHomeView to return to the desktop grid.
+    var toolkitHomeSignal: Int = 0
+
     /// True when the user is reading a book (inside BookReaderView).
     /// Used to hide the floating module tab bubble.
     var isReadingBook: Bool = false

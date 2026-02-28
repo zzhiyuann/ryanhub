@@ -98,6 +98,10 @@ struct ContentView: View {
         HStack(spacing: 0) {
             ForEach(MainTab.allCases, id: \.rawValue) { tab in
                 Button {
+                    if selectedTab == tab && tab == .toolkit {
+                        // Already on toolkit — go back to home grid
+                        appState.toolkitHomeSignal += 1
+                    }
                     selectedTab = tab
                 } label: {
                     ZStack(alignment: .topTrailing) {

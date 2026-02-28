@@ -55,6 +55,11 @@ struct ToolkitHomeView: View {
         .onChange(of: selectedPlugin) { _, newValue in
             appState.isInToolkitModule = newValue != nil
         }
+        .onChange(of: appState.toolkitHomeSignal) {
+            withAnimation(.easeInOut(duration: 0.25)) {
+                selectedPlugin = nil
+            }
+        }
     }
 
     // MARK: - Tool Content
