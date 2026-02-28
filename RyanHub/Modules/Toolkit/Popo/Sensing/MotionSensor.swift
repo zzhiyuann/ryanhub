@@ -25,7 +25,7 @@ final class MotionSensor {
     private var lastActivityChangeTime: Date?
 
     /// Minimum time (seconds) between activity transitions to avoid noisy flapping.
-    private static let transitionCooldown: TimeInterval = 30
+    private static let transitionCooldown: TimeInterval = 10
 
     // MARK: - Lifecycle
 
