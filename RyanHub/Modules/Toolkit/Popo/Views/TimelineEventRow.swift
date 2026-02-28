@@ -675,8 +675,7 @@ struct TimelineEventRow: View {
             }
             return "(\(lat), \(lon))"
         case .screen:
-            let state = event.payload["state"] ?? "unknown"
-            return state == "on" ? "Screen on" : state == "off" ? "Screen off" : state
+            return screenEventSummary(event)
         case .workout:
             let type = event.payload["type"] ?? "unknown"
             let calories = event.payload["calories"] ?? "0"
@@ -741,6 +740,35 @@ struct TimelineEventRow: View {
         }
     }
 
+    // MARK: - Screen Event Helpers
+
+    /// Build a rich summary for screen on events.
+    /// Format: "Screen On · 5m 30s · Off for 15m"
+    /// - The on-duration shows how long the screen was on (added retroactively when screen turns off)
+    /// - The off-duration shows how long the screen was off before this unlock
+    private func screenEventSummary(_ event: SensingEvent) -> String {
+        let state = event.payload["state"] ?? "unknown"
+
+        // Off events should be filtered from the timeline, but handle gracefully
+        guard state == "on" else { return "Screen \(state)" }
+
+        var parts: [String] = ["Screen On"]
+
+        // On-duration (how long screen was on — enriched when screen turns off)
+        if let onDurStr = event.payload["onDuration"],
+           let onDur = Double(onDurStr), onDur > 0 {
+            parts[0] = "Screen On \u{00B7} \(formatDuration(onDur))"
+        }
+
+        // Off-duration (how long screen was off before this unlock)
+        if let offDurStr = event.payload["offDuration"],
+           let offDur = Double(offDurStr), offDur > 0 {
+            parts.append("Off for \(formatDuration(offDur))")
+        }
+
+        return parts.joined(separator: " \u{00B7} ")
+    }
+
     // MARK: - Nudge Helpers
 
     private func nudgeTypeIcon(_ type: NudgeType) -> String {
@@ -764,10 +792,15 @@ struct TimelineEventRow: View {
     // MARK: - Formatting
 
     private func formatDuration(_ seconds: TimeInterval) -> String {
-        let minutes = Int(seconds) / 60
-        let secs = Int(seconds) % 60
+        let totalSeconds = Int(seconds)
+        let hours = totalSeconds / 3600
+        let minutes = (totalSeconds % 3600) / 60
+        let secs = totalSeconds % 60
+        if hours > 0 {
+            return minutes > 0 ? "\(hours)h \(minutes)m" : "\(hours)h"
+        }
         if minutes > 0 {
-            return "\(minutes)m \(secs)s"
+            return secs > 0 ? "\(minutes)m \(secs)s" : "\(minutes)m"
         }
         return "\(secs)s"
     }

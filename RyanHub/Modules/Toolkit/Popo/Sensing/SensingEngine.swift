@@ -153,7 +153,17 @@ final class SensingEngine {
 
     /// Called by each sensor when new data arrives.
     /// Stores the event locally and triggers sync if batch threshold is reached.
+    ///
+    /// For screen "off" events, instead of just storing the event, we also enrich
+    /// the most recent screen "on" event with the `onDuration` so the timeline
+    /// shows how long the screen was on in a single consolidated row.
     func recordEvent(_ event: SensingEvent) {
+        // Screen off events enrich the previous screen on event
+        if event.modality == .screen, event.payload["state"] == "off",
+           let onDuration = event.payload["onDuration"] {
+            enrichLastScreenOnEvent(onDuration: onDuration)
+        }
+
         // Add to UI display list (keep newest first, capped)
         recentEvents.insert(event, at: 0)
         if recentEvents.count > Self.maxRecentEvents {
@@ -167,6 +177,18 @@ final class SensingEngine {
         // Trigger immediate sync if batch threshold reached
         if pendingEventCount >= Self.batchSizeThreshold {
             Task { await syncPendingEvents() }
+        }
+    }
+
+    /// Find the most recent screen "on" event and add `onDuration` to its payload.
+    private func enrichLastScreenOnEvent(onDuration: String) {
+        // Update in-memory recentEvents array
+        if let index = recentEvents.firstIndex(where: {
+            $0.modality == .screen && $0.payload["state"] == "on"
+        }) {
+            recentEvents[index].payload["onDuration"] = onDuration
+            // Also update in the persisted data store
+            dataStore.updateEventPayload(id: recentEvents[index].id, merge: ["onDuration": onDuration])
         }
     }
 

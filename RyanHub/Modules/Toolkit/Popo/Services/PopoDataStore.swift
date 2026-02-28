@@ -66,6 +66,17 @@ final class PopoDataStore {
         persistSyncedIDs()
     }
 
+    /// Update an existing event's payload by ID. Used to enrich screen "on" events
+    /// with on-duration when the corresponding "off" event arrives.
+    func updateEventPayload(id: UUID, merge newPayload: [String: String]) {
+        if let index = events.firstIndex(where: { $0.id == id }) {
+            for (key, value) in newPayload {
+                events[index].payload[key] = value
+            }
+            persistToDisk()
+        }
+    }
+
     /// Return all events from the last N hours.
     func recentEvents(hours: Int = 24) -> [SensingEvent] {
         let cutoff = Date().addingTimeInterval(-Double(hours) * 3600)

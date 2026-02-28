@@ -207,11 +207,16 @@ final class PopoViewModel {
 
     /// All timeline items for the selected date, merged and sorted chronologically (newest first).
     /// Sensing events are filtered to remove noise (duplicate motion, redundant location, raw steps).
+    /// Screen "off" events are hidden — their data is folded into the preceding "on" event.
     /// Health module meals and activities are included. Motion events overlapping with Health
     /// activities (walking, running, cycling) are removed to avoid duplication.
     var timelineItems: [TimelineItem] {
         var items: [TimelineItem] = []
-        items.append(contentsOf: deduplicatedSensingEvents.map { .sensing($0) })
+        // Filter out screen "off" events — only "on" events appear in timeline
+        let visibleSensingEvents = deduplicatedSensingEvents.filter { event in
+            !(event.modality == .screen && event.payload["state"] == "off")
+        }
+        items.append(contentsOf: visibleSensingEvents.map { .sensing($0) })
         items.append(contentsOf: narrationsForSelectedDate.map { .narration($0) })
         items.append(contentsOf: nudgesForSelectedDate.map { .nudge($0) })
         items.append(contentsOf: foodEntriesForSelectedDate.map { .meal($0) })

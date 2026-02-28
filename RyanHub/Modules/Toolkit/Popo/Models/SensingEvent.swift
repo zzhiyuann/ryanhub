@@ -37,7 +37,7 @@ enum SensingModality: String, Codable, CaseIterable {
 /// - hrv:             {"sdnn": "42.5", "source": "watch"}
 /// - sleep:           {"stage": "asleep", "startDate": "...", "endDate": "..."}
 /// - location:        {"latitude": "38.0336", "longitude": "-78.5080", "accuracy": "10.0"}
-/// - screen:          {"state": "foreground", "sessionDuration": "300"}
+/// - screen:          {"state": "on", "offDuration": "900", "onDuration": "330"}
 /// - workout:         {"type": "running", "duration": "1800", "calories": "250"}
 /// - activeEnergy:    {"kcal": "45.2", "source": "watch"}
 /// - basalEnergy:     {"kcal": "62.0", "source": "watch"}
@@ -48,7 +48,7 @@ struct SensingEvent: Identifiable, Codable {
     let id: UUID
     let timestamp: Date
     let modality: SensingModality
-    let payload: [String: String]
+    var payload: [String: String]
 
     init(
         id: UUID = UUID(),
