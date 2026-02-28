@@ -641,7 +641,11 @@ class Dispatcher:
         return result or ""
 
     async def _ws_stream_loop(self, websocket, msg_id: str, session: Session) -> None:
-        """Stream partial output to the WebSocket client as it's generated."""
+        """Stream partial output to the WebSocket client as it's generated.
+
+        If the original websocket disconnects mid-stream, retargets to any
+        active client so streaming continues on reconnect.
+        """
         last_len = 0
         try:
             while session.status in ("pending", "running"):
@@ -649,7 +653,10 @@ class Dispatcher:
                 partial = session.partial_output
                 if partial and len(partial) > last_len:
                     last_len = len(partial)
-                    await self._ws.send_response(websocket, msg_id, partial, streaming=True)
+                    # Use active client — original ws may have disconnected
+                    target = self._ws.get_active_client(websocket)
+                    if target:
+                        await self._ws.send_response(target, msg_id, partial, streaming=True)
         except asyncio.CancelledError:
             pass
 

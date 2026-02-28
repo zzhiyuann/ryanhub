@@ -308,20 +308,31 @@ class WebSocketServer:
                     content, project, msg_id, websocket,
                     image_base64, audio_base64, audio_duration, language,
                 )
-                # Send final response
-                await self._send(websocket, {
+                # Pick best target: original ws if still connected, else any active client
+                response_data = {
                     "type": "response",
                     "id": msg_id,
                     "content": result or "",
                     "streaming": False,
-                })
+                }
+                target = self.get_active_client(websocket)
+                if target:
+                    await self._send(target, response_data)
+                else:
+                    # No client connected — cache for later replay
+                    self._cache_if_important(response_data)
             except Exception as exc:
                 log.exception("ws message handler error for msg %s", msg_id[:8])
-                await self._send(websocket, {
+                error_data = {
                     "type": "error",
                     "id": msg_id,
                     "message": f"Handler error: {str(exc)[:200]}",
-                })
+                }
+                target = self.get_active_client(websocket)
+                if target:
+                    await self._send(target, error_data)
+                else:
+                    self._cache_if_important(error_data)
         else:
             await self._send(websocket, {
                 "type": "error",
@@ -343,19 +354,33 @@ class WebSocketServer:
         if self.on_command:
             try:
                 result = await self.on_command(command, data)
-                await self._send(websocket, {
-                    "type": "command_result",
-                    "id": msg_id,
-                    "command": command,
-                    "data": result,
-                })
+                target = self.get_active_client(websocket)
+                if target:
+                    await self._send(target, {
+                        "type": "command_result",
+                        "id": msg_id,
+                        "command": command,
+                        "data": result,
+                    })
+                else:
+                    self._cache_if_important({
+                        "type": "command_result",
+                        "id": msg_id,
+                        "command": command,
+                        "data": result,
+                    })
             except Exception as exc:
                 log.exception("ws command handler error for %s", command)
-                await self._send(websocket, {
+                error_data = {
                     "type": "error",
                     "id": msg_id,
                     "message": f"Command error: {str(exc)[:200]}",
-                })
+                }
+                target = self.get_active_client(websocket)
+                if target:
+                    await self._send(target, error_data)
+                else:
+                    self._cache_if_important(error_data)
         else:
             await self._send(websocket, {
                 "type": "error",
@@ -377,24 +402,35 @@ class WebSocketServer:
         if self.on_edit:
             try:
                 result = await self.on_edit(msg_id, content, websocket)
+                target = self.get_active_client(websocket)
                 if result.get("ok"):
-                    await self._send(websocket, {
-                        "type": "edit_ack",
-                        "id": msg_id,
-                    })
+                    if target:
+                        await self._send(target, {
+                            "type": "edit_ack",
+                            "id": msg_id,
+                        })
                 else:
-                    await self._send(websocket, {
+                    error_data = {
                         "type": "error",
                         "id": msg_id,
                         "message": result.get("error", "Edit failed"),
-                    })
+                    }
+                    if target:
+                        await self._send(target, error_data)
+                    else:
+                        self._cache_if_important(error_data)
             except Exception as exc:
                 log.exception("ws edit handler error for msg %s", msg_id[:8])
-                await self._send(websocket, {
+                error_data = {
                     "type": "error",
                     "id": msg_id,
                     "message": f"Edit error: {str(exc)[:200]}",
-                })
+                }
+                target = self.get_active_client(websocket)
+                if target:
+                    await self._send(target, error_data)
+                else:
+                    self._cache_if_important(error_data)
         else:
             await self._send(websocket, {
                 "type": "error",
@@ -421,7 +457,12 @@ class WebSocketServer:
             self._cache_if_important(data)
 
     def _cache_if_important(self, data: dict) -> None:
-        """Cache a message for later delivery if it's a final response or error."""
+        """Cache a message for later delivery if it's a final response or error.
+
+        If there are active clients when caching, immediately flush the
+        pending queue so reconnected clients don't miss responses that
+        completed while they were away (race condition fix).
+        """
         msg_type = data.get("type")
         is_final_response = msg_type == "response" and not data.get("streaming", False)
         is_error = msg_type == "error"
@@ -430,6 +471,27 @@ class WebSocketServer:
             data["_cached_at"] = time.time()
             self._pending_deliveries.append(data)
             log.info("ws cached undelivered %s (id=%s) for replay", msg_type, data.get("id", "?")[:8])
+            # Immediately try to flush to any connected clients — this closes
+            # the race window where a client reconnects before the task finishes
+            # and the replay queue is still empty at replay time.
+            if self._clients:
+                asyncio.create_task(self._flush_pending())
+
+    async def _flush_pending(self) -> None:
+        """Send all pending deliveries to currently connected clients."""
+        if not self._pending_deliveries or not self._clients:
+            return
+        pending = list(self._pending_deliveries)
+        self._pending_deliveries.clear()
+        log.info("ws flushing %d pending deliveries to %d active clients", len(pending), len(self._clients))
+        for msg in pending:
+            await self.broadcast(msg)
+
+    def get_active_client(self, preferred: ServerConnection | None = None) -> ServerConnection | None:
+        """Return preferred client if still active, else any connected client."""
+        if preferred and preferred in self._clients:
+            return preferred
+        return next(iter(self._clients), None)
 
     async def send_response(
         self,
@@ -438,13 +500,26 @@ class WebSocketServer:
         content: str,
         streaming: bool = True,
     ) -> None:
-        """Send a response message to a specific client."""
-        await self._send(websocket, {
-            "type": "response",
-            "id": msg_id,
-            "content": content,
-            "streaming": streaming,
-        })
+        """Send a response message to a specific client.
+
+        If the original websocket is dead, retarget to any active client.
+        """
+        target = self.get_active_client(websocket)
+        if target:
+            await self._send(target, {
+                "type": "response",
+                "id": msg_id,
+                "content": content,
+                "streaming": streaming,
+            })
+        elif not streaming:
+            # Only cache non-streaming (final) responses
+            self._cache_if_important({
+                "type": "response",
+                "id": msg_id,
+                "content": content,
+                "streaming": streaming,
+            })
 
     async def send_status(self, websocket: ServerConnection) -> None:
         """Send current status to a specific client."""
@@ -464,7 +539,19 @@ class WebSocketServer:
         allow_free_text: bool = True,
     ) -> None:
         """Send an AskUserQuestion to a specific WebSocket client."""
-        await self._send(websocket, {
+        target = self.get_active_client(websocket)
+        if not target:
+            # Cache for replay — question is important
+            self._cache_if_important({
+                "type": "question",
+                "id": msg_id,
+                "session_id": session_id,
+                "question": question,
+                "options": options,
+                "allow_free_text": allow_free_text,
+            })
+            return
+        await self._send(target, {
             "type": "question",
             "id": msg_id,
             "session_id": session_id,
