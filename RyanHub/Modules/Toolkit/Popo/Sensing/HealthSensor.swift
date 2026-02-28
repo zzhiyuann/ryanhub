@@ -334,16 +334,12 @@ final class HealthSensor {
         }
     }
 
-    /// Fetch recent heart rate samples and apply smart throttling.
+    /// Fetch heart rate samples since last fetch and emit per-minute aggregates.
     ///
-    /// Instead of emitting every individual reading (which can be ~12/min with
-    /// continuous Apple Watch HR monitoring), readings are buffered and emitted
-    /// as a single aggregated event once per minute with avg/min/max/count.
-    ///
-    /// Anomalies bypass the throttle and emit immediately:
-    /// - Resting HR > 100 bpm (tachycardia)
-    /// - HR < 45 bpm (bradycardia)
-    /// - Sudden change > 30 bpm from previous minute's average
+    /// Samples are grouped by calendar minute. Completed minutes emit immediately
+    /// as aggregated events (avg/min/max/count). The current (incomplete) minute
+    /// is buffered and flushed by the periodic timer or next fetch cycle.
+    /// Anomalies bypass aggregation and emit individually.
     private func fetchHeartRate() {
         guard let heartRateType = HKQuantityType.quantityType(forIdentifier: .heartRate) else { return }
         let start = fetchStart(for: FetchKey.heartRate)
@@ -358,12 +354,24 @@ final class HealthSensor {
             sortDescriptors: [sortDescriptor]
         ) { [weak self] _, samples, error in
             guard let self, let samples = samples as? [HKQuantitySample], error == nil else { return }
+            guard !samples.isEmpty else {
+                self.recordFetch(for: fetchKey)
+                return
+            }
             let source = samples.first?.sourceRevision.source.name ?? "watch"
+            let calendar = Calendar.current
 
+            // Current calendar minute — samples in this minute go to buffer (incomplete)
+            let now = Date()
+            let currentMinuteComps = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: now)
+            let currentMinuteStart = calendar.date(from: currentMinuteComps) ?? now
+
+            // Group samples by calendar minute, separate anomalies
+            var minuteGroups: [Date: [Double]] = [:]
             for sample in samples {
                 let bpm = sample.quantity.doubleValue(for: HKUnit(from: "count/min"))
 
-                // Check for anomaly — emit immediately if detected
+                // Anomaly — emit immediately regardless of grouping
                 if self.isHeartRateAnomaly(bpm) {
                     let event = SensingEvent(
                         timestamp: sample.startDate,
@@ -376,13 +384,40 @@ final class HealthSensor {
                         ]
                     )
                     self.onEvent?(event)
+                    continue
+                }
+
+                // Group by minute start
+                let sampleMinuteComps = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: sample.startDate)
+                let minuteStart = calendar.date(from: sampleMinuteComps) ?? sample.startDate
+                minuteGroups[minuteStart, default: []].append(bpm)
+            }
+
+            // Emit completed minutes immediately, buffer current minute
+            for (minute, bpms) in minuteGroups {
+                if minute >= currentMinuteStart {
+                    // Current (incomplete) minute — add to buffer
+                    self.hrBuffer.append(contentsOf: bpms)
                 } else {
-                    // Normal reading — add to buffer
-                    self.hrBuffer.append(bpm)
+                    // Completed minute — emit aggregated event now
+                    let avg = bpms.reduce(0, +) / Double(bpms.count)
+                    let event = SensingEvent(
+                        timestamp: minute,
+                        modality: .heartRate,
+                        payload: [
+                            "bpm": String(format: "%.0f", avg),
+                            "min": String(format: "%.0f", bpms.min() ?? avg),
+                            "max": String(format: "%.0f", bpms.max() ?? avg),
+                            "count": "\(bpms.count)",
+                            "source": source
+                        ]
+                    )
+                    self.onEvent?(event)
+                    self.previousMinuteAvgBPM = avg
                 }
             }
 
-            // Emit aggregated event if enough time has elapsed
+            // Try flushing the current-minute buffer if enough time elapsed
             self.emitAggregatedHeartRateIfReady(source: source)
             self.recordFetch(for: fetchKey)
         }

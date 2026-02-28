@@ -306,6 +306,7 @@ final class PopoViewModel {
         // Modalities that need time-window dedup (keep at most 1 per interval).
         let timeWindowModalities: [SensingModality: TimeInterval] = [
             .heartRate: 60,         // 1 per minute
+            .hrv: 60,               // 1 per minute
             .activeEnergy: 300,     // 1 per 5 minutes
             .basalEnergy: 300,      // 1 per 5 minutes
             .respiratoryRate: 600,  // 1 per 10 minutes
