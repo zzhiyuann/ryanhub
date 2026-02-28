@@ -37,6 +37,7 @@ struct ContentView: View {
     @Environment(AppState.self) private var appState
     @Environment(NotificationManager.self) private var notificationManager
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.scenePhase) private var scenePhase
     @State private var selectedTab: MainTab = .chat
     @State private var chatMode: ChatMode = .chat
     /// ChatViewModel is owned here so it survives tab switches.
@@ -82,6 +83,12 @@ struct ContentView: View {
         .onAppear {
             chatViewModel.notificationManager = notificationManager
             chatViewModel.appStateRef = appState
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            if newPhase == .active {
+                // App returned to foreground — re-establish WebSocket if it died
+                chatViewModel.ensureConnected()
+            }
         }
     }
 

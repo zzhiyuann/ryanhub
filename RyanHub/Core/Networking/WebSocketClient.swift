@@ -73,6 +73,17 @@ final class WebSocketClient {
         connectionState = .disconnected
     }
 
+    /// Called when the app returns to foreground. Checks if the connection is
+    /// still alive; if not, resets retry count and reconnects immediately.
+    func reconnectIfNeeded() {
+        // Already connected — nothing to do
+        guard !isConnected, let url = serverURL else { return }
+        // Reset retry counter so we get a fresh set of attempts
+        isIntentionalDisconnect = false
+        reconnectAttempts = 0
+        establishConnection(to: url)
+    }
+
     func sendMessage(id: String, content: String, project: String? = nil, language: String? = nil) async throws {
         let payload = ClientMessage(type: "message", id: id, content: content, project: project, language: language)
         let data = try JSONEncoder().encode(payload)

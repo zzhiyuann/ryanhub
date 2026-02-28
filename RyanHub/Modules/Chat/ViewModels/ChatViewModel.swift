@@ -155,6 +155,13 @@ final class ChatViewModel {
         startStatePolling()
     }
 
+    /// Called when the app returns to foreground. Re-establishes connection
+    /// if it was lost while suspended in the background.
+    func ensureConnected() {
+        webSocket.reconnectIfNeeded()
+        startStatePolling()
+    }
+
     /// Send the current input text (and any pending image) as a message.
     /// Optionally include a reference to a message being replied to.
     func sendMessage(replyingTo: ChatMessage? = nil) {
