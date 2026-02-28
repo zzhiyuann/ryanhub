@@ -66,15 +66,17 @@ struct BookReaderView: View {
     private func wrapHTML(_ body: String) -> String {
         let isDark = colorScheme == .dark
 
-        let bgColor = isDark ? "#0A0A0F" : "#F5F5F7"
-        let textColor = isDark ? "#E0E0E5" : "#1A1A1A"
-        let headingColor = isDark ? "#F5F5F7" : "#111111"
-        let subheadingColor = isDark ? "#C8C8D0" : "#333333"
-        let mutedColor = isDark ? "#9CA3AF" : "#6B7280"
-        let codeBg = isDark ? "#252540" : "#F0F0F2"
-        let borderColor = isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)"
-        let accentColor = "#6366F1"
-        let linkColor = isDark ? "#818CF8" : "#6366F1"
+        // Dark mode: warm, low-contrast palette optimized for long reading sessions.
+        // Avoids pure black bg and pure white text to reduce eye strain.
+        let bgColor = isDark ? "#1A1A1A" : "#FAF8F5"
+        let textColor = isDark ? "#C8C4BC" : "#2C2C2C"
+        let headingColor = isDark ? "#D8D4CC" : "#1A1A1A"
+        let subheadingColor = isDark ? "#B8B4AC" : "#3A3A3A"
+        let mutedColor = isDark ? "#8A8680" : "#6B6860"
+        let codeBg = isDark ? "#252320" : "#F0EDE8"
+        let borderColor = isDark ? "rgba(200,196,188,0.1)" : "rgba(0,0,0,0.06)"
+        let accentColor = isDark ? "#B8A080" : "#6366F1"
+        let linkColor = isDark ? "#C8A882" : "#6366F1"
 
         return """
         <!DOCTYPE html>
@@ -160,7 +162,7 @@ struct BookReaderView: View {
             margin: 0.8em 0;
             color: \(mutedColor) !important;
             font-style: italic;
-            background: \(isDark ? "rgba(99,102,241,0.06)" : "rgba(99,102,241,0.04)") !important;
+            background: \(isDark ? "rgba(184,160,128,0.06)" : "rgba(99,102,241,0.04)") !important;
             border-radius: 0 6px 6px 0;
         }
         blockquote p {
@@ -231,13 +233,13 @@ struct BookReaderView: View {
             color: \(textColor) !important;
         }
         th {
-            background: \(isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)") !important;
+            background: \(isDark ? "rgba(200,196,188,0.04)" : "rgba(0,0,0,0.03)") !important;
             font-weight: 600;
         }
 
         /* Strong & emphasis */
         strong, b { color: \(headingColor) !important; }
-        em, i { color: \(isDark ? "#D0D0D8" : "#333") !important; }
+        em, i { color: \(isDark ? "#B0ACA4" : "#333") !important; }
 
         /* Footnotes & small text */
         sup { font-size: 0.75em; }
@@ -272,15 +274,15 @@ struct BookHTMLWebView: UIViewRepresentable {
         webView.scrollView.contentInsetAdjustmentBehavior = .always
         // Override the web content to match iOS appearance
         webView.underPageBackgroundColor = colorScheme == .dark
-            ? UIColor(red: 0x0A/255, green: 0x0A/255, blue: 0x0F/255, alpha: 1)
-            : UIColor(red: 0xF5/255, green: 0xF5/255, blue: 0xF7/255, alpha: 1)
+            ? UIColor(red: 0x1A/255, green: 0x1A/255, blue: 0x1A/255, alpha: 1)
+            : UIColor(red: 0xFA/255, green: 0xF8/255, blue: 0xF5/255, alpha: 1)
         return webView
     }
 
     func updateUIView(_ webView: WKWebView, context: Context) {
         webView.underPageBackgroundColor = colorScheme == .dark
-            ? UIColor(red: 0x0A/255, green: 0x0A/255, blue: 0x0F/255, alpha: 1)
-            : UIColor(red: 0xF5/255, green: 0xF5/255, blue: 0xF7/255, alpha: 1)
+            ? UIColor(red: 0x1A/255, green: 0x1A/255, blue: 0x1A/255, alpha: 1)
+            : UIColor(red: 0xFA/255, green: 0xF8/255, blue: 0xF5/255, alpha: 1)
         webView.loadHTMLString(html, baseURL: nil)
     }
 }
