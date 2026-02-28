@@ -36,7 +36,7 @@ Endpoints:
   GET/POST /popo/daily-summary — Daily behavior summaries
   POST     /popo/audio — Upload audio file (binary)
   GET      /popo/audio/<filename> — Retrieve audio file
-  POST     /popo/narrations/analyze — Transcribe (Whisper) + affective analysis (local emotion model)
+  POST     /popo/narrations/analyze — Transcribe (via diarization server) + affective analysis (local emotion model)
   POST     /popo/analyze — Behavioral analysis: generate proactive nudges from sensing data (LLM or rule-based)
   POST     /popo/location/enrich — Reverse geocode + semantic place enrichment
   POST     /popo/location/learn-place — Teach the system a named place
@@ -102,40 +102,68 @@ POPO_AUDIO_DIR = os.path.join(BRIDGE_DATA_DIR, "popo_audio")
 os.makedirs(POPO_AUDIO_DIR, exist_ok=True)
 
 # ---------------------------------------------------------------------------
-# Local Whisper integration for narration transcription
+# Whisper transcription via diarization server (port 18793)
 # ---------------------------------------------------------------------------
 
-WHISPER_AVAILABLE = False
-_whisper_model = None
-# Lock to serialize all Whisper transcription calls. The model (GPU/CPU) cannot
-# handle concurrent inference safely — concurrent calls can crash or produce
-# garbage output. All callers (narration analysis, chat voice, audio upload
-# background thread) must acquire this lock before calling model.transcribe().
-_whisper_lock = threading.Lock()
+DIARIZATION_SERVER_URL = "http://localhost:18793"
 
 # Lock to protect concurrent reads/writes of the narrations JSON file.
 # With ThreadingHTTPServer, multiple handlers can run concurrently, and the
 # background analysis thread also writes to this file.
 _narrations_file_lock = threading.Lock()
 
-try:
-    import whisper
-    WHISPER_AVAILABLE = True
-    print("Local Whisper available for narration transcription.")
-except ImportError:
-    print("Warning: openai-whisper not installed. Narration transcription will be skipped.",
-          file=sys.stderr)
-    print("  Install with: pip install openai-whisper", file=sys.stderr)
 
+def transcribe_via_diarization_server(audio_path):
+    """Transcribe audio by forwarding to the diarization server's /transcribe endpoint.
 
-def get_whisper_model():
-    """Lazily load the Whisper model (large-v3-turbo for best quality)."""
-    global _whisper_model
-    if _whisper_model is None:
-        print("[Whisper] Loading model large-v3-turbo (first call, may take a moment)...")
-        _whisper_model = whisper.load_model("large-v3-turbo")
-        print("[Whisper] Model loaded successfully.")
-    return _whisper_model
+    Posts the audio file as multipart form data to http://localhost:18793/transcribe.
+    Returns the transcript text, or None on failure.
+    Timeout: 120s (whisper can be slow on long recordings).
+    """
+    import urllib.request
+    import urllib.error
+    import mimetypes
+
+    try:
+        # Build multipart/form-data request
+        boundary = f"----BridgeUpload{uuid.uuid4().hex}"
+        filename = os.path.basename(audio_path)
+        content_type = mimetypes.guess_type(filename)[0] or "audio/wav"
+
+        with open(audio_path, "rb") as f:
+            file_data = f.read()
+
+        body = (
+            f"--{boundary}\r\n"
+            f'Content-Disposition: form-data; name="audio"; filename="{filename}"\r\n'
+            f"Content-Type: {content_type}\r\n"
+            f"\r\n"
+        ).encode("utf-8") + file_data + f"\r\n--{boundary}--\r\n".encode("utf-8")
+
+        req = urllib.request.Request(
+            f"{DIARIZATION_SERVER_URL}/transcribe",
+            data=body,
+            headers={
+                "Content-Type": f"multipart/form-data; boundary={boundary}",
+                "Content-Length": str(len(body)),
+            },
+            method="POST",
+        )
+
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            result = json.loads(resp.read().decode("utf-8"))
+
+        text = result.get("text", "").strip()
+        if text:
+            print(f"[Whisper] Transcribed via diarization server: {os.path.basename(audio_path)}: {text[:80]}...")
+        return text if text else None
+
+    except urllib.error.URLError as e:
+        print(f"[Whisper] Diarization server unreachable: {e}", file=sys.stderr)
+        return None
+    except Exception as e:
+        print(f"[Whisper] Remote transcription failed: {e}", file=sys.stderr)
+        return None
 
 # ---------------------------------------------------------------------------
 # Local HuggingFace emotion model for affect analysis
@@ -216,22 +244,9 @@ def _emotion_to_stress(emotion):
 
 def transcribe_audio(audio_path):
     # type: (str) -> Optional[str]
-    """Transcribe an audio file using local Whisper model.
-    Acquires _whisper_lock to serialize calls (model is not thread-safe).
+    """Transcribe an audio file via the diarization server (port 18793).
     Returns the transcript text, or None if unavailable."""
-    if not WHISPER_AVAILABLE:
-        return None
-    try:
-        with _whisper_lock:
-            model = get_whisper_model()
-            result = model.transcribe(str(audio_path))
-        text = result["text"].strip()
-        if text:
-            print(f"[Whisper] Transcribed {os.path.basename(audio_path)}: {text[:80]}...")
-        return text if text else None
-    except Exception as e:
-        print(f"[Whisper] Local transcription failed: {e}", file=sys.stderr)
-        return None
+    return transcribe_via_diarization_server(audio_path)
 
 
 def analyze_affect(text):
@@ -278,6 +293,7 @@ def analyze_affect(text):
 def run_narration_analysis(audio_path, narration_id=None):
     # type: (str, Optional[str]) -> Dict[str, Any]
     """Run the full transcription + affect analysis pipeline.
+    Transcription is forwarded to the diarization server (port 18793).
     Returns a dict with 'transcript', 'affect', and 'narration_id'."""
     result = {
         "narration_id": narration_id,
@@ -286,21 +302,20 @@ def run_narration_analysis(audio_path, narration_id=None):
         "status": "skipped"
     }  # type: Dict[str, Any]
 
-    if not WHISPER_AVAILABLE:
-        result["status"] = "whisper_unavailable"
+    # Step 1: Transcribe via diarization server
+    transcript = transcribe_audio(audio_path)
+    if transcript is None:
+        result["status"] = "transcription_failed"
         return result
 
-    # Step 1: Transcribe
-    transcript = transcribe_audio(audio_path)
-    if transcript:
-        result["transcript"] = transcript
-        result["status"] = "transcribed"
+    result["transcript"] = transcript
+    result["status"] = "transcribed"
 
-        # Step 2: Affect analysis
-        affect = analyze_affect(transcript)
-        if affect:
-            result["affect"] = affect
-            result["status"] = "analyzed"
+    # Step 2: Affect analysis (local)
+    affect = analyze_affect(transcript)
+    if affect:
+        result["affect"] = affect
+        result["status"] = "analyzed"
 
     return result
 
@@ -1625,16 +1640,7 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
             self._send_json(404, {"error": "Audio file not found: %s" % filename})
             return
 
-        if not WHISPER_AVAILABLE:
-            self._send_json(503, {
-                "error": "Local Whisper not available (openai-whisper package not installed)",
-                "transcript": None,
-                "affect": None,
-                "status": "whisper_unavailable"
-            })
-            return
-
-        # Run the analysis pipeline
+        # Run the analysis pipeline (transcription forwarded to diarization server)
         try:
             result = run_narration_analysis(audio_path, narration_id)
 
@@ -1994,17 +2000,14 @@ def main():
         print("Analysis endpoints will fail, but data endpoints will work.", file=sys.stderr)
 
     # Use ThreadingHTTPServer so the server can accept new requests while
-    # a long-running handler (e.g. Whisper transcription) is processing.
-    # Without threading, a 30+ second Whisper call blocks ALL other requests.
+    # a long-running handler (e.g. remote transcription, Claude analysis) is processing.
+    # Without threading, a long call blocks ALL other requests.
     server = http.server.ThreadingHTTPServer((HOST, PORT), BridgeHandler)
     print(f"RyanHub Bridge Server listening on http://{HOST}:{PORT}")
     print(f"Data directory: {BRIDGE_DATA_DIR}")
     if os.path.isfile(CLAUDE_PATH):
         print(f"Claude CLI: {CLAUDE_PATH}")
-    if WHISPER_AVAILABLE:
-        print("Local Whisper: available (narration transcription enabled)")
-    else:
-        print("Local Whisper: not available (narration transcription disabled)")
+    print(f"Whisper: via diarization server ({DIARIZATION_SERVER_URL})")
     if SENTIMENT_AVAILABLE:
         print("Local emotion model: available (affect analysis enabled)")
     else:

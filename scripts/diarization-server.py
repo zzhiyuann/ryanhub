@@ -300,9 +300,10 @@ def identify_speaker(embedding: np.ndarray) -> tuple[str, float]:
 # Audio Processing
 # ============================================================
 
-def transcribe_audio(audio_path: str, language: Optional[str] = None) -> dict:
+def transcribe_audio(audio_path: str, language: Optional[str] = None, source: str = "unknown") -> dict:
     """Transcribe audio using mlx-whisper.
-    Acquires _whisper_lock to serialize calls (model is not thread-safe)."""
+    Acquires _whisper_lock to serialize calls (model is not thread-safe).
+    source: identifies the caller (e.g. 'http', 'websocket', 'pipeline')."""
     whisper = get_whisper()
 
     kwargs = {
@@ -312,8 +313,19 @@ def transcribe_audio(audio_path: str, language: Optional[str] = None) -> dict:
     if language:
         kwargs["language"] = language
 
+    wait_start = time.time()
+    log.info(f"[whisper] Waiting for lock (source={source}, file={os.path.basename(audio_path)})")
     with _whisper_lock:
+        waited = time.time() - wait_start
+        if waited > 0.1:
+            log.info(f"[whisper] Lock acquired after {waited:.2f}s wait (source={source})")
+        else:
+            log.info(f"[whisper] Lock acquired immediately (source={source})")
+        t0 = time.time()
         result = whisper.transcribe(audio_path, **kwargs)
+        elapsed = time.time() - t0
+        text_preview = result.get("text", "")[:80]
+        log.info(f"[whisper] Transcription done in {elapsed:.2f}s (source={source}): {text_preview}...")
     return result
 
 
@@ -398,7 +410,7 @@ def full_pipeline(audio_path: str, language: Optional[str] = None) -> dict:
     # Step 1: Transcribe
     log.info("Step 1/3: Transcribing...")
     t1 = time.time()
-    transcription = transcribe_audio(audio_path, language)
+    transcription = transcribe_audio(audio_path, language, source="pipeline")
     log.info(f"  Transcription done in {time.time()-t1:.1f}s")
 
     # Step 2: Diarize
@@ -676,7 +688,7 @@ class DiarizationHandler(BaseHTTPRequestHandler):
             return
 
         try:
-            result = transcribe_audio(audio_path)
+            result = transcribe_audio(audio_path, source="http")
             self._send_json({
                 "text": result.get("text", ""),
                 "segments": result.get("segments", []),
@@ -862,7 +874,7 @@ def _save_pcm_to_wav(pcm_samples: np.ndarray, sample_rate: int = SAMPLE_RATE) ->
 
 def _transcribe_segment_sync(wav_path: str) -> dict:
     """Synchronous transcription of a WAV file. Runs in thread pool."""
-    result = transcribe_audio(wav_path)
+    result = transcribe_audio(wav_path, source="websocket")
     return result
 
 
