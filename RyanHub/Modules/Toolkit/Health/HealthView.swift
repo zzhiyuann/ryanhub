@@ -38,6 +38,18 @@ struct HealthView: View {
     @State private var activityAnalysisDate = Date()
     @State private var activityAnalysisDescription = ""
 
+    // Exercise input sheet state
+    @State private var showExerciseInput = false
+    @State private var exerciseTargetActivityID: UUID?
+    @State private var exerciseName = ""
+    @State private var exerciseSets: Int = 3
+    @State private var exerciseReps: Int = 10
+    @State private var exerciseWeightValue = ""
+    @State private var exerciseWeightUnit: WeightUnit = .lb
+    @State private var exerciseDuration: Int = 0
+    @State private var exerciseIsCardio = false
+    @State private var exerciseNameSuggestions: [String] = []
+
     var body: some View {
         ScrollView {
             VStack(spacing: HubLayout.sectionSpacing) {
@@ -50,6 +62,9 @@ struct HealthView: View {
         .background(AdaptiveColors.background(for: colorScheme))
         .sheet(isPresented: $showWeightLog) {
             WeightLogView(viewModel: viewModel)
+        }
+        .sheet(isPresented: $showExerciseInput) {
+            exerciseInputSheet
         }
         .fullScreenCover(isPresented: $showCamera) {
             CameraView { image in
@@ -1126,62 +1141,162 @@ struct HealthView: View {
     // MARK: - Shared
 
     private func activityEntryRow(_ entry: ActivityEntry) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: ActivityParser.icon(for: entry.type))
-                .font(.system(size: 18, weight: .medium))
-                .foregroundStyle(Color.hubAccentGreen)
-                .frame(width: 36, height: 36)
-                .background(
-                    Circle().fill(Color.hubAccentGreen.opacity(0.12))
-                )
+        VStack(alignment: .leading, spacing: 0) {
+            // Main activity header
+            HStack(spacing: 12) {
+                // Activity icon with optional Watch badge overlay
+                ZStack(alignment: .bottomTrailing) {
+                    Image(systemName: ActivityParser.icon(for: entry.type))
+                        .font(.system(size: 18, weight: .medium))
+                        .foregroundStyle(Color.hubAccentGreen)
+                        .frame(width: 36, height: 36)
+                        .background(
+                            Circle().fill(Color.hubAccentGreen.opacity(0.12))
+                        )
 
-            VStack(alignment: .leading, spacing: 2) {
-                if let rawDesc = entry.rawDescription, !rawDesc.isEmpty {
-                    Text(rawDesc)
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
-                        .lineLimit(2)
-                } else {
-                    Text(entry.type)
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                    // Apple Watch badge
+                    if entry.isFromWatch {
+                        Image(systemName: "applewatch")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(.white)
+                            .frame(width: 16, height: 16)
+                            .background(Circle().fill(Color.hubPrimary))
+                            .offset(x: 4, y: 4)
+                    }
                 }
 
-                HStack(spacing: 8) {
-                    if entry.rawDescription != nil {
+                VStack(alignment: .leading, spacing: 2) {
+                    if entry.isFromWatch {
                         Text(entry.type)
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(Color.hubAccentGreen)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(
-                                Capsule().fill(Color.hubAccentGreen.opacity(0.12))
-                            )
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                    } else if let rawDesc = entry.rawDescription, !rawDesc.isEmpty {
+                        Text(rawDesc)
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                            .lineLimit(2)
+                    } else {
+                        Text(entry.type)
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
                     }
 
-                    if entry.duration > 0 {
-                        Text(entry.formattedDuration)
+                    HStack(spacing: 8) {
+                        if !entry.isFromWatch && entry.rawDescription != nil {
+                            Text(entry.type)
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(Color.hubAccentGreen)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(
+                                    Capsule().fill(Color.hubAccentGreen.opacity(0.12))
+                                )
+                        }
+
+                        if entry.isFromWatch {
+                            Text("Watch")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(Color.hubPrimary)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(
+                                    Capsule().fill(Color.hubPrimary.opacity(0.12))
+                                )
+                        }
+
+                        if entry.duration > 0 {
+                            Text(entry.formattedDuration)
+                                .font(.hubCaption)
+                                .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                        }
+
+                        Text(entry.formattedTime)
                             .font(.hubCaption)
                             .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
                     }
+                }
 
-                    Text(entry.formattedTime)
-                        .font(.hubCaption)
-                        .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                Spacer()
+
+                VStack(alignment: .trailing, spacing: 4) {
+                    if let calories = entry.caloriesBurned, calories > 0 {
+                        Text("\(calories) cal")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(Color.hubAccentYellow)
+                    } else if entry.rawDescription == nil, let note = entry.note, !note.isEmpty {
+                        Text(note)
+                            .font(.hubCaption)
+                            .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                            .lineLimit(1)
+                    }
+
+                    // Add exercise button
+                    Button {
+                        openExerciseInput(for: entry.id)
+                    } label: {
+                        Image(systemName: "plus.circle")
+                            .font(.system(size: 18))
+                            .foregroundStyle(Color.hubPrimary)
+                    }
                 }
             }
 
-            Spacer()
+            // Exercises list (below the main row)
+            if !entry.exercises.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    Divider()
+                        .padding(.vertical, 8)
 
-            if let calories = entry.caloriesBurned, calories > 0 {
-                Text("\(calories) cal")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Color.hubAccentYellow)
-            } else if entry.rawDescription == nil, let note = entry.note, !note.isEmpty {
-                Text(note)
-                    .font(.hubCaption)
-                    .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
-                    .lineLimit(1)
+                    ForEach(entry.exercises) { exercise in
+                        HStack(spacing: 8) {
+                            Circle()
+                                .fill(Color.hubAccentGreen.opacity(0.4))
+                                .frame(width: 5, height: 5)
+
+                            Text(exercise.name)
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+
+                            Spacer()
+
+                            HStack(spacing: 6) {
+                                if let sets = exercise.sets, let reps = exercise.reps {
+                                    Text("\(sets)x\(reps)")
+                                        .font(.system(size: 12, weight: .semibold))
+                                        .foregroundStyle(Color.hubPrimary)
+                                }
+
+                                if let weight = exercise.weight {
+                                    Text(weight)
+                                        .font(.system(size: 12, weight: .medium))
+                                        .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                                }
+
+                                if let duration = exercise.duration {
+                                    Text("\(duration) min")
+                                        .font(.system(size: 12, weight: .medium))
+                                        .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                                }
+
+                                if let cal = exercise.caloriesBurned {
+                                    Text("~\(cal) cal")
+                                        .font(.system(size: 12, weight: .semibold))
+                                        .foregroundStyle(Color.hubAccentYellow)
+                                }
+                            }
+                        }
+                        .padding(.vertical, 2)
+                        .contextMenu {
+                            Button(role: .destructive) {
+                                withAnimation {
+                                    viewModel.removeExercise(exercise.id, from: entry.id)
+                                }
+                            } label: {
+                                Label("Delete Exercise", systemImage: "trash")
+                            }
+                        }
+                    }
+                }
             }
         }
         .padding(HubLayout.cardInnerPadding)
@@ -1197,6 +1312,232 @@ struct HealthView: View {
                     y: 2
                 )
         )
+    }
+
+    // MARK: - Exercise Input
+
+    /// Open the exercise input sheet for a given activity entry.
+    private func openExerciseInput(for activityID: UUID) {
+        exerciseTargetActivityID = activityID
+        exerciseName = ""
+        exerciseSets = 3
+        exerciseReps = 10
+        exerciseWeightValue = ""
+        exerciseWeightUnit = .lb
+        exerciseDuration = 0
+        exerciseIsCardio = false
+        exerciseNameSuggestions = viewModel.recentExerciseNames
+        showExerciseInput = true
+    }
+
+    /// Save the current exercise input to the target activity.
+    private func saveExercise() {
+        guard let activityID = exerciseTargetActivityID else { return }
+        let trimmedName = exerciseName.trimmingCharacters(in: .whitespaces)
+        guard !trimmedName.isEmpty else { return }
+
+        let weightString: String? = {
+            let trimmed = exerciseWeightValue.trimmingCharacters(in: .whitespaces)
+            guard !trimmed.isEmpty else { return nil }
+            return "\(trimmed) \(exerciseWeightUnit.rawValue)"
+        }()
+
+        let exercise = ExerciseItem(
+            name: trimmedName,
+            sets: exerciseIsCardio ? nil : exerciseSets,
+            reps: exerciseIsCardio ? nil : exerciseReps,
+            weight: exerciseIsCardio ? nil : weightString,
+            duration: exerciseIsCardio ? (exerciseDuration > 0 ? exerciseDuration : nil) : nil
+        )
+
+        viewModel.addExercise(exercise, to: activityID)
+        showExerciseInput = false
+    }
+
+    /// Exercise input sheet view.
+    private var exerciseInputSheet: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 20) {
+                    // Exercise name with autocomplete suggestions
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("EXERCISE NAME")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+
+                        TextField("e.g., Lat Pulldown", text: $exerciseName)
+                            .font(.hubBody)
+                            .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                            .padding(12)
+                            .background(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .fill(AdaptiveColors.surfaceSecondary(for: colorScheme))
+                            )
+
+                        // Recent exercise name suggestions
+                        if !exerciseNameSuggestions.isEmpty && exerciseName.isEmpty {
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 8) {
+                                    ForEach(exerciseNameSuggestions.prefix(8), id: \.self) { suggestion in
+                                        Button {
+                                            exerciseName = suggestion
+                                        } label: {
+                                            Text(suggestion)
+                                                .font(.system(size: 12, weight: .medium))
+                                                .foregroundStyle(Color.hubPrimary)
+                                                .padding(.horizontal, 10)
+                                                .padding(.vertical, 6)
+                                                .background(
+                                                    Capsule().fill(Color.hubPrimary.opacity(0.1))
+                                                )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Filtered suggestions while typing
+                        if !exerciseName.isEmpty {
+                            let filtered = exerciseNameSuggestions.filter {
+                                $0.localizedCaseInsensitiveContains(exerciseName) && $0.lowercased() != exerciseName.lowercased()
+                            }
+                            if !filtered.isEmpty {
+                                ScrollView(.horizontal, showsIndicators: false) {
+                                    HStack(spacing: 8) {
+                                        ForEach(filtered.prefix(5), id: \.self) { suggestion in
+                                            Button {
+                                                exerciseName = suggestion
+                                            } label: {
+                                                Text(suggestion)
+                                                    .font(.system(size: 12, weight: .medium))
+                                                    .foregroundStyle(Color.hubPrimary)
+                                                    .padding(.horizontal, 10)
+                                                    .padding(.vertical, 6)
+                                                    .background(
+                                                        Capsule().fill(Color.hubPrimary.opacity(0.1))
+                                                    )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Strength / Cardio toggle
+                    Picker("Type", selection: $exerciseIsCardio) {
+                        Text("Strength").tag(false)
+                        Text("Cardio").tag(true)
+                    }
+                    .pickerStyle(.segmented)
+
+                    if exerciseIsCardio {
+                        // Cardio: duration
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("DURATION (MINUTES)")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+
+                            Stepper(value: $exerciseDuration, in: 0...300, step: 5) {
+                                Text("\(exerciseDuration) min")
+                                    .font(.system(size: 20, weight: .bold))
+                                    .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                            }
+                            .padding(12)
+                            .background(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .fill(AdaptiveColors.surfaceSecondary(for: colorScheme))
+                            )
+                        }
+                    } else {
+                        // Strength: sets, reps, weight
+                        HStack(spacing: 16) {
+                            // Sets
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("SETS")
+                                    .font(.system(size: 11, weight: .bold))
+                                    .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+
+                                Stepper(value: $exerciseSets, in: 1...20) {
+                                    Text("\(exerciseSets)")
+                                        .font(.system(size: 20, weight: .bold))
+                                        .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                                }
+                                .padding(12)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .fill(AdaptiveColors.surfaceSecondary(for: colorScheme))
+                                )
+                            }
+
+                            // Reps
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("REPS")
+                                    .font(.system(size: 11, weight: .bold))
+                                    .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+
+                                Stepper(value: $exerciseReps, in: 1...100) {
+                                    Text("\(exerciseReps)")
+                                        .font(.system(size: 20, weight: .bold))
+                                        .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                                }
+                                .padding(12)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .fill(AdaptiveColors.surfaceSecondary(for: colorScheme))
+                                )
+                            }
+                        }
+
+                        // Weight input
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("WEIGHT")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+
+                            HStack(spacing: 10) {
+                                TextField("e.g., 70", text: $exerciseWeightValue)
+                                    .font(.hubBody)
+                                    .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                                    .keyboardType(.decimalPad)
+                                    .padding(12)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 10)
+                                            .fill(AdaptiveColors.surfaceSecondary(for: colorScheme))
+                                    )
+
+                                Picker("Unit", selection: $exerciseWeightUnit) {
+                                    ForEach(WeightUnit.allCases) { unit in
+                                        Text(unit.displayName).tag(unit)
+                                    }
+                                }
+                                .pickerStyle(.segmented)
+                                .frame(width: 100)
+                            }
+                        }
+                    }
+
+                    // Save button
+                    HubButton("Add Exercise", icon: "plus.circle.fill") {
+                        saveExercise()
+                    }
+                    .disabled(exerciseName.trimmingCharacters(in: .whitespaces).isEmpty)
+                    .opacity(exerciseName.trimmingCharacters(in: .whitespaces).isEmpty ? 0.5 : 1)
+                }
+                .padding(HubLayout.standardPadding)
+            }
+            .background(AdaptiveColors.background(for: colorScheme))
+            .navigationTitle("Add Exercise")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        showExerciseInput = false
+                    }
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
     }
 
     // MARK: - Empty State

@@ -31,8 +31,24 @@ final class HealthViewModel {
     /// Whether a HealthKit query is in progress.
     var isLoadingSteps: Bool = false
 
+    /// Whether Watch workouts are currently being fetched.
+    var isLoadingWorkouts: Bool = false
+
     /// The HealthKit store instance (nil if HealthKit is unavailable).
     private let healthStore: HKHealthStore? = HKHealthStore.isHealthDataAvailable() ? HKHealthStore() : nil
+
+    /// Observer query for real-time workout updates from Apple Watch.
+    private var workoutObserverQuery: HKObserverQuery?
+
+    /// Recently used exercise names for autocomplete.
+    var recentExerciseNames: [String] {
+        let allNames = activityEntries
+            .flatMap(\.exercises)
+            .map(\.name)
+        // Deduplicate, preserving most recent first
+        var seen = Set<String>()
+        return allNames.reversed().filter { seen.insert($0.lowercased()).inserted }
+    }
 
     // MARK: - Bridge Server
 
@@ -161,12 +177,13 @@ final class HealthViewModel {
 
     // MARK: - HealthKit
 
-    /// Request HealthKit authorization and fetch today's step count.
+    /// Request HealthKit authorization for steps and workouts, then fetch data.
     func requestHealthKitAccess() {
         guard let healthStore else { return }
         guard let stepType = HKQuantityType.quantityType(forIdentifier: .stepCount) else { return }
 
-        let readTypes: Set<HKObjectType> = [stepType]
+        let workoutType = HKObjectType.workoutType()
+        let readTypes: Set<HKObjectType> = [stepType, workoutType]
 
         healthStore.requestAuthorization(toShare: nil, read: readTypes) { [weak self] success, error in
             Task { @MainActor in
@@ -174,6 +191,8 @@ final class HealthViewModel {
                 if success {
                     self.healthKitAuthorized = true
                     self.fetchTodaySteps()
+                    self.fetchRecentWorkouts()
+                    self.startWorkoutObserver()
                 } else {
                     print("[HealthVM] HealthKit authorization failed: \(error?.localizedDescription ?? "unknown")")
                 }
@@ -208,6 +227,111 @@ final class HealthViewModel {
 
         isLoadingSteps = true
         healthStore.execute(query)
+    }
+
+    // MARK: - HealthKit Workouts
+
+    /// Fetch workouts from the last 7 days and import as activity entries.
+    func fetchRecentWorkouts() {
+        guard let healthStore else { return }
+
+        let calendar = Calendar.current
+        let startDate = calendar.date(byAdding: .day, value: -7, to: Date()) ?? Date()
+        let predicate = HKQuery.predicateForSamples(withStart: startDate, end: Date(), options: .strictStartDate)
+
+        let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
+
+        let query = HKSampleQuery(
+            sampleType: HKObjectType.workoutType(),
+            predicate: predicate,
+            limit: HKObjectQueryNoLimit,
+            sortDescriptors: [sortDescriptor]
+        ) { [weak self] _, samples, error in
+            Task { @MainActor in
+                guard let self else { return }
+                self.isLoadingWorkouts = false
+                if let workouts = samples as? [HKWorkout] {
+                    self.importWorkouts(workouts)
+                } else {
+                    print("[HealthVM] Workout query error: \(error?.localizedDescription ?? "no data")")
+                }
+            }
+        }
+
+        isLoadingWorkouts = true
+        healthStore.execute(query)
+    }
+
+    /// Start observing new workout additions in real time.
+    private func startWorkoutObserver() {
+        guard let healthStore else { return }
+        // Remove any existing observer
+        if let existing = workoutObserverQuery {
+            healthStore.stop(existing)
+        }
+
+        let query = HKObserverQuery(sampleType: HKObjectType.workoutType(), predicate: nil) { [weak self] _, completionHandler, error in
+            if let error {
+                print("[HealthVM] Workout observer error: \(error.localizedDescription)")
+                completionHandler()
+                return
+            }
+            Task { @MainActor in
+                self?.fetchRecentWorkouts()
+            }
+            completionHandler()
+        }
+
+        workoutObserverQuery = query
+        healthStore.execute(query)
+    }
+
+    /// Convert HKWorkout instances into ActivityEntry records, deduplicating by workout UUID.
+    private func importWorkouts(_ workouts: [HKWorkout]) {
+        let existingUUIDs = Set(activityEntries.compactMap(\.hkWorkoutUUID))
+        var didImport = false
+
+        for workout in workouts {
+            let workoutUUID = workout.uuid.uuidString
+            guard !existingUUIDs.contains(workoutUUID) else { continue }
+
+            let type = ActivityParser.activityType(from: workout.workoutActivityType)
+            let durationMinutes = Int(workout.duration / 60)
+            let calories: Int? = workout.totalEnergyBurned.map {
+                Int($0.doubleValue(for: .kilocalorie()))
+            }
+
+            let entry = ActivityEntry(
+                date: workout.startDate,
+                type: type,
+                duration: durationMinutes,
+                rawDescription: "Apple Watch Workout",
+                caloriesBurned: calories,
+                hkWorkoutUUID: workoutUUID
+            )
+            activityEntries.append(entry)
+            didImport = true
+        }
+
+        if didImport {
+            saveAndSync(activityEntries, forKey: StorageKeys.activityEntries, endpoint: "/health-data/activity")
+        }
+    }
+
+    // MARK: - Exercise Management
+
+    /// Add an exercise to an existing activity entry.
+    func addExercise(_ exercise: ExerciseItem, to activityID: UUID) {
+        guard let index = activityEntries.firstIndex(where: { $0.id == activityID }) else { return }
+        activityEntries[index].exercises.append(exercise)
+        saveAndSync(activityEntries, forKey: StorageKeys.activityEntries, endpoint: "/health-data/activity")
+    }
+
+    /// Remove an exercise from an existing activity entry.
+    func removeExercise(_ exerciseID: UUID, from activityID: UUID) {
+        guard let index = activityEntries.firstIndex(where: { $0.id == activityID }) else { return }
+        activityEntries[index].exercises.removeAll { $0.id == exerciseID }
+        saveAndSync(activityEntries, forKey: StorageKeys.activityEntries, endpoint: "/health-data/activity")
     }
 
     // MARK: - Weight Actions

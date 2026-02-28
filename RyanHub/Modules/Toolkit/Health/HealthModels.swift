@@ -1,4 +1,5 @@
 import Foundation
+import HealthKit
 
 // MARK: - Weight Entry
 
@@ -151,21 +152,64 @@ enum MealType: String, Codable, CaseIterable, Identifiable {
 
 // MARK: - Exercise Item (sub-item within an activity)
 
-/// Individual exercise within a workout, typically from AI analysis.
+/// Individual exercise within a workout, typically from AI analysis or manual entry.
 /// Supports both strength (sets/reps/weight) and cardio (duration).
 struct ExerciseItem: Codable, Identifiable {
-    var id: String { name }
+    let id: UUID
     let name: String        // "Lat Pulldown"
     let sets: Int?          // 4
     let reps: Int?          // 12
     let weight: String?     // "70 lb"
     let duration: Int?      // minutes (for cardio)
     let caloriesBurned: Int?
+
+    init(id: UUID = UUID(), name: String, sets: Int? = nil, reps: Int? = nil, weight: String? = nil, duration: Int? = nil, caloriesBurned: Int? = nil) {
+        self.id = id
+        self.name = name
+        self.sets = sets
+        self.reps = reps
+        self.weight = weight
+        self.duration = duration
+        self.caloriesBurned = caloriesBurned
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, sets, reps, weight, duration, caloriesBurned
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        // Backwards compatibility: old entries used name as id (no UUID field).
+        // Try decoding UUID first; fall back to generating one.
+        id = (try? container.decode(UUID.self, forKey: .id)) ?? UUID()
+        name = try container.decode(String.self, forKey: .name)
+        sets = try container.decodeIfPresent(Int.self, forKey: .sets)
+        reps = try container.decodeIfPresent(Int.self, forKey: .reps)
+        weight = try container.decodeIfPresent(String.self, forKey: .weight)
+        duration = try container.decodeIfPresent(Int.self, forKey: .duration)
+        caloriesBurned = try container.decodeIfPresent(Int.self, forKey: .caloriesBurned)
+    }
+
+    /// Formatted display string for exercise details (e.g., "4×12 @ 70 lb").
+    var formattedDetails: String {
+        var parts: [String] = []
+        if let sets, let reps {
+            parts.append("\(sets)×\(reps)")
+        }
+        if let weight {
+            parts.append("@ \(weight)")
+        }
+        if let duration {
+            parts.append("\(duration) min")
+        }
+        return parts.joined(separator: " ")
+    }
 }
 
 // MARK: - Activity Entry
 
 /// A single physical activity record.
+/// Supports both manual entries and Apple Watch workout imports via HealthKit.
 struct ActivityEntry: Codable, Identifiable {
     let id: UUID
     let date: Date
@@ -175,14 +219,28 @@ struct ActivityEntry: Codable, Identifiable {
     let rawDescription: String?
     let caloriesBurned: Int?
     let isAIAnalyzed: Bool
-    let exercises: [ExerciseItem]
+    var exercises: [ExerciseItem]
     let aiSummary: String?
+    /// HealthKit workout UUID for deduplication of Watch-imported workouts.
+    let hkWorkoutUUID: String?
 
     enum CodingKeys: String, CodingKey {
-        case id, date, type, duration, note, rawDescription, caloriesBurned, isAIAnalyzed, exercises, aiSummary
+        case id, date, type, duration, note, rawDescription, caloriesBurned, isAIAnalyzed, exercises, aiSummary, hkWorkoutUUID
     }
 
-    init(id: UUID = UUID(), date: Date = Date(), type: String, duration: Int, note: String? = nil, rawDescription: String? = nil, caloriesBurned: Int? = nil, isAIAnalyzed: Bool = false, exercises: [ExerciseItem] = [], aiSummary: String? = nil) {
+    init(
+        id: UUID = UUID(),
+        date: Date = Date(),
+        type: String,
+        duration: Int,
+        note: String? = nil,
+        rawDescription: String? = nil,
+        caloriesBurned: Int? = nil,
+        isAIAnalyzed: Bool = false,
+        exercises: [ExerciseItem] = [],
+        aiSummary: String? = nil,
+        hkWorkoutUUID: String? = nil
+    ) {
         self.id = id
         self.date = date
         self.type = type
@@ -193,6 +251,7 @@ struct ActivityEntry: Codable, Identifiable {
         self.isAIAnalyzed = isAIAnalyzed
         self.exercises = exercises
         self.aiSummary = aiSummary
+        self.hkWorkoutUUID = hkWorkoutUUID
     }
 
     init(from decoder: Decoder) throws {
@@ -207,6 +266,12 @@ struct ActivityEntry: Codable, Identifiable {
         isAIAnalyzed = try container.decodeIfPresent(Bool.self, forKey: .isAIAnalyzed) ?? false
         exercises = try container.decodeIfPresent([ExerciseItem].self, forKey: .exercises) ?? []
         aiSummary = try container.decodeIfPresent(String.self, forKey: .aiSummary)
+        hkWorkoutUUID = try container.decodeIfPresent(String.self, forKey: .hkWorkoutUUID)
+    }
+
+    /// Whether this entry was imported from Apple Watch via HealthKit.
+    var isFromWatch: Bool {
+        hkWorkoutUUID != nil
     }
 
     /// Formatted duration string.
@@ -375,4 +440,46 @@ enum ActivityParser {
         }
         return "figure.run"
     }
+
+    /// Map HKWorkoutActivityType to a human-readable activity type string.
+    static func activityType(from hkType: HKWorkoutActivityType) -> String {
+        switch hkType {
+        case .running:                      return "Running"
+        case .walking:                      return "Walking"
+        case .cycling:                      return "Cycling"
+        case .swimming:                     return "Swimming"
+        case .traditionalStrengthTraining:  return "Gym"
+        case .functionalStrengthTraining:   return "Gym"
+        case .yoga:                         return "Yoga"
+        case .dance, .socialDance,
+             .cardioDance:                  return "Dancing"
+        case .basketball:                   return "Basketball"
+        case .soccer:                       return "Soccer"
+        case .tennis:                       return "Tennis"
+        case .climbing:                     return "Climbing"
+        case .rowing:                       return "Rowing"
+        case .boxing, .kickboxing,
+             .martialArts:                  return "Martial Arts"
+        case .elliptical, .stairClimbing,
+             .jumpRope, .highIntensityIntervalTraining:
+                                            return "Cardio"
+        case .hiking:                       return "Walking"
+        case .badminton, .racquetball,
+             .squash, .tableTennis,
+             .pickleball:                   return "Tennis"
+        default:                            return "Exercise"
+        }
+    }
+}
+
+// MARK: - Weight Unit
+
+/// Weight unit for exercise input (lb or kg).
+enum WeightUnit: String, CaseIterable, Identifiable {
+    case lb
+    case kg
+
+    var id: String { rawValue }
+
+    var displayName: String { rawValue }
 }
