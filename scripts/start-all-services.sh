@@ -56,6 +56,13 @@ BOOKFACTORY_HTTP_PORT=3000
 BOOKFACTORY_DIR="$REPO_ROOT/services/bookfactory"
 BOOKFACTORY_LOG="/tmp/ryanhub-bookfactory.log"
 
+# Diarization Server
+DIARIZATION_NAME="diarization"
+DIARIZATION_PORT=18793
+DIARIZATION_SCRIPT="$REPO_ROOT/scripts/diarization-server.py"
+DIARIZATION_PYTHON="$REPO_ROOT/scripts/diarization-env/bin/python3"
+DIARIZATION_LOG="/tmp/ryanhub-diarization.log"
+
 # Data directories (external to repo)
 export BOOKFACTORY_DATA_DIR="/Users/zwang/projects/bookfactory/data"
 export BOOK_SOURCE_DIR="/Users/zwang/bookfactory"
@@ -352,6 +359,78 @@ status_calendar() {
 }
 
 # =============================================================================
+# Service: Diarization Server
+# =============================================================================
+
+start_diarization() {
+    if port_in_use "$DIARIZATION_PORT"; then
+        local existing_pid
+        existing_pid=$(get_pid_on_port "$DIARIZATION_PORT")
+        log "$DIARIZATION_NAME: Already running on port $DIARIZATION_PORT (PID $existing_pid)"
+        save_pid "$DIARIZATION_NAME" "$existing_pid"
+        return 0
+    fi
+
+    if [[ ! -f "$DIARIZATION_SCRIPT" ]]; then
+        log_warn "$DIARIZATION_NAME: Script not found at $DIARIZATION_SCRIPT — skipping"
+        return 0
+    fi
+
+    if [[ ! -x "$DIARIZATION_PYTHON" ]]; then
+        log_warn "$DIARIZATION_NAME: Python venv not found at $DIARIZATION_PYTHON — skipping"
+        return 0
+    fi
+
+    log "$DIARIZATION_NAME: Starting on port $DIARIZATION_PORT..."
+    nohup "$DIARIZATION_PYTHON" "$DIARIZATION_SCRIPT" >> "$DIARIZATION_LOG" 2>&1 &
+    local pid=$!
+    disown "$pid" 2>/dev/null || true
+    save_pid "$DIARIZATION_NAME" "$pid"
+
+    if wait_for_port "$DIARIZATION_PORT" 15; then
+        log "$DIARIZATION_NAME: Started successfully (PID $pid)"
+    else
+        log_error "$DIARIZATION_NAME: Failed to start within timeout"
+        return 1
+    fi
+}
+
+stop_diarization() {
+    local pid
+    pid=$(read_pid "$DIARIZATION_NAME")
+    if [[ -z "$pid" ]]; then
+        pid=$(get_pid_on_port "$DIARIZATION_PORT")
+    fi
+
+    if [[ -n "$pid" ]] && is_alive "$pid"; then
+        log "$DIARIZATION_NAME: Stopping (PID $pid)..."
+        kill "$pid" 2>/dev/null
+        local wait=0
+        while is_alive "$pid" && (( wait < 5 )); do
+            sleep 1
+            (( wait++ ))
+        done
+        if is_alive "$pid"; then
+            kill -9 "$pid" 2>/dev/null
+        fi
+        log "$DIARIZATION_NAME: Stopped"
+    else
+        log "$DIARIZATION_NAME: Not running"
+    fi
+    rm -f "$PID_DIR/$DIARIZATION_NAME.pid"
+}
+
+status_diarization() {
+    if port_in_use "$DIARIZATION_PORT"; then
+        local pid
+        pid=$(get_pid_on_port "$DIARIZATION_PORT")
+        echo "  $DIARIZATION_NAME: RUNNING on port $DIARIZATION_PORT (PID $pid)"
+    else
+        echo "  $DIARIZATION_NAME: STOPPED (port $DIARIZATION_PORT)"
+    fi
+}
+
+# =============================================================================
 # Service: Book Factory Server
 # =============================================================================
 
@@ -446,10 +525,11 @@ do_start() {
 
     local failures=0
 
-    start_dispatcher  || (( failures++ )) || true
-    start_food        || (( failures++ )) || true
-    start_calendar    || (( failures++ )) || true
-    start_bookfactory || (( failures++ )) || true
+    start_dispatcher    || (( failures++ )) || true
+    start_food          || (( failures++ )) || true
+    start_calendar      || (( failures++ )) || true
+    start_diarization   || (( failures++ )) || true
+    start_bookfactory   || (( failures++ )) || true
 
     echo ""
     log "=========================================="
@@ -469,6 +549,7 @@ do_stop() {
     log "=========================================="
 
     stop_bookfactory
+    stop_diarization
     stop_calendar
     stop_food
     stop_dispatcher
@@ -484,6 +565,7 @@ do_status() {
     status_dispatcher
     status_food
     status_calendar
+    status_diarization
     status_bookfactory
     echo ""
 }
@@ -525,8 +607,14 @@ case "$ACTION" in
     stop-calendar)
         stop_calendar
         ;;
+    start-diarization)
+        start_diarization
+        ;;
+    stop-diarization)
+        stop_diarization
+        ;;
     *)
-        echo "Usage: $0 {start|stop|status|restart|start-food|stop-food|start-calendar|stop-calendar}"
+        echo "Usage: $0 {start|stop|status|restart|start-food|stop-food|start-calendar|stop-calendar|start-diarization|stop-diarization}"
         exit 1
         ;;
 esac
