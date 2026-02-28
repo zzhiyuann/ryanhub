@@ -150,6 +150,32 @@ struct QueueManagerView: View {
                                 .tint(.hubAccentGreen)
                             }
                         }
+                        .contextMenu {
+                            if topic.status == "pending" {
+                                Button {
+                                    Task { await vm.generateImmediately(id: topic.id) }
+                                } label: {
+                                    Label("Generate Immediately", systemImage: "bolt.fill")
+                                }
+                            }
+                            Button {
+                                editingTopic = topic
+                            } label: {
+                                Label("Edit", systemImage: "pencil")
+                            }
+                            if topic.status == "pending" {
+                                Button {
+                                    Task { await vm.updateTopic(id: topic.id, status: "skipped") }
+                                } label: {
+                                    Label("Skip", systemImage: "forward")
+                                }
+                            }
+                            Button(role: .destructive) {
+                                Task { await vm.deleteTopic(id: topic.id) }
+                            } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
+                        }
                         .contentShape(Rectangle())
                         .onTapGesture { editingTopic = topic }
                 }

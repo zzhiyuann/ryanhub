@@ -13,7 +13,7 @@ import { getDb } from "./db";
 import { ingestBook } from "./books";
 
 const BOOKFACTORY_DIR =
-  process.env.BOOK_SOURCE_DIR || "/Users/zwang/bookfactory";
+  process.env.BOOK_SOURCE_DIR || path.join(process.cwd(), "books");
 
 interface GenerationJob {
   id: string;
@@ -84,13 +84,12 @@ function buildPrompt(
   return `You are generating a comprehensive book. Follow these steps precisely:
 
 1. Read the file "CLAUDE_CODE_BRIEF.md" in the current working directory for full instructions on format, depth, quality, and LANGUAGE requirements (Chinese with English terms).
-2. The user has specified this topic: ${topic}. Generate a comprehensive book on this topic. If it's already in topic_backlog.md, mark it done. If it's not in the backlog, add it and mark it done.
+2. The topic is: ${topic}. Generate a comprehensive book on this topic.
 3. Before writing, do extensive web research on the topic using WebSearch (at least 10-15 searches covering different angles: foundational theory, recent advances, applications, critiques, practitioner perspectives).
 4. Generate the book following ALL specifications in the brief. Deep prose, not outlines.
 5. Write the book to: ${dateStr}/${slot}_[topic_slug].md
-6. After writing, update topic_backlog.md to mark the topic as Done with today's date and slot name ${slot}.
-7. Convert to HTML by running: python3 md_to_pdf.py "${dateStr}/${slot}_[topic_slug].md"
-8. Send the HTML file via Telegram (only HTML, no PDF):
+6. Convert to HTML by running: python3 md_to_pdf.py "${dateStr}/${slot}_[topic_slug].md"
+7. Send the HTML file via Telegram (only HTML, no PDF):
    curl -F chat_id="${telegramChatId}" -F document=@"path.html" -F caption="New book: [topic]" "https://api.telegram.org/bot${telegramToken}/sendDocument"
 
 CRITICAL: Write in Chinese (zhong wen) with important English terms in parentheses. This is a personalized book for Zhiyuan Wang — 5th-year UVA PhD student transitioning to Meta Reality Labs Research Scientist (behavioral AI, multimodal sensing + social behavior). Write a REAL comprehensive book, not an outline.`;

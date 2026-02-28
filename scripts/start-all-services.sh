@@ -64,10 +64,10 @@ DIARIZATION_SCRIPT="$REPO_ROOT/scripts/diarization-server.py"
 DIARIZATION_PYTHON="$REPO_ROOT/scripts/diarization-env/bin/python3"
 DIARIZATION_LOG="/tmp/ryanhub-diarization.log"
 
-# Data directories (external to repo)
-export BOOKFACTORY_DATA_DIR="/Users/zwang/projects/bookfactory/data"
-export BOOK_SOURCE_DIR="/Users/zwang/bookfactory"
-export BACKLOG_PATH="/Users/zwang/bookfactory/topic_backlog.md"
+# Data directories (within the monorepo, gitignored)
+export BOOKFACTORY_DATA_DIR="$REPO_ROOT/services/bookfactory/data"
+export BOOK_SOURCE_DIR="$REPO_ROOT/services/bookfactory/books"
+export BACKLOG_PATH="$REPO_ROOT/services/bookfactory/books/topic_backlog.md"
 
 # PATH setup — ensure we have access to homebrew, node, python, lsof, etc.
 export PATH="/usr/sbin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/Users/zwang/.local/bin:/Users/zwang/.npm-global/bin:$REPO_ROOT/services/dispatcher/.venv/bin:$PATH"

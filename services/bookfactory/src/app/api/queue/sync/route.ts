@@ -122,8 +122,7 @@ export async function POST() {
   // Find the backlog file
   const backlogPaths = [
     process.env.BACKLOG_PATH,
-    "/Users/zwang/bookfactory/topic_backlog.md",
-    path.join(process.env.HOME || "", "bookfactory", "topic_backlog.md"),
+    path.join(process.cwd(), "books", "topic_backlog.md"),
   ].filter(Boolean) as string[];
 
   let backlogContent: string | null = null;

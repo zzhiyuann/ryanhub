@@ -1,7 +1,8 @@
 import * as fs from "fs";
+import * as path from "path";
 import { getDb } from "@/lib/db";
 
-const BACKLOG_PATH = process.env.BACKLOG_PATH || "/Users/zwang/bookfactory/topic_backlog.md";
+const BACKLOG_PATH = process.env.BACKLOG_PATH || path.join(process.cwd(), "books", "topic_backlog.md");
 
 interface QueueTopic {
   id: string;

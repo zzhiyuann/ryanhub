@@ -96,6 +96,22 @@ final class QueueViewModel {
         }
     }
 
+    // MARK: - Generate Immediately
+
+    func generateImmediately(id: String) async {
+        struct GenerateResponse: Decodable {
+            let ok: Bool
+            let jobId: String?
+        }
+        do {
+            let _: GenerateResponse = try await api.post("/api/queue/topics/\(id)/generate")
+            await loadTopics()
+            await loadSchedule()
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
     // MARK: - Reordering
 
     func moveTopic(from source: IndexSet, to destination: Int) {

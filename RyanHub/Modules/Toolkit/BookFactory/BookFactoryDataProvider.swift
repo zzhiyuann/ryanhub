@@ -69,8 +69,8 @@ enum BookFactoryDataProvider: ToolkitDataProvider {
 
         // Action hints — ALWAYS present regardless of cache state
         lines.append("Actions:")
-        lines.append("- Generate a book NOW: run `env -u CLAUDE_CODE -u CLAUDECODE /Users/zwang/bookfactory/generate_now.sh \"<topic>\"` (takes ~20 min, runs in background)")
-        lines.append("- Add to backlog: append a line to /Users/zwang/bookfactory/topic_backlog.md (batch cron picks it up)")
+        lines.append("- Generate a book NOW: use the Book Factory queue in the Toolkit tab — add a topic with 'Generate Now' or long-press an existing topic and select 'Generate Immediately'")
+        lines.append("- Add to queue: use the Book Factory queue in the Toolkit tab to add topics")
         lines.append("- IMPORTANT: Do NOT write book content inline in chat. Always use the generation pipeline above.")
 
         lines.append("[End \(displayName)]")

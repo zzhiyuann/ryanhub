@@ -28,6 +28,8 @@ services/bookfactory/node_modules/
 services/bookfactory/.next/
 services/bookfactory/certs/
 services/bookfactory/.env
+services/bookfactory/data/
+services/bookfactory/books/
 
 # Services: Dispatcher (Python)
 services/dispatcher/.venv/

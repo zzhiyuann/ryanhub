@@ -3,8 +3,9 @@ export async function register() {
     const { scanMissingBooks } = await import("@/lib/book-watcher");
     const { startScheduler } = await import("@/lib/book-scheduler");
 
+    const path = await import("path");
     const sourceDir =
-      process.env.BOOK_SOURCE_DIR || "/Users/zwang/bookfactory";
+      process.env.BOOK_SOURCE_DIR || path.join(process.cwd(), "books");
 
     // Startup scan: catch up on any books generated outside the server
     const result = scanMissingBooks(sourceDir);

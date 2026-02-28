@@ -1180,9 +1180,14 @@ final class PopoViewModel {
         let endpoint = "\(Self.bridgeBaseURL)/popo/analyze"
         guard let url = URL(string: endpoint) else { return }
 
-        // Gather recent sensing events (last 6 hours)
+        // Gather recent sensing events from the filtered timeline (WYSIWYG —
+        // AI sees exactly what the user sees, not raw data).
         let sixHoursAgo = Date().addingTimeInterval(-6 * 3600)
-        let recentSensingEvents = engine.recentEvents
+        let recentSensingEvents = timelineItems
+            .compactMap { item -> SensingEvent? in
+                if case .sensing(let event) = item { return event }
+                return nil
+            }
             .filter { $0.timestamp > sixHoursAgo }
             .prefix(200)
 
