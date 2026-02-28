@@ -34,6 +34,17 @@ final class HealthSensor {
     /// Minimum interval (seconds) between aggregated HR emits.
     private static let hrEmitInterval: TimeInterval = 60
 
+    // MARK: - Active Energy Throttling State
+
+    /// Buffer of kcal readings awaiting hourly aggregation.
+    private var activeEnergyBuffer: [Double] = []
+
+    /// Timestamp of the last aggregated active energy emit.
+    private var lastActiveEnergyEmitTime: Date?
+
+    /// Minimum interval (seconds) between aggregated active energy emits (1 hour).
+    private static let activeEnergyEmitInterval: TimeInterval = 3600
+
     // MARK: - Anomaly Thresholds
 
     /// Resting heart rate above this is considered tachycardia.
@@ -462,7 +473,11 @@ final class HealthSensor {
         healthStore?.execute(query)
     }
 
-    /// Fetch active energy burned in the last hour.
+    /// Fetch active energy burned in the last hour and aggregate into a single hourly event.
+    ///
+    /// Apple Watch writes many small active energy samples (~every few minutes).
+    /// Instead of emitting each one, we buffer them and emit a single aggregated
+    /// event once per hour with total kcal for that period.
     private func fetchActiveEnergy() {
         guard let type = HKQuantityType.quantityType(forIdentifier: .activeEnergyBurned) else { return }
         let oneHourAgo = Date().addingTimeInterval(-3600)
@@ -472,24 +487,52 @@ final class HealthSensor {
         let query = HKSampleQuery(
             sampleType: type,
             predicate: predicate,
-            limit: 5,
+            limit: HKObjectQueryNoLimit,
             sortDescriptors: [sortDescriptor]
         ) { [weak self] _, samples, error in
-            guard let samples = samples as? [HKQuantitySample], error == nil else { return }
+            guard let self, let samples = samples as? [HKQuantitySample], error == nil else { return }
+            let source = samples.first?.sourceRevision.source.name ?? "watch"
+
             for sample in samples {
                 let kcal = sample.quantity.doubleValue(for: .kilocalorie())
-                let event = SensingEvent(
-                    timestamp: sample.startDate,
-                    modality: .activeEnergy,
-                    payload: [
-                        "kcal": String(format: "%.1f", kcal),
-                        "source": sample.sourceRevision.source.name
-                    ]
-                )
-                self?.onEvent?(event)
+                self.activeEnergyBuffer.append(kcal)
             }
+
+            self.emitAggregatedActiveEnergyIfReady(source: source)
         }
         healthStore?.execute(query)
+    }
+
+    /// Emit a single aggregated active energy event if at least 1 hour has passed.
+    private func emitAggregatedActiveEnergyIfReady(source: String) {
+        let now = Date()
+
+        if lastActiveEnergyEmitTime == nil {
+            lastActiveEnergyEmitTime = now
+            guard !activeEnergyBuffer.isEmpty else { return }
+        }
+
+        guard let lastEmit = lastActiveEnergyEmitTime,
+              now.timeIntervalSince(lastEmit) >= Self.activeEnergyEmitInterval,
+              !activeEnergyBuffer.isEmpty else {
+            return
+        }
+
+        let totalKcal = activeEnergyBuffer.reduce(0, +)
+
+        let event = SensingEvent(
+            timestamp: now,
+            modality: .activeEnergy,
+            payload: [
+                "kcal": String(format: "%.0f", totalKcal),
+                "samples": "\(activeEnergyBuffer.count)",
+                "source": source
+            ]
+        )
+        onEvent?(event)
+
+        activeEnergyBuffer.removeAll()
+        lastActiveEnergyEmitTime = now
     }
 
     /// Fetch basal (resting) energy burned in the last hour.

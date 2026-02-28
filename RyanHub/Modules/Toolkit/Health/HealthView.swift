@@ -768,43 +768,44 @@ struct HealthView: View {
                 activityAnalysisResultView(result)
             }
 
-            // Day summary
-            HubCard {
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(activitySummaryLabel)
-                            .font(.hubCaption)
-                            .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
-
-                        HStack(alignment: .firstTextBaseline, spacing: 4) {
-                            let loggedCal = viewModel.activityCalories(for: selectedDate)
-                            let stepsCal = Calendar.current.isDateInToday(selectedDate) ? viewModel.stepsCaloriesBurned : 0
-                            Text("\(loggedCal + stepsCal)")
-                                .font(.system(size: 34, weight: .bold))
-                                .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
-                            Text("kcal")
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
-                        }
-                    }
-
-                    Spacer()
-
-                    VStack(alignment: .trailing, spacing: 4) {
-                        Text("\(selectedDayActivityEntries.count) activities")
-                            .font(.hubCaption)
-                            .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
-                        let actMinutes = viewModel.activityMinutes(for: selectedDate)
-                        if actMinutes > 0 {
-                            Text("\(actMinutes) min")
+            // Day summary (for non-today dates without rings)
+            if !Calendar.current.isDateInToday(selectedDate) {
+                HubCard {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(activitySummaryLabel)
                                 .font(.hubCaption)
                                 .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+
+                            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                                let loggedCal = viewModel.activityCalories(for: selectedDate)
+                                Text("\(loggedCal)")
+                                    .font(.system(size: 34, weight: .bold))
+                                    .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                                Text("kcal")
+                                    .font(.system(size: 16, weight: .medium))
+                                    .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                            }
+                        }
+
+                        Spacer()
+
+                        VStack(alignment: .trailing, spacing: 4) {
+                            Text("\(selectedDayActivityEntries.count) activities")
+                                .font(.hubCaption)
+                                .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                            let actMinutes = viewModel.activityMinutes(for: selectedDate)
+                            if actMinutes > 0 {
+                                Text("\(actMinutes) min")
+                                    .font(.hubCaption)
+                                    .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                            }
                         }
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityIdentifier(AccessibilityID.healthTodayActivity)
             }
-            .accessibilityIdentifier(AccessibilityID.healthTodayActivity)
 
             // Day's activities
             if !selectedDayActivityEntries.isEmpty {
@@ -833,62 +834,112 @@ struct HealthView: View {
         }
     }
 
-    // MARK: - Steps Card (Apple Health)
+    // MARK: - Activity Rings Card
 
-    /// Card displaying today's step count and estimated calories from HealthKit.
+    /// Daily goals for ring progress calculation.
+    private static let stepGoal: Double = 10000
+    private static let calorieGoal: Double = 500
+    private static let activityMinuteGoal: Double = 30
+
+    /// Card with activity rings (steps, calories, active minutes) — Apple Watch style.
     private var stepsCard: some View {
-        HubCard {
-            HStack(spacing: 16) {
-                // Step icon
+        let steps = Double(viewModel.todaySteps)
+        let totalCal = Double(viewModel.todayActivityCalories + viewModel.stepsCaloriesBurned)
+        let activeMin = Double(viewModel.todayActivityMinutes)
+
+        return HubCard {
+            HStack(spacing: 20) {
+                // Activity rings
                 ZStack {
-                    Circle()
-                        .fill(Color.hubAccentGreen.opacity(0.12))
-                        .frame(width: 48, height: 48)
-
-                    Image(systemName: "figure.walk")
-                        .font(.system(size: 22, weight: .medium))
-                        .foregroundStyle(Color.hubAccentGreen)
+                    // Active minutes ring (outer)
+                    activityRing(
+                        progress: min(activeMin / Self.activityMinuteGoal, 1.0),
+                        color: Color.hubPrimary,
+                        lineWidth: 8,
+                        size: 100
+                    )
+                    // Calories ring (middle)
+                    activityRing(
+                        progress: min(totalCal / Self.calorieGoal, 1.0),
+                        color: Color.hubAccentYellow,
+                        lineWidth: 8,
+                        size: 76
+                    )
+                    // Steps ring (inner)
+                    activityRing(
+                        progress: min(steps / Self.stepGoal, 1.0),
+                        color: Color.hubAccentGreen,
+                        lineWidth: 8,
+                        size: 52
+                    )
                 }
+                .frame(width: 100, height: 100)
 
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Today's Steps")
-                        .font(.hubCaption)
-                        .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
-
+                // Stats
+                VStack(alignment: .leading, spacing: 10) {
                     if viewModel.isLoadingSteps {
                         ProgressView()
                             .tint(Color.hubAccentGreen)
                     } else {
-                        HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        // Steps
+                        HStack(spacing: 6) {
+                            Circle()
+                                .fill(Color.hubAccentGreen)
+                                .frame(width: 8, height: 8)
                             Text(viewModel.todaySteps.formatted())
-                                .font(.system(size: 28, weight: .bold))
+                                .font(.system(size: 16, weight: .bold))
                                 .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
-
                             Text("steps")
-                                .font(.system(size: 14, weight: .medium))
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                        }
+
+                        // Calories
+                        HStack(spacing: 6) {
+                            Circle()
+                                .fill(Color.hubAccentYellow)
+                                .frame(width: 8, height: 8)
+                            Text("\(Int(totalCal))")
+                                .font(.system(size: 16, weight: .bold))
+                                .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                            Text("kcal")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                        }
+
+                        // Active minutes
+                        HStack(spacing: 6) {
+                            Circle()
+                                .fill(Color.hubPrimary)
+                                .frame(width: 8, height: 8)
+                            Text("\(Int(activeMin))")
+                                .font(.system(size: 16, weight: .bold))
+                                .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                            Text("min")
+                                .font(.system(size: 12, weight: .medium))
                                 .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
                         }
                     }
                 }
 
                 Spacer()
-
-                // Estimated calories from steps
-                if !viewModel.isLoadingSteps && viewModel.todaySteps > 0 {
-                    VStack(alignment: .trailing, spacing: 4) {
-                        Text("~\(viewModel.stepsCaloriesBurned)")
-                            .font(.system(size: 20, weight: .bold))
-                            .foregroundStyle(Color.hubAccentYellow)
-
-                        Text("kcal")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(Color.hubAccentYellow.opacity(0.7))
-                    }
-                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .accessibilityIdentifier(AccessibilityID.healthStepsCard)
+    }
+
+    /// A single activity ring (circular progress).
+    private func activityRing(progress: Double, color: Color, lineWidth: CGFloat, size: CGFloat) -> some View {
+        ZStack {
+            Circle()
+                .stroke(color.opacity(0.15), lineWidth: lineWidth)
+            Circle()
+                .trim(from: 0, to: progress)
+                .stroke(color, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+        }
+        .frame(width: size, height: size)
     }
 
     /// AI-powered activity input.
