@@ -641,15 +641,22 @@ struct TimelineEventRow: View {
             let stage = event.payload["stage"] ?? "unknown"
             return "Stage: \(stage)"
         case .location:
-            // Prefer semantic label from known places
+            // 1. User-defined known place (Home, Work, Gym, etc.)
             if let label = event.payload["semanticLabel"], !label.isEmpty {
-                let address = event.payload["address"] ?? ""
-                if !address.isEmpty {
-                    return "\(label) \u{00B7} \(address)"
+                if let placeName = event.payload["placeName"], !placeName.isEmpty {
+                    return "\(label) \u{00B7} \(placeName)"
                 }
                 return label
             }
-            // Show neighborhood + address from enrichment
+            // 2. Google Places POI name (e.g. "Starbucks", "Target")
+            if let placeName = event.payload["placeName"], !placeName.isEmpty {
+                let placeType = event.payload["placeType"] ?? ""
+                if !placeType.isEmpty {
+                    return "\(placeName) (\(placeType))"
+                }
+                return placeName
+            }
+            // 3. Address from Google Geocoding
             if let address = event.payload["address"], !address.isEmpty {
                 let neighborhood = event.payload["neighborhood"] ?? ""
                 if !neighborhood.isEmpty {
@@ -657,7 +664,7 @@ struct TimelineEventRow: View {
                 }
                 return address
             }
-            // Fallback to coordinates
+            // 4. Fallback to coordinates
             let lat = event.payload["latitude"] ?? "?"
             let lon = event.payload["longitude"] ?? "?"
             if event.payload["visit"] == "true" {

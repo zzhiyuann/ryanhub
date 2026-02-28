@@ -100,19 +100,24 @@ final class LocationSensor: NSObject {
                    let enrichment = result["enrichment"] as? [String: Any] {
                     let label = enrichment["semantic_label"] as? String ?? ""
                     let address = enrichment["address"] as? String ?? ""
-                    print("[LocationSensor] Enriched: \(label.isEmpty ? address : label)")
+                    let placeName = enrichment["place_name"] as? String ?? ""
+                    let nearbyPois = (enrichment["nearby_pois"] as? [String])?.joined(separator: ", ") ?? ""
+                    let displayName = !placeName.isEmpty ? placeName : (!label.isEmpty ? label : address)
+                    print("[LocationSensor] Enriched: \(displayName)")
 
-                    // Emit a new enriched event with semantic data written back
+                    // Emit a new enriched event with Google Maps data
                     let enrichedEvent = SensingEvent(
                         modality: .location,
                         payload: [
                             "latitude": String(format: "%.6f", latitude),
                             "longitude": String(format: "%.6f", longitude),
                             "semanticLabel": label,
+                            "placeName": placeName,
                             "address": address,
                             "neighborhood": enrichment["neighborhood"] as? String ?? "",
                             "city": enrichment["city"] as? String ?? "",
                             "placeType": enrichment["place_type"] as? String ?? "",
+                            "nearbyPOIs": nearbyPois,
                             "enriched": "true"
                         ]
                     )

@@ -333,30 +333,30 @@ def update_narration_with_analysis(narration_id, analysis_result):
 # Geopy integration for semantic location enrichment
 # ---------------------------------------------------------------------------
 
-GEOPY_AVAILABLE = False
-_geocoder = None
+import urllib.request
+import math
 
-try:
-    from geopy.geocoders import Nominatim
-    from geopy.distance import geodesic
-    _geocoder = Nominatim(user_agent="ryanhub-popo/1.0")
-    GEOPY_AVAILABLE = True
-    print("Geopy available for location enrichment.")
-except ImportError:
-    print("Warning: geopy not installed. Location enrichment will be unavailable.",
-          file=sys.stderr)
-    print("  Install with: pip install geopy", file=sys.stderr)
+# Google Maps API key for reverse geocoding + Places nearby search
+GOOGLE_MAPS_API_KEY = "AIzaSyAQV2dwvyVTSKEQvoI-APgzly1guJMzg6I"
 
 # Known places file for home/work detection
 KNOWN_PLACES_FILE = os.path.join(BRIDGE_DATA_DIR, "popo", "known_places.json")
 os.makedirs(os.path.join(BRIDGE_DATA_DIR, "popo"), exist_ok=True)
 
 
+def _haversine_meters(lat1, lng1, lat2, lng2):
+    """Calculate distance in meters between two lat/lng points."""
+    R = 6371000
+    phi1, phi2 = math.radians(lat1), math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlam = math.radians(lng2 - lng1)
+    a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlam / 2) ** 2
+    return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+
 def check_known_places(lat, lng):
     """Check if coordinates match a known place (within 200m).
     Returns the place label string, or None."""
-    if not GEOPY_AVAILABLE:
-        return None
     if not os.path.exists(KNOWN_PLACES_FILE):
         return None
     try:
@@ -373,46 +373,117 @@ def check_known_places(lat, lng):
         plng = place.get("lng")
         if plat is None or plng is None:
             continue
-        dist = geodesic((lat, lng), (plat, plng)).meters
+        dist = _haversine_meters(lat, lng, plat, plng)
         if dist < 200:
             return place.get("label")
     return None
 
 
+def _google_reverse_geocode(lat, lng):
+    """Reverse geocode via Google Geocoding API. Returns (address, components dict)."""
+    url = (
+        "https://maps.googleapis.com/maps/api/geocode/json"
+        "?latlng=%.6f,%.6f&key=%s&language=en"
+    ) % (lat, lng, GOOGLE_MAPS_API_KEY)
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "ryanhub-popo/1.0"})
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            data = json.loads(resp.read().decode())
+        if data.get("status") != "OK" or not data.get("results"):
+            return None, {}
+        top = data["results"][0]
+        address = top.get("formatted_address", "")
+        # Parse address components into a lookup dict
+        components = {}
+        for comp in top.get("address_components", []):
+            for t in comp.get("types", []):
+                components[t] = comp.get("long_name", "")
+        return address, components
+    except Exception as e:
+        print(f"[Location] Google geocode failed: {e}")
+        return None, {}
+
+
+def _google_nearby_places(lat, lng, radius=100):
+    """Find nearby places via Google Places Nearby Search.
+    Returns a list of dicts with name, types, vicinity."""
+    url = (
+        "https://maps.googleapis.com/maps/api/place/nearbysearch/json"
+        "?location=%.6f,%.6f&radius=%d&key=%s"
+    ) % (lat, lng, radius, GOOGLE_MAPS_API_KEY)
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "ryanhub-popo/1.0"})
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            data = json.loads(resp.read().decode())
+        if data.get("status") not in ("OK", "ZERO_RESULTS"):
+            print(f"[Location] Google Places status: {data.get('status')}")
+            return []
+        results = []
+        for place in data.get("results", [])[:5]:
+            results.append({
+                "name": place.get("name", ""),
+                "types": place.get("types", []),
+                "vicinity": place.get("vicinity", ""),
+            })
+        return results
+    except Exception as e:
+        print(f"[Location] Google Places failed: {e}")
+        return []
+
+
 def enrich_location_data(lat, lng, timestamp_str=None):
-    """Enrich a lat/lng with semantic place info.
-    Returns a dict with address, place_type, semantic_label, etc."""
+    """Enrich a lat/lng with semantic place info via Google APIs.
+    Returns a dict with address, place_type, semantic_label, nearby POIs, etc."""
     result = {}
 
-    # 1. Reverse geocode via Nominatim
-    if GEOPY_AVAILABLE and _geocoder:
-        try:
-            location = _geocoder.reverse(
-                f"{lat}, {lng}", exactly_one=True, language="en"
-            )
-            if location:
-                addr = location.raw.get("address", {})
-                result["address"] = location.address
-                result["place_type"] = (
-                    addr.get("amenity")
-                    or addr.get("shop")
-                    or addr.get("building")
-                    or addr.get("leisure")
-                    or ""
-                )
-                result["neighborhood"] = (
-                    addr.get("neighbourhood") or addr.get("suburb") or ""
-                )
-                result["city"] = addr.get("city") or addr.get("town") or ""
-        except Exception as e:
-            print(f"[Location] Geocode failed: {e}")
+    # 1. Reverse geocode via Google Geocoding API
+    address, components = _google_reverse_geocode(lat, lng)
+    if address:
+        result["address"] = address
+        result["neighborhood"] = (
+            components.get("neighborhood", "")
+            or components.get("sublocality", "")
+            or components.get("sublocality_level_1", "")
+        )
+        result["city"] = (
+            components.get("locality", "")
+            or components.get("administrative_area_level_2", "")
+        )
+        result["place_type"] = components.get("point_of_interest", "")
 
-    # 2. Check against known places (home/work clusters)
+    # 2. Nearby Places (POI) via Google Places API
+    nearby = _google_nearby_places(lat, lng, radius=100)
+    if nearby:
+        # Filter out generic/city-level results — keep only real POIs
+        skip_types = {"point_of_interest", "establishment", "political", "route",
+                      "street_address", "premise", "subpremise", "locality",
+                      "administrative_area_level_1", "administrative_area_level_2",
+                      "country", "postal_code"}
+        real_pois = []
+        for p in nearby:
+            types_set = set(p.get("types", []))
+            # Skip if ALL types are generic (no meaningful POI type)
+            meaningful = types_set - skip_types
+            if meaningful:
+                real_pois.append(p)
+
+        if real_pois:
+            top_place = real_pois[0]
+            result["place_name"] = top_place["name"]
+            place_types = [t for t in top_place.get("types", []) if t not in skip_types]
+            if place_types:
+                result["place_type"] = place_types[0].replace("_", " ")
+            # Include up to 3 nearby POI names
+            poi_names = [p["name"] for p in real_pois[:3] if p["name"]]
+            if poi_names:
+                result["nearby_pois"] = poi_names
+
+    # 3. Check against user-defined known places (home/work clusters)
     known = check_known_places(lat, lng)
     if known:
         result["semantic_label"] = known
 
-    # 3. Time-based heuristic
+    # 4. Time-based heuristic
     if timestamp_str:
         try:
             hour = datetime.fromisoformat(
@@ -807,8 +878,13 @@ def summarize_sensing_data(events, narrations, daily_summary=None):
         lines.append("[Location]")
         places = set()
         for ev in loc_events:
-            place = (ev.get("place") or ev.get("data", {}).get("place")
-                     or ev.get("semanticPlace") or ev.get("data", {}).get("semanticPlace"))
+            data = ev.get("data", {})
+            place = (
+                ev.get("placeName") or data.get("placeName")
+                or ev.get("semanticLabel") or data.get("semanticLabel")
+                or ev.get("place") or data.get("place")
+                or ev.get("semanticPlace") or data.get("semanticPlace")
+            )
             if place:
                 places.add(place)
         if places:
@@ -1868,10 +1944,8 @@ def main():
         print("Local emotion model: available (affect analysis enabled)")
     else:
         print("Local emotion model: not available (affect analysis disabled)")
-    if GEOPY_AVAILABLE:
-        print("Geopy: available (location enrichment enabled)")
-    else:
-        print("Geopy: not available (location enrichment disabled)")
+    if GOOGLE_MAPS_API_KEY:
+        print("Google Maps API: configured (location enrichment enabled)")
     if ANTHROPIC_AVAILABLE:
         api_key = _get_anthropic_api_key()
         if api_key:
