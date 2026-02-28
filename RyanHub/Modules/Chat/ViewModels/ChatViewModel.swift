@@ -868,6 +868,12 @@ final class ChatViewModel {
             // Fire a local notification if the app is in background
             // or the user is not on the chat tab.
             sendLocalNotificationIfNeeded(content: content, messageId: assistantId)
+            // If the original user message was health-related, the agent may have
+            // written structured data to the bridge server. Trigger a refresh so
+            // new entries appear in the Health tab.
+            if let userMsg = userMessage, HealthDataProvider.isHealthRelated(userMsg.content) {
+                NotificationCenter.default.post(name: .healthDataUpdatedExternally, object: nil)
+            }
         } else {
             currentStreamingMessageId = assistantId
         }
