@@ -3,8 +3,8 @@ import Foundation
 // MARK: - POPO Data Store
 
 /// Local file-based cache for sensing events that handles persistence and sync state.
-/// Stores pending (unsynced) events in a JSON file, keeps the last 24 hours of
-/// events in memory for quick access, and clears synced events after successful POST.
+/// Stores ALL events permanently on disk (never pruned by age), keeps them
+/// in memory for quick access, and clears synced events after successful POST.
 final class PopoDataStore {
     /// All events currently in the store (both synced and pending).
     private(set) var events: [SensingEvent] = []
@@ -18,11 +18,8 @@ final class PopoDataStore {
     /// File path for persisting synced event IDs.
     private let syncedIDsFilePath: URL
 
-    /// Maximum age of events to keep in memory (24 hours).
-    private static let maxEventAge: TimeInterval = 86400
-
-    /// Maximum number of events to keep in memory.
-    private static let maxEventCount: Int = 500
+    /// Maximum number of events to keep in memory (oldest are persisted on disk).
+    private static let maxInMemoryCount: Int = 2000
 
     // MARK: - Init
 
@@ -44,14 +41,14 @@ final class PopoDataStore {
     /// Save a new sensing event to the store.
     func save(_ event: SensingEvent) {
         events.append(event)
-        pruneOldEvents()
+        trimInMemoryIfNeeded()
         persistToDisk()
     }
 
     /// Save a batch of events to the store.
     func save(_ newEvents: [SensingEvent]) {
         events.append(contentsOf: newEvents)
-        pruneOldEvents()
+        trimInMemoryIfNeeded()
         persistToDisk()
     }
 
@@ -77,7 +74,14 @@ final class PopoDataStore {
         }
     }
 
-    /// Return all events from the last N hours.
+    /// Return all events for a given date (full 24-hour day).
+    func events(for date: Date) -> [SensingEvent] {
+        let calendar = Calendar.current
+        return events.filter { calendar.isDate($0.timestamp, inSameDayAs: date) }
+            .sorted { $0.timestamp > $1.timestamp }
+    }
+
+    /// Return all events from the last N hours (convenience).
     func recentEvents(hours: Int = 24) -> [SensingEvent] {
         let cutoff = Date().addingTimeInterval(-Double(hours) * 3600)
         return events.filter { $0.timestamp > cutoff }
@@ -107,7 +111,7 @@ final class PopoDataStore {
         }
 
         // Clean up stale data on load
-        pruneOldEvents()
+        trimInMemoryIfNeeded()
     }
 
     /// Persist current events to disk.
@@ -127,19 +131,18 @@ final class PopoDataStore {
         }
     }
 
-    /// Remove events older than 24 hours and trim to max count.
-    private func pruneOldEvents() {
-        let cutoff = Date().addingTimeInterval(-Self.maxEventAge)
-        events = events.filter { $0.timestamp > cutoff }
+    /// Trim in-memory events if exceeding cap (keep newest). All events remain on disk.
+    private func trimInMemoryIfNeeded() {
+        if events.count > Self.maxInMemoryCount {
+            events.sort { $0.timestamp > $1.timestamp }
+            let trimmed = Array(events.prefix(Self.maxInMemoryCount))
+            // Persist ALL events to disk before trimming memory
+            persistToDisk()
+            events = trimmed
+        }
 
-        // Also prune synced IDs for events we no longer hold
+        // Clean up synced IDs for events no longer in memory
         let currentIDs = Set(events.map(\.id))
         syncedEventIDs = syncedEventIDs.intersection(currentIDs)
-
-        // Trim to max count if needed (keep newest)
-        if events.count > Self.maxEventCount {
-            events.sort { $0.timestamp > $1.timestamp }
-            events = Array(events.prefix(Self.maxEventCount))
-        }
     }
 }

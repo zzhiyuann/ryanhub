@@ -68,8 +68,8 @@ final class SensingEngine {
     /// Batch size threshold that triggers an immediate sync.
     private static let batchSizeThreshold = 50
 
-    /// Maximum events to display in UI.
-    private static let maxRecentEvents = 100
+    /// Maximum events to keep in the UI display list.
+    private static let maxRecentEvents = 500
 
     // MARK: - Lifecycle
 
@@ -120,8 +120,8 @@ final class SensingEngine {
             lastSyncTime = Date(timeIntervalSince1970: savedSyncTime)
         }
 
-        // Load existing events from store
-        recentEvents = Array(dataStore.recentEvents(hours: 24).prefix(Self.maxRecentEvents))
+        // Load all events for today from store
+        recentEvents = dataStore.events(for: Date())
         pendingEventCount = dataStore.pendingCount
 
         // Start periodic sync timer
@@ -191,11 +191,8 @@ final class SensingEngine {
             enrichLastScreenOnEvent(onDuration: onDuration)
         }
 
-        // Add to UI display list (keep newest first, capped)
+        // Add to UI display list (newest first)
         recentEvents.insert(event, at: 0)
-        if recentEvents.count > Self.maxRecentEvents {
-            recentEvents = Array(recentEvents.prefix(Self.maxRecentEvents))
-        }
 
         // Persist to local store
         dataStore.save(event)
