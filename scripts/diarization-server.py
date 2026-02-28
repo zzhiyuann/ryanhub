@@ -28,6 +28,10 @@ import struct
 import sys
 import time
 import tempfile
+from opencc import OpenCC
+
+# Traditional → Simplified Chinese converter (singleton)
+_t2s = OpenCC('t2s')
 import logging
 import threading
 import wave
@@ -312,6 +316,7 @@ def transcribe_audio(audio_path: str, language: Optional[str] = None, source: st
     kwargs = {
         "path_or_hf_repo": WHISPER_MODEL,
         "word_timestamps": True,
+        "initial_prompt": "以下是普通话的句子，使用简体中文。",
     }
     if language:
         kwargs["language"] = language
@@ -332,6 +337,14 @@ def transcribe_audio(audio_path: str, language: Optional[str] = None, source: st
         t0 = time.time()
         result = whisper.transcribe(audio_path, **kwargs)
         elapsed = time.time() - t0
+
+        # Convert Traditional Chinese → Simplified Chinese
+        if result.get("text"):
+            result["text"] = _t2s.convert(result["text"])
+        for seg in result.get("segments", []):
+            if seg.get("text"):
+                seg["text"] = _t2s.convert(seg["text"])
+
         text_preview = result.get("text", "")[:80]
         log.info(f"[whisper] Transcription done in {elapsed:.2f}s (source={source}): {text_preview}...")
     finally:
