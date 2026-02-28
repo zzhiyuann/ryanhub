@@ -3,94 +3,68 @@ import UIKit
 
 // MARK: - Screen Sensor
 
-/// Observes app foreground/background transitions to track screen usage patterns.
-/// Listens to UIApplication lifecycle notifications and calculates session durations.
-///
-/// Note: We cannot access other apps' usage without the DeviceActivity framework
-/// (which requires special entitlements). For now, we track our own app's usage
-/// and infer phone usage from lock/unlock patterns.
+/// Observes device screen on/off (unlock/lock) transitions.
+/// Uses protectedData notifications as a reliable proxy for screen lock state.
 final class ScreenSensor {
     private var isRunning = false
-    private var lastForegroundTime: Date?
 
     /// Callback invoked when a new sensing event is captured.
     var onEvent: ((SensingEvent) -> Void)?
 
     // MARK: - Lifecycle
 
-    /// Start observing app lifecycle notifications.
+    /// Start observing screen on/off notifications.
     func start() {
         guard !isRunning else { return }
         isRunning = true
-        lastForegroundTime = Date()
 
+        // Device unlocked → screen on
         NotificationCenter.default.addObserver(
             self,
-            selector: #selector(appDidBecomeActive),
-            name: UIApplication.didBecomeActiveNotification,
+            selector: #selector(screenOn),
+            name: UIApplication.protectedDataDidBecomeAvailableNotification,
             object: nil
         )
 
+        // Device locked → screen off
         NotificationCenter.default.addObserver(
             self,
-            selector: #selector(appWillResignActive),
-            name: UIApplication.willResignActiveNotification,
+            selector: #selector(screenOff),
+            name: UIApplication.protectedDataWillBecomeUnavailableNotification,
             object: nil
         )
 
-        // Record initial foreground event
+        // Record initial state as screen on (we're running, so screen is on)
         let event = SensingEvent(
             modality: .screen,
-            payload: [
-                "state": "foreground",
-                "event": "app_opened"
-            ]
+            payload: ["state": "on"]
         )
         onEvent?(event)
     }
 
-    /// Stop observing app lifecycle notifications.
+    /// Stop observing screen notifications.
     func stop() {
         guard isRunning else { return }
         isRunning = false
-        NotificationCenter.default.removeObserver(self, name: UIApplication.didBecomeActiveNotification, object: nil)
-        NotificationCenter.default.removeObserver(self, name: UIApplication.willResignActiveNotification, object: nil)
-        lastForegroundTime = nil
+        NotificationCenter.default.removeObserver(self)
     }
 
     // MARK: - Notification Handlers
 
-    @objc private func appDidBecomeActive() {
-        lastForegroundTime = Date()
-
+    @objc private func screenOn() {
         let event = SensingEvent(
             modality: .screen,
-            payload: [
-                "state": "foreground",
-                "event": "app_opened"
-            ]
+            payload: ["state": "on"]
         )
         onEvent?(event)
     }
 
-    @objc private func appWillResignActive() {
-        let sessionDuration: TimeInterval
-        if let foregroundTime = lastForegroundTime {
-            sessionDuration = Date().timeIntervalSince(foregroundTime)
-        } else {
-            sessionDuration = 0
-        }
-
+    @objc private func screenOff() {
         let event = SensingEvent(
             modality: .screen,
-            payload: [
-                "state": "background",
-                "event": "app_closed",
-                "sessionDuration": String(format: "%.0f", sessionDuration)
-            ]
+            payload: ["state": "off"]
         )
         onEvent?(event)
-        lastForegroundTime = nil
     }
 
     deinit {

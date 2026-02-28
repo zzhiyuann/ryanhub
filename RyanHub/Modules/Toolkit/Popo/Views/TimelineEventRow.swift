@@ -658,22 +658,7 @@ struct TimelineEventRow: View {
             return "(\(lat), \(lon))"
         case .screen:
             let state = event.payload["state"] ?? "unknown"
-            if state == "foreground" {
-                return "App opened"
-            } else if state == "background" {
-                if let durationStr = event.payload["sessionDuration"],
-                   let seconds = Double(durationStr), seconds > 0 {
-                    let minutes = Int(seconds) / 60
-                    let secs = Int(seconds) % 60
-                    if minutes > 0 {
-                        return "Session ended · \(minutes)m \(secs)s"
-                    } else {
-                        return "Session ended · \(secs)s"
-                    }
-                }
-                return "App backgrounded"
-            }
-            return state
+            return state == "on" ? "Screen on" : state == "off" ? "Screen off" : state
         case .workout:
             let type = event.payload["type"] ?? "unknown"
             let calories = event.payload["calories"] ?? "0"
