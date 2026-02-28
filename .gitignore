@@ -1,3 +1,9 @@
+# Python venvs
+scripts/diarization-env/
+data/voice-enrollment/*.m4a
+data/voice-enrollment/*.wav
+data/voice-profiles/*.npy
+
 # Xcode
 *.xcodeproj/xcuserdata/
 *.xcodeproj/project.xcworkspace/xcuserdata/
