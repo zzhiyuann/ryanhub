@@ -47,6 +47,7 @@
 	<string>Ryan Hub needs photo library access to send images in chat.</string>
 	<key>UIBackgroundModes</key>
 	<array>
+		<string>audio</string>
 		<string>fetch</string>
 		<string>processing</string>
 		<string>location</string>

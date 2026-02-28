@@ -52,6 +52,7 @@ targets:
         # WiFi SSID access also requires the com.apple.developer.networking.wifi-info entitlement.
         # The WiFiSensor will gracefully return nil without it.
         UIBackgroundModes:
+          - audio
           - fetch
           - processing
           - location

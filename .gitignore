@@ -41,3 +41,4 @@ services/dispatcher/scripts/node_modules/
 *.db-wal
 *.db-shm
 *.db.bak
+data/speechbrain-cache/
