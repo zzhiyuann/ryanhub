@@ -463,7 +463,7 @@ struct PopoView: View {
                 if viewModel.daySummary.totalCaloriesConsumed > 0 {
                     statePill(
                         icon: "fork.knife",
-                        value: "\(viewModel.daySummary.totalCaloriesConsumed)",
+                        value: "\(viewModel.daySummary.totalCaloriesConsumed) Cal",
                         label: "Calories In",
                         color: Color.hubAccentYellow
                     )
@@ -483,7 +483,7 @@ struct PopoView: View {
                 if viewModel.daySummary.totalCaloriesBurned > 0 {
                     statePill(
                         icon: "flame.fill",
-                        value: "\(viewModel.daySummary.totalCaloriesBurned)",
+                        value: "\(viewModel.daySummary.totalCaloriesBurned) Cal",
                         label: "Burned",
                         color: Color.hubAccentRed
                     )
