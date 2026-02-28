@@ -82,6 +82,7 @@
 		AAA95584E2EACC49D4724DEF /* SensingEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF370F359AE0FEB721D1236A /* SensingEngine.swift */; };
 		AB3C20EDEFED295D54AD7F52 /* ToolkitTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0D1D7BFF0973ACC109D2297 /* ToolkitTests.swift */; };
 		AB96D5AD97442F7863EC11F7 /* PopoSyncService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 195C8EDB02EBDB32AE77AC5E /* PopoSyncService.swift */; };
+		AE7FE867AE353E249539873F /* CallSensor.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD1C3D6071A03B157D014D0E /* CallSensor.swift */; };
 		B1275F6E0A76A59C9FF85488 /* SensingEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D74E898BF51E3F1783F0633 /* SensingEvent.swift */; };
 		B3CB4EA04A8ED2E6B0F445EE /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 925B470E17A407A342F947A5 /* ChatView.swift */; };
 		B3DA11875470725BE119C406 /* ChatViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16AA3B6CD78A2A3E597642C3 /* ChatViewModel.swift */; };
@@ -235,6 +236,7 @@
 		F14ECFE406153DFEAD4BB330 /* FluentViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FluentViewModel.swift; sourceTree = "<group>"; };
 		F4E8144CB5135172B2DC2F7E /* LocalizationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalizationManager.swift; sourceTree = "<group>"; };
 		FBB4632AD98A761C6891EDFC /* FluentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FluentView.swift; sourceTree = "<group>"; };
+		FD1C3D6071A03B157D014D0E /* CallSensor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallSensor.swift; sourceTree = "<group>"; };
 		FDA7223EFC10C281D46964EB /* BookFactoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookFactoryTests.swift; sourceTree = "<group>"; };
 		FED78D1EEEF5E019B862807A /* AccessibilityID.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityID.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -459,6 +461,7 @@
 			children = (
 				301D1B48052E9787ED616984 /* BatterySensor.swift */,
 				19AFE35CA37D180D1C481879 /* BluetoothSensor.swift */,
+				FD1C3D6071A03B157D014D0E /* CallSensor.swift */,
 				44E36DA42169A81B9EE5BF11 /* HealthSensor.swift */,
 				0111F4EF56FEEE0D60EA35B1 /* LocationSensor.swift */,
 				D1FC8D72C2E96DC23DF5A0F2 /* MotionSensor.swift */,
@@ -781,6 +784,7 @@
 				BD100B6110735DA563B36EF1 /* CalendarPluginView.swift in Sources */,
 				470671EB95D8728E7B02B91F /* CalendarService.swift in Sources */,
 				5FD7730168DF713A1D55546E /* CalendarViewModel.swift in Sources */,
+				AE7FE867AE353E249539873F /* CallSensor.swift in Sources */,
 				A40E6627B20377EDD61A4772 /* CameraView.swift in Sources */,
 				E9544173000F3EA84613FAF2 /* ChatInputBar.swift in Sources */,
 				E6B383A34C266240B795CAC3 /* ChatMessage.swift in Sources */,

@@ -404,31 +404,61 @@ def _google_reverse_geocode(lat, lng):
         return None, {}
 
 
-def _google_nearby_places(lat, lng, radius=100):
+def _viewport_area(geometry):
+    """Calculate the approximate area of a place's viewport in degrees².
+    Larger viewport = larger/more prominent place."""
+    vp = geometry.get("viewport", {})
+    ne = vp.get("northeast", {})
+    sw = vp.get("southwest", {})
+    if not all(k in ne for k in ("lat", "lng")) or not all(k in sw for k in ("lat", "lng")):
+        return 0
+    dlat = abs(ne["lat"] - sw["lat"])
+    dlng = abs(ne["lng"] - sw["lng"])
+    return dlat * dlng
+
+
+def _google_nearby_places(lat, lng):
     """Find nearby places via Google Places Nearby Search.
-    Returns a list of dicts with name, types, vicinity."""
-    url = (
-        "https://maps.googleapis.com/maps/api/place/nearbysearch/json"
-        "?location=%.6f,%.6f&radius=%d&key=%s"
-    ) % (lat, lng, radius, GOOGLE_MAPS_API_KEY)
-    try:
-        req = urllib.request.Request(url, headers={"User-Agent": "ryanhub-popo/1.0"})
-        with urllib.request.urlopen(req, timeout=5) as resp:
-            data = json.loads(resp.read().decode())
-        if data.get("status") not in ("OK", "ZERO_RESULTS"):
-            print(f"[Location] Google Places status: {data.get('status')}")
-            return []
-        results = []
-        for place in data.get("results", [])[:5]:
-            results.append({
-                "name": place.get("name", ""),
-                "types": place.get("types", []),
-                "vicinity": place.get("vicinity", ""),
-            })
-        return results
-    except Exception as e:
-        print(f"[Location] Google Places failed: {e}")
-        return []
+    Uses progressive radius: start small (30m ~ iPhone GPS accuracy),
+    expand to 80m if no results. Smaller radius naturally returns
+    the building you're in rather than a shop down the hall."""
+    # Types that are purely geographic, not actual places
+    GEO_ONLY = {"locality", "political", "administrative_area_level_1",
+                "administrative_area_level_2", "administrative_area_level_3",
+                "country", "postal_code", "route", "street_address",
+                "street_number", "sublocality", "sublocality_level_1"}
+
+    for radius in (30, 80):
+        url = (
+            "https://maps.googleapis.com/maps/api/place/nearbysearch/json"
+            "?location=%.6f,%.6f&radius=%d&key=%s"
+        ) % (lat, lng, radius, GOOGLE_MAPS_API_KEY)
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "ryanhub-popo/1.0"})
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                data = json.loads(resp.read().decode())
+            if data.get("status") not in ("OK", "ZERO_RESULTS"):
+                print(f"[Location] Google Places status: {data.get('status')}")
+                continue
+
+            results = []
+            for place in data.get("results", [])[:10]:
+                types_set = set(place.get("types", []))
+                # Skip if all types are purely geographic (city, country, etc.)
+                if types_set and types_set.issubset(GEO_ONLY):
+                    continue
+                results.append({
+                    "name": place.get("name", ""),
+                    "types": place.get("types", []),
+                    "vicinity": place.get("vicinity", ""),
+                })
+
+            if results:
+                return results
+        except Exception as e:
+            print(f"[Location] Google Places failed (radius={radius}): {e}")
+
+    return []
 
 
 def enrich_location_data(lat, lng, timestamp_str=None):
@@ -452,31 +482,21 @@ def enrich_location_data(lat, lng, timestamp_str=None):
         result["place_type"] = components.get("point_of_interest", "")
 
     # 2. Nearby Places (POI) via Google Places API
-    nearby = _google_nearby_places(lat, lng, radius=100)
+    # The _google_nearby_places function already filters out pure geographic entries.
+    # All results here are actual places (buildings, shops, landmarks, etc.)
+    nearby = _google_nearby_places(lat, lng)
     if nearby:
-        # Filter out generic/city-level results — keep only real POIs
-        skip_types = {"point_of_interest", "establishment", "political", "route",
-                      "street_address", "premise", "subpremise", "locality",
-                      "administrative_area_level_1", "administrative_area_level_2",
-                      "country", "postal_code"}
-        real_pois = []
-        for p in nearby:
-            types_set = set(p.get("types", []))
-            # Skip if ALL types are generic (no meaningful POI type)
-            meaningful = types_set - skip_types
-            if meaningful:
-                real_pois.append(p)
-
-        if real_pois:
-            top_place = real_pois[0]
-            result["place_name"] = top_place["name"]
-            place_types = [t for t in top_place.get("types", []) if t not in skip_types]
-            if place_types:
-                result["place_type"] = place_types[0].replace("_", " ")
-            # Include up to 3 nearby POI names
-            poi_names = [p["name"] for p in real_pois[:3] if p["name"]]
-            if poi_names:
-                result["nearby_pois"] = poi_names
+        top_place = nearby[0]
+        result["place_name"] = top_place["name"]
+        # Extract a readable place type, skipping generic Google categories
+        generic_types = {"point_of_interest", "establishment", "political"}
+        place_types = [t for t in top_place.get("types", []) if t not in generic_types]
+        if place_types:
+            result["place_type"] = place_types[0].replace("_", " ")
+        # Include up to 3 nearby place names
+        poi_names = [p["name"] for p in nearby[:3] if p["name"]]
+        if poi_names:
+            result["nearby_pois"] = poi_names
 
     # 3. Check against user-defined known places (home/work clusters)
     known = check_known_places(lat, lng)
