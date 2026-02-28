@@ -61,8 +61,8 @@ struct BookReaderView: View {
         isLoading = false
     }
 
-    /// Wraps raw HTML content in a styled page. Colors are set directly based on
-    /// the current colorScheme — no CSS media queries, so dark mode always works.
+    /// Wraps raw HTML content in a styled page. Colors use `!important` to
+    /// override any embedded CSS from Pandoc / book_style.css in the raw HTML.
     private func wrapHTML(_ body: String) -> String {
         let isDark = colorScheme == .dark
 
@@ -71,7 +71,6 @@ struct BookReaderView: View {
         let headingColor = isDark ? "#F5F5F7" : "#111111"
         let subheadingColor = isDark ? "#C8C8D0" : "#333333"
         let mutedColor = isDark ? "#9CA3AF" : "#6B7280"
-        let surfaceColor = isDark ? "#1C1C2E" : "#FFFFFF"
         let codeBg = isDark ? "#252540" : "#F0F0F2"
         let borderColor = isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)"
         let accentColor = "#6366F1"
@@ -86,23 +85,23 @@ struct BookReaderView: View {
         <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
-        body {
-            font-family: -apple-system, 'SF Pro Text', 'Noto Serif SC', Georgia, serif;
-            font-size: 17px;
-            line-height: 1.75;
-            color: \(textColor);
-            background: \(bgColor);
+        html, body {
+            font-family: -apple-system, 'SF Pro Text', 'Noto Serif SC', Georgia, serif !important;
+            font-size: 17px !important;
+            line-height: 1.75 !important;
+            color: \(textColor) !important;
+            background: \(bgColor) !important;
             padding: 16px 14px 100px 14px;
             -webkit-text-size-adjust: 100%;
             word-wrap: break-word;
             overflow-wrap: break-word;
         }
 
-        /* Headings */
+        /* Headings — !important to override Pandoc/book_style.css embedded colors */
         h1 {
             font-size: 1.5em;
             font-weight: 700;
-            color: \(headingColor);
+            color: \(headingColor) !important;
             margin: 1.4em 0 0.5em;
             line-height: 1.3;
             letter-spacing: -0.01em;
@@ -110,21 +109,21 @@ struct BookReaderView: View {
         h2 {
             font-size: 1.25em;
             font-weight: 600;
-            color: \(headingColor);
+            color: \(headingColor) !important;
             margin: 1.2em 0 0.4em;
             line-height: 1.35;
         }
         h3 {
             font-size: 1.1em;
             font-weight: 600;
-            color: \(subheadingColor);
+            color: \(subheadingColor) !important;
             margin: 1em 0 0.35em;
             line-height: 1.4;
         }
         h4, h5, h6 {
             font-size: 1em;
             font-weight: 600;
-            color: \(subheadingColor);
+            color: \(subheadingColor) !important;
             margin: 0.8em 0 0.3em;
         }
 
@@ -137,15 +136,18 @@ struct BookReaderView: View {
         /* Body text */
         p {
             margin: 0.7em 0;
+            color: \(textColor) !important;
         }
 
         /* Lists */
         ul, ol {
             margin: 0.6em 0;
             padding-left: 1.4em;
+            color: \(textColor) !important;
         }
         li {
             margin: 0.25em 0;
+            color: \(textColor) !important;
         }
         li > ul, li > ol {
             margin: 0.15em 0;
@@ -153,51 +155,54 @@ struct BookReaderView: View {
 
         /* Blockquotes */
         blockquote {
-            border-left: 3px solid \(accentColor);
+            border-left: 3px solid \(accentColor) !important;
             padding: 0.4em 0.9em;
             margin: 0.8em 0;
-            color: \(mutedColor);
+            color: \(mutedColor) !important;
             font-style: italic;
-            background: \(isDark ? "rgba(99,102,241,0.06)" : "rgba(99,102,241,0.04)");
+            background: \(isDark ? "rgba(99,102,241,0.06)" : "rgba(99,102,241,0.04)") !important;
             border-radius: 0 6px 6px 0;
         }
         blockquote p {
             margin: 0.3em 0;
+            color: \(mutedColor) !important;
         }
 
         /* Code */
         code {
-            background: \(codeBg);
+            background: \(codeBg) !important;
+            color: \(textColor) !important;
             padding: 0.12em 0.35em;
             border-radius: 4px;
             font-size: 0.88em;
             font-family: 'SF Mono', Menlo, monospace;
         }
         pre {
-            background: \(codeBg);
+            background: \(codeBg) !important;
+            color: \(textColor) !important;
             padding: 0.8em 1em;
             border-radius: 8px;
             overflow-x: auto;
             margin: 0.8em 0;
-            border: 1px solid \(borderColor);
+            border: 1px solid \(borderColor) !important;
         }
         pre code {
-            background: none;
+            background: none !important;
             padding: 0;
             font-size: 0.85em;
             line-height: 1.5;
         }
 
         /* Links */
-        a {
-            color: \(linkColor);
+        a, a:visited {
+            color: \(linkColor) !important;
             text-decoration: none;
         }
 
         /* Horizontal rules */
         hr {
-            border: none;
-            border-top: 1px solid \(borderColor);
+            border: none !important;
+            border-top: 1px solid \(borderColor) !important;
             margin: 1.5em 0;
         }
 
@@ -217,24 +222,31 @@ struct BookReaderView: View {
             font-size: 0.92em;
             overflow-x: auto;
             display: block;
+            color: \(textColor) !important;
         }
         th, td {
-            border: 1px solid \(borderColor);
+            border: 1px solid \(borderColor) !important;
             padding: 0.45em 0.6em;
             text-align: left;
+            color: \(textColor) !important;
         }
         th {
-            background: \(isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)");
+            background: \(isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)") !important;
             font-weight: 600;
         }
 
         /* Strong & emphasis */
-        strong, b { color: \(headingColor); }
-        em, i { color: \(isDark ? "#D0D0D8" : "#333"); }
+        strong, b { color: \(headingColor) !important; }
+        em, i { color: \(isDark ? "#D0D0D8" : "#333") !important; }
 
         /* Footnotes & small text */
         sup { font-size: 0.75em; }
-        small { font-size: 0.85em; color: \(mutedColor); }
+        small { font-size: 0.85em; color: \(mutedColor) !important; }
+
+        /* Catch-all: override any inline color on span/div from Pandoc */
+        span, div, section, article, main, header, footer, nav, aside, figure, figcaption, details, summary {
+            color: inherit !important;
+        }
         </style>
         </head>
         <body>
