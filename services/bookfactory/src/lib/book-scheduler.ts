@@ -2,10 +2,10 @@
  * Book Scheduler — generates books at calculated times throughout the day.
  *
  * Based on books_per_day, calculates exact trigger times (evenly spaced),
- * then sets timers to fire at those times. No polling.
+ * starting at START_HOUR (5 AM) and distributed over 19 hours (5 AM - midnight).
  *
- * Example: books_per_day = 4 → triggers at 00:00, 06:00, 12:00, 18:00
- * Example: books_per_day = 8 → triggers at 00:00, 03:00, 06:00, ...
+ * Example: books_per_day = 4 → triggers at 05:00, 09:45, 14:30, 19:15
+ * Example: books_per_day = 8 → triggers at 05:00, 07:22, 09:45, ...
  *
  * Recalculates at midnight for the next day.
  */
@@ -36,17 +36,25 @@ function getUserId(): string | null {
   return user?.id || null;
 }
 
-/** Calculate trigger times for today (as ms offsets from now) */
+// First book at 5 AM, spread across 19 hours (5 AM - midnight)
+const START_HOUR = 5;
+const WINDOW_HOURS = 19;
+
+/** Calculate trigger times for today (evenly spaced from 5 AM) */
 function calculateTriggerTimes(booksPerDay: number): Date[] {
   if (booksPerDay <= 0) return [];
 
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const intervalMs = (24 * 60 * 60 * 1000) / booksPerDay;
+  const startMs = today.getTime() + START_HOUR * 60 * 60 * 1000;
+  const windowMs = WINDOW_HOURS * 60 * 60 * 1000;
+  const intervalMs = booksPerDay === 1 ? 0 : windowMs / (booksPerDay - 1);
 
   const times: Date[] = [];
   for (let i = 0; i < booksPerDay; i++) {
-    const triggerTime = new Date(today.getTime() + i * intervalMs);
+    const triggerTime = new Date(
+      startMs + (booksPerDay === 1 ? 0 : i * intervalMs)
+    );
     // Only schedule future times
     if (triggerTime > now) {
       times.push(triggerTime);

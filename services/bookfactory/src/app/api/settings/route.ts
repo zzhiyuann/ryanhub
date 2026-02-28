@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { getDb } from "@/lib/db";
+import { reschedule } from "@/lib/book-scheduler";
 
 export async function GET() {
   const user = await getCurrentUser();
@@ -49,6 +50,11 @@ export async function PUT(req: NextRequest) {
         `UPDATE settings SET ${field} = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?`
       ).run(value, user.id);
     }
+  }
+
+  // Reschedule if books_per_day changed
+  if (body.books_per_day !== undefined) {
+    reschedule();
   }
 
   // Update API keys on users table
