@@ -41,6 +41,27 @@ final class WiFiSensor {
         timer = nil
     }
 
+    // MARK: - Background One-Shot
+
+    /// Immediately read and report the current SSID, bypassing the change check.
+    /// Suitable for background wake-ups where we want a snapshot regardless.
+    func checkNow() {
+        let ssid = getCurrentSSID()
+
+        let event = SensingEvent(
+            modality: .wifi,
+            payload: [
+                "ssid": ssid ?? "disconnected",
+                "connected": ssid != nil ? "true" : "false",
+                "source": "background_check"
+            ]
+        )
+        onEvent?(event)
+
+        // Update tracked state so periodic checks don't re-report the same value
+        lastSSID = ssid
+    }
+
     // MARK: - Internal
 
     private func checkWiFi() {

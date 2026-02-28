@@ -225,9 +225,10 @@ final class SensingEngine {
     // MARK: - Background Wake
 
     /// Called from BGTaskScheduler when the app wakes in the background.
-    /// Backfills any missed motion/pedometer data and syncs pending events.
+    /// Backfills any missed motion/pedometer data, takes snapshots of battery/wifi/bluetooth,
+    /// and syncs pending events.
     func handleBackgroundWake() async {
-        print("[SensingEngine] Background wake — backfilling data and syncing")
+        print("[SensingEngine] Background wake — backfilling data, taking snapshots, and syncing")
 
         // Determine the backfill window: from last sync (or 1 hour ago) to now
         let now = Date()
@@ -238,6 +239,14 @@ final class SensingEngine {
 
         // Backfill motion activity data
         await backfillMotionActivity(from: backfillStart, to: now)
+
+        // Take one-shot snapshots of ambient sensors during background execution
+        batterySensor.checkNow()
+        wifiSensor.checkNow()
+        bluetoothSensor.quickScan(duration: 5)
+
+        // Small delay to let the BT quick scan complete before syncing
+        try? await Task.sleep(nanoseconds: 6_000_000_000)
 
         // Sync all pending events to the server
         await syncPendingEvents()

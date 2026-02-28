@@ -109,6 +109,14 @@ final class PopoViewModel {
     /// Activity entries loaded from Health module's UserDefaults storage.
     var activityEntries: [ActivityEntry] = []
 
+    // MARK: - Text Diary State
+
+    /// Text bound to the diary text input field.
+    var textDiaryInput: String = ""
+
+    /// Whether a text diary submission is in progress.
+    private(set) var isSubmittingTextDiary: Bool = false
+
     // MARK: - Narration Recording State
 
     /// Current state of the recording flow.
@@ -256,7 +264,8 @@ final class PopoViewModel {
 
     /// Filters sensing events to show only semantically meaningful entries.
     /// - Steps: removed entirely (shown in overview card via daySummary.totalSteps)
-    /// - Motion: only kept when activityType changes from previous event
+    /// - Motion: HAR episode grouping — consecutive same-activity events within 5 minutes
+    ///   are collapsed to keep only the first (transition) event
     /// - Location: only kept when position changed (>~100m) or 1+ hour gap since last
     /// - Screen, health, and other modalities: kept as-is
     private var filteredSensingEvents: [SensingEvent] {
@@ -273,15 +282,28 @@ final class PopoViewModel {
             $0.modality != .steps && $0.modality != .motion && $0.modality != .location
         }
 
-        // Motion: keep only when activity type changes from previous
+        // Motion: HAR episode grouping
+        // 1. Keep only when activity type changes from previous (transition events)
+        // 2. If multiple events of the same type appear within 5 minutes, keep only the first
+        let motionEpisodeWindow: TimeInterval = 300  // 5 minutes
         var filteredMotion: [SensingEvent] = []
         var lastActivityType: String?
+        var lastMotionTime: Date?
         for event in motionEvents {
             let activityType = event.payload["activityType"] ?? "unknown"
+
             if activityType != lastActivityType {
+                // Activity changed — this is a transition, always keep it
                 filteredMotion.append(event)
                 lastActivityType = activityType
+                lastMotionTime = event.timestamp
+            } else if let prevTime = lastMotionTime,
+                      event.timestamp.timeIntervalSince(prevTime) >= motionEpisodeWindow {
+                // Same activity but >5 min gap — could be a re-detection after gap, keep it
+                filteredMotion.append(event)
+                lastMotionTime = event.timestamp
             }
+            // Otherwise: same activity within 5 min window — skip (noise)
         }
 
         // Location: keep only when position changed significantly or 1h+ gap
@@ -729,6 +751,93 @@ final class PopoViewModel {
 
         if let url = recordingURL {
             try? FileManager.default.removeItem(at: url)
+        }
+    }
+
+    // MARK: - Text Diary
+
+    /// Submit a text diary entry. Creates a narration with no audio,
+    /// saves locally, syncs to server, and requests affect analysis on the text.
+    func addTextDiary(_ text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        isSubmittingTextDiary = true
+
+        var narration = Narration(
+            id: UUID(),
+            timestamp: Date(),
+            transcript: trimmed,
+            duration: 0,
+            audioFileRef: nil
+        )
+
+        narrations.insert(narration, at: 0)
+        saveNarrations()
+        textDiaryInput = ""
+
+        Task {
+            // Sync to server
+            await syncNarrationToServer(narration)
+
+            // Request affect analysis on the text (skip audio transcription)
+            if let analysis = await requestTextAnalysis(narration) {
+                narration.affectAnalysis = analysis.affect
+                narration.extractedMood = analysis.affect?.primaryEmotion
+
+                // Update the local entry
+                if let index = narrations.firstIndex(where: { $0.id == narration.id }) {
+                    narrations[index] = narration
+                    saveNarrations()
+                }
+
+                // Re-sync updated narration
+                await syncNarrationToServer(narration)
+            }
+
+            isSubmittingTextDiary = false
+        }
+    }
+
+    /// Request affect analysis for a text-only narration (no audio file to transcribe).
+    /// Sends the transcript directly to the analysis endpoint with a flag to skip Whisper.
+    private func requestTextAnalysis(_ narration: Narration) async -> NarrationAnalysisResult? {
+        let endpoint = "\(Self.bridgeBaseURL)/popo/narrations/analyze"
+        guard let url = URL(string: endpoint) else { return nil }
+
+        let payload: [String: String] = [
+            "narration_id": narration.id.uuidString,
+            "transcript": narration.transcript,
+            "text_only": "true"
+        ]
+
+        guard let body = try? JSONSerialization.data(withJSONObject: payload) else { return nil }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = body
+        request.timeoutInterval = 60
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse,
+                  (200..<300).contains(httpResponse.statusCode) else {
+                return nil
+            }
+
+            let decoder = JSONDecoder()
+            decoder.keyDecodingStrategy = .convertFromSnakeCase
+            let result = try decoder.decode(NarrationAnalysisResponse.self, from: data)
+
+            return NarrationAnalysisResult(
+                transcript: result.transcript ?? narration.transcript,
+                affect: result.affect
+            )
+        } catch {
+            print("[PopoVM] Text analysis request failed: \(error.localizedDescription)")
+            return nil
         }
     }
 

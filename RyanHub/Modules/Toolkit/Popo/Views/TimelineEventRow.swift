@@ -540,8 +540,16 @@ struct TimelineEventRow: View {
     private func sensingEventSummary(_ event: SensingEvent) -> String {
         switch event.modality {
         case .motion:
-            let activity = event.payload["activityType"] ?? "unknown"
+            let activity = (event.payload["activityType"] ?? "unknown").capitalized
             let confidence = event.payload["confidence"] ?? ""
+            // Show transition info if available (HAR clustering output)
+            if let previousActivity = event.payload["previousActivity"],
+               let durationStr = event.payload["previousDuration"],
+               let duration = Double(durationStr) {
+                let minutes = Int(duration) / 60
+                let durationText = minutes > 0 ? "\(minutes)m" : "\(Int(duration))s"
+                return "\(previousActivity.capitalized) \u{2192} \(activity) \u{00B7} was \(previousActivity) for \(durationText)"
+            }
             return "\(activity) (\(confidence))"
         case .steps:
             let steps = event.payload["steps"] ?? "0"
@@ -589,6 +597,12 @@ struct TimelineEventRow: View {
             let ssid = event.payload["ssid"] ?? "unknown"
             return ssid
         case .bluetooth:
+            // Aggregated scan: show device counts
+            if let totalStr = event.payload["deviceCount"],
+               let namedStr = event.payload["namedCount"] {
+                return "\(totalStr) devices nearby (\(namedStr) named)"
+            }
+            // Legacy single-device events (backwards compatibility)
             let device = event.payload["device"] ?? "unknown"
             return device
         case .visit:

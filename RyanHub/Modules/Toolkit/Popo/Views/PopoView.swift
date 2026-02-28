@@ -3,13 +3,14 @@ import SwiftUI
 // MARK: - POPO View
 
 /// The main view for the POPO (Proactive Personal Observer) toolkit plugin.
-/// Displays Facai's insight card, current state dashboard, channel status,
-/// chronological timeline, and narration recording controls.
+/// The Facai card serves as the central control hub: sensing toggle, nudge display,
+/// text diary input, and voice recording are all consolidated here.
 struct PopoView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.scenePhase) private var scenePhase
     @State private var viewModel = PopoViewModel()
     @State private var showChannelDetail = false
+    @FocusState private var isTextDiaryFocused: Bool
 
     var body: some View {
         ScrollView {
@@ -17,10 +18,10 @@ struct PopoView: View {
                 // Section 1: Date Navigation
                 DateNavigationBar(selectedDate: $viewModel.selectedDate)
 
-                if viewModel.sensingEnabled {
-                    // Section 2: Facai Insight Card (Hero)
-                    facaiInsightCard
+                // Section 2: Facai Control Hub Card (always visible)
+                facaiInsightCard
 
+                if viewModel.sensingEnabled {
                     // Section 3: Current State Dashboard
                     currentStateDashboard
 
@@ -29,20 +30,18 @@ struct PopoView: View {
 
                     // Section 5: Timeline
                     timelineSection
-
-                    // Section 6: Record Narration
-                    NarrationRecordButton(viewModel: viewModel)
                 }
 
-                // Sensing status footer (always visible)
-                sensingStatusFooter
+                // Auto-sync status (only when sensing is on)
+                if viewModel.sensingEnabled {
+                    autoSyncStatusRow
+                }
             }
             .padding(HubLayout.standardPadding)
         }
         .background(AdaptiveColors.background(for: colorScheme))
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active {
-                // Refresh health data from UserDefaults (may have been updated by Health module)
                 viewModel.refreshHealthData()
                 Task {
                     await viewModel.checkAndGenerateNudgesIfNeeded()
@@ -51,18 +50,22 @@ struct PopoView: View {
         }
     }
 
-    // MARK: - Section 2: Facai Insight Card
+    // MARK: - Section 2: Facai Insight Card (Central Hub)
 
     private var facaiInsightCard: some View {
-        let todayNudges = viewModel.nudgesForSelectedDate
+        HubCard {
+            VStack(alignment: .leading, spacing: 14) {
+                // Row 1: Avatar + Name + Sensing Toggle
+                facaiCardHeader
 
-        return HubCard {
-            if todayNudges.isEmpty {
-                // No nudges — observing state
-                facaiObservingState
-            } else {
-                // Show latest nudge as hero
-                facaiNudgeContent(todayNudges)
+                // Row 2: Nudge content or status message
+                facaiCardBody
+
+                // Row 3: Text diary input
+                textDiaryInputField
+
+                // Row 4: Voice record button (compact or expanded)
+                voiceRecordSection
             }
         }
         .overlay(
@@ -71,24 +74,33 @@ struct PopoView: View {
         )
     }
 
-    private var facaiObservingState: some View {
-        HStack(spacing: 14) {
-            FacaiAvatar(size: 44)
+    // MARK: - Facai Card Header (Avatar + Name + Toggle)
+
+    private var facaiCardHeader: some View {
+        HStack(spacing: 12) {
+            FacaiAvatar(size: 40)
                 .overlay(
                     Circle()
-                        .stroke(Color.hubPrimary.opacity(0.3), lineWidth: 2)
+                        .stroke(
+                            viewModel.sensingEnabled
+                                ? Color.hubPrimary.opacity(0.3)
+                                : AdaptiveColors.textSecondary(for: colorScheme).opacity(0.2),
+                            lineWidth: 2
+                        )
                 )
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text("Facai")
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
 
-                HStack(spacing: 6) {
-                    PulsingObserveDot()
+                HStack(spacing: 4) {
+                    Circle()
+                        .fill(viewModel.sensingEnabled ? Color.hubAccentGreen : AdaptiveColors.textSecondary(for: colorScheme).opacity(0.3))
+                        .frame(width: 6, height: 6)
 
-                    Text("Observing your day...")
-                        .font(.hubCaption)
+                    Text(viewModel.sensingEnabled ? "Sensing on" : "Sensing off")
+                        .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
                 }
             }
@@ -100,6 +112,46 @@ struct PopoView: View {
                     .scaleEffect(0.7)
                     .tint(Color.hubPrimary)
             }
+
+            Toggle("", isOn: $viewModel.sensingEnabled)
+                .labelsHidden()
+                .tint(Color.hubPrimary)
+        }
+    }
+
+    // MARK: - Facai Card Body (Nudge or Status)
+
+    private var facaiCardBody: some View {
+        Group {
+            if !viewModel.sensingEnabled {
+                // Sensing is off — paused state
+                HStack(spacing: 8) {
+                    Image(systemName: "pause.circle")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+
+                    Text("Sensing paused")
+                        .font(.hubCaption)
+                        .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                }
+                .padding(.vertical, 4)
+            } else {
+                let todayNudges = viewModel.nudgesForSelectedDate
+                if todayNudges.isEmpty {
+                    // No nudges — observing
+                    HStack(spacing: 6) {
+                        PulsingObserveDot()
+
+                        Text("Observing your day...")
+                            .font(.hubCaption)
+                            .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                    }
+                    .padding(.vertical, 4)
+                } else {
+                    // Show latest nudge
+                    facaiNudgeContent(todayNudges)
+                }
+            }
         }
     }
 
@@ -107,24 +159,16 @@ struct PopoView: View {
         let latest = nudges[0]
         let remainingCount = nudges.count - 1
 
-        return VStack(alignment: .leading, spacing: 12) {
-            // Header: Avatar + name + type badge
-            HStack(spacing: 12) {
-                FacaiAvatar(size: 40)
+        return VStack(alignment: .leading, spacing: 8) {
+            // Type badge + timestamp row
+            HStack(spacing: 8) {
+                nudgeTypeBadge(latest.type)
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Facai")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
-
-                    Text(formatTimestamp(latest.timestamp))
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
-                }
+                Text(formatTimestamp(latest.timestamp))
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
 
                 Spacer()
-
-                nudgeTypeBadge(latest.type)
             }
 
             // Speech bubble content
@@ -178,6 +222,206 @@ struct PopoView: View {
         case .reminder: return ("bell.fill", Color.hubPrimary, "Reminder")
         case .encouragement: return ("hand.thumbsup.fill", Color.hubAccentGreen, "Encouragement")
         case .alert: return ("exclamationmark.triangle.fill", Color.hubAccentRed, "Alert")
+        }
+    }
+
+    // MARK: - Text Diary Input
+
+    private var textDiaryInputField: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "square.and.pencil")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+
+            TextField("What's on your mind...", text: $viewModel.textDiaryInput)
+                .font(.hubCaption)
+                .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                .focused($isTextDiaryFocused)
+                .onSubmit {
+                    submitTextDiary()
+                }
+                .disabled(viewModel.isSubmittingTextDiary)
+
+            if viewModel.isSubmittingTextDiary {
+                ProgressView()
+                    .scaleEffect(0.6)
+                    .tint(Color.hubPrimary)
+            } else if !viewModel.textDiaryInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                Button {
+                    submitTextDiary()
+                } label: {
+                    Image(systemName: "arrow.up.circle.fill")
+                        .font(.system(size: 20))
+                        .foregroundStyle(Color.hubPrimary)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(AdaptiveColors.surfaceSecondary(for: colorScheme))
+        )
+    }
+
+    private func submitTextDiary() {
+        let text = viewModel.textDiaryInput
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        isTextDiaryFocused = false
+        viewModel.addTextDiary(text)
+    }
+
+    // MARK: - Voice Record Section
+
+    private var voiceRecordSection: some View {
+        Group {
+            switch viewModel.narrationState {
+            case .idle, .done:
+                // Compact voice button
+                compactVoiceButton
+            case .recording:
+                // Expanded recording UI
+                expandedRecordingUI
+            case .uploading:
+                // Uploading state
+                uploadingRow
+            case .error(let message):
+                // Error state
+                errorRow(message)
+            }
+        }
+    }
+
+    private var compactVoiceButton: some View {
+        Button {
+            viewModel.startNarration()
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "mic.fill")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(Color.hubPrimary)
+
+                Text("Voice")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(Color.hubPrimary)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(
+                Capsule()
+                    .fill(Color.hubPrimary.opacity(0.12))
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var expandedRecordingUI: some View {
+        VStack(spacing: 10) {
+            // Waveform visualization
+            inlineWaveformView
+
+            // Duration + controls
+            HStack {
+                HStack(spacing: 8) {
+                    InlinePulsingDot()
+
+                    Text(formatDuration(viewModel.narrationDuration))
+                        .font(.system(size: 15, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                }
+
+                Spacer()
+
+                // Cancel
+                Button {
+                    viewModel.cancelNarration()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 22))
+                        .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                }
+                .buttonStyle(.plain)
+
+                // Stop
+                Button {
+                    viewModel.stopNarration()
+                } label: {
+                    Image(systemName: "stop.circle.fill")
+                        .font(.system(size: 30))
+                        .foregroundStyle(Color.hubAccentRed)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(10)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(AdaptiveColors.surfaceSecondary(for: colorScheme))
+        )
+    }
+
+    private var inlineWaveformView: some View {
+        GeometryReader { geometry in
+            let levels = viewModel.narrationAudioLevels
+            let barWidth: CGFloat = 3
+            let barSpacing: CGFloat = 2
+            let totalBarWidth = barWidth + barSpacing
+            let maxBars = Int(geometry.size.width / totalBarWidth)
+            let displayLevels = Array(levels.suffix(maxBars))
+
+            HStack(alignment: .center, spacing: barSpacing) {
+                ForEach(Array(displayLevels.enumerated()), id: \.offset) { _, level in
+                    RoundedRectangle(cornerRadius: 1.5)
+                        .fill(Color.hubPrimary.opacity(0.7))
+                        .frame(width: barWidth, height: max(2, level * geometry.size.height))
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
+        }
+        .frame(height: 32)
+        .clipShape(RoundedRectangle(cornerRadius: 6))
+    }
+
+    private var uploadingRow: some View {
+        HStack(spacing: 10) {
+            ProgressView()
+                .scaleEffect(0.7)
+                .tint(Color.hubPrimary)
+
+            Text("Uploading & analyzing...")
+                .font(.hubCaption)
+                .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+
+            Spacer()
+
+            Text(formatDuration(viewModel.narrationDuration))
+                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+        }
+    }
+
+    private func errorRow(_ message: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 14))
+                .foregroundStyle(Color.hubAccentYellow)
+
+            Text(message)
+                .font(.hubCaption)
+                .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                .lineLimit(1)
+
+            Spacer()
+
+            Button {
+                viewModel.cancelNarration()
+            } label: {
+                Text("Dismiss")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Color.hubPrimary)
+            }
+            .buttonStyle(.plain)
         }
     }
 
@@ -502,80 +746,48 @@ struct PopoView: View {
         }
     }
 
-    // MARK: - Sensing Status Footer
+    // MARK: - Auto-Sync Status Row
 
-    private var sensingStatusFooter: some View {
-        VStack(spacing: HubLayout.itemSpacing) {
-            // Sensing toggle
-            HubCard {
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack(spacing: 8) {
-                            Circle()
-                                .fill(viewModel.sensingEnabled ? Color.hubAccentGreen : AdaptiveColors.textSecondary(for: colorScheme).opacity(0.3))
-                                .frame(width: 8, height: 8)
-
-                            Text("Sensing Engine")
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
-                        }
-
-                        Text(viewModel.sensingEnabled ? "Actively observing" : "Paused")
-                            .font(.system(size: 12, weight: .regular))
-                            .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
-                    }
-
-                    Spacer()
-
-                    Toggle("", isOn: $viewModel.sensingEnabled)
-                        .labelsHidden()
-                        .tint(Color.hubPrimary)
+    private var autoSyncStatusRow: some View {
+        HStack(spacing: 12) {
+            HStack(spacing: 4) {
+                if viewModel.isSyncing {
+                    ProgressView()
+                        .scaleEffect(0.6)
+                        .frame(width: 12, height: 12)
+                    Text("Syncing...")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                } else if viewModel.lastSyncError != nil {
+                    Image(systemName: "exclamationmark.icloud.fill")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(Color.hubAccentRed)
+                    Text("Sync error")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(Color.hubAccentRed)
+                } else {
+                    Image(systemName: "arrow.triangle.2.circlepath.icloud.fill")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                    Text(viewModel.autoSyncStatusText)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
                 }
             }
 
-            // Auto-sync status row (only when sensing is on)
-            if viewModel.sensingEnabled {
-                HStack(spacing: 12) {
-                    HStack(spacing: 4) {
-                        if viewModel.isSyncing {
-                            ProgressView()
-                                .scaleEffect(0.6)
-                                .frame(width: 12, height: 12)
-                            Text("Syncing...")
-                                .font(.system(size: 11, weight: .medium))
-                                .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
-                        } else if viewModel.lastSyncError != nil {
-                            Image(systemName: "exclamationmark.icloud.fill")
-                                .font(.system(size: 11, weight: .medium))
-                                .foregroundStyle(Color.hubAccentRed)
-                            Text("Sync error")
-                                .font(.system(size: 11, weight: .medium))
-                                .foregroundStyle(Color.hubAccentRed)
-                        } else {
-                            Image(systemName: "arrow.triangle.2.circlepath.icloud.fill")
-                                .font(.system(size: 11, weight: .medium))
-                                .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
-                            Text(viewModel.autoSyncStatusText)
-                                .font(.system(size: 11, weight: .medium))
-                                .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
-                        }
-                    }
+            Spacer()
 
-                    Spacer()
-
-                    Button {
-                        Task { await viewModel.syncNow() }
-                    } label: {
-                        Image(systemName: "arrow.clockwise")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme).opacity(0.6))
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(viewModel.isSyncing)
-                }
-                .padding(.horizontal, 4)
+            Button {
+                Task { await viewModel.syncNow() }
+            } label: {
+                Image(systemName: "arrow.clockwise")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme).opacity(0.6))
             }
+            .buttonStyle(.plain)
+            .disabled(viewModel.isSyncing)
         }
+        .padding(.horizontal, 4)
     }
 
     // MARK: - Formatting Helpers
@@ -590,6 +802,12 @@ struct PopoView: View {
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .abbreviated
         return formatter.localizedString(for: date, relativeTo: Date())
+    }
+
+    private func formatDuration(_ duration: TimeInterval) -> String {
+        let minutes = Int(duration) / 60
+        let seconds = Int(duration) % 60
+        return String(format: "%d:%02d", minutes, seconds)
     }
 }
 
@@ -606,6 +824,27 @@ private struct PulsingObserveDot: View {
             .opacity(isPulsing ? 0.3 : 1.0)
             .animation(
                 .easeInOut(duration: 1.2).repeatForever(autoreverses: true),
+                value: isPulsing
+            )
+            .onAppear {
+                isPulsing = true
+            }
+    }
+}
+
+// MARK: - Inline Pulsing Dot (Recording Indicator)
+
+/// A small red circle that pulses to indicate active recording, used inline in the Facai card.
+private struct InlinePulsingDot: View {
+    @State private var isPulsing = false
+
+    var body: some View {
+        Circle()
+            .fill(Color.hubAccentRed)
+            .frame(width: 8, height: 8)
+            .opacity(isPulsing ? 0.4 : 1.0)
+            .animation(
+                .easeInOut(duration: 0.8).repeatForever(autoreverses: true),
                 value: isPulsing
             )
             .onAppear {

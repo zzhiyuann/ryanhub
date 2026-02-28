@@ -40,6 +40,39 @@ final class BatterySensor {
         UIDevice.current.isBatteryMonitoringEnabled = false
     }
 
+    // MARK: - Background One-Shot
+
+    /// Immediately read and report battery state, bypassing the change threshold.
+    /// Suitable for background wake-ups where we want a snapshot regardless.
+    func checkNow() {
+        UIDevice.current.isBatteryMonitoringEnabled = true
+
+        let level = UIDevice.current.batteryLevel
+        let state = UIDevice.current.batteryState
+
+        let stateString: String
+        switch state {
+        case .charging: stateString = "charging"
+        case .full: stateString = "full"
+        case .unplugged: stateString = "unplugged"
+        default: stateString = "unknown"
+        }
+
+        let event = SensingEvent(
+            modality: .battery,
+            payload: [
+                "level": String(format: "%.0f", level * 100),
+                "state": stateString,
+                "source": "background_check"
+            ]
+        )
+        onEvent?(event)
+
+        // Update tracked state so periodic checks don't re-report the same value
+        lastReportedLevel = level
+        lastReportedState = state
+    }
+
     // MARK: - Internal
 
     private func reportBatteryState() {

@@ -5,8 +5,9 @@ import CoreMotion
 
 /// Observes user motion activity and step counts using CoreMotion.
 /// Activity updates (walking, running, driving, stationary, cycling) arrive
-/// automatically when the state changes. Step count updates are delivered
-/// via CMPedometer live updates.
+/// automatically when the state changes. Implements HAR (Human Activity Recognition)
+/// temporal clustering to reduce noise — only emits transition events when activity
+/// type changes with sufficient confidence and cooldown.
 final class MotionSensor {
     private let activityManager = CMMotionActivityManager()
     private let pedometer = CMPedometer()
@@ -14,6 +15,17 @@ final class MotionSensor {
 
     /// Callback invoked when a new sensing event is captured.
     var onEvent: ((SensingEvent) -> Void)?
+
+    // MARK: - HAR Temporal Clustering State
+
+    /// The last activity type that was actually reported (emitted as an event).
+    private var lastReportedActivity: String?
+
+    /// Timestamp when the last activity transition was reported.
+    private var lastActivityChangeTime: Date?
+
+    /// Minimum time (seconds) between activity transitions to avoid noisy flapping.
+    private static let transitionCooldown: TimeInterval = 30
 
     // MARK: - Lifecycle
 
@@ -40,25 +52,60 @@ final class MotionSensor {
     // MARK: - Activity Updates
 
     /// Monitor real-time activity type changes (walking, running, driving, etc).
-    /// CoreMotion delivers updates on state transitions automatically.
+    /// Applies HAR temporal clustering: only emits a transition event when the
+    /// activity type changes, confidence is at least medium, and the transition
+    /// cooldown has elapsed.
     private func startActivityUpdates() {
         let queue = OperationQueue()
         queue.name = "com.ryanhub.popo.motion"
         queue.maxConcurrentOperationCount = 1
 
         activityManager.startActivityUpdates(to: queue) { [weak self] activity in
-            guard let activity else { return }
+            guard let self, let activity else { return }
+
             let activityType = Self.activityTypeString(from: activity)
-            let confidence = Self.confidenceString(from: activity.confidence)
+            let confidence = activity.confidence
+
+            // Filter 1: Ignore low-confidence readings — too noisy
+            guard confidence != .low else { return }
+
+            // Filter 2: Only emit when activity type actually changes
+            guard activityType != self.lastReportedActivity else { return }
+
+            // Filter 3: Enforce transition cooldown to prevent rapid flapping
+            let now = Date()
+            if let lastChange = self.lastActivityChangeTime,
+               now.timeIntervalSince(lastChange) < Self.transitionCooldown {
+                return
+            }
+
+            // Build transition payload with episode context
+            var payload: [String: String] = [
+                "activityType": activityType,
+                "confidence": Self.confidenceString(from: confidence)
+            ]
+
+            // Include previous activity context for transition awareness
+            if let previousActivity = self.lastReportedActivity {
+                payload["previousActivity"] = previousActivity
+                payload["transitionType"] = "\(previousActivity)_to_\(activityType)"
+
+                // Calculate how long the previous activity lasted
+                if let lastChange = self.lastActivityChangeTime {
+                    let previousDuration = now.timeIntervalSince(lastChange)
+                    payload["previousDuration"] = String(format: "%.0f", previousDuration)
+                }
+            }
+
+            // Update tracking state
+            self.lastReportedActivity = activityType
+            self.lastActivityChangeTime = now
 
             let event = SensingEvent(
                 modality: .motion,
-                payload: [
-                    "activityType": activityType,
-                    "confidence": confidence
-                ]
+                payload: payload
             )
-            self?.onEvent?(event)
+            self.onEvent?(event)
         }
     }
 
@@ -106,7 +153,7 @@ final class MotionSensor {
     }
 
     /// Convert a CMMotionActivityConfidence to a human-readable string.
-    private static func confidenceString(from confidence: CMMotionActivityConfidence) -> String {
+    static func confidenceString(from confidence: CMMotionActivityConfidence) -> String {
         switch confidence {
         case .low: return "low"
         case .medium: return "medium"
