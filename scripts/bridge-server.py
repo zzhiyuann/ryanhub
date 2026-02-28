@@ -1514,23 +1514,35 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
         summary_text = summarize_sensing_data(sensing_events, narrations, daily_summary)
         print("[Analyze] Summary:\n%s" % summary_text[:500])
 
-        # Step 2: Generate nudges (LLM first, then rule-based fallback)
+        # Step 2: Generate nudges via LLM (no silent fallback — fail loudly)
         method_used = "none"
         raw_nudges = None
 
-        # Try LLM-based generation first
-        if ANTHROPIC_AVAILABLE:
-            raw_nudges = generate_nudges_llm(summary_text)
-            if raw_nudges is not None:
-                method_used = "llm"
-                print("[Analyze] Generated %d nudges via LLM" % len(raw_nudges))
+        if not ANTHROPIC_AVAILABLE:
+            error_msg = "Anthropic SDK not available or API key not configured"
+            print("[Analyze] ERROR: %s" % error_msg, file=sys.stderr)
+            self._send_json(503, {
+                "ok": False,
+                "error": error_msg,
+                "nudges": [],
+                "method": "none"
+            })
+            return
 
-        # Fall back to rule-based
+        raw_nudges = generate_nudges_llm(summary_text)
         if raw_nudges is None:
-            raw_nudges = generate_nudges_rule_based(
-                sensing_events, narrations, daily_summary)
-            method_used = "rule_based"
-            print("[Analyze] Generated %d nudges via rule-based system" % len(raw_nudges))
+            error_msg = "LLM nudge generation failed — check API key, network, or model availability"
+            print("[Analyze] ERROR: %s" % error_msg, file=sys.stderr)
+            self._send_json(500, {
+                "ok": False,
+                "error": error_msg,
+                "nudges": [],
+                "method": "llm_failed"
+            })
+            return
+
+        method_used = "llm"
+        print("[Analyze] Generated %d nudges via LLM" % len(raw_nudges))
 
         # Step 3: Normalize nudge records (add id, timestamp, validate fields)
         now_iso = datetime.now().isoformat()
