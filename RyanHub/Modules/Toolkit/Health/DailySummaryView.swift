@@ -214,7 +214,7 @@ struct DailySummaryView: View {
         }
     }
 
-    private var calorieGoal: Int { 2000 }
+    private var calorieGoal: Int { 1600 }
 
     private var calorieProgress: Double {
         guard calorieGoal > 0 else { return 0 }
@@ -245,21 +245,21 @@ struct DailySummaryView: View {
             macroBar(
                 label: "Protein",
                 value: dayProtein,
-                goal: 120,
+                goal: 160,
                 unit: "g",
                 color: Color.hubAccentRed
             )
             macroBar(
                 label: "Carbs",
                 value: dayCarbs,
-                goal: 250,
+                goal: 120,
                 unit: "g",
                 color: Color.hubPrimary
             )
             macroBar(
                 label: "Fat",
                 value: dayFat,
-                goal: 65,
+                goal: 50,
                 unit: "g",
                 color: Color.hubAccentGreen
             )
