@@ -303,14 +303,14 @@ final class PopoViewModel {
         let locationEvents = dayEvents
             .filter { $0.modality == .location }
             .sorted { $0.timestamp < $1.timestamp }
-        // Modalities that need time-window dedup (keep at most 1 per interval)
+        // Modalities that need time-window dedup (keep at most 1 per interval).
+        // Blood Oxygen is user-triggered (ad-hoc) so it passes through unfiltered.
         let timeWindowModalities: [SensingModality: TimeInterval] = [
             .heartRate: 60,         // 1 per minute
-            .activeEnergy: 3600,    // 1 per hour
-            .basalEnergy: 3600,     // 1 per hour
+            .activeEnergy: 300,     // 1 per 5 minutes
+            .basalEnergy: 300,      // 1 per 5 minutes
             .respiratoryRate: 600,  // 1 per 10 minutes
-            .bloodOxygen: 60,       // 1 per minute (dedup Apple Watch multi-sample)
-            .noiseExposure: 600,    // 1 per 10 minutes
+            .noiseExposure: 600,    // 1 per 10 minutes (anomaly: 1 per minute)
         ]
 
         let timeWindowEvents = dayEvents
@@ -321,7 +321,8 @@ final class PopoViewModel {
         }
 
         // Time-window dedup: for each modality, keep at most 1 event per window.
-        // Anomaly events (HR) always bypass the window.
+        // Anomaly events (HR, noise) use a tighter window or bypass entirely.
+        let noiseAnomalyThreshold: Double = 80  // dBA
         var filteredTimeWindow: [SensingEvent] = []
         for (modality, windowInterval) in timeWindowModalities {
             let modalityEvents = timeWindowEvents
@@ -332,6 +333,18 @@ final class PopoViewModel {
                 // HR anomalies always pass through
                 if modality == .heartRate && event.payload["anomaly"] == "true" {
                     filteredTimeWindow.append(event)
+                    continue
+                }
+                // Noise anomaly (>80 dBA): tighten window to 1 minute
+                if modality == .noiseExposure,
+                   let dbStr = event.payload["decibels"],
+                   let db = Double(dbStr), db >= noiseAnomalyThreshold {
+                    if let prevTime = lastKeptTime,
+                       event.timestamp.timeIntervalSince(prevTime) < 60 {
+                        continue
+                    }
+                    filteredTimeWindow.append(event)
+                    lastKeptTime = event.timestamp
                     continue
                 }
                 if let prevTime = lastKeptTime,
