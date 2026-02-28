@@ -40,6 +40,16 @@ struct CalendarPluginView: View {
             commandInputBar
         }
         .background(AdaptiveColors.background(for: colorScheme))
+        .alert("Delete Event", isPresented: $viewModel.showDeleteConfirmation) {
+            Button("Delete", role: .destructive) {
+                Task { await viewModel.executeDeleteEvent() }
+            }
+            Button("Cancel", role: .cancel) {
+                viewModel.eventToDelete = nil
+            }
+        } message: {
+            Text("Are you sure you want to delete \"\(viewModel.eventToDelete?.title ?? "")\"? This will also remove it from Google Calendar.")
+        }
         .sheet(isPresented: $viewModel.showEventDetail) {
             if let event = viewModel.selectedEvent {
                 EventDetailView(
@@ -350,6 +360,13 @@ struct CalendarPluginView: View {
                     Button { viewModel.selectEvent(event) } label: {
                         eventCard(event)
                     }
+                    .contextMenu {
+                        Button(role: .destructive) {
+                            viewModel.confirmDeleteEvent(event)
+                        } label: {
+                            Label("Delete Event", systemImage: "trash")
+                        }
+                    }
                 }
             }
         }
@@ -373,6 +390,13 @@ struct CalendarPluginView: View {
                 ForEach(viewModel.tomorrowEvents) { event in
                     Button { viewModel.selectEvent(event) } label: {
                         eventCard(event)
+                    }
+                    .contextMenu {
+                        Button(role: .destructive) {
+                            viewModel.confirmDeleteEvent(event)
+                        } label: {
+                            Label("Delete Event", systemImage: "trash")
+                        }
                     }
                 }
             }
@@ -398,6 +422,13 @@ struct CalendarPluginView: View {
                         ForEach(dayGroup.events) { event in
                             Button { viewModel.selectEvent(event) } label: {
                                 eventCard(event)
+                            }
+                            .contextMenu {
+                                Button(role: .destructive) {
+                                    viewModel.confirmDeleteEvent(event)
+                                } label: {
+                                    Label("Delete Event", systemImage: "trash")
+                                }
                             }
                         }
                     }

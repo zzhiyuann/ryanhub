@@ -15,6 +15,10 @@ final class CalendarViewModel {
     var selectedEvent: CalendarEvent?
     var showEventDetail = false
 
+    // Long-press delete
+    var eventToDelete: CalendarEvent?
+    var showDeleteConfirmation = false
+
     // AI command input
     var commandText = ""
     var isProcessingCommand = false
@@ -197,6 +201,19 @@ final class CalendarViewModel {
         } catch {
             commandError = "Failed to delete: \(error.localizedDescription)"
         }
+    }
+
+    /// Request deletion of an event via long-press (shows confirmation).
+    func confirmDeleteEvent(_ event: CalendarEvent) {
+        eventToDelete = event
+        showDeleteConfirmation = true
+    }
+
+    /// Execute the pending long-press deletion.
+    func executeDeleteEvent() async {
+        guard let event = eventToDelete else { return }
+        await deleteEvent(event)
+        eventToDelete = nil
     }
 
     /// Dismiss the agent response card.
