@@ -18,6 +18,8 @@ struct ChatView: View {
     /// Whether the user has manually scrolled up away from the bottom.
     /// When true, auto-scroll on streaming content updates is suppressed.
     @State private var userScrolledUp: Bool = false
+    /// Reference to the scroll proxy, stored so keyboard handlers can trigger scroll.
+    @State private var scrollProxy: ScrollViewProxy?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -79,11 +81,19 @@ struct ChatView: View {
                     // and the keyboard frame includes the area behind the tab bar
                     keyboardHeight = frame.height - 50
                 }
+                // Scroll to bottom after keyboard layout settles
+                if let proxy = scrollProxy {
+                    scrollToBottom(proxy: proxy, delay: 0.3)
+                }
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
             withAnimation(.easeOut(duration: 0.25)) {
                 keyboardHeight = 0
+            }
+            // Scroll to bottom after keyboard dismissal settles
+            if let proxy = scrollProxy {
+                scrollToBottom(proxy: proxy, delay: 0.3)
             }
         }
         .task {
@@ -250,9 +260,14 @@ struct ChatView: View {
                 }
             }
             .onAppear {
+                // Store proxy so keyboard handlers can access it.
+                scrollProxy = proxy
                 // When switching back to the chat tab or chat mode,
-                // scroll to bottom so the user sees the latest messages.
-                scrollToBottom(proxy: proxy)
+                // instant-scroll (no animation) so the user immediately sees latest.
+                scrollToBottom(proxy: proxy, animated: false)
+                // Follow up with an animated scroll after layout fully settles,
+                // in case the first one fired before content was laid out.
+                scrollToBottom(proxy: proxy, delay: 0.2)
             }
         }
     }
@@ -419,10 +434,13 @@ struct ChatView: View {
         .accessibilityIdentifier(AccessibilityID.chatReplyBar)
     }
 
-    private func scrollToBottom(proxy: ScrollViewProxy) {
-        // Small delay to allow the layout to update before scrolling
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-            withAnimation(.easeOut(duration: 0.2)) {
+    private func scrollToBottom(proxy: ScrollViewProxy, animated: Bool = true, delay: TimeInterval = 0.05) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+            if animated {
+                withAnimation(.easeOut(duration: 0.15)) {
+                    proxy.scrollTo("bottom-anchor", anchor: .bottom)
+                }
+            } else {
                 proxy.scrollTo("bottom-anchor", anchor: .bottom)
             }
         }

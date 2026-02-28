@@ -102,15 +102,15 @@ struct ContentView: View {
                             .frame(height: 50)
                             .contentShape(Rectangle())
 
-                        // Unread badge on chat tab
-                        if tab == .chat && notificationManager.unreadChatCount > 0 {
+                        // Unread badge on chat tab (hidden when user is already on chat)
+                        if tab == .chat && selectedTab != .chat && notificationManager.unreadChatCount > 0 {
                             Text("\(notificationManager.unreadChatCount)")
                                 .font(.system(size: 10, weight: .bold))
                                 .foregroundStyle(.white)
                                 .frame(minWidth: 16, minHeight: 16)
                                 .padding(.horizontal, 3)
                                 .background(Circle().fill(Color.hubAccentRed))
-                                .offset(x: -4, y: 8)
+                                .offset(x: -12, y: 6)
                         }
                     }
                 }
