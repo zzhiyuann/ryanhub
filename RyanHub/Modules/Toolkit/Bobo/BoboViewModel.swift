@@ -15,7 +15,7 @@ enum NarrationRecordingState: Equatable {
 
 // MARK: - Timeline Item
 
-/// A unified timeline item that wraps any type of POPO event for chronological display.
+/// A unified timeline item that wraps any type of BOBO event for chronological display.
 /// Enables rendering sensing events, narrations, nudges, meals, and activities in a single timeline.
 enum TimelineItem: Identifiable {
     case sensing(SensingEvent)
@@ -61,13 +61,13 @@ struct DayOverviewSummary {
     var totalCaloriesBurned: Int = 0
 }
 
-// MARK: - POPO View Model
+// MARK: - BOBO View Model
 
-/// Main view model for the POPO (Proactive Personal Observer) sensing module.
+/// Main view model for the BOBO (Proactive Personal Observer) sensing module.
 /// Coordinates the sensing engine and exposes observable state for the UI.
 @MainActor
 @Observable
-final class PopoViewModel {
+final class BoboViewModel {
     // MARK: - State
 
     /// The sensing engine that manages all sensors (shared singleton for BGTask access).
@@ -845,19 +845,19 @@ final class PopoViewModel {
         )
         narrations.insert(narration, at: 0)
         saveNarrations()
-        print("[PopoVM] Voice narration \(narrationId) inserted into timeline (pending upload)")
+        print("[BoboVM] Voice narration \(narrationId) inserted into timeline (pending upload)")
 
         Task {
             do {
                 // Sync the placeholder narration to the server FIRST so it exists
-                // in popo_narrations.json before any background analysis tries to
+                // in bobo_narrations.json before any background analysis tries to
                 // update it with the transcript.
                 if let index = narrations.firstIndex(where: { $0.id == narrationId }) {
                     await syncNarrationToServer(narrations[index])
                 }
 
                 let filename = try await uploadNarrationAudio(data: data, narrationId: narrationId)
-                print("[PopoVM] Audio uploaded: \(filename)")
+                print("[BoboVM] Audio uploaded: \(filename)")
 
                 // Update the placeholder with the server-assigned filename
                 if let index = narrations.firstIndex(where: { $0.id == narrationId }) {
@@ -869,7 +869,7 @@ final class PopoViewModel {
                 }
 
                 // Request server-side analysis (transcription + affect).
-                // The /popo/narrations/analyze endpoint runs Whisper + emotion model
+                // The /bobo/narrations/analyze endpoint runs Whisper + emotion model
                 // synchronously and returns the result inline.
                 var analysisResult = await requestNarrationAnalysis(filename: filename, narrationId: narrationId)
 
@@ -877,7 +877,7 @@ final class PopoViewModel {
                 // the audio upload may have triggered background analysis. Poll the server
                 // for the updated narration until transcript appears (up to 60s).
                 if analysisResult == nil {
-                    print("[PopoVM] Synchronous analysis returned nil, polling for background result...")
+                    print("[BoboVM] Synchronous analysis returned nil, polling for background result...")
                     analysisResult = await pollForNarrationAnalysis(narrationId: narrationId, maxAttempts: 12, intervalSeconds: 5)
                 }
 
@@ -888,13 +888,13 @@ final class PopoViewModel {
                         narrations[index].affectAnalysis = analysis.affect
                         narrations[index].extractedMood = analysis.affect?.primaryEmotion
                         saveNarrations()
-                        print("[PopoVM] Narration \(narrationId) updated with transcript: \(analysis.transcript.prefix(80))...")
+                        print("[BoboVM] Narration \(narrationId) updated with transcript: \(analysis.transcript.prefix(80))...")
 
                         // Re-sync updated narration
                         await syncNarrationToServer(narrations[index])
                     }
                 } else {
-                    print("[PopoVM] WARNING: No analysis result for narration \(narrationId) — transcript will remain empty")
+                    print("[BoboVM] WARNING: No analysis result for narration \(narrationId) — transcript will remain empty")
                 }
 
                 narrationState = .done
@@ -907,7 +907,7 @@ final class PopoViewModel {
                     narrationAudioLevels = []
                 }
             } catch {
-                print("[PopoVM] Upload failed for narration \(narrationId): \(error.localizedDescription)")
+                print("[BoboVM] Upload failed for narration \(narrationId): \(error.localizedDescription)")
                 // Upload failed but the narration placeholder is already in the timeline.
                 // Keep it there so the user can see it was recorded, even if upload failed.
                 narrationState = .error("Upload failed: \(error.localizedDescription)")
@@ -980,7 +980,7 @@ final class PopoViewModel {
     /// Request affect analysis for a text-only narration (no audio file to transcribe).
     /// Sends the transcript directly to the analysis endpoint with a flag to skip Whisper.
     private func requestTextAnalysis(_ narration: Narration) async -> NarrationAnalysisResult? {
-        let endpoint = "\(Self.bridgeBaseURL)/popo/narrations/analyze"
+        let endpoint = "\(Self.bridgeBaseURL)/bobo/narrations/analyze"
         guard let url = URL(string: endpoint) else { return nil }
 
         let payload: [String: String] = [
@@ -1002,7 +1002,7 @@ final class PopoViewModel {
 
             guard let httpResponse = response as? HTTPURLResponse,
                   (200..<300).contains(httpResponse.statusCode) else {
-                print("[PopoVM] Text analysis server returned status \((response as? HTTPURLResponse)?.statusCode ?? -1)")
+                print("[BoboVM] Text analysis server returned status \((response as? HTTPURLResponse)?.statusCode ?? -1)")
                 return nil
             }
 
@@ -1015,7 +1015,7 @@ final class PopoViewModel {
                 affect: result.affect
             )
         } catch {
-            print("[PopoVM] Text analysis request failed: \(error.localizedDescription)")
+            print("[BoboVM] Text analysis request failed: \(error.localizedDescription)")
             return nil
         }
     }
@@ -1024,7 +1024,7 @@ final class PopoViewModel {
 
     /// Upload raw audio data to the bridge server. Returns the server-assigned filename.
     private func uploadNarrationAudio(data: Data, narrationId: UUID) async throws -> String {
-        let endpoint = "\(Self.bridgeBaseURL)/popo/audio"
+        let endpoint = "\(Self.bridgeBaseURL)/bobo/audio"
         guard let url = URL(string: endpoint) else {
             throw URLError(.badURL)
         }
@@ -1051,9 +1051,9 @@ final class PopoViewModel {
         return result.filename
     }
 
-    /// Sync a narration entry to the bridge server's /popo/narrations endpoint.
+    /// Sync a narration entry to the bridge server's /bobo/narrations endpoint.
     private func syncNarrationToServer(_ narration: Narration) async {
-        let endpoint = "\(Self.bridgeBaseURL)/popo/narrations"
+        let endpoint = "\(Self.bridgeBaseURL)/bobo/narrations"
         guard let url = URL(string: endpoint) else { return }
 
         let encoder = JSONEncoder()
@@ -1074,7 +1074,7 @@ final class PopoViewModel {
         filename: String,
         narrationId: UUID
     ) async -> NarrationAnalysisResult? {
-        let endpoint = "\(Self.bridgeBaseURL)/popo/narrations/analyze"
+        let endpoint = "\(Self.bridgeBaseURL)/bobo/narrations/analyze"
         guard let url = URL(string: endpoint) else { return nil }
 
         let payload: [String: String] = [
@@ -1095,7 +1095,7 @@ final class PopoViewModel {
 
             guard let httpResponse = response as? HTTPURLResponse,
                   (200..<300).contains(httpResponse.statusCode) else {
-                print("[PopoVM] Analysis server returned status \((response as? HTTPURLResponse)?.statusCode ?? -1)")
+                print("[BoboVM] Analysis server returned status \((response as? HTTPURLResponse)?.statusCode ?? -1)")
                 return nil
             }
 
@@ -1112,21 +1112,21 @@ final class PopoViewModel {
                 affect: result.affect
             )
         } catch {
-            print("[PopoVM] Analysis request failed: \(error.localizedDescription)")
+            print("[BoboVM] Analysis request failed: \(error.localizedDescription)")
             return nil
         }
     }
 
     /// Poll the server for a narration's analysis results.
     /// The audio upload endpoint triggers background Whisper transcription; this method
-    /// fetches all narrations from `/popo/narrations` and checks if the target narration
+    /// fetches all narrations from `/bobo/narrations` and checks if the target narration
     /// has a non-empty transcript, retrying up to `maxAttempts` times.
     private func pollForNarrationAnalysis(
         narrationId: UUID,
         maxAttempts: Int,
         intervalSeconds: UInt64
     ) async -> NarrationAnalysisResult? {
-        let endpoint = "\(Self.bridgeBaseURL)/popo/narrations"
+        let endpoint = "\(Self.bridgeBaseURL)/bobo/narrations"
         guard let url = URL(string: endpoint) else { return nil }
 
         for attempt in 1...maxAttempts {
@@ -1151,20 +1151,20 @@ final class PopoViewModel {
 
                 if let match = serverNarrations.first(where: { $0.id == narrationId }),
                    !match.transcript.isEmpty {
-                    print("[PopoVM] Poll attempt \(attempt): found transcript for \(narrationId)")
+                    print("[BoboVM] Poll attempt \(attempt): found transcript for \(narrationId)")
                     return NarrationAnalysisResult(
                         transcript: match.transcript,
                         affect: match.affectAnalysis
                     )
                 }
 
-                print("[PopoVM] Poll attempt \(attempt)/\(maxAttempts): transcript still empty")
+                print("[BoboVM] Poll attempt \(attempt)/\(maxAttempts): transcript still empty")
             } catch {
-                print("[PopoVM] Poll attempt \(attempt) error: \(error.localizedDescription)")
+                print("[BoboVM] Poll attempt \(attempt) error: \(error.localizedDescription)")
             }
         }
 
-        print("[PopoVM] Polling exhausted for narration \(narrationId)")
+        print("[BoboVM] Polling exhausted for narration \(narrationId)")
         return nil
     }
 
@@ -1177,7 +1177,7 @@ final class PopoViewModel {
         isGeneratingNudges = true
         defer { isGeneratingNudges = false }
 
-        let endpoint = "\(Self.bridgeBaseURL)/popo/analyze"
+        let endpoint = "\(Self.bridgeBaseURL)/bobo/analyze"
         guard let url = URL(string: endpoint) else { return }
 
         // Gather recent sensing events from the filtered timeline (WYSIWYG —
@@ -1248,7 +1248,7 @@ final class PopoViewModel {
 
             guard let httpResponse = response as? HTTPURLResponse,
                   (200..<300).contains(httpResponse.statusCode) else {
-                print("[PopoVM] Nudge generation server returned error")
+                print("[BoboVM] Nudge generation server returned error")
                 return
             }
 
@@ -1282,9 +1282,9 @@ final class PopoViewModel {
                 forKey: StorageKeys.lastNudgeGeneration
             )
 
-            print("[PopoVM] Generated \(result.nudges.count) nudges")
+            print("[BoboVM] Generated \(result.nudges.count) nudges")
         } catch {
-            print("[PopoVM] Nudge generation failed: \(error.localizedDescription)")
+            print("[BoboVM] Nudge generation failed: \(error.localizedDescription)")
         }
     }
 
@@ -1329,7 +1329,7 @@ final class PopoViewModel {
         content.title = "Facai"
         content.body = nudge.content
         content.sound = .default
-        content.userInfo = ["destination": "popo"]
+        content.userInfo = ["destination": "bobo"]
 
         let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
         let request = UNNotificationRequest(
@@ -1395,7 +1395,7 @@ final class PopoViewModel {
 
     /// Sync nudges to the bridge server.
     private func syncNudgesToServer() async {
-        let endpoint = "\(Self.bridgeBaseURL)/popo/nudges"
+        let endpoint = "\(Self.bridgeBaseURL)/bobo/nudges"
         guard let url = URL(string: endpoint) else { return }
 
         let encoder = JSONEncoder()
@@ -1449,10 +1449,10 @@ final class PopoViewModel {
     // MARK: - Storage Keys
 
     private enum StorageKeys {
-        static let sensingEnabled = "ryanhub_popo_sensing_enabled"
-        static let narrations = "ryanhub_popo_narrations"
-        static let nudges = "ryanhub_popo_nudges"
-        static let lastNudgeGeneration = "ryanhub_popo_last_nudge_generation"
+        static let sensingEnabled = "ryanhub_bobo_sensing_enabled"
+        static let narrations = "ryanhub_bobo_narrations"
+        static let nudges = "ryanhub_bobo_nudges"
+        static let lastNudgeGeneration = "ryanhub_bobo_last_nudge_generation"
     }
 }
 

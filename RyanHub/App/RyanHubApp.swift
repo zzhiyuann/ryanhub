@@ -8,13 +8,13 @@ struct RyanHubApp: App {
     @State private var notificationManager = NotificationManager()
     @Environment(\.scenePhase) private var scenePhase
 
-    /// Background task identifier for POPO periodic sync.
-    private static let popoSyncTaskID = "com.zwang.ryanhub.popo-sync"
+    /// Background task identifier for BOBO periodic sync.
+    private static let boboSyncTaskID = "com.zwang.ryanhub.bobo-sync"
 
     init() {
-        // Register BGTaskScheduler for POPO background sync
+        // Register BGTaskScheduler for BOBO background sync
         BGTaskScheduler.shared.register(
-            forTaskWithIdentifier: Self.popoSyncTaskID,
+            forTaskWithIdentifier: Self.boboSyncTaskID,
             using: nil
         ) { task in
             guard let refreshTask = task as? BGAppRefreshTask else {
@@ -61,13 +61,13 @@ struct RyanHubApp: App {
 
     // MARK: - Background Sync
 
-    /// Schedule the next background app refresh for POPO sync.
+    /// Schedule the next background app refresh for BOBO sync.
     static func scheduleBackgroundSync() {
-        let request = BGAppRefreshTaskRequest(identifier: popoSyncTaskID)
+        let request = BGAppRefreshTaskRequest(identifier: boboSyncTaskID)
         request.earliestBeginDate = Date(timeIntervalSinceNow: 15 * 60) // 15 minutes
         do {
             try BGTaskScheduler.shared.submit(request)
-            print("[RyanHubApp] Scheduled background POPO sync")
+            print("[RyanHubApp] Scheduled background BOBO sync")
         } catch {
             print("[RyanHubApp] Failed to schedule background sync: \(error.localizedDescription)")
         }

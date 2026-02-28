@@ -79,7 +79,7 @@ final class LocationSensor: NSObject {
     /// enriched SensingEvent with the semantic label and address data.
     private func enrichLocation(latitude: Double, longitude: Double, timestamp: Date) {
         Task {
-            let endpoint = "\(Self.bridgeBaseURL)/popo/location/enrich"
+            let endpoint = "\(Self.bridgeBaseURL)/bobo/location/enrich"
             guard let url = URL(string: endpoint) else { return }
 
             var request = URLRequest(url: url)

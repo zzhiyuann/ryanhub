@@ -3,7 +3,7 @@ import CoreMotion
 
 // MARK: - Sensing Engine
 
-/// Main coordinator for the POPO sensing system.
+/// Main coordinator for the BOBO sensing system.
 /// Manages the lifecycle of all individual sensors, collects their events,
 /// stores them locally, and coordinates periodic sync to the bridge server.
 @MainActor
@@ -23,7 +23,7 @@ final class SensingEngine {
     var lastSyncTime: Date? {
         didSet {
             if let time = lastSyncTime {
-                UserDefaults.standard.set(time.timeIntervalSince1970, forKey: "ryanhub_popo_last_sync_time")
+                UserDefaults.standard.set(time.timeIntervalSince1970, forKey: "ryanhub_bobo_last_sync_time")
             }
         }
     }
@@ -54,8 +54,8 @@ final class SensingEngine {
 
     // MARK: - Services
 
-    private let syncService = PopoSyncService()
-    private let dataStore = PopoDataStore()
+    private let syncService = BoboSyncService()
+    private let dataStore = BoboDataStore()
 
     // MARK: - Internal State
 
@@ -115,7 +115,7 @@ final class SensingEngine {
         bluetoothSensor.start()
 
         // Restore last sync time from disk
-        let savedSyncTime = UserDefaults.standard.double(forKey: "ryanhub_popo_last_sync_time")
+        let savedSyncTime = UserDefaults.standard.double(forKey: "ryanhub_bobo_last_sync_time")
         if savedSyncTime > 0 {
             lastSyncTime = Date(timeIntervalSince1970: savedSyncTime)
         }
@@ -384,7 +384,7 @@ final class SensingEngine {
 
         let activityManager = CMMotionActivityManager()
         let queue = OperationQueue()
-        queue.name = "com.ryanhub.popo.background-motion"
+        queue.name = "com.ryanhub.bobo.background-motion"
         queue.maxConcurrentOperationCount = 1
 
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in

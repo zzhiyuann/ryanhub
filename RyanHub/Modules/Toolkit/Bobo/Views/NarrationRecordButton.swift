@@ -6,10 +6,10 @@ import SwiftUI
 /// Displays different states: idle (mic icon), recording (pulsing + waveform),
 /// uploading (progress), and done (checkmark).
 ///
-/// Usage: Embed in PopoView and bind to PopoViewModel.
+/// Usage: Embed in BoboView and bind to BoboViewModel.
 struct NarrationRecordButton: View {
     @Environment(\.colorScheme) private var colorScheme
-    @Bindable var viewModel: PopoViewModel
+    @Bindable var viewModel: BoboViewModel
 
     var body: some View {
         HubCard {
@@ -242,6 +242,6 @@ private struct PulsingDot: View {
 // MARK: - Preview
 
 #Preview {
-    NarrationRecordButton(viewModel: PopoViewModel())
+    NarrationRecordButton(viewModel: BoboViewModel())
         .padding()
 }

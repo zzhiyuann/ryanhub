@@ -2,7 +2,7 @@ import SwiftUI
 
 // MARK: - Timeline Event Row
 
-/// A unified row view for the POPO timeline that renders any timeline item type
+/// A unified row view for the BOBO timeline that renders any timeline item type
 /// (sensing event, narration, or nudge) with a distinct visual identity and
 /// tap-to-expand detail behavior.
 struct TimelineEventRow: View {

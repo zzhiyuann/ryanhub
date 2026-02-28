@@ -55,15 +55,15 @@ final class HealthSensor {
 
     /// UserDefaults keys for per-type last fetch timestamps.
     private enum FetchKey {
-        static let heartRate = "popo_health_lastFetch_heartRate"
-        static let hrv = "popo_health_lastFetch_hrv"
-        static let sleep = "popo_health_lastFetch_sleep"
-        static let workout = "popo_health_lastFetch_workout"
-        static let activeEnergy = "popo_health_lastFetch_activeEnergy"
-        static let basalEnergy = "popo_health_lastFetch_basalEnergy"
-        static let respiratoryRate = "popo_health_lastFetch_respiratoryRate"
-        static let bloodOxygen = "popo_health_lastFetch_bloodOxygen"
-        static let noiseExposure = "popo_health_lastFetch_noiseExposure"
+        static let heartRate = "bobo_health_lastFetch_heartRate"
+        static let hrv = "bobo_health_lastFetch_hrv"
+        static let sleep = "bobo_health_lastFetch_sleep"
+        static let workout = "bobo_health_lastFetch_workout"
+        static let activeEnergy = "bobo_health_lastFetch_activeEnergy"
+        static let basalEnergy = "bobo_health_lastFetch_basalEnergy"
+        static let respiratoryRate = "bobo_health_lastFetch_respiratoryRate"
+        static let bloodOxygen = "bobo_health_lastFetch_bloodOxygen"
+        static let noiseExposure = "bobo_health_lastFetch_noiseExposure"
     }
 
     /// Default lookback on first-ever fetch (24 hours).
@@ -94,7 +94,7 @@ final class HealthSensor {
     /// A jump larger than this from the previous minute's average triggers an anomaly.
     private static let spikeThreshold: Double = 30
 
-    /// The HealthKit data types POPO requests read access for.
+    /// The HealthKit data types BOBO requests read access for.
     private static let readTypes: Set<HKSampleType> = {
         var types = Set<HKSampleType>()
         if let stepCount = HKQuantityType.quantityType(forIdentifier: .stepCount) {

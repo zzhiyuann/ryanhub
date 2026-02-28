@@ -218,7 +218,7 @@ struct ContentView: View {
             selectedTab = .chat
             chatMode = .chat
             notificationManager.clearChatBadge()
-        case .popo:
+        case .bobo:
             selectedTab = .toolkit
         }
     }

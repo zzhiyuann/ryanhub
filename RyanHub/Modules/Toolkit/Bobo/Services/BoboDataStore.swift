@@ -1,11 +1,11 @@
 import Foundation
 
-// MARK: - POPO Data Store
+// MARK: - BOBO Data Store
 
 /// Local file-based cache for sensing events that handles persistence and sync state.
 /// Stores ALL events permanently on disk (never pruned by age), keeps them
 /// in memory for quick access, and clears synced events after successful POST.
-final class PopoDataStore {
+final class BoboDataStore {
     /// All events currently in the store (both synced and pending).
     private(set) var events: [SensingEvent] = []
 
@@ -25,13 +25,13 @@ final class PopoDataStore {
 
     init() {
         let documentsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-        let popoDir = documentsDir.appendingPathComponent("popo", isDirectory: true)
+        let boboDir = documentsDir.appendingPathComponent("bobo", isDirectory: true)
 
         // Ensure the directory exists
-        try? FileManager.default.createDirectory(at: popoDir, withIntermediateDirectories: true)
+        try? FileManager.default.createDirectory(at: boboDir, withIntermediateDirectories: true)
 
-        self.eventsFilePath = popoDir.appendingPathComponent("popo_events.json")
-        self.syncedIDsFilePath = popoDir.appendingPathComponent("popo_synced_ids.json")
+        self.eventsFilePath = boboDir.appendingPathComponent("bobo_events.json")
+        self.syncedIDsFilePath = boboDir.appendingPathComponent("bobo_synced_ids.json")
 
         loadFromDisk()
     }

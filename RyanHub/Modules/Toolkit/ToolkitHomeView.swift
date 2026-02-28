@@ -80,8 +80,8 @@ struct ToolkitHomeView: View {
             CalendarPluginView()
         case .health:
             HealthView()
-        case .popo:
-            PopoView()
+        case .bobo:
+            BoboView()
         }
     }
 }
@@ -510,7 +510,7 @@ enum ToolkitPlugin: String, CaseIterable, Identifiable {
     case parking
     case calendar
     case health
-    case popo
+    case bobo
 
     var id: String { rawValue }
 
@@ -521,7 +521,7 @@ enum ToolkitPlugin: String, CaseIterable, Identifiable {
         case .parking: return L10n.toolkitParking
         case .calendar: return L10n.toolkitCalendar
         case .health: return L10n.toolkitHealth
-        case .popo: return L10n.toolkitPopo
+        case .bobo: return L10n.toolkitBobo
         }
     }
 
@@ -533,7 +533,7 @@ enum ToolkitPlugin: String, CaseIterable, Identifiable {
         case .parking: return "Parking"
         case .calendar: return "Calendar"
         case .health: return "Health"
-        case .popo: return "POPO"
+        case .bobo: return "BOBO"
         }
     }
 
@@ -544,7 +544,7 @@ enum ToolkitPlugin: String, CaseIterable, Identifiable {
         case .parking: return L10n.toolkitParkingDesc
         case .calendar: return L10n.toolkitCalendarDesc
         case .health: return L10n.toolkitHealthDesc
-        case .popo: return L10n.toolkitPopoDesc
+        case .bobo: return L10n.toolkitBoboDesc
         }
     }
 
@@ -555,7 +555,7 @@ enum ToolkitPlugin: String, CaseIterable, Identifiable {
         case .parking: return "car.fill"
         case .calendar: return "calendar"
         case .health: return "heart.fill"
-        case .popo: return "waveform.path.ecg"
+        case .bobo: return "waveform.path.ecg"
         }
     }
 
@@ -566,7 +566,7 @@ enum ToolkitPlugin: String, CaseIterable, Identifiable {
         case .parking: return .hubAccentGreen
         case .calendar: return .hubAccentYellow
         case .health: return .hubAccentRed
-        case .popo: return .hubPrimaryLight
+        case .bobo: return .hubPrimaryLight
         }
     }
 

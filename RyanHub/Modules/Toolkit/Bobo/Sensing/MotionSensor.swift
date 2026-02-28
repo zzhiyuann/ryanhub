@@ -57,7 +57,7 @@ final class MotionSensor {
     /// cooldown has elapsed.
     private func startActivityUpdates() {
         let queue = OperationQueue()
-        queue.name = "com.ryanhub.popo.motion"
+        queue.name = "com.ryanhub.bobo.motion"
         queue.maxConcurrentOperationCount = 1
 
         activityManager.startActivityUpdates(to: queue) { [weak self] activity in

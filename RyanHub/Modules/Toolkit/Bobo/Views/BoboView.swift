@@ -1,14 +1,14 @@
 import SwiftUI
 
-// MARK: - POPO View
+// MARK: - BOBO View
 
-/// The main view for the POPO (Proactive Personal Observer) toolkit plugin.
+/// The main view for the BOBO (Proactive Personal Observer) toolkit plugin.
 /// The Facai card serves as the central control hub: sensing toggle, nudge display,
 /// text diary input, and voice recording are all consolidated here.
-struct PopoView: View {
+struct BoboView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.scenePhase) private var scenePhase
-    @State private var viewModel = PopoViewModel()
+    @State private var viewModel = BoboViewModel()
     @State private var showChannelDetail = false
     @State private var isPressingMic = false
     @State private var isTimelineExpanded = false
@@ -611,13 +611,13 @@ struct PopoView: View {
         .padding(.horizontal, 4)
     }
 
-    private func channelDot(for channel: PopoViewModel.ChannelStatus) -> some View {
+    private func channelDot(for channel: BoboViewModel.ChannelStatus) -> some View {
         Circle()
             .fill(channelDotColor(channel.status))
             .frame(width: 8, height: 8)
     }
 
-    private func channelDotColor(_ state: PopoViewModel.ChannelStatus.ChannelState) -> Color {
+    private func channelDotColor(_ state: BoboViewModel.ChannelStatus.ChannelState) -> Color {
         switch state {
         case .active: return Color.hubAccentGreen
         case .stale: return Color.hubAccentYellow
@@ -940,5 +940,5 @@ private struct PulsingRecordingMic: View {
 // MARK: - Preview
 
 #Preview {
-    PopoView()
+    BoboView()
 }

@@ -45,10 +45,10 @@ targets:
         NSCameraUsageDescription: "Ryan Hub needs camera access to capture photos for chat."
         NSPhotoLibraryUsageDescription: "Ryan Hub needs photo library access to send images in chat."
         NSHealthShareUsageDescription: "Ryan Hub reads your step count and Apple Watch workouts to track daily activity and calories burned."
-        NSMotionUsageDescription: "Ryan Hub uses motion data to detect your activity (walking, running, driving) for the POPO sensing engine."
-        NSLocationWhenInUseUsageDescription: "Ryan Hub uses your location for contextual behavioral sensing in the POPO module."
-        NSLocationAlwaysAndWhenInUseUsageDescription: "Ryan Hub uses background location for continuous behavioral sensing in the POPO module."
-        NSBluetoothAlwaysUsageDescription: "POPO detects nearby Bluetooth devices to understand your context (e.g., connected to car, wearing AirPods)."
+        NSMotionUsageDescription: "Ryan Hub uses motion data to detect your activity (walking, running, driving) for the BOBO sensing engine."
+        NSLocationWhenInUseUsageDescription: "Ryan Hub uses your location for contextual behavioral sensing in the BOBO module."
+        NSLocationAlwaysAndWhenInUseUsageDescription: "Ryan Hub uses background location for continuous behavioral sensing in the BOBO module."
+        NSBluetoothAlwaysUsageDescription: "BOBO detects nearby Bluetooth devices to understand your context (e.g., connected to car, wearing AirPods)."
         # WiFi SSID access also requires the com.apple.developer.networking.wifi-info entitlement.
         # The WiFiSensor will gracefully return nil without it.
         UIBackgroundModes:
@@ -57,7 +57,7 @@ targets:
           - processing
           - location
         BGTaskSchedulerPermittedIdentifiers:
-          - com.zwang.ryanhub.popo-sync
+          - com.zwang.ryanhub.bobo-sync
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
     entitlements:

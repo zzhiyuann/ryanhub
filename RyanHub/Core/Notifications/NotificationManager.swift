@@ -2,7 +2,7 @@ import Foundation
 import UserNotifications
 import UIKit
 
-/// Manages local push notifications for proactive Facai messages and POPO nudges.
+/// Manages local push notifications for proactive Facai messages and BOBO nudges.
 /// Handles permission requests, notification scheduling, badge count, and deep link routing.
 @MainActor
 @Observable
@@ -70,19 +70,19 @@ final class NotificationManager: NSObject {
         UNUserNotificationCenter.current().add(request)
     }
 
-    /// Schedule a local notification for a POPO nudge.
+    /// Schedule a local notification for a BOBO nudge.
     /// - Parameters:
     ///   - body: The nudge message text
     ///   - identifier: Unique ID for this notification
-    func sendPopoNudge(body: String, identifier: String) {
+    func sendBoboNudge(body: String, identifier: String) {
         guard isAuthorized else { return }
 
         let content = UNMutableNotificationContent()
-        content.title = "POPO"
+        content.title = "BOBO"
         content.body = body
         content.sound = .default
-        // Deep link to POPO plugin in toolkit tab
-        content.userInfo = ["destination": "popo"]
+        // Deep link to BOBO plugin in toolkit tab
+        content.userInfo = ["destination": "bobo"]
 
         let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
         let request = UNNotificationRequest(identifier: identifier, content: content, trigger: trigger)
@@ -138,8 +138,8 @@ extension NotificationManager: UNUserNotificationCenterDelegate {
         case "chat":
             let messageId = userInfo["messageId"] as? String
             deepLink = .chat(messageId: messageId)
-        case "popo":
-            deepLink = .popo
+        case "bobo":
+            deepLink = .bobo
         default:
             return
         }
@@ -160,7 +160,7 @@ extension NotificationManager: UNUserNotificationCenterDelegate {
 /// Represents a navigation destination triggered by a notification tap.
 enum DeepLink: Equatable {
     case chat(messageId: String?)
-    case popo
+    case bobo
 }
 
 // MARK: - Notification Name

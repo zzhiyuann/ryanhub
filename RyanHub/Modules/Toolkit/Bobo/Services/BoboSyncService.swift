@@ -1,11 +1,11 @@
 import Foundation
 
-// MARK: - POPO Sync Service
+// MARK: - BOBO Sync Service
 
 /// Handles syncing sensing events to the bridge server.
-/// Posts batches of events to the `/popo/sensing` endpoint with
+/// Posts batches of events to the `/bobo/sensing` endpoint with
 /// exponential backoff retry on failure.
-final class PopoSyncService {
+final class BoboSyncService {
     /// Maximum number of retry attempts for a failed sync.
     private static let maxRetryAttempts = 3
 
@@ -37,9 +37,9 @@ final class PopoSyncService {
         isSyncing = true
         defer { isSyncing = false }
 
-        let endpoint = "\(Self.bridgeBaseURL)/popo/sensing"
+        let endpoint = "\(Self.bridgeBaseURL)/bobo/sensing"
         guard let url = URL(string: endpoint) else {
-            print("[PopoSync] Invalid URL: \(endpoint)")
+            print("[BoboSync] Invalid URL: \(endpoint)")
             return []
         }
 
@@ -47,7 +47,7 @@ final class PopoSyncService {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         guard let body = try? encoder.encode(events) else {
-            print("[PopoSync] Failed to encode events")
+            print("[BoboSync] Failed to encode events")
             return []
         }
 
@@ -65,14 +65,14 @@ final class PopoSyncService {
                 if let httpResponse = response as? HTTPURLResponse,
                    (200..<300).contains(httpResponse.statusCode) {
                     let syncedIDs = events.map(\.id)
-                    print("[PopoSync] Successfully synced \(events.count) events")
+                    print("[BoboSync] Successfully synced \(events.count) events")
                     return syncedIDs
                 } else {
                     let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
-                    print("[PopoSync] Server returned \(statusCode), attempt \(attempt + 1)/\(Self.maxRetryAttempts)")
+                    print("[BoboSync] Server returned \(statusCode), attempt \(attempt + 1)/\(Self.maxRetryAttempts)")
                 }
             } catch {
-                print("[PopoSync] Sync failed (attempt \(attempt + 1)/\(Self.maxRetryAttempts)): \(error.localizedDescription)")
+                print("[BoboSync] Sync failed (attempt \(attempt + 1)/\(Self.maxRetryAttempts)): \(error.localizedDescription)")
             }
 
             // Exponential backoff before retry
@@ -82,7 +82,7 @@ final class PopoSyncService {
             }
         }
 
-        print("[PopoSync] All retry attempts exhausted for \(events.count) events")
+        print("[BoboSync] All retry attempts exhausted for \(events.count) events")
         return []
     }
 }
