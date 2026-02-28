@@ -79,11 +79,13 @@ final class BatterySensor {
         let level = UIDevice.current.batteryLevel
         let state = UIDevice.current.batteryState
 
-        // Only report if level changed by >5% or state changed
-        let levelChanged = abs(level - lastReportedLevel) > 0.05
+        // Round to nearest 10% boundary (0, 10, 20, ..., 100)
+        let currentDecile = Int(round(level * 10))  // 0-10
+        let lastDecile = lastReportedLevel >= 0 ? Int(round(lastReportedLevel * 10)) : -1
+        let decileChanged = currentDecile != lastDecile
         let stateChanged = state != lastReportedState
 
-        guard levelChanged || stateChanged else { return }
+        guard decileChanged || stateChanged else { return }
 
         lastReportedLevel = level
         lastReportedState = state
@@ -99,7 +101,7 @@ final class BatterySensor {
         let event = SensingEvent(
             modality: .battery,
             payload: [
-                "level": String(format: "%.0f", level * 100),
+                "level": "\(currentDecile * 10)",
                 "state": stateString
             ]
         )

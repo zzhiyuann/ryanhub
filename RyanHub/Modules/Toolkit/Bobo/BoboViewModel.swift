@@ -1,5 +1,6 @@
 import Foundation
 import AVFoundation
+import HealthKit
 import UserNotifications
 
 // MARK: - Narration Recording State
@@ -121,6 +122,10 @@ final class BoboViewModel {
     /// Activity entries loaded from Health module's UserDefaults storage.
     var activityEntries: [ActivityEntry] = []
 
+    /// HealthKit events fetched directly from Apple Health for the selected date.
+    /// This bypasses the HealthSensor pipeline — HealthKit IS the source of truth.
+    var healthKitEvents: [SensingEvent] = []
+
     // MARK: - Text Diary State
 
     /// Text bound to the diary text input field.
@@ -170,12 +175,26 @@ final class BoboViewModel {
         Calendar.current.isDateInToday(selectedDate)
     }
 
+    /// HealthKit modalities that come from direct Apple Health queries.
+    /// These are excluded from engine.recentEvents to avoid duplication.
+    private static let healthKitModalities: Set<SensingModality> = [
+        .heartRate, .hrv, .sleep, .workout, .activeEnergy,
+        .basalEnergy, .respiratoryRate, .bloodOxygen, .noiseExposure,
+    ]
+
     /// Sensing events for the selected date, sorted newest first.
+    /// Phone sensing events come from engine.recentEvents; HealthKit events come
+    /// from direct Apple Health queries (healthKitEvents) — no intermediate caching.
     var eventsForSelectedDate: [SensingEvent] {
         let calendar = Calendar.current
-        return engine.recentEvents
+        // Phone sensing data from the engine (exclude HealthKit modalities to avoid duplication)
+        let phoneSensing = engine.recentEvents
+            .filter { !Self.healthKitModalities.contains($0.modality) }
             .filter { calendar.isDate($0.timestamp, inSameDayAs: selectedDate) }
-            .sorted { $0.timestamp > $1.timestamp }
+        // HealthKit data queried directly from Apple Health
+        let healthData = healthKitEvents
+            .filter { calendar.isDate($0.timestamp, inSameDayAs: selectedDate) }
+        return (phoneSensing + healthData).sorted { $0.timestamp > $1.timestamp }
     }
 
     /// Narrations for the selected date, sorted newest first.
@@ -701,6 +720,33 @@ final class BoboViewModel {
         loadNudges()
         loadFoodEntries()
         loadActivityEntries()
+
+        // Fetch HealthKit data directly from Apple Health
+        requestHealthKitAuthAndFetch()
+    }
+
+    /// Request HealthKit read authorization (if not yet granted) and fetch data.
+    private func requestHealthKitAuthAndFetch() {
+        guard let store = Self.healthStore else { return }
+        var readTypes = Set<HKObjectType>()
+        if let t = HKQuantityType.quantityType(forIdentifier: .heartRate) { readTypes.insert(t) }
+        if let t = HKQuantityType.quantityType(forIdentifier: .heartRateVariabilitySDNN) { readTypes.insert(t) }
+        if let t = HKQuantityType.quantityType(forIdentifier: .activeEnergyBurned) { readTypes.insert(t) }
+        if let t = HKQuantityType.quantityType(forIdentifier: .basalEnergyBurned) { readTypes.insert(t) }
+        if let t = HKQuantityType.quantityType(forIdentifier: .respiratoryRate) { readTypes.insert(t) }
+        if let t = HKQuantityType.quantityType(forIdentifier: .oxygenSaturation) { readTypes.insert(t) }
+        if let t = HKQuantityType.quantityType(forIdentifier: .environmentalAudioExposure) { readTypes.insert(t) }
+        if let t = HKCategoryType.categoryType(forIdentifier: .sleepAnalysis) { readTypes.insert(t) }
+        readTypes.insert(HKWorkoutType.workoutType())
+
+        store.requestAuthorization(toShare: nil, read: readTypes) { [weak self] success, error in
+            print("[BoBo] HealthKit auth: success=\(success), error=\(error?.localizedDescription ?? "none")")
+            if success {
+                Task { @MainActor in
+                    self?.fetchHealthKitEvents()
+                }
+            }
+        }
     }
 
     /// Migrate UserDefaults keys from the old "popo" naming to "bobo".
@@ -1469,12 +1515,249 @@ final class BoboViewModel {
     }
 
     /// Refresh all health data when app becomes active.
-    /// Loads food/activity entries from UserDefaults AND triggers HealthSensor
-    /// to backfill any HealthKit data missed during background suspension.
+    /// Loads food/activity entries from UserDefaults and queries HealthKit directly.
     func refreshHealthData() {
         loadFoodEntries()
         loadActivityEntries()
-        engine.resumeHealthSensor()
+        fetchHealthKitEvents()
+    }
+
+    // MARK: - Direct HealthKit Queries
+
+    /// Shared HealthKit store for direct queries.
+    private static let healthStore: HKHealthStore? = {
+        HKHealthStore.isHealthDataAvailable() ? HKHealthStore() : nil
+    }()
+
+    /// Fetch all HealthKit data for the selected date directly from Apple Health.
+    /// This is the simple, correct approach: HealthKit is the persistent store,
+    /// just query it and display. No intermediate caching needed.
+    func fetchHealthKitEvents() {
+        guard let store = Self.healthStore else {
+            print("[BoBo] HealthKit not available")
+            return
+        }
+
+        let calendar = Calendar.current
+        let dayStart = calendar.startOfDay(for: selectedDate)
+        guard let dayEnd = calendar.date(byAdding: .day, value: 1, to: dayStart) else { return }
+        let predicate = HKQuery.predicateForSamples(withStart: dayStart, end: dayEnd, options: .strictStartDate)
+        let sort = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
+
+        // Query all HealthKit types in parallel, collect results
+        var allEvents: [SensingEvent] = []
+        let group = DispatchGroup()
+
+        // Heart rate
+        if let type = HKQuantityType.quantityType(forIdentifier: .heartRate) {
+            group.enter()
+            let q = HKSampleQuery(sampleType: type, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: [sort]) { _, samples, _ in
+                defer { group.leave() }
+                guard let samples = samples as? [HKQuantitySample] else { return }
+                // Group by calendar minute for aggregation
+                var minuteGroups: [Date: [Double]] = [:]
+                for s in samples {
+                    let bpm = s.quantity.doubleValue(for: HKUnit(from: "count/min"))
+                    let mc = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: s.startDate)
+                    let minuteStart = calendar.date(from: mc) ?? s.startDate
+                    minuteGroups[minuteStart, default: []].append(bpm)
+                }
+                for (minute, bpms) in minuteGroups {
+                    let avg = bpms.reduce(0, +) / Double(bpms.count)
+                    allEvents.append(SensingEvent(timestamp: minute, modality: .heartRate, payload: [
+                        "bpm": String(format: "%.0f", avg),
+                        "min": String(format: "%.0f", bpms.min() ?? avg),
+                        "max": String(format: "%.0f", bpms.max() ?? avg),
+                        "count": "\(bpms.count)",
+                        "source": samples.first?.sourceRevision.source.name ?? "watch",
+                    ]))
+                }
+            }
+            store.execute(q)
+        }
+
+        // HRV
+        if let type = HKQuantityType.quantityType(forIdentifier: .heartRateVariabilitySDNN) {
+            group.enter()
+            let q = HKSampleQuery(sampleType: type, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: [sort]) { _, samples, _ in
+                defer { group.leave() }
+                guard let samples = samples as? [HKQuantitySample] else { return }
+                for s in samples {
+                    let sdnn = s.quantity.doubleValue(for: HKUnit.secondUnit(with: .milli))
+                    allEvents.append(SensingEvent(timestamp: s.startDate, modality: .hrv, payload: [
+                        "sdnn": String(format: "%.1f", sdnn),
+                        "source": s.sourceRevision.source.name,
+                    ]))
+                }
+            }
+            store.execute(q)
+        }
+
+        // Sleep
+        if let type = HKCategoryType.categoryType(forIdentifier: .sleepAnalysis) {
+            group.enter()
+            let q = HKSampleQuery(sampleType: type, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: [sort]) { _, samples, _ in
+                defer { group.leave() }
+                guard let samples = samples as? [HKCategorySample] else { return }
+                let formatter = ISO8601DateFormatter()
+                for s in samples {
+                    let stage: String
+                    switch s.value {
+                    case HKCategoryValueSleepAnalysis.inBed.rawValue: stage = "inBed"
+                    case HKCategoryValueSleepAnalysis.asleepUnspecified.rawValue: stage = "asleep"
+                    case HKCategoryValueSleepAnalysis.awake.rawValue: stage = "awake"
+                    case HKCategoryValueSleepAnalysis.asleepCore.rawValue: stage = "core"
+                    case HKCategoryValueSleepAnalysis.asleepDeep.rawValue: stage = "deep"
+                    case HKCategoryValueSleepAnalysis.asleepREM.rawValue: stage = "rem"
+                    default: stage = "unknown"
+                    }
+                    allEvents.append(SensingEvent(timestamp: s.startDate, modality: .sleep, payload: [
+                        "stage": stage,
+                        "startDate": formatter.string(from: s.startDate),
+                        "endDate": formatter.string(from: s.endDate),
+                        "source": s.sourceRevision.source.name,
+                    ]))
+                }
+            }
+            store.execute(q)
+        }
+
+        // Workouts
+        group.enter()
+        let wq = HKSampleQuery(sampleType: HKWorkoutType.workoutType(), predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: [sort]) { _, samples, _ in
+            defer { group.leave() }
+            guard let samples = samples as? [HKWorkout] else { return }
+            for w in samples {
+                let cal = w.totalEnergyBurned?.doubleValue(for: .kilocalorie())
+                allEvents.append(SensingEvent(timestamp: w.startDate, modality: .workout, payload: [
+                    "type": Self.workoutTypeString(from: w.workoutActivityType),
+                    "duration": String(format: "%.0f", w.duration),
+                    "calories": cal.map { String(format: "%.0f", $0) } ?? "unknown",
+                    "source": w.sourceRevision.source.name,
+                ]))
+            }
+        }
+        store.execute(wq)
+
+        // Active energy — group by 5-minute windows
+        if let type = HKQuantityType.quantityType(forIdentifier: .activeEnergyBurned) {
+            group.enter()
+            let q = HKSampleQuery(sampleType: type, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: [sort]) { _, samples, _ in
+                defer { group.leave() }
+                guard let samples = samples as? [HKQuantitySample] else { return }
+                var windowGroups: [Date: Double] = [:]
+                for s in samples {
+                    let kcal = s.quantity.doubleValue(for: .kilocalorie())
+                    let c = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: s.startDate)
+                    var wc = c; wc.minute = (c.minute ?? 0) / 5 * 5
+                    let windowStart = calendar.date(from: wc) ?? s.startDate
+                    windowGroups[windowStart, default: 0] += kcal
+                }
+                let source = samples.first?.sourceRevision.source.name ?? "watch"
+                for (windowStart, totalKcal) in windowGroups {
+                    allEvents.append(SensingEvent(timestamp: windowStart, modality: .activeEnergy, payload: [
+                        "kcal": String(format: "%.0f", totalKcal),
+                        "source": source,
+                    ]))
+                }
+            }
+            store.execute(q)
+        }
+
+        // Basal energy
+        if let type = HKQuantityType.quantityType(forIdentifier: .basalEnergyBurned) {
+            group.enter()
+            let q = HKSampleQuery(sampleType: type, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: [sort]) { _, samples, _ in
+                defer { group.leave() }
+                guard let samples = samples as? [HKQuantitySample] else { return }
+                for s in samples {
+                    let kcal = s.quantity.doubleValue(for: .kilocalorie())
+                    allEvents.append(SensingEvent(timestamp: s.startDate, modality: .basalEnergy, payload: [
+                        "kcal": String(format: "%.1f", kcal),
+                        "source": s.sourceRevision.source.name,
+                    ]))
+                }
+            }
+            store.execute(q)
+        }
+
+        // Respiratory rate
+        if let type = HKQuantityType.quantityType(forIdentifier: .respiratoryRate) {
+            group.enter()
+            let q = HKSampleQuery(sampleType: type, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: [sort]) { _, samples, _ in
+                defer { group.leave() }
+                guard let samples = samples as? [HKQuantitySample] else { return }
+                for s in samples {
+                    let bpm = s.quantity.doubleValue(for: HKUnit(from: "count/min"))
+                    allEvents.append(SensingEvent(timestamp: s.startDate, modality: .respiratoryRate, payload: [
+                        "breathsPerMin": String(format: "%.1f", bpm),
+                        "source": s.sourceRevision.source.name,
+                    ]))
+                }
+            }
+            store.execute(q)
+        }
+
+        // Blood oxygen
+        if let type = HKQuantityType.quantityType(forIdentifier: .oxygenSaturation) {
+            group.enter()
+            let q = HKSampleQuery(sampleType: type, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: [sort]) { _, samples, _ in
+                defer { group.leave() }
+                guard let samples = samples as? [HKQuantitySample] else { return }
+                for s in samples {
+                    let pct = s.quantity.doubleValue(for: HKUnit.percent()) * 100
+                    allEvents.append(SensingEvent(timestamp: s.startDate, modality: .bloodOxygen, payload: [
+                        "spo2": String(format: "%.1f", pct),
+                        "source": s.sourceRevision.source.name,
+                    ]))
+                }
+            }
+            store.execute(q)
+        }
+
+        // Noise exposure
+        if let type = HKQuantityType.quantityType(forIdentifier: .environmentalAudioExposure) {
+            group.enter()
+            let q = HKSampleQuery(sampleType: type, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: [sort]) { _, samples, _ in
+                defer { group.leave() }
+                guard let samples = samples as? [HKQuantitySample] else { return }
+                for s in samples {
+                    let db = s.quantity.doubleValue(for: HKUnit.decibelAWeightedSoundPressureLevel())
+                    allEvents.append(SensingEvent(timestamp: s.startDate, modality: .noiseExposure, payload: [
+                        "decibels": String(format: "%.1f", db),
+                        "source": s.sourceRevision.source.name,
+                    ]))
+                }
+            }
+            store.execute(q)
+        }
+
+        // Wait for all queries to complete, then update on main thread
+        DispatchQueue.global().async {
+            group.wait()
+            print("[BoBo] HealthKit direct query: fetched \(allEvents.count) events for \(self.selectedDate)")
+            Task { @MainActor in
+                self.healthKitEvents = allEvents
+            }
+        }
+    }
+
+    /// Convert HKWorkoutActivityType to display string.
+    private static func workoutTypeString(from type: HKWorkoutActivityType) -> String {
+        switch type {
+        case .running: return "running"
+        case .walking: return "walking"
+        case .cycling: return "cycling"
+        case .swimming: return "swimming"
+        case .yoga: return "yoga"
+        case .functionalStrengthTraining, .traditionalStrengthTraining: return "strength"
+        case .highIntensityIntervalTraining: return "hiit"
+        case .elliptical: return "elliptical"
+        case .rowing: return "rowing"
+        case .stairClimbing: return "stairs"
+        case .hiking: return "hiking"
+        default: return "other"
+        }
     }
 
     /// Resume the audio stream sensor if it was enabled but died during background suspension.

@@ -54,9 +54,11 @@ struct BoboView: View {
                 Task {
                     await viewModel.checkAndGenerateNudgesIfNeeded()
                 }
-                // Resume audio stream if it was enabled but died during background suspension
                 viewModel.resumeAudioStreamIfNeeded()
             }
+        }
+        .onChange(of: viewModel.selectedDate) {
+            viewModel.fetchHealthKitEvents()
         }
     }
 
