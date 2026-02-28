@@ -11,6 +11,7 @@ struct ToolkitHomeView: View {
     @Environment(AppState.self) private var appState
     @State private var selectedPlugin: ToolkitPlugin?
     @State private var menuBarAppeared = false
+    @State private var pluginOrder: [ToolkitPlugin] = ToolkitPlugin.loadOrder()
     @Namespace private var menuAnimation
 
     var body: some View {
@@ -18,6 +19,7 @@ struct ToolkitHomeView: View {
             // macOS-style menu bar — always visible at top
             ToolkitMenuBar(
                 selectedPlugin: $selectedPlugin,
+                pluginOrder: pluginOrder,
                 namespace: menuAnimation,
                 appeared: menuBarAppeared
             )
@@ -35,8 +37,11 @@ struct ToolkitHomeView: View {
                             removal: .opacity.combined(with: .move(edge: .leading))
                         ))
                 } else {
-                    ToolkitDesktopGrid(selectedPlugin: $selectedPlugin)
-                        .transition(.opacity.combined(with: .scale(scale: 0.98)))
+                    ToolkitDesktopGrid(
+                        selectedPlugin: $selectedPlugin,
+                        pluginOrder: $pluginOrder
+                    )
+                    .transition(.opacity.combined(with: .scale(scale: 0.98)))
                 }
             }
             .animation(.easeInOut(duration: 0.3), value: selectedPlugin)
@@ -84,6 +89,7 @@ struct ToolkitHomeView: View {
 struct ToolkitMenuBar: View {
     @Environment(\.colorScheme) private var colorScheme
     @Binding var selectedPlugin: ToolkitPlugin?
+    var pluginOrder: [ToolkitPlugin]
     var namespace: Namespace.ID
     var appeared: Bool
 
@@ -104,7 +110,7 @@ struct ToolkitMenuBar: View {
                 // Scrollable tool items
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 4) {
-                        ForEach(ToolkitPlugin.allCases) { plugin in
+                        ForEach(pluginOrder) { plugin in
                             menuItem(for: plugin)
                         }
                     }
@@ -206,10 +212,23 @@ struct ToolkitMenuBar: View {
 // MARK: - Desktop Grid
 
 /// The "desktop" view showing all toolkit plugins in a 2-column card grid.
-/// Tapping a card selects it in the menu bar and opens it in-place.
+/// Supports long-press drag-to-reorder like the iPhone home screen.
 struct ToolkitDesktopGrid: View {
     @Environment(\.colorScheme) private var colorScheme
     @Binding var selectedPlugin: ToolkitPlugin?
+    @Binding var pluginOrder: [ToolkitPlugin]
+
+    /// Whether the grid is in reorder (jiggle) mode.
+    @State private var isReordering = false
+
+    /// The plugin currently being dragged.
+    @State private var draggingPlugin: ToolkitPlugin?
+
+    /// Offset of the dragged card from its original position.
+    @State private var dragOffset: CGSize = .zero
+
+    /// Card frames for hit-testing during drag.
+    @State private var cardFrames: [ToolkitPlugin: CGRect] = [:]
 
     private let columns = [
         GridItem(.flexible(), spacing: HubLayout.itemSpacing),
@@ -233,22 +252,136 @@ struct ToolkitDesktopGrid: View {
 
                 // Plugin grid
                 LazyVGrid(columns: columns, spacing: HubLayout.itemSpacing) {
-                    ForEach(ToolkitPlugin.allCases) { plugin in
-                        Button {
-                            withAnimation(.easeInOut(duration: 0.25)) {
-                                selectedPlugin = plugin
+                    ForEach(pluginOrder) { plugin in
+                        ToolkitPluginCard(
+                            plugin: plugin,
+                            isJiggling: isReordering,
+                            isDragging: draggingPlugin == plugin
+                        )
+                        .opacity(draggingPlugin == plugin ? 0.5 : 1)
+                        .zIndex(draggingPlugin == plugin ? 1 : 0)
+                        .offset(draggingPlugin == plugin ? dragOffset : .zero)
+                        .background(
+                            GeometryReader { geo in
+                                Color.clear
+                                    .preference(
+                                        key: CardFramePreference.self,
+                                        value: [plugin: geo.frame(in: .named("desktopGrid"))]
+                                    )
                             }
-                        } label: {
-                            ToolkitPluginCard(plugin: plugin)
-                        }
-                        .buttonStyle(.plain)
+                        )
+                        .gesture(
+                            isReordering
+                                ? nil
+                                : TapGesture().onEnded {
+                                    withAnimation(.easeInOut(duration: 0.25)) {
+                                        selectedPlugin = plugin
+                                    }
+                                }
+                        )
+                        .simultaneousGesture(
+                            LongPressGesture(minimumDuration: 0.5)
+                                .sequenced(before: DragGesture(coordinateSpace: .named("desktopGrid")))
+                                .onChanged { value in
+                                    switch value {
+                                    case .first(true):
+                                        // Long press recognized — enter jiggle mode
+                                        if !isReordering {
+                                            let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
+                                            impactFeedback.impactOccurred()
+                                            withAnimation(.easeInOut(duration: 0.2)) {
+                                                isReordering = true
+                                            }
+                                            draggingPlugin = plugin
+                                        }
+                                    case .second(true, let drag):
+                                        // Dragging
+                                        if let drag {
+                                            draggingPlugin = plugin
+                                            dragOffset = drag.translation
+                                            checkSwap(for: plugin, at: drag.location)
+                                        }
+                                    default:
+                                        break
+                                    }
+                                }
+                                .onEnded { _ in
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                        draggingPlugin = nil
+                                        dragOffset = .zero
+                                    }
+                                }
+                        )
                         .accessibilityIdentifier(AccessibilityID.toolkitCard(plugin.rawValue))
                     }
+                }
+                .coordinateSpace(name: "desktopGrid")
+                .onPreferenceChange(CardFramePreference.self) { frames in
+                    cardFrames = frames
+                }
+
+                // "Done" button when in reorder mode
+                if isReordering {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            isReordering = false
+                            draggingPlugin = nil
+                        }
+                    } label: {
+                        Text("Done")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 24)
+                            .padding(.vertical, 10)
+                            .background(
+                                Capsule().fill(Color.hubPrimary)
+                            )
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 4)
+                    .transition(.opacity.combined(with: .scale(scale: 0.9)))
                 }
             }
             .padding(HubLayout.standardPadding)
         }
         .accessibilityIdentifier(AccessibilityID.toolkitDesktopGrid)
+        .onTapGesture {
+            // Tap outside cards to exit reorder mode
+            if isReordering {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    isReordering = false
+                    draggingPlugin = nil
+                }
+            }
+        }
+    }
+
+    /// Check if the dragged card should swap with another card.
+    private func checkSwap(for plugin: ToolkitPlugin, at location: CGPoint) {
+        guard let sourceIndex = pluginOrder.firstIndex(of: plugin) else { return }
+
+        for (target, frame) in cardFrames {
+            guard target != plugin,
+                  frame.contains(location),
+                  let targetIndex = pluginOrder.firstIndex(of: target) else { continue }
+
+            // Swap and persist
+            let lightFeedback = UIImpactFeedbackGenerator(style: .light)
+            lightFeedback.impactOccurred()
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                pluginOrder.swapAt(sourceIndex, targetIndex)
+            }
+            ToolkitPlugin.saveOrder(pluginOrder)
+            break
+        }
+    }
+}
+
+/// Preference key for collecting card frames during layout.
+private struct CardFramePreference: PreferenceKey {
+    static var defaultValue: [ToolkitPlugin: CGRect] = [:]
+    static func reduce(value: inout [ToolkitPlugin: CGRect], nextValue: () -> [ToolkitPlugin: CGRect]) {
+        value.merge(nextValue()) { $1 }
     }
 }
 
@@ -258,47 +391,71 @@ struct ToolkitDesktopGrid: View {
 private struct ToolkitPluginCard: View {
     @Environment(\.colorScheme) private var colorScheme
     let plugin: ToolkitPlugin
+    var isJiggling: Bool = false
+    var isDragging: Bool = false
+
+    /// Per-card random jiggle seed so they don't all move in sync.
+    @State private var jiggleSeed: Double = Double.random(in: 0...1)
 
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 10) {
             // Icon with tinted background circle
             ZStack {
                 Circle()
                     .fill(plugin.iconColor.opacity(0.12))
-                    .frame(width: 52, height: 52)
+                    .frame(width: 48, height: 48)
 
                 Image(systemName: plugin.icon)
-                    .font(.system(size: 24, weight: .medium))
+                    .font(.system(size: 22, weight: .medium))
                     .foregroundStyle(plugin.iconColor)
             }
 
-            VStack(spacing: 4) {
+            VStack(spacing: 3) {
                 Text(plugin.title)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                    .lineLimit(1)
 
                 Text(plugin.subtitle)
-                    .font(.system(size: 12, weight: .regular))
+                    .font(.system(size: 11, weight: .regular))
                     .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
-                    .lineLimit(2)
-                    .multilineTextAlignment(.center)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
             }
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 20)
-        .padding(.horizontal, HubLayout.cardInnerPadding)
+        .frame(height: 110)
         .background(
             RoundedRectangle(cornerRadius: HubLayout.cardCornerRadius)
                 .fill(AdaptiveColors.surface(for: colorScheme))
                 .shadow(
                     color: colorScheme == .dark
-                        ? Color.black.opacity(0.3)
-                        : Color.black.opacity(0.06),
-                    radius: 8,
+                        ? Color.black.opacity(isDragging ? 0.5 : 0.3)
+                        : Color.black.opacity(isDragging ? 0.12 : 0.06),
+                    radius: isDragging ? 12 : 8,
                     x: 0,
-                    y: 2
+                    y: isDragging ? 4 : 2
                 )
         )
+        .scaleEffect(isDragging ? 1.08 : 1.0)
+        .rotationEffect(
+            isJiggling && !isDragging
+                ? .degrees(1.5 * sin(jiggleSeed * .pi * 2))
+                : .zero
+        )
+        .animation(
+            isJiggling && !isDragging
+                ? .easeInOut(duration: 0.12 + jiggleSeed * 0.06)
+                    .repeatForever(autoreverses: true)
+                : .spring(response: 0.3, dampingFraction: 0.7),
+            value: isJiggling
+        )
+        .onChange(of: isJiggling) { _, jiggling in
+            if jiggling {
+                // Re-randomize so the animation restarts with a fresh phase
+                jiggleSeed = Double.random(in: 0...1)
+            }
+        }
     }
 }
 
@@ -369,6 +526,26 @@ enum ToolkitPlugin: String, CaseIterable, Identifiable {
         case .health: return .hubAccentRed
         case .popo: return .hubPrimaryLight
         }
+    }
+
+    // MARK: - Order Persistence
+
+    private static let orderKey = "ryanhub_toolkit_plugin_order"
+
+    /// Load persisted plugin order, falling back to default CaseIterable order.
+    static func loadOrder() -> [ToolkitPlugin] {
+        guard let saved = UserDefaults.standard.stringArray(forKey: orderKey) else {
+            return Array(allCases)
+        }
+        let mapped = saved.compactMap { ToolkitPlugin(rawValue: $0) }
+        // Ensure all plugins are present (in case new ones were added)
+        let missing = allCases.filter { !mapped.contains($0) }
+        return mapped + missing
+    }
+
+    /// Save the current plugin order to UserDefaults.
+    static func saveOrder(_ order: [ToolkitPlugin]) {
+        UserDefaults.standard.set(order.map(\.rawValue), forKey: orderKey)
     }
 }
 
