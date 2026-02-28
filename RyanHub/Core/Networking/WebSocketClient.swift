@@ -37,8 +37,9 @@ final class WebSocketClient {
 
     init() {
         let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 10
-        config.timeoutIntervalForResource = 10
+        config.timeoutIntervalForRequest = 30
+        config.timeoutIntervalForResource = 60
+        config.waitsForConnectivity = true
         self.session = URLSession(configuration: config)
     }
 
@@ -93,7 +94,13 @@ final class WebSocketClient {
         guard let task = webSocketTask, isConnected else {
             throw WebSocketError.notConnected
         }
-        try await task.send(.string(jsonString))
+        do {
+            try await task.send(.string(jsonString))
+        } catch {
+            // Send failed — connection is dead. Update state and trigger reconnect.
+            await MainActor.run { handleDisconnection(error: error) }
+            throw error
+        }
     }
 
     /// Send an edit message to re-dispatch a previously sent message with new content.
@@ -106,7 +113,12 @@ final class WebSocketClient {
         guard let task = webSocketTask, isConnected else {
             throw WebSocketError.notConnected
         }
-        try await task.send(.string(jsonString))
+        do {
+            try await task.send(.string(jsonString))
+        } catch {
+            await MainActor.run { handleDisconnection(error: error) }
+            throw error
+        }
     }
 
     /// Send a message with an image attachment (base64-encoded).
@@ -126,7 +138,12 @@ final class WebSocketClient {
         guard let task = webSocketTask, isConnected else {
             throw WebSocketError.notConnected
         }
-        try await task.send(.string(jsonString))
+        do {
+            try await task.send(.string(jsonString))
+        } catch {
+            await MainActor.run { handleDisconnection(error: error) }
+            throw error
+        }
     }
 
     /// Send an answer to an AskUserQuestion from the Dispatcher.
@@ -139,7 +156,12 @@ final class WebSocketClient {
         guard let task = webSocketTask, isConnected else {
             throw WebSocketError.notConnected
         }
-        try await task.send(.string(jsonString))
+        do {
+            try await task.send(.string(jsonString))
+        } catch {
+            await MainActor.run { handleDisconnection(error: error) }
+            throw error
+        }
     }
 
     /// Send a voice message (base64-encoded audio).
@@ -160,7 +182,12 @@ final class WebSocketClient {
         guard let task = webSocketTask, isConnected else {
             throw WebSocketError.notConnected
         }
-        try await task.send(.string(jsonString))
+        do {
+            try await task.send(.string(jsonString))
+        } catch {
+            await MainActor.run { handleDisconnection(error: error) }
+            throw error
+        }
     }
 
     func testConnection(to urlString: String) async -> Bool {
@@ -358,12 +385,22 @@ final class WebSocketClient {
         pingTask?.cancel()
         pingTask = Task { [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(30))
-                guard !Task.isCancelled, let self, let task = self.webSocketTask else { break }
+                try? await Task.sleep(for: .seconds(15))
+                guard !Task.isCancelled, let self, let task = self.webSocketTask, self.isConnected else { break }
                 // Send application-level ping (not WebSocket ping frame)
                 let pingData = try? JSONEncoder().encode(ClientMessage(type: "ping", id: "", content: "", project: nil, language: nil))
                 if let data = pingData, let str = String(data: data, encoding: .utf8) {
-                    try? await task.send(.string(str))
+                    do {
+                        try await task.send(.string(str))
+                    } catch {
+                        // Ping failed — connection is dead, trigger reconnect
+                        if !Task.isCancelled {
+                            await MainActor.run {
+                                self.handleDisconnection(error: error)
+                            }
+                        }
+                        break
+                    }
                 }
             }
         }
