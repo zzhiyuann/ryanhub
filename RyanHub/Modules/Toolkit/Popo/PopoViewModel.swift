@@ -303,8 +303,44 @@ final class PopoViewModel {
         let locationEvents = dayEvents
             .filter { $0.modality == .location }
             .sorted { $0.timestamp < $1.timestamp }
+        // Modalities that need time-window dedup (keep at most 1 per interval)
+        let timeWindowModalities: [SensingModality: TimeInterval] = [
+            .heartRate: 60,         // 1 per minute
+            .activeEnergy: 3600,    // 1 per hour
+            .basalEnergy: 3600,     // 1 per hour
+            .respiratoryRate: 600,  // 1 per 10 minutes
+            .bloodOxygen: 60,       // 1 per minute (dedup Apple Watch multi-sample)
+            .noiseExposure: 600,    // 1 per 10 minutes
+        ]
+
+        let timeWindowEvents = dayEvents
+            .filter { timeWindowModalities.keys.contains($0.modality) }
         let passthroughEvents = dayEvents.filter {
             $0.modality != .steps && $0.modality != .motion && $0.modality != .location
+            && !timeWindowModalities.keys.contains($0.modality)
+        }
+
+        // Time-window dedup: for each modality, keep at most 1 event per window.
+        // Anomaly events (HR) always bypass the window.
+        var filteredTimeWindow: [SensingEvent] = []
+        for (modality, windowInterval) in timeWindowModalities {
+            let modalityEvents = timeWindowEvents
+                .filter { $0.modality == modality }
+                .sorted { $0.timestamp < $1.timestamp }
+            var lastKeptTime: Date?
+            for event in modalityEvents {
+                // HR anomalies always pass through
+                if modality == .heartRate && event.payload["anomaly"] == "true" {
+                    filteredTimeWindow.append(event)
+                    continue
+                }
+                if let prevTime = lastKeptTime,
+                   event.timestamp.timeIntervalSince(prevTime) < windowInterval {
+                    continue // Within window — skip
+                }
+                filteredTimeWindow.append(event)
+                lastKeptTime = event.timestamp
+            }
         }
 
         // Motion: HAR episode grouping
@@ -406,7 +442,7 @@ final class PopoViewModel {
             }
         }
 
-        return filteredMotion + filteredLocation + passthroughEvents
+        return filteredMotion + filteredLocation + filteredTimeWindow + passthroughEvents
     }
 
     /// Aggregated overview summary for the selected date.

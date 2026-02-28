@@ -20,6 +20,12 @@ final class HealthSensor {
     private var observerQueries: [HKObserverQuery] = []
     private var isRunning = false
 
+    /// Timer that periodically flushes aggregation buffers and refetches gap data.
+    private var periodicFlushTimer: Timer?
+
+    /// Interval for periodic buffer flush and gap refetch (2 minutes).
+    private static let periodicFlushInterval: TimeInterval = 120
+
     // MARK: - Heart Rate Throttling State
 
     /// Buffer of BPM readings awaiting aggregation.
@@ -44,6 +50,38 @@ final class HealthSensor {
 
     /// Minimum interval (seconds) between aggregated active energy emits (1 hour).
     private static let activeEnergyEmitInterval: TimeInterval = 3600
+
+    // MARK: - Last Fetch Timestamps (persisted across launches)
+
+    /// UserDefaults keys for per-type last fetch timestamps.
+    private enum FetchKey {
+        static let heartRate = "popo_health_lastFetch_heartRate"
+        static let hrv = "popo_health_lastFetch_hrv"
+        static let sleep = "popo_health_lastFetch_sleep"
+        static let workout = "popo_health_lastFetch_workout"
+        static let activeEnergy = "popo_health_lastFetch_activeEnergy"
+        static let basalEnergy = "popo_health_lastFetch_basalEnergy"
+        static let respiratoryRate = "popo_health_lastFetch_respiratoryRate"
+        static let bloodOxygen = "popo_health_lastFetch_bloodOxygen"
+        static let noiseExposure = "popo_health_lastFetch_noiseExposure"
+    }
+
+    /// Default lookback on first-ever fetch (24 hours).
+    private static let defaultLookback: TimeInterval = 86400
+
+    /// Get the start date for a fetch: last fetch time or 24h ago on first run.
+    private func fetchStart(for key: String) -> Date {
+        let ts = UserDefaults.standard.double(forKey: key)
+        if ts > 0 {
+            return Date(timeIntervalSince1970: ts)
+        }
+        return Date().addingTimeInterval(-Self.defaultLookback)
+    }
+
+    /// Record that we just fetched up to now for a given key.
+    private func recordFetch(for key: String) {
+        UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: key)
+    }
 
     // MARK: - Anomaly Thresholds
 
@@ -114,25 +152,38 @@ final class HealthSensor {
             if success {
                 self?.startObservers()
                 self?.fetchRecentSamples()
+                self?.startPeriodicFlush()
             } else {
                 print("[HealthSensor] Authorization failed: \(error?.localizedDescription ?? "unknown")")
             }
         }
     }
 
-    /// Stop all observer queries and clear HR throttling state.
+    /// Stop all observer queries, cancel the periodic timer, and clear throttling state.
     func stop() {
         guard isRunning, let healthStore else { return }
         isRunning = false
+        periodicFlushTimer?.invalidate()
+        periodicFlushTimer = nil
         for query in observerQueries {
             healthStore.stop(query)
         }
         observerQueries.removeAll()
 
-        // Reset HR throttling state
+        // Flush any remaining buffered data before stopping
+        if !hrBuffer.isEmpty {
+            emitAggregatedHeartRateIfReady(source: "watch")
+        }
+        if !activeEnergyBuffer.isEmpty {
+            emitAggregatedActiveEnergyIfReady(source: "watch")
+        }
+
+        // Reset throttling state
         hrBuffer.removeAll()
         lastHREmitTime = nil
         previousMinuteAvgBPM = nil
+        activeEnergyBuffer.removeAll()
+        lastActiveEnergyEmitTime = nil
     }
 
     // MARK: - Observer Queries
@@ -263,6 +314,26 @@ final class HealthSensor {
         fetchNoiseExposure()
     }
 
+    /// Start a repeating timer that flushes aggregation buffers and refetches gap data.
+    /// This ensures events are emitted even when HKObserverQuery doesn't fire
+    /// (e.g., Watch temporarily off wrist, HealthKit delivery delays).
+    private func startPeriodicFlush() {
+        periodicFlushTimer?.invalidate()
+        DispatchQueue.main.async { [weak self] in
+            self?.periodicFlushTimer = Timer.scheduledTimer(
+                withTimeInterval: Self.periodicFlushInterval,
+                repeats: true
+            ) { [weak self] _ in
+                guard let self, self.isRunning else { return }
+                // Flush buffered aggregations
+                self.emitAggregatedHeartRateIfReady(source: "watch")
+                self.emitAggregatedActiveEnergyIfReady(source: "watch")
+                // Refetch all types to capture any gap data
+                self.fetchRecentSamples()
+            }
+        }
+    }
+
     /// Fetch recent heart rate samples and apply smart throttling.
     ///
     /// Instead of emitting every individual reading (which can be ~12/min with
@@ -275,14 +346,15 @@ final class HealthSensor {
     /// - Sudden change > 30 bpm from previous minute's average
     private func fetchHeartRate() {
         guard let heartRateType = HKQuantityType.quantityType(forIdentifier: .heartRate) else { return }
-        let fiveMinutesAgo = Date().addingTimeInterval(-300)
-        let predicate = HKQuery.predicateForSamples(withStart: fiveMinutesAgo, end: Date(), options: .strictStartDate)
+        let start = fetchStart(for: FetchKey.heartRate)
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: Date(), options: .strictStartDate)
         let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
 
+        let fetchKey = FetchKey.heartRate
         let query = HKSampleQuery(
             sampleType: heartRateType,
             predicate: predicate,
-            limit: 30,
+            limit: HKObjectQueryNoLimit,
             sortDescriptors: [sortDescriptor]
         ) { [weak self] _, samples, error in
             guard let self, let samples = samples as? [HKQuantitySample], error == nil else { return }
@@ -312,6 +384,7 @@ final class HealthSensor {
 
             // Emit aggregated event if enough time has elapsed
             self.emitAggregatedHeartRateIfReady(source: source)
+            self.recordFetch(for: fetchKey)
         }
         healthStore?.execute(query)
     }
@@ -379,20 +452,21 @@ final class HealthSensor {
         lastHREmitTime = now
     }
 
-    /// Fetch most recent HRV samples (last hour).
+    /// Fetch HRV samples since last fetch (gap-aware).
     private func fetchHRV() {
         guard let hrvType = HKQuantityType.quantityType(forIdentifier: .heartRateVariabilitySDNN) else { return }
-        let oneHourAgo = Date().addingTimeInterval(-3600)
-        let predicate = HKQuery.predicateForSamples(withStart: oneHourAgo, end: Date(), options: .strictStartDate)
+        let start = fetchStart(for: FetchKey.hrv)
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: Date(), options: .strictStartDate)
         let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
 
+        let fetchKey = FetchKey.hrv
         let query = HKSampleQuery(
             sampleType: hrvType,
             predicate: predicate,
-            limit: 3,
+            limit: HKObjectQueryNoLimit,
             sortDescriptors: [sortDescriptor]
         ) { [weak self] _, samples, error in
-            guard let samples = samples as? [HKQuantitySample], error == nil else { return }
+            guard let self, let samples = samples as? [HKQuantitySample], error == nil else { return }
             for sample in samples {
                 let sdnn = sample.quantity.doubleValue(for: HKUnit.secondUnit(with: .milli))
                 let event = SensingEvent(
@@ -403,29 +477,31 @@ final class HealthSensor {
                         "source": sample.sourceRevision.source.name
                     ]
                 )
-                self?.onEvent?(event)
+                self.onEvent?(event)
             }
+            self.recordFetch(for: fetchKey)
         }
         healthStore?.execute(query)
     }
 
-    /// Fetch sleep analysis from the last 24 hours.
+    /// Fetch sleep analysis since last fetch (gap-aware).
     private func fetchSleep() {
         guard let sleepType = HKCategoryType.categoryType(forIdentifier: .sleepAnalysis) else { return }
-        let yesterday = Date().addingTimeInterval(-86400)
-        let predicate = HKQuery.predicateForSamples(withStart: yesterday, end: Date(), options: .strictStartDate)
+        let start = fetchStart(for: FetchKey.sleep)
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: Date(), options: .strictStartDate)
         let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
 
+        let fetchKey = FetchKey.sleep
         let query = HKSampleQuery(
             sampleType: sleepType,
             predicate: predicate,
-            limit: 20,
+            limit: HKObjectQueryNoLimit,
             sortDescriptors: [sortDescriptor]
         ) { [weak self] _, samples, error in
-            guard let samples = samples as? [HKCategorySample], error == nil else { return }
+            guard let self, let samples = samples as? [HKCategorySample], error == nil else { return }
+            let formatter = ISO8601DateFormatter()
             for sample in samples {
                 let stage = Self.sleepStageString(from: sample.value)
-                let formatter = ISO8601DateFormatter()
                 let event = SensingEvent(
                     timestamp: sample.startDate,
                     modality: .sleep,
@@ -436,25 +512,27 @@ final class HealthSensor {
                         "source": sample.sourceRevision.source.name
                     ]
                 )
-                self?.onEvent?(event)
+                self.onEvent?(event)
             }
+            self.recordFetch(for: fetchKey)
         }
         healthStore?.execute(query)
     }
 
-    /// Fetch workouts completed in the last 24 hours.
+    /// Fetch workouts since last fetch (gap-aware).
     private func fetchWorkouts() {
-        let yesterday = Date().addingTimeInterval(-86400)
-        let predicate = HKQuery.predicateForSamples(withStart: yesterday, end: Date(), options: .strictStartDate)
+        let start = fetchStart(for: FetchKey.workout)
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: Date(), options: .strictStartDate)
         let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
 
+        let fetchKey = FetchKey.workout
         let query = HKSampleQuery(
             sampleType: HKWorkoutType.workoutType(),
             predicate: predicate,
-            limit: 10,
+            limit: HKObjectQueryNoLimit,
             sortDescriptors: [sortDescriptor]
         ) { [weak self] _, samples, error in
-            guard let samples = samples as? [HKWorkout], error == nil else { return }
+            guard let self, let samples = samples as? [HKWorkout], error == nil else { return }
             for workout in samples {
                 let calories = workout.totalEnergyBurned?.doubleValue(for: .kilocalorie())
                 let event = SensingEvent(
@@ -467,23 +545,25 @@ final class HealthSensor {
                         "source": workout.sourceRevision.source.name
                     ]
                 )
-                self?.onEvent?(event)
+                self.onEvent?(event)
             }
+            self.recordFetch(for: fetchKey)
         }
         healthStore?.execute(query)
     }
 
-    /// Fetch active energy burned in the last hour and aggregate into a single hourly event.
+    /// Fetch active energy burned since last fetch (gap-aware) and aggregate hourly.
     ///
     /// Apple Watch writes many small active energy samples (~every few minutes).
     /// Instead of emitting each one, we buffer them and emit a single aggregated
     /// event once per hour with total kcal for that period.
     private func fetchActiveEnergy() {
         guard let type = HKQuantityType.quantityType(forIdentifier: .activeEnergyBurned) else { return }
-        let oneHourAgo = Date().addingTimeInterval(-3600)
-        let predicate = HKQuery.predicateForSamples(withStart: oneHourAgo, end: Date(), options: .strictStartDate)
+        let start = fetchStart(for: FetchKey.activeEnergy)
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: Date(), options: .strictStartDate)
         let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
 
+        let fetchKey = FetchKey.activeEnergy
         let query = HKSampleQuery(
             sampleType: type,
             predicate: predicate,
@@ -499,6 +579,7 @@ final class HealthSensor {
             }
 
             self.emitAggregatedActiveEnergyIfReady(source: source)
+            self.recordFetch(for: fetchKey)
         }
         healthStore?.execute(query)
     }
@@ -535,20 +616,21 @@ final class HealthSensor {
         lastActiveEnergyEmitTime = now
     }
 
-    /// Fetch basal (resting) energy burned in the last hour.
+    /// Fetch basal (resting) energy burned since last fetch (gap-aware).
     private func fetchBasalEnergy() {
         guard let type = HKQuantityType.quantityType(forIdentifier: .basalEnergyBurned) else { return }
-        let oneHourAgo = Date().addingTimeInterval(-3600)
-        let predicate = HKQuery.predicateForSamples(withStart: oneHourAgo, end: Date(), options: .strictStartDate)
+        let start = fetchStart(for: FetchKey.basalEnergy)
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: Date(), options: .strictStartDate)
         let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
 
+        let fetchKey = FetchKey.basalEnergy
         let query = HKSampleQuery(
             sampleType: type,
             predicate: predicate,
-            limit: 5,
+            limit: HKObjectQueryNoLimit,
             sortDescriptors: [sortDescriptor]
         ) { [weak self] _, samples, error in
-            guard let samples = samples as? [HKQuantitySample], error == nil else { return }
+            guard let self, let samples = samples as? [HKQuantitySample], error == nil else { return }
             for sample in samples {
                 let kcal = sample.quantity.doubleValue(for: .kilocalorie())
                 let event = SensingEvent(
@@ -559,26 +641,28 @@ final class HealthSensor {
                         "source": sample.sourceRevision.source.name
                     ]
                 )
-                self?.onEvent?(event)
+                self.onEvent?(event)
             }
+            self.recordFetch(for: fetchKey)
         }
         healthStore?.execute(query)
     }
 
-    /// Fetch respiratory rate samples from the last hour.
+    /// Fetch respiratory rate since last fetch (gap-aware).
     private func fetchRespiratoryRate() {
         guard let type = HKQuantityType.quantityType(forIdentifier: .respiratoryRate) else { return }
-        let oneHourAgo = Date().addingTimeInterval(-3600)
-        let predicate = HKQuery.predicateForSamples(withStart: oneHourAgo, end: Date(), options: .strictStartDate)
+        let start = fetchStart(for: FetchKey.respiratoryRate)
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: Date(), options: .strictStartDate)
         let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
 
+        let fetchKey = FetchKey.respiratoryRate
         let query = HKSampleQuery(
             sampleType: type,
             predicate: predicate,
-            limit: 5,
+            limit: HKObjectQueryNoLimit,
             sortDescriptors: [sortDescriptor]
         ) { [weak self] _, samples, error in
-            guard let samples = samples as? [HKQuantitySample], error == nil else { return }
+            guard let self, let samples = samples as? [HKQuantitySample], error == nil else { return }
             for sample in samples {
                 let breathsPerMin = sample.quantity.doubleValue(for: HKUnit(from: "count/min"))
                 let event = SensingEvent(
@@ -589,27 +673,29 @@ final class HealthSensor {
                         "source": sample.sourceRevision.source.name
                     ]
                 )
-                self?.onEvent?(event)
+                self.onEvent?(event)
             }
+            self.recordFetch(for: fetchKey)
         }
         healthStore?.execute(query)
     }
 
-    /// Fetch the most recent blood oxygen (SpO2) sample from the last hour.
-    /// Apple Watch may write multiple SpO2 samples per measurement — only emit the latest.
+    /// Fetch blood oxygen (SpO2) since last fetch (gap-aware).
+    /// Sorted newest-first, limit 1 to avoid duplicate entries per measurement.
     private func fetchBloodOxygen() {
         guard let type = HKQuantityType.quantityType(forIdentifier: .oxygenSaturation) else { return }
-        let oneHourAgo = Date().addingTimeInterval(-3600)
-        let predicate = HKQuery.predicateForSamples(withStart: oneHourAgo, end: Date(), options: .strictStartDate)
+        let start = fetchStart(for: FetchKey.bloodOxygen)
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: Date(), options: .strictStartDate)
         let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
 
+        let fetchKey = FetchKey.bloodOxygen
         let query = HKSampleQuery(
             sampleType: type,
             predicate: predicate,
             limit: 1,
             sortDescriptors: [sortDescriptor]
         ) { [weak self] _, samples, error in
-            guard let samples = samples as? [HKQuantitySample], error == nil else { return }
+            guard let self, let samples = samples as? [HKQuantitySample], error == nil else { return }
             if let sample = samples.first {
                 let percentage = sample.quantity.doubleValue(for: HKUnit.percent()) * 100
                 let event = SensingEvent(
@@ -620,26 +706,28 @@ final class HealthSensor {
                         "source": sample.sourceRevision.source.name
                     ]
                 )
-                self?.onEvent?(event)
+                self.onEvent?(event)
             }
+            self.recordFetch(for: fetchKey)
         }
         healthStore?.execute(query)
     }
 
-    /// Fetch environmental audio exposure (noise level) from the last hour.
+    /// Fetch noise exposure since last fetch (gap-aware).
     private func fetchNoiseExposure() {
         guard let type = HKQuantityType.quantityType(forIdentifier: .environmentalAudioExposure) else { return }
-        let oneHourAgo = Date().addingTimeInterval(-3600)
-        let predicate = HKQuery.predicateForSamples(withStart: oneHourAgo, end: Date(), options: .strictStartDate)
+        let start = fetchStart(for: FetchKey.noiseExposure)
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: Date(), options: .strictStartDate)
         let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
 
+        let fetchKey = FetchKey.noiseExposure
         let query = HKSampleQuery(
             sampleType: type,
             predicate: predicate,
-            limit: 5,
+            limit: HKObjectQueryNoLimit,
             sortDescriptors: [sortDescriptor]
         ) { [weak self] _, samples, error in
-            guard let samples = samples as? [HKQuantitySample], error == nil else { return }
+            guard let self, let samples = samples as? [HKQuantitySample], error == nil else { return }
             for sample in samples {
                 let decibels = sample.quantity.doubleValue(for: HKUnit.decibelAWeightedSoundPressureLevel())
                 let event = SensingEvent(
@@ -650,8 +738,9 @@ final class HealthSensor {
                         "source": sample.sourceRevision.source.name
                     ]
                 )
-                self?.onEvent?(event)
+                self.onEvent?(event)
             }
+            self.recordFetch(for: fetchKey)
         }
         healthStore?.execute(query)
     }
