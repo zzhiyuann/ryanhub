@@ -64,6 +64,11 @@ final class MotionSensor {
             guard let self, let activity else { return }
 
             let activityType = Self.activityTypeString(from: activity)
+
+            // Ignore "unknown" — these are transient classifier uncertainty (picking up phone, shifting position)
+            // Not a real activity transition; do not update lastReportedActivity or lastActivityChangeTime
+            guard activityType != "unknown" else { return }
+
             let confidence = activity.confidence
 
             // Filter 1: Ignore low-confidence readings — too noisy
