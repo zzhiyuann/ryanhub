@@ -32,7 +32,7 @@ import logging
 import threading
 import wave
 from concurrent.futures import ThreadPoolExecutor
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import HTTPServer, BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Optional
 from urllib.parse import parse_qs, urlparse
@@ -300,10 +300,13 @@ def identify_speaker(embedding: np.ndarray) -> tuple[str, float]:
 # Audio Processing
 # ============================================================
 
-def transcribe_audio(audio_path: str, language: Optional[str] = None, source: str = "unknown") -> dict:
+def transcribe_audio(audio_path: str, language: Optional[str] = None, source: str = "unknown",
+                     lock_timeout: float = 90.0) -> dict:
     """Transcribe audio using mlx-whisper.
     Acquires _whisper_lock to serialize calls (model is not thread-safe).
-    source: identifies the caller (e.g. 'http', 'websocket', 'pipeline')."""
+    source: identifies the caller (e.g. 'http', 'websocket', 'pipeline').
+    lock_timeout: max seconds to wait for lock (default 90s, fits inside bridge's 120s HTTP timeout).
+    Raises TimeoutError if the lock cannot be acquired within the timeout."""
     whisper = get_whisper()
 
     kwargs = {
@@ -315,7 +318,12 @@ def transcribe_audio(audio_path: str, language: Optional[str] = None, source: st
 
     wait_start = time.time()
     log.info(f"[whisper] Waiting for lock (source={source}, file={os.path.basename(audio_path)})")
-    with _whisper_lock:
+    acquired = _whisper_lock.acquire(timeout=lock_timeout)
+    if not acquired:
+        waited = time.time() - wait_start
+        log.error(f"[whisper] Lock acquisition timed out after {waited:.1f}s (source={source})")
+        raise TimeoutError(f"Whisper lock not acquired within {lock_timeout}s (source={source})")
+    try:
         waited = time.time() - wait_start
         if waited > 0.1:
             log.info(f"[whisper] Lock acquired after {waited:.2f}s wait (source={source})")
@@ -326,6 +334,8 @@ def transcribe_audio(audio_path: str, language: Optional[str] = None, source: st
         elapsed = time.time() - t0
         text_preview = result.get("text", "")[:80]
         log.info(f"[whisper] Transcription done in {elapsed:.2f}s (source={source}): {text_preview}...")
+    finally:
+        _whisper_lock.release()
     return result
 
 
@@ -677,6 +687,9 @@ class DiarizationHandler(BaseHTTPRequestHandler):
 
             result = full_pipeline(audio_path, language)
             self._send_json(result)
+        except TimeoutError as e:
+            log.warning(f"Full pipeline timed out waiting for whisper lock: {e}")
+            self._send_error(str(e), 503)
         finally:
             os.unlink(audio_path)
 
@@ -694,6 +707,9 @@ class DiarizationHandler(BaseHTTPRequestHandler):
                 "segments": result.get("segments", []),
                 "language": result.get("language", ""),
             })
+        except TimeoutError as e:
+            log.warning(f"Transcription timed out waiting for lock: {e}")
+            self._send_error(str(e), 503)
         finally:
             os.unlink(audio_path)
 
@@ -1214,8 +1230,10 @@ async def _slow_path_task(websocket, segment_id: str, wav_path: str, loop):
 # ============================================================
 
 def run_http_server():
-    """Run the HTTP server in a separate thread (blocking)."""
-    server = HTTPServer((HOST, PORT), DiarizationHandler)
+    """Run the HTTP server in a separate thread (blocking).
+    Uses ThreadingHTTPServer so concurrent /transcribe requests can be accepted
+    (one may block on _whisper_lock while others queue up, and /health stays responsive)."""
+    server = ThreadingHTTPServer((HOST, PORT), DiarizationHandler)
     log.info(f"HTTP server listening on {HOST}:{PORT}")
     server.serve_forever()
 

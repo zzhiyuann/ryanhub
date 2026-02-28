@@ -153,11 +153,23 @@ def transcribe_via_diarization_server(audio_path):
         with urllib.request.urlopen(req, timeout=120) as resp:
             result = json.loads(resp.read().decode("utf-8"))
 
+        # Check for error response from diarization server
+        if "error" in result:
+            print(f"[Whisper] Diarization server error: {result['error']}", file=sys.stderr)
+            return None
+
         text = result.get("text", "").strip()
         if text:
             print(f"[Whisper] Transcribed via diarization server: {os.path.basename(audio_path)}: {text[:80]}...")
         return text if text else None
 
+    except urllib.error.HTTPError as e:
+        # 503 = whisper lock timeout (server busy), other codes = unexpected errors
+        if e.code == 503:
+            print(f"[Whisper] Diarization server busy (503): whisper lock contention", file=sys.stderr)
+        else:
+            print(f"[Whisper] Diarization server HTTP error {e.code}: {e.reason}", file=sys.stderr)
+        return None
     except urllib.error.URLError as e:
         print(f"[Whisper] Diarization server unreachable: {e}", file=sys.stderr)
         return None
