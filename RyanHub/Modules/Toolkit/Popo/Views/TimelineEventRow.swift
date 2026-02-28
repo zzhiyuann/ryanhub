@@ -372,22 +372,7 @@ struct TimelineEventRow: View {
                let endStr = event.payload["endDate"],
                let start = formatter.date(from: startStr),
                let end = formatter.date(from: endStr) {
-                let duration = end.timeIntervalSince(start)
-                let timeFormatter = DateFormatter()
-                timeFormatter.dateFormat = "h:mm a"
-
-                HStack(spacing: 8) {
-                    detailBadge(
-                        icon: "clock",
-                        text: formatDuration(duration),
-                        color: Color.hubPrimaryLight
-                    )
-                    detailBadge(
-                        icon: "arrow.right",
-                        text: "\(timeFormatter.string(from: start)) – \(timeFormatter.string(from: end))",
-                        color: AdaptiveColors.textSecondary(for: colorScheme)
-                    )
-                }
+                sleepDurationRow(start: start, end: end)
             }
 
             if let source = event.payload["source"] {
@@ -397,6 +382,25 @@ struct TimelineEventRow: View {
                     color: AdaptiveColors.textSecondary(for: colorScheme)
                 )
             }
+        }
+    }
+
+    /// Helper to display sleep duration row (extracted to avoid `let` statements inside ViewBuilder).
+    private func sleepDurationRow(start: Date, end: Date) -> some View {
+        let duration = end.timeIntervalSince(start)
+        let timeFormatter = DateFormatter()
+        timeFormatter.dateFormat = "h:mm a"
+        return HStack(spacing: 8) {
+            detailBadge(
+                icon: "clock",
+                text: formatDuration(duration),
+                color: Color.hubPrimaryLight
+            )
+            detailBadge(
+                icon: "arrow.right",
+                text: "\(timeFormatter.string(from: start)) – \(timeFormatter.string(from: end))",
+                color: AdaptiveColors.textSecondary(for: colorScheme)
+            )
         }
     }
 

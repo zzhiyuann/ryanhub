@@ -34,7 +34,7 @@
 	<key>NSCameraUsageDescription</key>
 	<string>Ryan Hub needs camera access to capture photos for chat.</string>
 	<key>NSHealthShareUsageDescription</key>
-	<string>Ryan Hub reads your step count to estimate daily calories burned.</string>
+	<string>Ryan Hub reads your step count and Apple Watch workouts to track daily activity and calories burned.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>Ryan Hub uses background location for continuous behavioral sensing in the POPO module.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
