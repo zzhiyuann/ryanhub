@@ -1386,10 +1386,13 @@ final class PopoViewModel {
         activityEntries = (try? decoder.decode([ActivityEntry].self, from: data)) ?? []
     }
 
-    /// Refresh health data from UserDefaults (called when app becomes active).
+    /// Refresh all health data when app becomes active.
+    /// Loads food/activity entries from UserDefaults AND triggers HealthSensor
+    /// to backfill any HealthKit data missed during background suspension.
     func refreshHealthData() {
         loadFoodEntries()
         loadActivityEntries()
+        engine.resumeHealthSensor()
     }
 
     /// Resume the audio stream sensor if it was enabled but died during background suspension.

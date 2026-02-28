@@ -183,6 +183,13 @@ final class SensingEngine {
         audioStreamSensor.resumeIfNeeded()
     }
 
+    /// Resume the health sensor on foreground return. Re-fetches all HealthKit data
+    /// from the last fetch timestamp to now, filling any gaps from background suspension.
+    func resumeHealthSensor() {
+        guard isRunning else { return }
+        healthSensor.resume()
+    }
+
     // MARK: - Event Recording
 
     /// Called by each sensor when new data arrives.

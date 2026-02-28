@@ -150,6 +150,7 @@ final class HealthSensor {
 
         healthStore.requestAuthorization(toShare: nil, read: Self.readTypes as Set<HKObjectType>) { [weak self] success, error in
             if success {
+                self?.enableBackgroundDelivery()
                 self?.startObservers()
                 self?.fetchRecentSamples()
                 self?.startPeriodicFlush()
@@ -157,6 +158,16 @@ final class HealthSensor {
                 print("[HealthSensor] Authorization failed: \(error?.localizedDescription ?? "unknown")")
             }
         }
+    }
+
+    /// Called when app returns to foreground. Re-fetches all data types to cover any
+    /// gap from background suspension. Observer queries may have gone stale, so we
+    /// also restart them. This ensures the timeline is complete regardless of how
+    /// long the app was in the background.
+    func resume() {
+        guard isRunning else { return }
+        print("[HealthSensor] Resuming — backfilling gap data")
+        fetchRecentSamples()
     }
 
     /// Stop all observer queries, cancel the periodic timer, and clear throttling state.
@@ -184,6 +195,23 @@ final class HealthSensor {
         previousMinuteAvgBPM = nil
         activeEnergyBuffer.removeAll()
         lastActiveEnergyEmitTime = nil
+    }
+
+    // MARK: - Background Delivery
+
+    /// Enable HealthKit background delivery for all monitored types.
+    /// This allows HealthKit to wake the app when new samples arrive,
+    /// even when the app is suspended. Observer queries then fire and
+    /// data flows into the timeline.
+    private func enableBackgroundDelivery() {
+        guard let healthStore else { return }
+        for type in Self.readTypes {
+            healthStore.enableBackgroundDelivery(for: type, frequency: .hourly) { success, error in
+                if !success {
+                    print("[HealthSensor] Background delivery failed for \(type): \(error?.localizedDescription ?? "unknown")")
+                }
+            }
+        }
     }
 
     // MARK: - Observer Queries
@@ -587,11 +615,11 @@ final class HealthSensor {
         healthStore?.execute(query)
     }
 
-    /// Fetch active energy burned since last fetch (gap-aware) and aggregate hourly.
+    /// Fetch active energy since last fetch (gap-aware), grouped by 5-minute windows.
     ///
-    /// Apple Watch writes many small active energy samples (~every few minutes).
-    /// Instead of emitting each one, we buffer them and emit a single aggregated
-    /// event once per hour with total kcal for that period.
+    /// Apple Watch writes many small active energy samples. Instead of emitting each one,
+    /// samples are grouped by 5-minute calendar windows. Completed windows emit immediately;
+    /// the current (incomplete) window stays in the buffer for periodic flush.
     private func fetchActiveEnergy() {
         guard let type = HKQuantityType.quantityType(forIdentifier: .activeEnergyBurned) else { return }
         let start = fetchStart(for: FetchKey.activeEnergy)
@@ -606,26 +634,65 @@ final class HealthSensor {
             sortDescriptors: [sortDescriptor]
         ) { [weak self] _, samples, error in
             guard let self, let samples = samples as? [HKQuantitySample], error == nil else { return }
+            guard !samples.isEmpty else {
+                self.recordFetch(for: fetchKey)
+                return
+            }
             let source = samples.first?.sourceRevision.source.name ?? "watch"
+            let calendar = Calendar.current
 
+            // Current 5-minute window start
+            let now = Date()
+            let comps = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: now)
+            let currentWindowMinute = (comps.minute ?? 0) / 5 * 5
+            var currentWindowComps = comps
+            currentWindowComps.minute = currentWindowMinute
+            let currentWindowStart = calendar.date(from: currentWindowComps) ?? now
+
+            // Group samples by 5-minute window
+            var windowGroups: [Date: Double] = [:]
             for sample in samples {
                 let kcal = sample.quantity.doubleValue(for: .kilocalorie())
-                self.activeEnergyBuffer.append(kcal)
+                let sComps = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: sample.startDate)
+                let windowMinute = (sComps.minute ?? 0) / 5 * 5
+                var windowComps = sComps
+                windowComps.minute = windowMinute
+                let windowStart = calendar.date(from: windowComps) ?? sample.startDate
+                windowGroups[windowStart, default: 0] += kcal
             }
 
+            // Emit completed windows immediately, buffer current window
+            for (windowStart, totalKcal) in windowGroups {
+                if windowStart >= currentWindowStart {
+                    // Current window — add to buffer
+                    self.activeEnergyBuffer.append(totalKcal)
+                } else {
+                    // Completed window — emit now
+                    let event = SensingEvent(
+                        timestamp: windowStart,
+                        modality: .activeEnergy,
+                        payload: [
+                            "kcal": String(format: "%.0f", totalKcal),
+                            "source": source
+                        ]
+                    )
+                    self.onEvent?(event)
+                }
+            }
+
+            // Try flushing the current-window buffer
             self.emitAggregatedActiveEnergyIfReady(source: source)
             self.recordFetch(for: fetchKey)
         }
         healthStore?.execute(query)
     }
 
-    /// Emit a single aggregated active energy event if at least 1 hour has passed.
+    /// Flush the active energy buffer if enough time has elapsed since last emit.
     private func emitAggregatedActiveEnergyIfReady(source: String) {
         let now = Date()
 
         if lastActiveEnergyEmitTime == nil {
             lastActiveEnergyEmitTime = now
-            guard !activeEnergyBuffer.isEmpty else { return }
         }
 
         guard let lastEmit = lastActiveEnergyEmitTime,
@@ -641,7 +708,6 @@ final class HealthSensor {
             modality: .activeEnergy,
             payload: [
                 "kcal": String(format: "%.0f", totalKcal),
-                "samples": "\(activeEnergyBuffer.count)",
                 "source": source
             ]
         )

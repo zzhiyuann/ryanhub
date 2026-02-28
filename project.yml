@@ -64,6 +64,7 @@ targets:
       path: RyanHub/RyanHub.entitlements
       properties:
         com.apple.developer.healthkit: true
+        com.apple.developer.healthkit.background-delivery: true
         # com.apple.developer.networking.wifi-info: true  # Requires paid Apple Developer Program
     settings:
       base:
