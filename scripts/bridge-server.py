@@ -741,87 +741,8 @@ def parse_food_json(text: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Anthropic SDK for behavioral analysis (LLM-based nudges)
-# ---------------------------------------------------------------------------
-
-ANTHROPIC_AVAILABLE = False
-_anthropic_client = None
-
-try:
-    import anthropic as _anthropic_module
-    ANTHROPIC_AVAILABLE = True
-    print("Anthropic SDK available for behavioral analysis.")
-except ImportError:
-    print("Warning: anthropic not installed. LLM-based nudge generation unavailable.",
-          file=sys.stderr)
-    print("  Install with: pip3 install anthropic", file=sys.stderr)
-
-
-def _get_anthropic_api_key():
-    # type: () -> Optional[str]
-    """Resolve the Anthropic API key from environment or config files."""
-    # 1. Environment variable (standard)
-    key = os.environ.get("ANTHROPIC_API_KEY")
-    if key:
-        return key
-
-    # 2. Dispatcher config.yaml
-    config_path = os.path.expanduser("~/.config/dispatcher/config.yaml")
-    if os.path.exists(config_path):
-        try:
-            import yaml
-            with open(config_path, "r") as f:
-                cfg = yaml.safe_load(f)
-            if isinstance(cfg, dict):
-                key = cfg.get("anthropic_api_key") or cfg.get("ANTHROPIC_API_KEY")
-                if key:
-                    return key
-        except Exception:
-            pass
-
-    # 3. Common .env files
-    for env_path in [
-        os.path.expanduser("~/.env"),
-        os.path.expanduser("~/projects/ryanhub/.env"),
-        os.path.expanduser("~/projects/ryanhub/scripts/.env"),
-    ]:
-        if os.path.exists(env_path):
-            try:
-                with open(env_path, "r") as f:
-                    for line in f:
-                        line = line.strip()
-                        if line.startswith("ANTHROPIC_API_KEY="):
-                            return line.split("=", 1)[1].strip().strip('"').strip("'")
-            except Exception:
-                pass
-
-    return None
-
-
-def get_anthropic_client():
-    # type: () -> Optional[Any]
-    """Get or create a singleton Anthropic client."""
-    global _anthropic_client
-    if _anthropic_client is not None:
-        return _anthropic_client
-
-    if not ANTHROPIC_AVAILABLE:
-        return None
-
-    api_key = _get_anthropic_api_key()
-    if not api_key:
-        print("[Analyze] No Anthropic API key found. LLM nudges disabled.",
-              file=sys.stderr)
-        return None
-
-    try:
-        _anthropic_client = _anthropic_module.Anthropic(api_key=api_key)
-        print("[Analyze] Anthropic client initialized.")
-        return _anthropic_client
-    except Exception as e:
-        print("[Analyze] Failed to create Anthropic client: %s" % e,
-              file=sys.stderr)
-        return None
+# Claude CLI is used for behavioral analysis (nudge generation).
+# No API key needed — uses the local claude CLI with Max Plan auth.
 
 
 # ---------------------------------------------------------------------------
@@ -1047,30 +968,21 @@ def summarize_sensing_data(events, narrations, daily_summary=None):
 
 def generate_nudges_llm(summary_text):
     # type: (str) -> Optional[List[Dict]]
-    """Generate nudges using Claude API. Returns list of nudge dicts or None on failure."""
-    client = get_anthropic_client()
-    if client is None:
-        return None
+    """Generate nudges using Claude CLI (Max Plan). Returns list of nudge dicts or None on failure."""
+    full_prompt = BEHAVIORAL_ANALYSIS_SYSTEM_PROMPT + "\n\n" + summary_text
 
     try:
-        message = client.messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=1024,
-            system=BEHAVIORAL_ANALYSIS_SYSTEM_PROMPT,
-            messages=[
-                {"role": "user", "content": summary_text}
-            ]
-        )
+        raw_output = run_claude_text(full_prompt)
 
-        # Extract the text content
-        response_text = ""
-        for block in message.content:
-            if hasattr(block, "text"):
-                response_text += block.text
+        # Parse the claude CLI JSON output to get the result text
+        try:
+            cli_result = json.loads(raw_output)
+            response_text = cli_result.get("result", raw_output)
+        except (json.JSONDecodeError, TypeError):
+            response_text = raw_output
 
-        # Parse JSON from response
+        # Strip markdown code blocks if present
         response_text = response_text.strip()
-        # Handle markdown code blocks
         if response_text.startswith("```json"):
             response_text = response_text[7:]
         elif response_text.startswith("```"):
@@ -1703,20 +1615,9 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
         summary_text = summarize_sensing_data(sensing_events, narrations, daily_summary)
         print("[Analyze] Summary:\n%s" % summary_text[:500])
 
-        # Step 2: Generate nudges via LLM (no silent fallback — fail loudly)
+        # Step 2: Generate nudges via Claude CLI
         method_used = "none"
         raw_nudges = None
-
-        if not ANTHROPIC_AVAILABLE:
-            error_msg = "Anthropic SDK not available or API key not configured"
-            print("[Analyze] ERROR: %s" % error_msg, file=sys.stderr)
-            self._send_json(503, {
-                "ok": False,
-                "error": error_msg,
-                "nudges": [],
-                "method": "none"
-            })
-            return
 
         raw_nudges = generate_nudges_llm(summary_text)
         if raw_nudges is None:
@@ -2026,14 +1927,7 @@ def main():
         print("Local emotion model: not available (affect analysis disabled)")
     if GOOGLE_MAPS_API_KEY:
         print("Google Maps API: configured (location enrichment enabled)")
-    if ANTHROPIC_AVAILABLE:
-        api_key = _get_anthropic_api_key()
-        if api_key:
-            print("Anthropic API: available (LLM nudge generation enabled)")
-        else:
-            print("Anthropic SDK: installed but no API key found (rule-based fallback)")
-    else:
-        print("Anthropic SDK: not installed (rule-based nudge generation only)")
+    print("Claude CLI: nudge generation via Max Plan (%s)" % CLAUDE_PATH)
     print("Press Ctrl+C to stop.")
 
     try:
