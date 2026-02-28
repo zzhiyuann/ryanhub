@@ -59,6 +59,7 @@ BOOKFACTORY_LOG="/tmp/ryanhub-bookfactory.log"
 # Diarization Server
 DIARIZATION_NAME="diarization"
 DIARIZATION_PORT=18793
+DIARIZATION_WS_PORT=18794
 DIARIZATION_SCRIPT="$REPO_ROOT/scripts/diarization-server.py"
 DIARIZATION_PYTHON="$REPO_ROOT/scripts/diarization-env/bin/python3"
 DIARIZATION_LOG="/tmp/ryanhub-diarization.log"
@@ -381,7 +382,7 @@ start_diarization() {
         return 0
     fi
 
-    log "$DIARIZATION_NAME: Starting on port $DIARIZATION_PORT..."
+    log "$DIARIZATION_NAME: Starting on port $DIARIZATION_PORT (HTTP) / $DIARIZATION_WS_PORT (WebSocket)..."
     nohup "$DIARIZATION_PYTHON" "$DIARIZATION_SCRIPT" >> "$DIARIZATION_LOG" 2>&1 &
     local pid=$!
     disown "$pid" 2>/dev/null || true
@@ -424,9 +425,13 @@ status_diarization() {
     if port_in_use "$DIARIZATION_PORT"; then
         local pid
         pid=$(get_pid_on_port "$DIARIZATION_PORT")
-        echo "  $DIARIZATION_NAME: RUNNING on port $DIARIZATION_PORT (PID $pid)"
+        local ws_status="DOWN"
+        if port_in_use "$DIARIZATION_WS_PORT"; then
+            ws_status="UP"
+        fi
+        echo "  $DIARIZATION_NAME: RUNNING on port $DIARIZATION_PORT (HTTP) / $DIARIZATION_WS_PORT (WebSocket: $ws_status) (PID $pid)"
     else
-        echo "  $DIARIZATION_NAME: STOPPED (port $DIARIZATION_PORT)"
+        echo "  $DIARIZATION_NAME: STOPPED (port $DIARIZATION_PORT / $DIARIZATION_WS_PORT)"
     fi
 }
 

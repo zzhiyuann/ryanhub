@@ -2,12 +2,12 @@
 """
 Speaker Diarization & Transcription Server
 
-A standalone HTTP server that processes audio and returns:
+A standalone server that processes audio and returns:
 - Transcription (via mlx-whisper, Apple Silicon optimized)
 - Speaker diarization (via pyannote.audio, MPS accelerated)
 - Speaker identification (via SpeechBrain ECAPA-TDNN embeddings)
 
-Endpoints:
+HTTP Endpoints (port 18793):
   POST /process       — Full pipeline: transcribe + diarize + identify speakers
   POST /transcribe    — Transcription only (mlx-whisper)
   POST /diarize       — Diarization only (pyannote)
@@ -17,15 +17,21 @@ Endpoints:
   DELETE /profiles/<name> — Remove a speaker profile
   GET  /health        — Health check
 
-Listens on 0.0.0.0:18793
+WebSocket Endpoint (port 18794):
+  ws://host:18794/ws/stream — Real-time streaming with VAD + hybrid pipeline
 """
 
+import asyncio
 import json
 import os
+import struct
 import sys
 import time
 import tempfile
 import logging
+import threading
+import wave
+from concurrent.futures import ThreadPoolExecutor
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 from typing import Optional
@@ -38,6 +44,7 @@ import numpy as np
 _whisper_model = None
 _diarization_pipeline = None
 _speaker_model = None
+_vad_model = None
 _speaker_profiles: dict[str, np.ndarray] = {}  # name -> centroid embedding
 
 # Paths
@@ -49,9 +56,21 @@ PROFILES_DIR.mkdir(parents=True, exist_ok=True)
 # Config
 HOST = "0.0.0.0"
 PORT = 18793
+WS_PORT = 18794
 WHISPER_MODEL = "mlx-community/whisper-large-v3-mlx"
 SIMILARITY_THRESHOLD = 0.25  # Cosine similarity threshold for speaker ID
 SAMPLE_RATE = 16000
+
+# VAD config
+VAD_FRAME_SAMPLES = 512      # Silero VAD expects 512 samples at 16kHz (32ms)
+VAD_THRESHOLD = 0.5           # Speech probability threshold
+SILENCE_TIMEOUT_MS = 500      # Silence duration to end a segment (ms)
+SILENCE_FRAMES = SILENCE_TIMEOUT_MS // 32  # ~16 frames of 32ms each
+MIN_SEGMENT_DURATION = 1.0    # Minimum speech segment duration in seconds
+MAX_SEGMENT_DURATION = 30.0   # Maximum speech segment duration in seconds
+
+# Thread pool for CPU/GPU-bound model inference
+_executor = ThreadPoolExecutor(max_workers=4)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -111,6 +130,17 @@ def get_speaker_model():
         )
         log.info("Speaker verification model loaded")
     return _speaker_model
+
+
+def get_vad_model():
+    """Load Silero VAD model for voice activity detection."""
+    global _vad_model
+    if _vad_model is None:
+        log.info("Loading Silero VAD model (first use)...")
+        from silero_vad import load_silero_vad
+        _vad_model = load_silero_vad()
+        log.info("Silero VAD model loaded")
+    return _vad_model
 
 
 # ============================================================
@@ -569,6 +599,7 @@ class DiarizationHandler(BaseHTTPRequestHandler):
                     "diarization": _diarization_pipeline is not None,
                     "speaker": _speaker_model is not None,
                 },
+                "websocket_port": WS_PORT,
             })
         elif self.path == "/profiles":
             profiles = {}
@@ -794,16 +825,417 @@ class DiarizationHandler(BaseHTTPRequestHandler):
 
 
 # ============================================================
+# WebSocket Streaming Server
+# ============================================================
+
+def _save_pcm_to_wav(pcm_samples: np.ndarray, sample_rate: int = SAMPLE_RATE) -> str:
+    """Save raw PCM samples (float32 or int16) to a temporary WAV file.
+    Returns the path to the temp file (caller must clean up)."""
+    tmp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
+    tmp.close()
+
+    # Convert to int16 if needed
+    if pcm_samples.dtype == np.float32 or pcm_samples.dtype == np.float64:
+        # Clip to [-1, 1] and scale to int16 range
+        pcm_int16 = np.clip(pcm_samples, -1.0, 1.0)
+        pcm_int16 = (pcm_int16 * 32767).astype(np.int16)
+    elif pcm_samples.dtype == np.int16:
+        pcm_int16 = pcm_samples
+    else:
+        pcm_int16 = pcm_samples.astype(np.int16)
+
+    with wave.open(tmp.name, "wb") as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)  # 16-bit
+        wf.setframerate(sample_rate)
+        wf.writeframes(pcm_int16.tobytes())
+
+    return tmp.name
+
+
+def _transcribe_segment_sync(wav_path: str) -> dict:
+    """Synchronous transcription of a WAV file. Runs in thread pool."""
+    result = transcribe_audio(wav_path)
+    return result
+
+
+def _diarize_and_identify_sync(wav_path: str) -> list[dict]:
+    """Synchronous diarization + speaker identification. Runs in thread pool.
+    Returns list of diarization results with speaker identity."""
+    diar_segments = diarize_audio(wav_path)
+
+    if not diar_segments:
+        return []
+
+    results = []
+    unique_speakers = set(s["speaker"] for s in diar_segments)
+
+    for spk in unique_speakers:
+        spk_segs = [s for s in diar_segments if s["speaker"] == spk]
+        spk_segs.sort(key=lambda s: s["end"] - s["start"], reverse=True)
+
+        embeddings = []
+        for seg in spk_segs[:3]:
+            if seg["end"] - seg["start"] < 0.5:
+                continue
+            try:
+                seg_path = extract_segment_audio(wav_path, seg["start"], seg["end"])
+                emb = compute_embedding(seg_path)
+                embeddings.append(emb)
+                os.unlink(seg_path)
+            except Exception as e:
+                log.warning(f"  WS slow path: failed embedding for {spk}: {e}")
+
+        if embeddings:
+            avg_emb = np.mean(embeddings, axis=0)
+            name, confidence = identify_speaker(avg_emb)
+        else:
+            name, confidence = "unknown", 0.0
+
+        results.append({
+            "speaker_label": spk,
+            "speaker": name,
+            "confidence": round(confidence, 3),
+        })
+
+    return results
+
+
+class StreamingSession:
+    """Manages VAD state and audio buffering for one WebSocket connection."""
+
+    def __init__(self):
+        self.segment_counter = 0
+        self.speech_buffer: list[np.ndarray] = []  # Accumulated speech frames
+        self.silence_count = 0  # Consecutive non-speech frames
+        self.is_speaking = False  # Current VAD state
+        self.session_start_time = time.time()
+        self.segment_start_sample = 0  # Sample offset of current segment start
+        self.total_samples_received = 0  # Total samples received so far
+
+    def next_segment_id(self) -> str:
+        """Generate the next segment ID."""
+        self.segment_counter += 1
+        return f"seg_{self.segment_counter:03d}"
+
+    def get_buffered_duration(self) -> float:
+        """Get duration of buffered speech in seconds."""
+        total_samples = sum(len(chunk) for chunk in self.speech_buffer)
+        return total_samples / SAMPLE_RATE
+
+    def get_buffered_pcm(self) -> np.ndarray:
+        """Get all buffered speech as a single float32 array."""
+        if not self.speech_buffer:
+            return np.array([], dtype=np.float32)
+        return np.concatenate(self.speech_buffer)
+
+    def clear_buffer(self):
+        """Clear the speech buffer and reset silence counter."""
+        self.speech_buffer = []
+        self.silence_count = 0
+
+
+async def ws_handler(websocket):
+    """Handle a single WebSocket connection for real-time streaming."""
+    import torch
+
+    client_addr = websocket.remote_address
+    log.info(f"WS: New connection from {client_addr}")
+
+    session = None
+    vad_model = None
+    loop = asyncio.get_event_loop()
+
+    try:
+        async for message in websocket:
+            # --- Text frame: control messages ---
+            if isinstance(message, str):
+                try:
+                    msg = json.loads(message)
+                except json.JSONDecodeError:
+                    await websocket.send(json.dumps({
+                        "type": "error",
+                        "message": "Invalid JSON in text frame",
+                    }))
+                    continue
+
+                msg_type = msg.get("type", "")
+
+                if msg_type == "start":
+                    # Initialize a new streaming session
+                    session = StreamingSession()
+                    vad_model = get_vad_model()
+                    vad_model.reset_states()
+                    log.info(f"WS: Session started for {client_addr}")
+
+                    await websocket.send(json.dumps({
+                        "type": "status",
+                        "message": "connected",
+                        "profiles": list(_speaker_profiles.keys()),
+                    }))
+
+                elif msg_type == "stop":
+                    if session is not None:
+                        # Process any remaining buffered speech
+                        if session.speech_buffer and session.get_buffered_duration() >= MIN_SEGMENT_DURATION:
+                            await _process_speech_segment(
+                                websocket, session, loop
+                            )
+                        log.info(f"WS: Session stopped for {client_addr} "
+                                 f"({session.segment_counter} segments processed)")
+                        session = None
+                        vad_model = None
+                    await websocket.send(json.dumps({
+                        "type": "status",
+                        "message": "stopped",
+                    }))
+
+                else:
+                    await websocket.send(json.dumps({
+                        "type": "error",
+                        "message": f"Unknown control message type: {msg_type}",
+                    }))
+                continue
+
+            # --- Binary frame: raw PCM audio data ---
+            if not isinstance(message, (bytes, bytearray)):
+                continue
+
+            if session is None:
+                # Ignore audio before session start
+                continue
+
+            # Decode raw Int16 little-endian PCM to float32
+            pcm_int16 = np.frombuffer(message, dtype=np.int16)
+            pcm_float = pcm_int16.astype(np.float32) / 32768.0
+            session.total_samples_received += len(pcm_float)
+
+            # Split incoming chunk into VAD_FRAME_SAMPLES-sized sub-frames
+            offset = 0
+            while offset + VAD_FRAME_SAMPLES <= len(pcm_float):
+                frame = pcm_float[offset:offset + VAD_FRAME_SAMPLES]
+                offset += VAD_FRAME_SAMPLES
+
+                # Run VAD on this frame (lightweight, runs in async loop)
+                frame_tensor = torch.FloatTensor(frame)
+                speech_prob = vad_model(frame_tensor, SAMPLE_RATE).item()
+                is_speech = speech_prob > VAD_THRESHOLD
+
+                if is_speech:
+                    if not session.is_speaking:
+                        # Transition: silence -> speech
+                        session.is_speaking = True
+                        session.segment_start_sample = (
+                            session.total_samples_received - len(pcm_float) + offset - VAD_FRAME_SAMPLES
+                        )
+                        await websocket.send(json.dumps({
+                            "type": "vad",
+                            "speech": True,
+                        }))
+
+                    session.speech_buffer.append(frame)
+                    session.silence_count = 0
+
+                    # Check max segment duration
+                    if session.get_buffered_duration() >= MAX_SEGMENT_DURATION:
+                        log.info(f"WS: Max segment duration reached, forcing segment end")
+                        await _process_speech_segment(websocket, session, loop)
+                        vad_model.reset_states()
+
+                else:
+                    if session.is_speaking:
+                        # Still accumulate during brief silence gaps within speech
+                        session.speech_buffer.append(frame)
+                        session.silence_count += 1
+
+                        if session.silence_count >= SILENCE_FRAMES:
+                            # Transition: speech -> silence (end of utterance)
+                            session.is_speaking = False
+                            await websocket.send(json.dumps({
+                                "type": "vad",
+                                "speech": False,
+                            }))
+
+                            # Process the segment if long enough
+                            if session.get_buffered_duration() >= MIN_SEGMENT_DURATION:
+                                await _process_speech_segment(
+                                    websocket, session, loop
+                                )
+                            else:
+                                log.info(f"WS: Discarding short segment "
+                                         f"({session.get_buffered_duration():.2f}s < {MIN_SEGMENT_DURATION}s)")
+                                session.clear_buffer()
+
+                            vad_model.reset_states()
+
+            # Handle leftover samples that don't fill a complete VAD frame
+            # (they'll be picked up when the next chunk arrives, since the
+            #  client sends continuous 0.5s chunks)
+
+    except Exception as e:
+        # websockets library raises ConnectionClosed variants on disconnect
+        error_name = type(e).__name__
+        if "Closed" in error_name or "closed" in str(e).lower():
+            log.info(f"WS: Connection closed for {client_addr}")
+        else:
+            log.exception(f"WS: Error in session for {client_addr}")
+            try:
+                await websocket.send(json.dumps({
+                    "type": "error",
+                    "message": str(e),
+                }))
+            except Exception:
+                pass
+
+    log.info(f"WS: Connection ended for {client_addr}")
+
+
+async def _process_speech_segment(websocket, session: StreamingSession, loop):
+    """Process a completed speech segment through the hybrid pipeline.
+
+    Fast path: transcribe with whisper (send transcript immediately)
+    Slow path: diarize + speaker ID (send speaker labels after)
+    """
+    pcm_data = session.get_buffered_pcm()
+    segment_id = session.next_segment_id()
+    segment_duration = len(pcm_data) / SAMPLE_RATE
+    segment_start = session.segment_start_sample / SAMPLE_RATE
+
+    log.info(f"WS: Processing segment {segment_id} "
+             f"({segment_duration:.1f}s, start={segment_start:.1f}s)")
+
+    # Save PCM to temp WAV for model processing
+    wav_path = _save_pcm_to_wav(pcm_data)
+    session.clear_buffer()
+
+    # --- Fast path: transcription (run in thread pool) ---
+    try:
+        transcription = await loop.run_in_executor(
+            _executor, _transcribe_segment_sync, wav_path
+        )
+        text = transcription.get("text", "").strip()
+
+        if text:
+            await websocket.send(json.dumps({
+                "type": "transcript",
+                "text": text,
+                "segment_id": segment_id,
+                "start": round(segment_start, 3),
+                "end": round(segment_start + segment_duration, 3),
+                "is_partial": False,
+            }))
+            log.info(f"WS: Fast path done for {segment_id}: \"{text[:80]}...\"" if len(text) > 80
+                     else f"WS: Fast path done for {segment_id}: \"{text}\"")
+        else:
+            log.info(f"WS: Fast path returned empty text for {segment_id}")
+
+    except Exception as e:
+        log.exception(f"WS: Fast path error for {segment_id}")
+        try:
+            await websocket.send(json.dumps({
+                "type": "error",
+                "message": f"Transcription failed for {segment_id}: {e}",
+            }))
+        except Exception:
+            pass
+
+    # --- Slow path: diarization + speaker ID (background task) ---
+    # Keep a reference to the wav_path so the background task can use it.
+    # The background task is responsible for cleaning up the WAV file.
+    asyncio.ensure_future(
+        _slow_path_task(websocket, segment_id, wav_path, loop)
+    )
+
+
+async def _slow_path_task(websocket, segment_id: str, wav_path: str, loop):
+    """Background task for diarization + speaker identification (slow path)."""
+    try:
+        results = await loop.run_in_executor(
+            _executor, _diarize_and_identify_sync, wav_path
+        )
+
+        for result in results:
+            try:
+                await websocket.send(json.dumps({
+                    "type": "speaker",
+                    "segment_id": segment_id,
+                    "speaker": result["speaker"],
+                    "speaker_label": result["speaker_label"],
+                    "confidence": result["confidence"],
+                }))
+            except Exception:
+                break  # Connection likely closed
+
+        if results:
+            speakers = ", ".join(f"{r['speaker']}({r['confidence']:.2f})" for r in results)
+            log.info(f"WS: Slow path done for {segment_id}: {speakers}")
+        else:
+            log.info(f"WS: Slow path returned no speakers for {segment_id}")
+
+    except Exception as e:
+        log.exception(f"WS: Slow path error for {segment_id}")
+        try:
+            await websocket.send(json.dumps({
+                "type": "error",
+                "message": f"Diarization failed for {segment_id}: {e}",
+            }))
+        except Exception:
+            pass
+
+    finally:
+        # Clean up temp WAV file
+        try:
+            os.unlink(wav_path)
+        except OSError:
+            pass
+
+
+# ============================================================
 # Main
 # ============================================================
+
+def run_http_server():
+    """Run the HTTP server in a separate thread (blocking)."""
+    server = HTTPServer((HOST, PORT), DiarizationHandler)
+    log.info(f"HTTP server listening on {HOST}:{PORT}")
+    server.serve_forever()
+
+
+async def run_ws_server():
+    """Run the WebSocket server using asyncio (async main loop)."""
+    import websockets
+
+    server = await websockets.serve(
+        ws_handler,
+        HOST,
+        WS_PORT,
+        max_size=2 ** 20,  # 1 MB max frame size (plenty for 0.5s audio chunks)
+        ping_interval=30,
+        ping_timeout=10,
+    )
+    log.info(f"WebSocket server listening on {HOST}:{WS_PORT}")
+    await server.wait_closed()
+
+
+async def async_main():
+    """Main async entry point: starts HTTP thread + WebSocket server."""
+    # Start HTTP server in a daemon thread
+    http_thread = threading.Thread(target=run_http_server, daemon=True)
+    http_thread.start()
+
+    # Run WebSocket server in the async event loop
+    await run_ws_server()
+
 
 def main():
     log.info("=" * 60)
     log.info("Speaker Diarization & Transcription Server")
-    log.info(f"Listening on {HOST}:{PORT}")
+    log.info(f"HTTP  server: {HOST}:{PORT}")
+    log.info(f"WebSocket server: {HOST}:{WS_PORT}")
     log.info(f"Whisper model: {WHISPER_MODEL} (MLX/Metal)")
     log.info(f"Diarization: pyannote/speaker-diarization-3.1 (MPS)")
     log.info(f"Speaker ID: speechbrain/spkrec-ecapa-voxceleb")
+    log.info(f"VAD: Silero VAD (streaming mode)")
     log.info(f"Enrollment dir: {ENROLLMENT_DIR}")
     log.info(f"Profiles dir: {PROFILES_DIR}")
     log.info("=" * 60)
@@ -811,12 +1243,7 @@ def main():
     # Load existing speaker profiles
     load_profiles()
 
-    # Start server first, then check HF auth in background
-    server = HTTPServer((HOST, PORT), DiarizationHandler)
-    log.info(f"Server listening on {HOST}:{PORT}")
-
     # Non-blocking HuggingFace auth check
-    import threading
     def _check_hf():
         try:
             from huggingface_hub import HfApi
@@ -825,11 +1252,11 @@ def main():
         except Exception:
             log.warning("HuggingFace not authenticated! Run: huggingface-cli login")
     threading.Thread(target=_check_hf, daemon=True).start()
+
     try:
-        server.serve_forever()
+        asyncio.run(async_main())
     except KeyboardInterrupt:
         log.info("Shutting down...")
-        server.server_close()
 
 
 if __name__ == "__main__":
