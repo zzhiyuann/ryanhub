@@ -703,6 +703,26 @@ struct PopoView: View {
             } else {
                 HubCard {
                     VStack(alignment: .leading, spacing: 0) {
+                        // Collapse button at top when expanded
+                        if isTimelineExpanded && totalCount > previewLimit {
+                            Button {
+                                withAnimation(.easeInOut(duration: 0.25)) {
+                                    isTimelineExpanded = false
+                                }
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "chevron.up")
+                                        .font(.system(size: 11, weight: .semibold))
+                                    Text("Collapse")
+                                        .font(.system(size: 13, weight: .medium))
+                                }
+                                .foregroundStyle(Color.hubPrimary)
+                                .padding(.vertical, 8)
+                                .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(.plain)
+                        }
+
                         ForEach(Array(displayedItems.enumerated()), id: \.element.id) { index, item in
                             TimelineEventRow(
                                 item: item,
@@ -715,7 +735,7 @@ struct PopoView: View {
                             }
                         }
 
-                        // Show expand/collapse button when there are more items than the preview limit
+                        // Show expand/collapse button at bottom
                         if totalCount > previewLimit {
                             Button {
                                 withAnimation(.easeInOut(duration: 0.25)) {
