@@ -312,13 +312,18 @@ final class PopoViewModel {
             .respiratoryRate: 600,  // 1 per 10 minutes
             .bloodOxygen: 60,       // 1 per minute (Watch writes multiple samples per measurement)
             .noiseExposure: 600,    // 1 per 10 minutes (anomaly: 1 per minute)
+            .bluetooth: 3600,       // 1 per hour
         ]
 
         let timeWindowEvents = dayEvents
             .filter { timeWindowModalities.keys.contains($0.modality) }
-        let passthroughEvents = dayEvents.filter {
-            $0.modality != .steps && $0.modality != .motion && $0.modality != .location
-            && !timeWindowModalities.keys.contains($0.modality)
+        let screenEvents = dayEvents
+            .filter { $0.modality == .screen && $0.payload["state"] == "on" }
+            .sorted { $0.timestamp < $1.timestamp }
+        let excludedModalities: Set<SensingModality> = [.steps, .motion, .location, .screen]
+        let passthroughEvents = dayEvents.filter { event in
+            !excludedModalities.contains(event.modality)
+            && !timeWindowModalities.keys.contains(event.modality)
         }
 
         // Time-window dedup: for each modality, keep at most 1 event per window.
@@ -456,7 +461,42 @@ final class PopoViewModel {
             }
         }
 
-        return filteredMotion + filteredLocation + filteredTimeWindow + passthroughEvents
+        // Screen: aggregate "on" events into hourly buckets.
+        // Each hourly event shows: number of opens, total on-duration, per-session durations.
+        let calendar = Calendar.current
+        var screenHourGroups: [Date: [SensingEvent]] = [:]
+        for event in screenEvents {
+            let hourStart = calendar.date(from: calendar.dateComponents(
+                [.year, .month, .day, .hour], from: event.timestamp))!
+            screenHourGroups[hourStart, default: []].append(event)
+        }
+        var aggregatedScreen: [SensingEvent] = []
+        for (hourStart, events) in screenHourGroups {
+            let count = events.count
+            var totalDuration: Double = 0
+            var sessionDurations: [String] = []
+            for event in events {
+                if let durStr = event.payload["onDuration"], let dur = Double(durStr), dur > 0 {
+                    totalDuration += dur
+                    sessionDurations.append("\(Int(dur))")
+                } else {
+                    sessionDurations.append("?")
+                }
+            }
+            aggregatedScreen.append(SensingEvent(
+                timestamp: hourStart,
+                modality: .screen,
+                payload: [
+                    "state": "hourly_aggregate",
+                    "count": "\(count)",
+                    "totalDuration": "\(Int(totalDuration))",
+                    "durations": sessionDurations.joined(separator: ","),
+                ]
+            ))
+        }
+
+        return filteredMotion + filteredLocation + filteredTimeWindow
+            + aggregatedScreen + passthroughEvents
     }
 
     /// Aggregated overview summary for the selected date.

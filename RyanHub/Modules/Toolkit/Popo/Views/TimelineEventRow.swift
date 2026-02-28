@@ -1217,6 +1217,18 @@ struct TimelineEventRow: View {
     private func screenEventSummary(_ event: SensingEvent) -> String {
         let state = event.payload["state"] ?? "unknown"
 
+        // Hourly aggregate — "Screen · 5 opens · 42m total"
+        if state == "hourly_aggregate" {
+            let count = event.payload["count"] ?? "0"
+            let openLabel = count == "1" ? "open" : "opens"
+            var parts = ["Screen \u{00B7} \(count) \(openLabel)"]
+            if let totalDurStr = event.payload["totalDuration"],
+               let totalDur = Double(totalDurStr), totalDur > 0 {
+                parts.append("\(formatDuration(totalDur)) total")
+            }
+            return parts.joined(separator: " \u{00B7} ")
+        }
+
         // Off events should be filtered from the timeline, but handle gracefully
         guard state == "on" else { return "Screen \(state)" }
 
