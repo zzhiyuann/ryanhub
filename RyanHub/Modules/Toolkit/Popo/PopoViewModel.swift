@@ -306,14 +306,46 @@ final class PopoViewModel {
             // Otherwise: same activity within 5 min window — skip (noise)
         }
 
-        // Location: keep only when position changed significantly or 1h+ gap
+        // Location: prefer enriched events over raw ones for the same coordinates,
+        // then keep only when position changed significantly or 1h+ gap.
         let locationDistanceThreshold: Double = 0.001  // ~100m in degrees
         let locationTimeGap: TimeInterval = 3600       // 1 hour
+
+        // Separate enriched and raw location events
+        let enrichedLocations = locationEvents.filter { $0.payload["enriched"] == "true" }
+        let rawLocations = locationEvents.filter { $0.payload["enriched"] != "true" }
+
+        // Remove raw events that have a matching enriched event (within 0.001 degrees)
+        let deduplicatedLocations: [SensingEvent] = {
+            var result = enrichedLocations
+            for raw in rawLocations {
+                guard let rawLatStr = raw.payload["latitude"],
+                      let rawLngStr = raw.payload["longitude"],
+                      let rawLat = Double(rawLatStr),
+                      let rawLng = Double(rawLngStr) else {
+                    result.append(raw)
+                    continue
+                }
+                let hasEnrichedMatch = enrichedLocations.contains { enriched in
+                    guard let eLat = enriched.payload["latitude"].flatMap(Double.init),
+                          let eLng = enriched.payload["longitude"].flatMap(Double.init) else {
+                        return false
+                    }
+                    return abs(rawLat - eLat) < locationDistanceThreshold
+                        && abs(rawLng - eLng) < locationDistanceThreshold
+                }
+                if !hasEnrichedMatch {
+                    result.append(raw)
+                }
+            }
+            return result.sorted { $0.timestamp < $1.timestamp }
+        }()
+
         var filteredLocation: [SensingEvent] = []
         var lastLat: Double?
         var lastLng: Double?
         var lastLocationTime: Date?
-        for event in locationEvents {
+        for event in deduplicatedLocations {
             guard let latStr = event.payload["latitude"],
                   let lngStr = event.payload["longitude"],
                   let lat = Double(latStr),

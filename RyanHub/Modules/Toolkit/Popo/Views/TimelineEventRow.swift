@@ -155,12 +155,14 @@ struct TimelineEventRow: View {
                 .fixedSize(horizontal: false, vertical: true)
 
             HStack(spacing: 12) {
-                // Duration badge
-                detailBadge(
-                    icon: "clock",
-                    text: formatDuration(narration.duration),
-                    color: Color.hubPrimaryLight
-                )
+                // Duration badge (only for audio narrations with recorded duration)
+                if narration.duration > 0 {
+                    detailBadge(
+                        icon: "clock",
+                        text: formatDuration(narration.duration),
+                        color: Color.hubPrimaryLight
+                    )
+                }
 
                 // Mood badge (if available)
                 if let mood = narration.extractedMood {
@@ -169,6 +171,81 @@ struct TimelineEventRow: View {
                         text: mood,
                         color: Color.hubAccentYellow
                     )
+                }
+            }
+
+            // Affect Analysis Results
+            if let affect = narration.affectAnalysis {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Emotion Analysis")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+
+                    // Brief summary
+                    if let summary = affect.briefSummary {
+                        Text(summary)
+                            .font(.system(size: 12, weight: .regular))
+                            .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                            .italic()
+                    }
+
+                    // Emotion badges row
+                    HStack(spacing: 8) {
+                        if let primary = affect.primaryEmotion {
+                            detailBadge(
+                                icon: "brain.head.profile",
+                                text: primary.capitalized,
+                                color: Color.hubPrimary
+                            )
+                        }
+                        if let secondary = affect.secondaryEmotion {
+                            detailBadge(
+                                icon: "sparkles",
+                                text: secondary.capitalized,
+                                color: Color.hubPrimaryLight
+                            )
+                        }
+                    }
+
+                    // Metrics row
+                    HStack(spacing: 8) {
+                        if let valence = affect.valence {
+                            detailBadge(
+                                icon: valence >= 0 ? "arrow.up.circle" : "arrow.down.circle",
+                                text: String(format: "Valence: %.1f", valence),
+                                color: valence >= 0 ? Color.hubAccentGreen : Color.hubAccentRed
+                            )
+                        }
+                        if let arousal = affect.arousal {
+                            detailBadge(
+                                icon: "bolt.fill",
+                                text: String(format: "Arousal: %.1f", arousal),
+                                color: Color.hubAccentYellow
+                            )
+                        }
+                    }
+
+                    // Mood/Energy/Stress scores
+                    HStack(spacing: 8) {
+                        if let mood = affect.mood {
+                            detailBadge(icon: "face.smiling", text: "Mood: \(mood)/10", color: Color.hubAccentGreen)
+                        }
+                        if let energy = affect.energy {
+                            detailBadge(icon: "bolt.heart", text: "Energy: \(energy)/10", color: Color.hubAccentYellow)
+                        }
+                        if let stress = affect.stress {
+                            detailBadge(icon: "waveform.path.ecg", text: "Stress: \(stress)/10", color: Color.hubAccentRed)
+                        }
+                    }
+
+                    // Confidence
+                    if let confidence = affect.confidence {
+                        detailBadge(
+                            icon: "checkmark.seal",
+                            text: String(format: "Confidence: %.0f%%", confidence * 100),
+                            color: AdaptiveColors.textSecondary(for: colorScheme)
+                        )
+                    }
                 }
             }
 
@@ -387,8 +464,8 @@ struct TimelineEventRow: View {
         switch item {
         case .sensing(let event):
             return modalityDisplayName(event.modality)
-        case .narration:
-            return "Voice Narration"
+        case .narration(let narration):
+            return narration.audioFileRef != nil ? "Voice Narration" : "Text Narration"
         case .nudge:
             return "Facai says"
         case .meal(let food):
@@ -422,8 +499,8 @@ struct TimelineEventRow: View {
         switch item {
         case .sensing(let event):
             return modalityIcon(event.modality)
-        case .narration:
-            return "mic.fill"
+        case .narration(let narration):
+            return narration.audioFileRef != nil ? "mic.fill" : "text.bubble.fill"
         case .nudge:
             return "cat.fill"
         case .meal:
@@ -437,8 +514,8 @@ struct TimelineEventRow: View {
         switch item {
         case .sensing(let event):
             return modalityColor(event.modality)
-        case .narration:
-            return Color.purple
+        case .narration(let narration):
+            return narration.audioFileRef != nil ? Color.purple : Color.indigo
         case .nudge:
             return Color.hubPrimary
         case .meal:
@@ -564,13 +641,39 @@ struct TimelineEventRow: View {
             let stage = event.payload["stage"] ?? "unknown"
             return "Stage: \(stage)"
         case .location:
+            // Prefer semantic label and address from enrichment
+            if let label = event.payload["semanticLabel"], !label.isEmpty {
+                let address = event.payload["address"] ?? ""
+                if !address.isEmpty {
+                    return "\(label) \u{00B7} \(address)"
+                }
+                return label
+            }
+            // Fallback to coordinates
             let lat = event.payload["latitude"] ?? "?"
             let lon = event.payload["longitude"] ?? "?"
+            if event.payload["visit"] == "true" {
+                return "Visit at (\(lat), \(lon))"
+            }
             return "(\(lat), \(lon))"
         case .screen:
             let state = event.payload["state"] ?? "unknown"
-            let duration = event.payload["sessionDuration"] ?? "0"
-            return "\(state) — \(duration)s"
+            if state == "foreground" {
+                return "App opened"
+            } else if state == "background" {
+                if let durationStr = event.payload["sessionDuration"],
+                   let seconds = Double(durationStr), seconds > 0 {
+                    let minutes = Int(seconds) / 60
+                    let secs = Int(seconds) % 60
+                    if minutes > 0 {
+                        return "Session ended · \(minutes)m \(secs)s"
+                    } else {
+                        return "Session ended · \(secs)s"
+                    }
+                }
+                return "App backgrounded"
+            }
+            return state
         case .workout:
             let type = event.payload["type"] ?? "unknown"
             let calories = event.payload["calories"] ?? "0"

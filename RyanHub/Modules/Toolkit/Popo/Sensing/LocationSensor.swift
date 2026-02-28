@@ -15,8 +15,14 @@ final class LocationSensor: NSObject {
     /// Callback invoked when a new sensing event is captured.
     var onEvent: ((SensingEvent) -> Void)?
 
-    /// Bridge server endpoint for semantic location enrichment.
-    private let enrichEndpoint = "http://100.89.67.80:18790/popo/location/enrich"
+    /// Base URL for the bridge server, derived from the shared server URL setting.
+    /// Falls back to the default food analysis URL (same host, port 18790).
+    private static var bridgeBaseURL: String {
+        UserDefaults.standard.string(forKey: "ryanhub_server_url")
+            .flatMap { URL(string: $0)?.host }
+            .map { "http://\($0):18790" }
+            ?? AppState.defaultFoodAnalysisURL
+    }
 
     // MARK: - Init
 
@@ -69,10 +75,12 @@ final class LocationSensor: NSObject {
 
     // MARK: - Semantic Enrichment
 
-    /// Fire-and-forget HTTP POST to the bridge server for semantic location enrichment.
+    /// POST to the bridge server for semantic location enrichment, then emit an
+    /// enriched SensingEvent with the semantic label and address data.
     private func enrichLocation(latitude: Double, longitude: Double, timestamp: Date) {
         Task {
-            guard let url = URL(string: enrichEndpoint) else { return }
+            let endpoint = "\(Self.bridgeBaseURL)/popo/location/enrich"
+            guard let url = URL(string: endpoint) else { return }
 
             var request = URLRequest(url: url)
             request.httpMethod = "POST"
@@ -90,13 +98,30 @@ final class LocationSensor: NSObject {
                 let (data, _) = try await URLSession.shared.data(for: request)
                 if let result = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                    let enrichment = result["enrichment"] as? [String: Any] {
-                    let label = enrichment["semantic_label"] as? String
-                        ?? enrichment["address"] as? String
-                        ?? "unknown"
-                    print("[LocationSensor] Enriched: \(label)")
+                    let label = enrichment["semantic_label"] as? String ?? ""
+                    let address = enrichment["address"] as? String ?? ""
+                    print("[LocationSensor] Enriched: \(label.isEmpty ? address : label)")
+
+                    // Emit a new enriched event with semantic data written back
+                    let enrichedEvent = SensingEvent(
+                        modality: .location,
+                        payload: [
+                            "latitude": String(format: "%.6f", latitude),
+                            "longitude": String(format: "%.6f", longitude),
+                            "semanticLabel": label,
+                            "address": address,
+                            "neighborhood": enrichment["neighborhood"] as? String ?? "",
+                            "city": enrichment["city"] as? String ?? "",
+                            "placeType": enrichment["place_type"] as? String ?? "",
+                            "enriched": "true"
+                        ]
+                    )
+                    self.onEvent?(enrichedEvent)
                 }
             } catch {
-                // Fire-and-forget — log but do not propagate errors
+                // Best-effort enrichment — log but do not propagate errors.
+                // The raw location event was already emitted; the timeline will
+                // simply show coordinates instead of a semantic label.
                 print("[LocationSensor] Enrichment request failed: \(error.localizedDescription)")
             }
         }

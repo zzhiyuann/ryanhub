@@ -10,6 +10,7 @@ struct PopoView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var viewModel = PopoViewModel()
     @State private var showChannelDetail = false
+    @State private var isPressingMic = false
     @FocusState private var isTextDiaryFocused: Bool
 
     var body: some View {
@@ -61,11 +62,8 @@ struct PopoView: View {
                 // Row 2: Nudge content or status message
                 facaiCardBody
 
-                // Row 3: Text diary input
-                textDiaryInputField
-
-                // Row 4: Voice record button (compact or expanded)
-                voiceRecordSection
+                // Row 3: Diary input (text field + mic icon, transforms during recording)
+                diaryInputRow
             }
         }
         .overlay(
@@ -137,17 +135,7 @@ struct PopoView: View {
                 .padding(.vertical, 4)
             } else {
                 let todayNudges = viewModel.nudgesForSelectedDate
-                if todayNudges.isEmpty {
-                    // No nudges — observing
-                    HStack(spacing: 6) {
-                        PulsingObserveDot()
-
-                        Text("Observing your day...")
-                            .font(.hubCaption)
-                            .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
-                    }
-                    .padding(.vertical, 4)
-                } else {
+                if !todayNudges.isEmpty {
                     // Show latest nudge
                     facaiNudgeContent(todayNudges)
                 }
@@ -225,10 +213,31 @@ struct PopoView: View {
         }
     }
 
-    // MARK: - Text Diary Input
+    // MARK: - Diary Input Row (Text + Mic)
 
-    private var textDiaryInputField: some View {
+    /// Unified diary input row: text field on the left, mic icon on the right.
+    /// During recording, the text area transforms into a recording indicator.
+    /// During upload/error, shows the corresponding state inline.
+    private var diaryInputRow: some View {
+        Group {
+            switch viewModel.narrationState {
+            case .idle, .done:
+                idleDiaryRow
+            case .recording:
+                recordingDiaryRow
+            case .uploading:
+                uploadingDiaryRow
+            case .error(let message):
+                errorDiaryRow(message)
+            }
+        }
+    }
+
+    // MARK: Idle State — Text Field + Mic Icon
+
+    private var idleDiaryRow: some View {
         HStack(spacing: 8) {
+            // Text input area
             Image(systemName: "square.and.pencil")
                 .font(.system(size: 14, weight: .medium))
                 .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
@@ -256,6 +265,9 @@ struct PopoView: View {
                 }
                 .buttonStyle(.plain)
             }
+
+            // Mic icon — long-press to record
+            micButton
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -265,6 +277,32 @@ struct PopoView: View {
         )
     }
 
+    /// Compact mic icon with long-press gesture to start/stop recording.
+    private var micButton: some View {
+        Image(systemName: "mic.fill")
+            .font(.system(size: 15, weight: .medium))
+            .foregroundStyle(Color.hubPrimary)
+            .frame(width: 36, height: 36)
+            .background(
+                Circle()
+                    .fill(Color.hubPrimary.opacity(0.12))
+            )
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { _ in
+                        guard !isPressingMic else { return }
+                        isPressingMic = true
+                        let impact = UIImpactFeedbackGenerator(style: .medium)
+                        impact.impactOccurred()
+                        viewModel.startNarration()
+                    }
+                    .onEnded { _ in
+                        isPressingMic = false
+                        viewModel.stopNarration()
+                    }
+            )
+    }
+
     private func submitTextDiary() {
         let text = viewModel.textDiaryInput
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
@@ -272,118 +310,60 @@ struct PopoView: View {
         viewModel.addTextDiary(text)
     }
 
-    // MARK: - Voice Record Section
+    // MARK: Recording State — Red Pulsing Mic + Duration
 
-    private var voiceRecordSection: some View {
-        Group {
-            switch viewModel.narrationState {
-            case .idle, .done:
-                // Compact voice button
-                compactVoiceButton
-            case .recording:
-                // Expanded recording UI
-                expandedRecordingUI
-            case .uploading:
-                // Uploading state
-                uploadingRow
-            case .error(let message):
-                // Error state
-                errorRow(message)
+    private var recordingDiaryRow: some View {
+        HStack(spacing: 10) {
+            // Recording indicator
+            InlinePulsingDot()
+
+            Text("Recording...")
+                .font(.hubCaption)
+                .foregroundStyle(Color.hubAccentRed)
+
+            Text(formatDuration(viewModel.narrationDuration))
+                .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+
+            Spacer()
+
+            // Cancel button
+            Button {
+                isPressingMic = false
+                viewModel.cancelNarration()
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 20))
+                    .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
             }
+            .buttonStyle(.plain)
+
+            // Stop / recording mic icon (pulsing red)
+            recordingMicButton
         }
-    }
-
-    private var compactVoiceButton: some View {
-        Button {
-            viewModel.startNarration()
-        } label: {
-            HStack(spacing: 6) {
-                Image(systemName: "mic.fill")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(Color.hubPrimary)
-
-                Text("Voice")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(Color.hubPrimary)
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .background(
-                Capsule()
-                    .fill(Color.hubPrimary.opacity(0.12))
-            )
-        }
-        .buttonStyle(.plain)
-    }
-
-    private var expandedRecordingUI: some View {
-        VStack(spacing: 10) {
-            // Waveform visualization
-            inlineWaveformView
-
-            // Duration + controls
-            HStack {
-                HStack(spacing: 8) {
-                    InlinePulsingDot()
-
-                    Text(formatDuration(viewModel.narrationDuration))
-                        .font(.system(size: 15, weight: .semibold, design: .monospaced))
-                        .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
-                }
-
-                Spacer()
-
-                // Cancel
-                Button {
-                    viewModel.cancelNarration()
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 22))
-                        .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
-                }
-                .buttonStyle(.plain)
-
-                // Stop
-                Button {
-                    viewModel.stopNarration()
-                } label: {
-                    Image(systemName: "stop.circle.fill")
-                        .font(.system(size: 30))
-                        .foregroundStyle(Color.hubAccentRed)
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(10)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
         .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(AdaptiveColors.surfaceSecondary(for: colorScheme))
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color.hubAccentRed.opacity(0.08))
         )
     }
 
-    private var inlineWaveformView: some View {
-        GeometryReader { geometry in
-            let levels = viewModel.narrationAudioLevels
-            let barWidth: CGFloat = 3
-            let barSpacing: CGFloat = 2
-            let totalBarWidth = barWidth + barSpacing
-            let maxBars = Int(geometry.size.width / totalBarWidth)
-            let displayLevels = Array(levels.suffix(maxBars))
-
-            HStack(alignment: .center, spacing: barSpacing) {
-                ForEach(Array(displayLevels.enumerated()), id: \.offset) { _, level in
-                    RoundedRectangle(cornerRadius: 1.5)
-                        .fill(Color.hubPrimary.opacity(0.7))
-                        .frame(width: barWidth, height: max(2, level * geometry.size.height))
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
-        }
-        .frame(height: 32)
-        .clipShape(RoundedRectangle(cornerRadius: 6))
+    /// Pulsing red mic icon shown during recording. Tap or release to stop.
+    private var recordingMicButton: some View {
+        PulsingRecordingMic()
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onEnded { _ in
+                        isPressingMic = false
+                        viewModel.stopNarration()
+                    }
+            )
     }
 
-    private var uploadingRow: some View {
+    // MARK: Uploading State
+
+    private var uploadingDiaryRow: some View {
         HStack(spacing: 10) {
             ProgressView()
                 .scaleEffect(0.7)
@@ -399,9 +379,17 @@ struct PopoView: View {
                 .font(.system(size: 11, weight: .medium, design: .monospaced))
                 .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
         }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(AdaptiveColors.surfaceSecondary(for: colorScheme))
+        )
     }
 
-    private func errorRow(_ message: String) -> some View {
+    // MARK: Error State
+
+    private func errorDiaryRow(_ message: String) -> some View {
         HStack(spacing: 8) {
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(.system(size: 14))
@@ -423,6 +411,12 @@ struct PopoView: View {
             }
             .buttonStyle(.plain)
         }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(AdaptiveColors.surfaceSecondary(for: colorScheme))
+        )
     }
 
     // MARK: - Section 3: Current State Dashboard
@@ -845,6 +839,32 @@ private struct InlinePulsingDot: View {
             .opacity(isPulsing ? 0.4 : 1.0)
             .animation(
                 .easeInOut(duration: 0.8).repeatForever(autoreverses: true),
+                value: isPulsing
+            )
+            .onAppear {
+                isPulsing = true
+            }
+    }
+}
+
+// MARK: - Pulsing Recording Mic Icon
+
+/// A mic icon that pulses red during active voice recording.
+private struct PulsingRecordingMic: View {
+    @State private var isPulsing = false
+
+    var body: some View {
+        Image(systemName: "stop.fill")
+            .font(.system(size: 14, weight: .bold))
+            .foregroundStyle(.white)
+            .frame(width: 36, height: 36)
+            .background(
+                Circle()
+                    .fill(Color.hubAccentRed)
+                    .opacity(isPulsing ? 0.7 : 1.0)
+            )
+            .animation(
+                .easeInOut(duration: 0.6).repeatForever(autoreverses: true),
                 value: isPulsing
             )
             .onAppear {

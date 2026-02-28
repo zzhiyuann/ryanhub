@@ -43,7 +43,7 @@ final class ScreenSensor {
             modality: .screen,
             payload: [
                 "state": "foreground",
-                "sessionDuration": "0"
+                "event": "app_opened"
             ]
         )
         onEvent?(event)
@@ -67,7 +67,7 @@ final class ScreenSensor {
             modality: .screen,
             payload: [
                 "state": "foreground",
-                "sessionDuration": "0"
+                "event": "app_opened"
             ]
         )
         onEvent?(event)
@@ -85,6 +85,7 @@ final class ScreenSensor {
             modality: .screen,
             payload: [
                 "state": "background",
+                "event": "app_closed",
                 "sessionDuration": String(format: "%.0f", sessionDuration)
             ]
         )
