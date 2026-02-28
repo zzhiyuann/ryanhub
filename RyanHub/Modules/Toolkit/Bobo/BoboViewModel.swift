@@ -190,15 +190,35 @@ final class BoboViewModel {
     /// Sensing events for the selected date, sorted newest first.
     /// Phone sensing events come from engine.recentEvents; HealthKit events come
     /// from direct Apple Health queries (healthKitEvents) — no intermediate caching.
+    /// For motion data: Watch workouts take priority over phone CoreMotion during
+    /// overlapping time periods, since wrist-worn sensors are more accurate.
     var eventsForSelectedDate: [SensingEvent] {
         let calendar = Calendar.current
+        // HealthKit data queried directly from Apple Health
+        let healthData = healthKitEvents
+            .filter { calendar.isDate($0.timestamp, inSameDayAs: selectedDate) }
+
+        // Build time intervals covered by Watch workouts so we can suppress
+        // phone CoreMotion events during those periods (Watch is more accurate).
+        let workoutIntervals: [(start: Date, end: Date)] = healthData
+            .filter { $0.modality == .workout }
+            .compactMap { event in
+                guard let durationStr = event.payload["duration"],
+                      let duration = Double(durationStr), duration > 0 else { return nil }
+                return (start: event.timestamp, end: event.timestamp.addingTimeInterval(duration))
+            }
+
         // Phone sensing data from the engine (exclude HealthKit modalities to avoid duplication)
         let phoneSensing = engine.recentEvents
             .filter { !Self.healthKitModalities.contains($0.modality) }
             .filter { calendar.isDate($0.timestamp, inSameDayAs: selectedDate) }
-        // HealthKit data queried directly from Apple Health
-        let healthData = healthKitEvents
-            .filter { calendar.isDate($0.timestamp, inSameDayAs: selectedDate) }
+            .filter { event in
+                // Drop phone motion events that overlap with Watch workout periods
+                guard event.modality == .motion else { return true }
+                let ts = event.timestamp
+                return !workoutIntervals.contains { ts >= $0.start && ts <= $0.end }
+            }
+
         return (phoneSensing + healthData).sorted { $0.timestamp > $1.timestamp }
     }
 
