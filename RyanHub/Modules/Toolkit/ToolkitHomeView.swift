@@ -224,11 +224,17 @@ struct ToolkitDesktopGrid: View {
     /// The plugin currently being dragged.
     @State private var draggingPlugin: ToolkitPlugin?
 
-    /// Offset of the dragged card from its original position.
-    @State private var dragOffset: CGSize = .zero
+    /// Drag position in the grid coordinate space.
+    @State private var dragPosition: CGPoint = .zero
 
     /// Card frames for hit-testing during drag.
     @State private var cardFrames: [ToolkitPlugin: CGRect] = [:]
+
+    /// Timer used to detect long-press without lifting the finger.
+    @State private var longPressTimer: Timer?
+
+    /// Plugin being pressed (before long-press threshold).
+    @State private var pressingPlugin: ToolkitPlugin?
 
     private let columns = [
         GridItem(.flexible(), spacing: HubLayout.itemSpacing),
@@ -253,71 +259,27 @@ struct ToolkitDesktopGrid: View {
                 // Plugin grid
                 LazyVGrid(columns: columns, spacing: HubLayout.itemSpacing) {
                     ForEach(pluginOrder) { plugin in
-                        ToolkitPluginCard(
-                            plugin: plugin,
-                            isJiggling: isReordering,
-                            isDragging: draggingPlugin == plugin
-                        )
-                        .opacity(draggingPlugin == plugin ? 0.5 : 1)
-                        .zIndex(draggingPlugin == plugin ? 1 : 0)
-                        .offset(draggingPlugin == plugin ? dragOffset : .zero)
-                        .background(
-                            GeometryReader { geo in
-                                Color.clear
-                                    .preference(
-                                        key: CardFramePreference.self,
-                                        value: [plugin: geo.frame(in: .named("desktopGrid"))]
-                                    )
-                            }
-                        )
-                        .gesture(
-                            isReordering
-                                ? nil
-                                : TapGesture().onEnded {
-                                    withAnimation(.easeInOut(duration: 0.25)) {
-                                        selectedPlugin = plugin
-                                    }
-                                }
-                        )
-                        .simultaneousGesture(
-                            LongPressGesture(minimumDuration: 0.5)
-                                .sequenced(before: DragGesture(coordinateSpace: .named("desktopGrid")))
-                                .onChanged { value in
-                                    switch value {
-                                    case .first(true):
-                                        // Long press recognized — enter jiggle mode
-                                        if !isReordering {
-                                            let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
-                                            impactFeedback.impactOccurred()
-                                            withAnimation(.easeInOut(duration: 0.2)) {
-                                                isReordering = true
-                                            }
-                                            draggingPlugin = plugin
-                                        }
-                                    case .second(true, let drag):
-                                        // Dragging
-                                        if let drag {
-                                            draggingPlugin = plugin
-                                            dragOffset = drag.translation
-                                            checkSwap(for: plugin, at: drag.location)
-                                        }
-                                    default:
-                                        break
-                                    }
-                                }
-                                .onEnded { _ in
-                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                        draggingPlugin = nil
-                                        dragOffset = .zero
-                                    }
-                                }
-                        )
-                        .accessibilityIdentifier(AccessibilityID.toolkitCard(plugin.rawValue))
+                        cardView(for: plugin)
+                            .accessibilityIdentifier(AccessibilityID.toolkitCard(plugin.rawValue))
                     }
                 }
                 .coordinateSpace(name: "desktopGrid")
                 .onPreferenceChange(CardFramePreference.self) { frames in
                     cardFrames = frames
+                }
+                // Floating card that follows the finger during drag
+                .overlay {
+                    if let plugin = draggingPlugin, let frame = cardFrames[plugin] {
+                        ToolkitPluginCard(
+                            plugin: plugin,
+                            isJiggling: false,
+                            isDragging: true
+                        )
+                        .frame(width: frame.width, height: frame.height)
+                        .position(dragPosition)
+                        .allowsHitTesting(false)
+                        .transition(.identity)
+                    }
                 }
 
                 // "Done" button when in reorder mode
@@ -345,15 +307,91 @@ struct ToolkitDesktopGrid: View {
             .padding(HubLayout.standardPadding)
         }
         .accessibilityIdentifier(AccessibilityID.toolkitDesktopGrid)
-        .onTapGesture {
-            // Tap outside cards to exit reorder mode
-            if isReordering {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    isReordering = false
-                    draggingPlugin = nil
-                }
+    }
+
+    // MARK: - Card View
+
+    @ViewBuilder
+    private func cardView(for plugin: ToolkitPlugin) -> some View {
+        let isDragging = draggingPlugin == plugin
+
+        ToolkitPluginCard(
+            plugin: plugin,
+            isJiggling: isReordering,
+            isDragging: isDragging
+        )
+        .background(
+            GeometryReader { geo in
+                Color.clear
+                    .preference(
+                        key: CardFramePreference.self,
+                        value: [plugin: geo.frame(in: .named("desktopGrid"))]
+                    )
             }
-        }
+        )
+        .opacity(isDragging ? 0.0 : 1.0)
+        .contentShape(Rectangle())
+        .gesture(
+            DragGesture(minimumDistance: 0, coordinateSpace: .named("desktopGrid"))
+                .onChanged { drag in
+                    if draggingPlugin == plugin {
+                        // Already dragging — update position
+                        dragPosition = drag.location
+                        checkSwap(for: plugin, at: drag.location)
+                    } else if draggingPlugin == nil {
+                        if pressingPlugin != plugin {
+                            // Finger just touched down — start timer
+                            pressingPlugin = plugin
+                            longPressTimer?.invalidate()
+                            longPressTimer = Timer.scheduledTimer(withTimeInterval: 0.45, repeats: false) { _ in
+                                DispatchQueue.main.async {
+                                    let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
+                                    impactFeedback.impactOccurred()
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        isReordering = true
+                                    }
+                                    draggingPlugin = plugin
+                                    dragPosition = drag.location
+                                }
+                            }
+                        }
+                        // If finger moves more than 10pt before timer fires, cancel (it's a scroll)
+                        let moved = sqrt(pow(drag.translation.width, 2) + pow(drag.translation.height, 2))
+                        if moved > 10 {
+                            longPressTimer?.invalidate()
+                            longPressTimer = nil
+                            pressingPlugin = nil
+                        }
+                    }
+                }
+                .onEnded { drag in
+                    longPressTimer?.invalidate()
+                    longPressTimer = nil
+
+                    if draggingPlugin == plugin {
+                        // Was dragging — drop it
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            draggingPlugin = nil
+                        }
+                    } else if pressingPlugin == plugin {
+                        // Short tap (timer didn't fire) — treat as tap
+                        let moved = sqrt(pow(drag.translation.width, 2) + pow(drag.translation.height, 2))
+                        if moved < 10 {
+                            if isReordering {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    isReordering = false
+                                    draggingPlugin = nil
+                                }
+                            } else {
+                                withAnimation(.easeInOut(duration: 0.25)) {
+                                    selectedPlugin = plugin
+                                }
+                            }
+                        }
+                    }
+                    pressingPlugin = nil
+                }
+        )
     }
 
     /// Check if the dragged card should swap with another card.
@@ -365,7 +403,6 @@ struct ToolkitDesktopGrid: View {
                   frame.contains(location),
                   let targetIndex = pluginOrder.firstIndex(of: target) else { continue }
 
-            // Swap and persist
             let lightFeedback = UIImpactFeedbackGenerator(style: .light)
             lightFeedback.impactOccurred()
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
