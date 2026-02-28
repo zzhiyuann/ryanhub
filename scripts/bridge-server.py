@@ -1246,6 +1246,16 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
             self._handle_behavioral_analysis()
             return
 
+        # Health data single-entry append (for chat agent)
+        _ADD_ENDPOINTS = {
+            "/health-data/weight/add": "/health-data/weight",
+            "/health-data/food/add": "/health-data/food",
+            "/health-data/activity/add": "/health-data/activity",
+        }
+        if path in _ADD_ENDPOINTS:
+            self._append_health_entry(_ADD_ENDPOINTS[path])
+            return
+
         # Server-side data write (health + chat + popo)
         if path in DATA_FILES:
             self._write_data_file(path)
@@ -1371,6 +1381,66 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
             with open(filepath, "w") as f:
                 json.dump(data, f, ensure_ascii=False)
             self._send_json(200, {"ok": True, "count": len(data) if isinstance(data, list) else 1})
+        except IOError as e:
+            self._send_json(500, {"error": f"Failed to write: {e}"})
+
+    # -----------------------------------------------------------------------
+    # Health data single-entry append (for chat agent use)
+    # -----------------------------------------------------------------------
+
+    def _append_health_entry(self, data_path):
+        """Append a single health entry to the data file.
+
+        Accepts a single JSON object (not an array). Generates an 'id' if
+        missing and adds 'date' defaulting to now if missing. Merges into
+        the existing array by id (so re-posting the same id is an upsert).
+        """
+        try:
+            content_length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(content_length)
+            entry = json.loads(body) if body else {}
+        except (json.JSONDecodeError, ValueError) as e:
+            self._send_json(400, {"error": f"Invalid body: {e}"})
+            return
+
+        if not isinstance(entry, dict):
+            self._send_json(400, {"error": "Expected a JSON object, not an array"})
+            return
+
+        # Auto-generate id if missing
+        if "id" not in entry:
+            import uuid
+            entry["id"] = str(uuid.uuid4()).upper()
+
+        # Auto-add date if missing (ISO 8601)
+        if "date" not in entry:
+            from datetime import datetime, timezone
+            entry["date"] = datetime.now(timezone.utc).isoformat()
+
+        filepath = DATA_FILES[data_path]
+
+        # Load existing data
+        existing = []
+        if os.path.exists(filepath):
+            try:
+                with open(filepath, "r") as f:
+                    content = f.read()
+                existing = json.loads(content) if content.strip() else []
+            except (json.JSONDecodeError, IOError):
+                existing = []
+
+        # Merge by id (upsert)
+        merged = {}
+        for item in existing:
+            if isinstance(item, dict) and "id" in item:
+                merged[item["id"]] = item
+        merged[entry["id"]] = entry
+        data = list(merged.values())
+
+        try:
+            with open(filepath, "w") as f:
+                json.dump(data, f, ensure_ascii=False)
+            self._send_json(200, {"ok": True, "id": entry["id"], "count": len(data)})
         except IOError as e:
             self._send_json(500, {"error": f"Failed to write: {e}"})
 

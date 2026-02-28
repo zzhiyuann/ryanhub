@@ -1326,7 +1326,7 @@ final class BoboViewModel {
     /// Send a local push notification for a nudge.
     private func sendNudgeNotification(_ nudge: Nudge) {
         let content = UNMutableNotificationContent()
-        content.title = "Facai"
+        content.title = "Bo"
         content.body = nudge.content
         content.sound = .default
         content.userInfo = ["destination": "bobo"]

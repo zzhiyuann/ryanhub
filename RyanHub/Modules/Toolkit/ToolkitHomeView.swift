@@ -183,11 +183,15 @@ struct ToolkitMenuBar: View {
             }
         } label: {
             HStack(spacing: 6) {
-                Image(systemName: plugin.icon)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(
-                        isSelected ? plugin.iconColor : AdaptiveColors.textSecondary(for: colorScheme)
-                    )
+                if plugin == .bobo {
+                    BoAvatar(size: 18)
+                } else {
+                    Image(systemName: plugin.icon)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(
+                            isSelected ? plugin.iconColor : AdaptiveColors.textSecondary(for: colorScheme)
+                        )
+                }
 
                 Text(plugin.shortName)
                     .font(.system(size: 13, weight: isSelected ? .semibold : .medium))
@@ -441,15 +445,19 @@ private struct ToolkitPluginCard: View {
 
     var body: some View {
         VStack(spacing: 10) {
-            // Icon with tinted background circle
-            ZStack {
-                Circle()
-                    .fill(plugin.iconColor.opacity(0.12))
-                    .frame(width: 48, height: 48)
+            // Icon with tinted background circle (BoBo uses its cat avatar)
+            if plugin == .bobo {
+                BoAvatar(size: 48)
+            } else {
+                ZStack {
+                    Circle()
+                        .fill(plugin.iconColor.opacity(0.12))
+                        .frame(width: 48, height: 48)
 
-                Image(systemName: plugin.icon)
-                    .font(.system(size: 22, weight: .medium))
-                    .foregroundStyle(plugin.iconColor)
+                    Image(systemName: plugin.icon)
+                        .font(.system(size: 22, weight: .medium))
+                        .foregroundStyle(plugin.iconColor)
+                }
             }
 
             VStack(spacing: 3) {

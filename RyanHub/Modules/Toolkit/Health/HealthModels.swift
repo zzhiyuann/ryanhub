@@ -472,6 +472,14 @@ enum ActivityParser {
     }
 }
 
+// MARK: - Notifications
+
+extension Notification.Name {
+    /// Posted when health data is written externally (e.g., by the chat agent via bridge server).
+    /// HealthViewModel listens for this to refresh from server.
+    static let healthDataUpdatedExternally = Notification.Name("healthDataUpdatedExternally")
+}
+
 // MARK: - Weight Unit
 
 /// Weight unit for exercise input (lb or kg).

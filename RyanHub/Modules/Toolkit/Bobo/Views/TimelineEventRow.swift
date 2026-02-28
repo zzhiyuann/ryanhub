@@ -69,9 +69,9 @@ struct TimelineEventRow: View {
 
     private var timelineColumn: some View {
         VStack(spacing: 0) {
-            // Icon circle (nudges use Facai's actual avatar)
+            // Icon circle (nudges use Bo's actual avatar)
             if case .nudge = item {
-                FacaiAvatar(size: 32)
+                BoAvatar(size: 32)
             } else {
                 ZStack {
                     Circle()
@@ -850,7 +850,7 @@ struct TimelineEventRow: View {
             // text narrations have duration == 0.
             return narration.duration > 0 ? "Voice Narration" : "Text Narration"
         case .nudge:
-            return "Facai says"
+            return "Bo says"
         case .meal(let food):
             return food.mealType.displayName
         case .activity(let activity):

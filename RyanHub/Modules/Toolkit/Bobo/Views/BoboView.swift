@@ -3,7 +3,7 @@ import SwiftUI
 // MARK: - BOBO View
 
 /// The main view for the BOBO (Proactive Personal Observer) toolkit plugin.
-/// The Facai card serves as the central control hub: sensing toggle, nudge display,
+/// The Bo card serves as the central control hub: sensing toggle, nudge display,
 /// text diary input, and voice recording are all consolidated here.
 struct BoboView: View {
     @Environment(\.colorScheme) private var colorScheme
@@ -21,7 +21,7 @@ struct BoboView: View {
                 DateNavigationBar(selectedDate: $viewModel.selectedDate)
                     .padding(.bottom, -12)
 
-                // Section 2: Facai Control Hub Card (always visible)
+                // Section 2: Bo Control Hub Card (always visible)
                 facaiInsightCard
 
                 if viewModel.sensingEnabled {
@@ -60,7 +60,7 @@ struct BoboView: View {
         }
     }
 
-    // MARK: - Section 2: Facai Insight Card (Central Hub)
+    // MARK: - Section 2: Bo Insight Card (Central Hub)
 
     private var facaiInsightCard: some View {
         HubCard {
@@ -81,11 +81,11 @@ struct BoboView: View {
         )
     }
 
-    // MARK: - Facai Card Header (Avatar + Name + Toggle)
+    // MARK: - Bo Card Header (Avatar + Name + Toggle)
 
     private var facaiCardHeader: some View {
         HStack(spacing: 12) {
-            FacaiAvatar(size: 40)
+            BoAvatar(size: 40)
                 .overlay(
                     Circle()
                         .stroke(
@@ -96,16 +96,16 @@ struct BoboView: View {
                         )
                 )
                 .onLongPressGesture {
-                    showFacaiMenu = true
+                    showBoMenu = true
                 }
-                .confirmationDialog("Facai", isPresented: $showFacaiMenu) {
+                .confirmationDialog("Bo", isPresented: $showBoMenu) {
                     Button("Generate Insights") {
                         Task { await viewModel.generateNudges() }
                     }
                 }
 
             VStack(alignment: .leading, spacing: 2) {
-                Text("Facai")
+                Text("Bo")
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
 
@@ -145,7 +145,7 @@ struct BoboView: View {
         }
     }
 
-    // MARK: - Facai Card Body (Nudge or Status)
+    // MARK: - Bo Card Body (Nudge or Status)
 
     private var facaiCardBody: some View {
         Group {
@@ -173,7 +173,7 @@ struct BoboView: View {
 
     /// Whether the nudge card is expanded to show all nudges.
     @State private var nudgesExpanded = false
-    @State private var showFacaiMenu = false
+    @State private var showBoMenu = false
 
     private func facaiNudgeContent(_ nudges: [Nudge]) -> some View {
         let latest = nudges[0]
@@ -871,7 +871,7 @@ struct BoboView: View {
 
 // MARK: - Pulsing Observe Dot
 
-/// A subtle pulsing dot that indicates Facai is actively observing.
+/// A subtle pulsing dot that indicates Bo is actively observing.
 private struct PulsingObserveDot: View {
     @State private var isPulsing = false
 
@@ -892,7 +892,7 @@ private struct PulsingObserveDot: View {
 
 // MARK: - Inline Pulsing Dot (Recording Indicator)
 
-/// A small red circle that pulses to indicate active recording, used inline in the Facai card.
+/// A small red circle that pulses to indicate active recording, used inline in the Bo card.
 private struct InlinePulsingDot: View {
     @State private var isPulsing = false
 

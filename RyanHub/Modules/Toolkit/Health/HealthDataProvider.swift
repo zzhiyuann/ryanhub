@@ -47,11 +47,16 @@ enum HealthDataProvider: ToolkitDataProvider {
         if let w = weightSection { parts.append(w) }
         if let f = foodSection { parts.append(f) }
         if let a = activitySection { parts.append(a) }
-        // Action hints — health data is recorded through the chat naturally
-        parts.append("Actions:")
-        parts.append("- Record food: user says what they ate, you log it (existing flow)")
-        parts.append("- Record weight: user reports weight, you log it")
-        parts.append("- Record activity: user describes workout, you log it")
+        // Action hints — agent can write health data via bridge server
+        parts.append("Actions — When the user mentions food/weight/activity, you MUST create a structured entry via curl:")
+        parts.append("- Record food: curl -s -X POST http://localhost:18790/health-data/food/add -H 'Content-Type: application/json' -d '{\"mealType\":\"lunch\",\"description\":\"what they ate\",\"calories\":500,\"protein\":30,\"carbs\":50,\"fat\":15,\"isAIAnalyzed\":true,\"aiSummary\":\"brief summary\"}'")
+        parts.append("  mealType must be: breakfast, lunch, dinner, or snack. Estimate macros based on your knowledge.")
+        parts.append("- Record weight: curl -s -X POST http://localhost:18790/health-data/weight/add -H 'Content-Type: application/json' -d '{\"weight\":91.5,\"note\":\"optional note\"}'")
+        parts.append("  weight is in kg.")
+        parts.append("- Record activity: curl -s -X POST http://localhost:18790/health-data/activity/add -H 'Content-Type: application/json' -d '{\"type\":\"Running\",\"duration\":30,\"caloriesBurned\":300,\"isAIAnalyzed\":true,\"rawDescription\":\"original text\",\"aiSummary\":\"brief summary\",\"exercises\":[]}'")
+        parts.append("  duration is in minutes. Common types: Walking, Running, Gym, Yoga, Swimming, Cycling, Cardio, Exercise.")
+        parts.append("  For gym workouts, include exercises array: [{\"name\":\"Bench Press\",\"sets\":3,\"reps\":10,\"weight\":\"135 lb\"}]")
+        parts.append("IMPORTANT: Always call curl to write the entry. The id and date fields are auto-generated. Do NOT skip writing just because you logged to memory.")
 
         parts.append("[End \(displayName)]")
 

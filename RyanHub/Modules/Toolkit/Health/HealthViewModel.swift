@@ -174,8 +174,26 @@ final class HealthViewModel {
 
     // MARK: - Init
 
+    private var refreshObserver: Any?
+
     init() {
         loadAll()
+        // Listen for external health data updates (e.g., chat agent wrote via bridge server)
+        refreshObserver = NotificationCenter.default.addObserver(
+            forName: .healthDataUpdatedExternally,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                await self?.loadFromServer()
+            }
+        }
+    }
+
+    deinit {
+        if let observer = refreshObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
     }
 
     // MARK: - HealthKit
