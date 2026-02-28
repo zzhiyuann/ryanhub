@@ -163,42 +163,52 @@ struct PopoView: View {
         }
     }
 
+    /// Whether the nudge card is expanded to show all nudges.
+    @State private var nudgesExpanded = false
+
     private func facaiNudgeContent(_ nudges: [Nudge]) -> some View {
         let latest = nudges[0]
         let remainingCount = nudges.count - 1
+        let displayedNudges = nudgesExpanded ? nudges : [latest]
 
         return VStack(alignment: .leading, spacing: 8) {
-            // Type badge + timestamp row
-            HStack(spacing: 8) {
-                nudgeTypeBadge(latest.type)
+            ForEach(displayedNudges) { nudge in
+                VStack(alignment: .leading, spacing: 6) {
+                    // Type badge + timestamp row
+                    HStack(spacing: 8) {
+                        nudgeTypeBadge(nudge.type)
 
-                Text(formatTimestamp(latest.timestamp))
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                        Text(formatTimestamp(nudge.timestamp))
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
 
-                Spacer()
+                        Spacer()
+                    }
+
+                    // Speech bubble content
+                    Text(nudge.content)
+                        .font(.hubBody)
+                        .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(12)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(AdaptiveColors.surfaceSecondary(for: colorScheme))
+                        )
+                }
             }
 
-            // Speech bubble content
-            Text(latest.content)
-                .font(.hubBody)
-                .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(12)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(AdaptiveColors.surfaceSecondary(for: colorScheme))
-                )
-
-            // "More insights" indicator
+            // "More insights" / "Show less" toggle
             if remainingCount > 0 {
                 Button {
-                    // Scroll to timeline where all nudges are shown
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        nudgesExpanded.toggle()
+                    }
                 } label: {
                     HStack(spacing: 4) {
-                        Image(systemName: "ellipsis.bubble")
+                        Image(systemName: nudgesExpanded ? "chevron.up" : "ellipsis.bubble")
                             .font(.system(size: 12, weight: .medium))
-                        Text("\(remainingCount) more insight\(remainingCount == 1 ? "" : "s")")
+                        Text(nudgesExpanded ? "Show less" : "\(remainingCount) more insight\(remainingCount == 1 ? "" : "s")")
                             .font(.system(size: 12, weight: .medium))
                     }
                     .foregroundStyle(Color.hubPrimary)
