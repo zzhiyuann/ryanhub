@@ -503,42 +503,34 @@ struct PopoView: View {
     }
 
     private func statePill(icon: String, value: String, label: String, color: Color) -> some View {
-        VStack(spacing: 6) {
+        HStack(spacing: 5) {
             Image(systemName: icon)
-                .font(.system(size: 14, weight: .medium))
+                .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(color)
 
             Text(value)
-                .font(.system(size: 13, weight: .bold))
+                .font(.system(size: 12, weight: .bold))
                 .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
-
-            Text(label)
-                .font(.system(size: 10, weight: .medium))
-                .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
         }
-        .frame(width: 80, height: 72)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
         .background(
-            RoundedRectangle(cornerRadius: 12)
+            RoundedRectangle(cornerRadius: 10)
                 .fill(AdaptiveColors.surfaceSecondary(for: colorScheme))
         )
     }
 
     private func statePillEmoji(emoji: String, label: String) -> some View {
-        VStack(spacing: 6) {
-            Text(emoji)
-                .font(.system(size: 20))
-
-            Text(label)
-                .font(.system(size: 10, weight: .medium))
-                .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
-        }
-        .frame(width: 80, height: 72)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(AdaptiveColors.surfaceSecondary(for: colorScheme))
-        )
+        Text(emoji)
+            .font(.system(size: 18))
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(AdaptiveColors.surfaceSecondary(for: colorScheme))
+            )
     }
 
     private func formatSteps(_ steps: Int) -> String {
