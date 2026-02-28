@@ -912,7 +912,7 @@ def generate_nudges_llm(summary_text):
 
     try:
         message = client.messages.create(
-            model="claude-haiku-4-5-20251001",
+            model="claude-sonnet-4-6",
             max_tokens=1024,
             system=BEHAVIORAL_ANALYSIS_SYSTEM_PROMPT,
             messages=[
