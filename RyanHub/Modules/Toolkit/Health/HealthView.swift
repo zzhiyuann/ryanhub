@@ -75,6 +75,9 @@ struct HealthView: View {
         .onChange(of: selectedPhoto) { _, newValue in
             Task { await loadPhoto(newValue) }
         }
+        .onChange(of: selectedDate) { _, newDate in
+            viewModel.fetchSteps(for: newDate)
+        }
         .onAppear {
             foodAnalysisService.updateBaseURL(appState.foodAnalysisURL)
             viewModel.requestHealthKitAccess()
@@ -748,10 +751,8 @@ struct HealthView: View {
             // Quick activity input
             quickActivityLogSection
 
-            // Apple Health step count card (only show for today)
-            if Calendar.current.isDateInToday(selectedDate) {
-                stepsCard
-            }
+            // Activity rings (steps + calories + active minutes)
+            stepsCard
 
             // Inline analyzing indicator
             if isActivityAnalyzing {
@@ -843,9 +844,10 @@ struct HealthView: View {
 
     /// Card with activity rings (steps, calories, active minutes) — Apple Watch style.
     private var stepsCard: some View {
-        let steps = Double(viewModel.todaySteps)
-        let totalCal = Double(viewModel.todayActivityCalories + viewModel.stepsCaloriesBurned)
-        let activeMin = Double(viewModel.todayActivityMinutes)
+        let steps = Double(viewModel.selectedDateSteps)
+        let loggedCal = Double(viewModel.activityCalories(for: selectedDate))
+        let totalCal = loggedCal + Double(viewModel.stepsCaloriesBurned)
+        let activeMin = Double(viewModel.activityMinutes(for: selectedDate))
 
         return HubCard {
             HStack(spacing: 20) {
@@ -886,7 +888,7 @@ struct HealthView: View {
                             Circle()
                                 .fill(Color.hubAccentGreen)
                                 .frame(width: 8, height: 8)
-                            Text(viewModel.todaySteps.formatted())
+                            Text(viewModel.selectedDateSteps.formatted())
                                 .font(.system(size: 16, weight: .bold))
                                 .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
                             Text("steps")

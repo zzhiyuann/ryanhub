@@ -595,7 +595,8 @@ final class HealthSensor {
         healthStore?.execute(query)
     }
 
-    /// Fetch blood oxygen (SpO2) samples from the last hour.
+    /// Fetch the most recent blood oxygen (SpO2) sample from the last hour.
+    /// Apple Watch may write multiple SpO2 samples per measurement — only emit the latest.
     private func fetchBloodOxygen() {
         guard let type = HKQuantityType.quantityType(forIdentifier: .oxygenSaturation) else { return }
         let oneHourAgo = Date().addingTimeInterval(-3600)
@@ -605,11 +606,11 @@ final class HealthSensor {
         let query = HKSampleQuery(
             sampleType: type,
             predicate: predicate,
-            limit: 5,
+            limit: 1,
             sortDescriptors: [sortDescriptor]
         ) { [weak self] _, samples, error in
             guard let samples = samples as? [HKQuantitySample], error == nil else { return }
-            for sample in samples {
+            if let sample = samples.first {
                 let percentage = sample.quantity.doubleValue(for: HKUnit.percent()) * 100
                 let event = SensingEvent(
                     timestamp: sample.startDate,

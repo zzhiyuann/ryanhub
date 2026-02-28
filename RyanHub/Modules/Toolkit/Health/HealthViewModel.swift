@@ -17,12 +17,15 @@ final class HealthViewModel {
 
     // MARK: - HealthKit State
 
-    /// Today's step count from Apple Health.
-    var todaySteps: Int = 0
+    /// Step count for the currently selected date from Apple Health.
+    var selectedDateSteps: Int = 0
+
+    /// The date that `selectedDateSteps` corresponds to.
+    var stepsDate: Date = Date()
 
     /// Estimated calories burned from steps (steps * 0.04).
     var stepsCaloriesBurned: Int {
-        Int(Double(todaySteps) * 0.04)
+        Int(Double(selectedDateSteps) * 0.04)
     }
 
     /// Whether HealthKit authorization has been granted.
@@ -190,7 +193,7 @@ final class HealthViewModel {
                 guard let self else { return }
                 if success {
                     self.healthKitAuthorized = true
-                    self.fetchTodaySteps()
+                    self.fetchSteps(for: Date())
                     self.fetchRecentWorkouts()
                     self.startWorkoutObserver()
                 } else {
@@ -200,14 +203,16 @@ final class HealthViewModel {
         }
     }
 
-    /// Fetch today's step count from HealthKit.
-    func fetchTodaySteps() {
+    /// Fetch step count from HealthKit for a specific date.
+    func fetchSteps(for date: Date) {
         guard let healthStore else { return }
         guard let stepType = HKQuantityType.quantityType(forIdentifier: .stepCount) else { return }
 
         let calendar = Calendar.current
-        let startOfDay = calendar.startOfDay(for: Date())
-        let predicate = HKQuery.predicateForSamples(withStart: startOfDay, end: Date(), options: .strictStartDate)
+        let startOfDay = calendar.startOfDay(for: date)
+        let endOfDay = calendar.date(byAdding: .day, value: 1, to: startOfDay) ?? startOfDay
+        let queryEnd = min(endOfDay, Date()) // Don't query into the future
+        let predicate = HKQuery.predicateForSamples(withStart: startOfDay, end: queryEnd, options: .strictStartDate)
 
         let query = HKStatisticsQuery(
             quantityType: stepType,
@@ -217,10 +222,11 @@ final class HealthViewModel {
             Task { @MainActor in
                 guard let self else { return }
                 self.isLoadingSteps = false
+                self.stepsDate = date
                 if let sum = result?.sumQuantity() {
-                    self.todaySteps = Int(sum.doubleValue(for: .count()))
+                    self.selectedDateSteps = Int(sum.doubleValue(for: .count()))
                 } else {
-                    print("[HealthVM] Step query error: \(error?.localizedDescription ?? "no data")")
+                    self.selectedDateSteps = 0
                 }
             }
         }
