@@ -118,8 +118,18 @@ struct TimelineEventRow: View {
             // Audio events get a specialized expanded view
             if event.modality == .audio, event.payload["status"] == "transcript" {
                 audioTranscriptDetail(event)
+            } else if event.modality == .heartRate {
+                heartRateDetail(event)
+            } else if event.modality == .hrv {
+                hrvDetail(event)
+            } else if event.modality == .bloodOxygen {
+                bloodOxygenDetail(event)
+            } else if event.modality == .sleep {
+                sleepDetail(event)
+            } else if event.modality == .respiratoryRate {
+                respiratoryRateDetail(event)
             } else {
-                // Payload key-value pairs
+                // Generic payload key-value pairs
                 ForEach(event.payload.sorted(by: { $0.key < $1.key }), id: \.key) { key, value in
                     HStack(spacing: 8) {
                         Text(key.camelCaseToWords)
@@ -149,6 +159,323 @@ struct TimelineEventRow: View {
             )
         }
         .padding(.top, 4)
+    }
+
+    // MARK: - Heart Rate Detail (Aggregated + Anomaly)
+
+    /// Expanded detail for heart rate events, showing aggregated stats or anomaly warning.
+    private func heartRateDetail(_ event: SensingEvent) -> some View {
+        let isAnomaly = event.payload["anomaly"] == "true"
+        let bpm = event.payload["bpm"] ?? "0"
+
+        return VStack(alignment: .leading, spacing: 8) {
+            // Large BPM reading
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                Text(bpm)
+                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                    .foregroundStyle(isAnomaly ? Color.hubAccentRed : AdaptiveColors.textPrimary(for: colorScheme))
+
+                Text("bpm")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+            }
+
+            // Aggregated range (if available)
+            if let minBPM = event.payload["min"], let maxBPM = event.payload["max"] {
+                HStack(spacing: 8) {
+                    detailBadge(
+                        icon: "arrow.down",
+                        text: "\(minBPM) bpm",
+                        color: Color.hubAccentGreen
+                    )
+                    detailBadge(
+                        icon: "arrow.up",
+                        text: "\(maxBPM) bpm",
+                        color: Color.hubAccentRed
+                    )
+                    if let count = event.payload["count"] {
+                        detailBadge(
+                            icon: "number",
+                            text: "\(count) readings",
+                            color: AdaptiveColors.textSecondary(for: colorScheme)
+                        )
+                    }
+                }
+            }
+
+            // Anomaly warning
+            if isAnomaly, let reason = event.payload["reason"] {
+                HStack(spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(Color.hubAccentRed)
+
+                    Text(heartRateAnomalyLabel(reason))
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Color.hubAccentRed)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color.hubAccentRed.opacity(0.1))
+                )
+            }
+
+            // Source badge
+            if let source = event.payload["source"] {
+                detailBadge(
+                    icon: "applewatch",
+                    text: source,
+                    color: AdaptiveColors.textSecondary(for: colorScheme)
+                )
+            }
+        }
+    }
+
+    /// Convert anomaly reason codes to user-friendly labels.
+    private func heartRateAnomalyLabel(_ reason: String) -> String {
+        switch reason {
+        case "tachycardia": return "High heart rate detected"
+        case "bradycardia": return "Low heart rate detected"
+        case "sudden_increase": return "Sudden heart rate increase"
+        case "sudden_decrease": return "Sudden heart rate decrease"
+        default: return "Abnormal heart rate"
+        }
+    }
+
+    // MARK: - HRV Detail
+
+    /// Expanded detail for HRV (Heart Rate Variability) events.
+    private func hrvDetail(_ event: SensingEvent) -> some View {
+        let sdnn = event.payload["sdnn"] ?? "0"
+
+        return VStack(alignment: .leading, spacing: 8) {
+            // Large SDNN reading
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                Text(sdnn)
+                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                    .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+
+                Text("ms")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+            }
+
+            // HRV context label
+            HStack(spacing: 6) {
+                Image(systemName: hrvStatusIcon(sdnn))
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(hrvStatusColor(sdnn))
+
+                Text(hrvStatusLabel(sdnn))
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(hrvStatusColor(sdnn))
+            }
+
+            if let source = event.payload["source"] {
+                detailBadge(
+                    icon: "applewatch",
+                    text: source,
+                    color: AdaptiveColors.textSecondary(for: colorScheme)
+                )
+            }
+        }
+    }
+
+    /// Contextual icon for HRV level.
+    private func hrvStatusIcon(_ sdnnStr: String) -> String {
+        guard let sdnn = Double(sdnnStr) else { return "questionmark.circle" }
+        if sdnn >= 50 { return "checkmark.circle.fill" }
+        if sdnn >= 20 { return "minus.circle" }
+        return "exclamationmark.circle"
+    }
+
+    /// Contextual color for HRV level.
+    private func hrvStatusColor(_ sdnnStr: String) -> Color {
+        guard let sdnn = Double(sdnnStr) else { return AdaptiveColors.textSecondary(for: colorScheme) }
+        if sdnn >= 50 { return Color.hubAccentGreen }
+        if sdnn >= 20 { return Color.hubAccentYellow }
+        return Color.hubAccentRed
+    }
+
+    /// Contextual label for HRV level.
+    private func hrvStatusLabel(_ sdnnStr: String) -> String {
+        guard let sdnn = Double(sdnnStr) else { return "Unknown" }
+        if sdnn >= 50 { return "Good variability" }
+        if sdnn >= 20 { return "Moderate variability" }
+        return "Low variability"
+    }
+
+    // MARK: - Blood Oxygen Detail
+
+    /// Expanded detail for blood oxygen (SpO2) events.
+    private func bloodOxygenDetail(_ event: SensingEvent) -> some View {
+        let spo2Str = event.payload["spo2"] ?? "0"
+        let spo2 = Double(spo2Str) ?? 0
+        let isLow = spo2 < 95
+
+        return VStack(alignment: .leading, spacing: 8) {
+            // Large SpO2 reading
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                Text(String(format: "%.0f", spo2))
+                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                    .foregroundStyle(isLow ? Color.hubAccentRed : AdaptiveColors.textPrimary(for: colorScheme))
+
+                Text("%")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+            }
+
+            // Status indicator
+            HStack(spacing: 6) {
+                Image(systemName: isLow ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(isLow ? Color.hubAccentRed : Color.hubAccentGreen)
+
+                Text(isLow ? "Below normal range" : "Normal oxygen level")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(isLow ? Color.hubAccentRed : Color.hubAccentGreen)
+            }
+
+            if let source = event.payload["source"] {
+                detailBadge(
+                    icon: "applewatch",
+                    text: source,
+                    color: AdaptiveColors.textSecondary(for: colorScheme)
+                )
+            }
+        }
+    }
+
+    // MARK: - Sleep Detail
+
+    /// Expanded detail for sleep analysis events.
+    private func sleepDetail(_ event: SensingEvent) -> some View {
+        let stage = event.payload["stage"] ?? "unknown"
+        let formatter = ISO8601DateFormatter()
+
+        return VStack(alignment: .leading, spacing: 8) {
+            // Stage label with icon
+            HStack(spacing: 8) {
+                Image(systemName: sleepStageIcon(stage))
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(sleepStageColor(stage))
+
+                Text(sleepStageLabel(stage))
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+            }
+
+            // Duration (start — end)
+            if let startStr = event.payload["startDate"],
+               let endStr = event.payload["endDate"],
+               let start = formatter.date(from: startStr),
+               let end = formatter.date(from: endStr) {
+                let duration = end.timeIntervalSince(start)
+                let timeFormatter = DateFormatter()
+                timeFormatter.dateFormat = "h:mm a"
+
+                HStack(spacing: 8) {
+                    detailBadge(
+                        icon: "clock",
+                        text: formatDuration(duration),
+                        color: Color.hubPrimaryLight
+                    )
+                    detailBadge(
+                        icon: "arrow.right",
+                        text: "\(timeFormatter.string(from: start)) – \(timeFormatter.string(from: end))",
+                        color: AdaptiveColors.textSecondary(for: colorScheme)
+                    )
+                }
+            }
+
+            if let source = event.payload["source"] {
+                detailBadge(
+                    icon: "applewatch",
+                    text: source,
+                    color: AdaptiveColors.textSecondary(for: colorScheme)
+                )
+            }
+        }
+    }
+
+    /// Icon for sleep stage.
+    private func sleepStageIcon(_ stage: String) -> String {
+        switch stage {
+        case "inBed": return "bed.double.fill"
+        case "awake": return "sun.max.fill"
+        case "asleep", "core": return "moon.fill"
+        case "deep": return "moon.zzz.fill"
+        case "rem": return "brain.head.profile"
+        default: return "moon.fill"
+        }
+    }
+
+    /// Color for sleep stage.
+    private func sleepStageColor(_ stage: String) -> Color {
+        switch stage {
+        case "inBed": return AdaptiveColors.textSecondary(for: colorScheme)
+        case "awake": return Color.hubAccentYellow
+        case "asleep", "core": return Color.hubPrimaryLight
+        case "deep": return Color.hubPrimary
+        case "rem": return Color(red: 0.6, green: 0.4, blue: 0.9)
+        default: return Color.hubPrimaryLight
+        }
+    }
+
+    /// Display label for sleep stage.
+    private func sleepStageLabel(_ stage: String) -> String {
+        switch stage {
+        case "inBed": return "In Bed"
+        case "awake": return "Awake"
+        case "asleep": return "Asleep"
+        case "core": return "Core Sleep"
+        case "deep": return "Deep Sleep"
+        case "rem": return "REM Sleep"
+        default: return "Sleep"
+        }
+    }
+
+    // MARK: - Respiratory Rate Detail
+
+    /// Expanded detail for respiratory rate events.
+    private func respiratoryRateDetail(_ event: SensingEvent) -> some View {
+        let rateStr = event.payload["breathsPerMin"] ?? "0"
+        let rate = Double(rateStr) ?? 0
+
+        return VStack(alignment: .leading, spacing: 8) {
+            // Large reading
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                Text(String(format: "%.1f", rate))
+                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                    .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+
+                Text("breaths/min")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+            }
+
+            // Normal range indicator (12-20 is typical adult resting)
+            let isNormal = rate >= 12 && rate <= 20
+            HStack(spacing: 6) {
+                Image(systemName: isNormal ? "checkmark.circle.fill" : "exclamationmark.circle")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(isNormal ? Color.hubAccentGreen : Color.hubAccentYellow)
+
+                Text(isNormal ? "Normal range" : "Outside typical range (12-20)")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(isNormal ? Color.hubAccentGreen : Color.hubAccentYellow)
+            }
+
+            if let source = event.payload["source"] {
+                detailBadge(
+                    icon: "applewatch",
+                    text: source,
+                    color: AdaptiveColors.textSecondary(for: colorScheme)
+                )
+            }
+        }
     }
 
     /// Specialized expanded view for audio transcript events from WebSocket streaming.
@@ -562,6 +889,10 @@ struct TimelineEventRow: View {
     private var itemIcon: String {
         switch item {
         case .sensing(let event):
+            // Heart rate anomaly gets a warning icon
+            if event.modality == .heartRate, event.payload["anomaly"] == "true" {
+                return "exclamationmark.heart.fill"
+            }
             return modalityIcon(event.modality)
         case .narration(let narration):
             return narration.duration > 0 ? "mic.fill" : "text.bubble.fill"
@@ -577,6 +908,16 @@ struct TimelineEventRow: View {
     private var itemColor: Color {
         switch item {
         case .sensing(let event):
+            // Heart rate anomalies use red accent for the entire row
+            if event.modality == .heartRate, event.payload["anomaly"] == "true" {
+                return Color.hubAccentRed
+            }
+            // Blood oxygen below 95% highlights in red
+            if event.modality == .bloodOxygen,
+               let spo2 = Double(event.payload["spo2"] ?? "100"),
+               spo2 < 95 {
+                return Color.hubAccentRed
+            }
             return modalityColor(event.modality)
         case .narration(let narration):
             return narration.duration > 0 ? Color.purple : Color.indigo
@@ -589,9 +930,25 @@ struct TimelineEventRow: View {
         }
     }
 
-    /// Badge text shown alongside the timestamp for meal and activity items.
+    /// Badge text shown alongside the timestamp for meal, activity, and health anomaly items.
     private var itemBadge: String? {
         switch item {
+        case .sensing(let event):
+            // Show anomaly badge for HR anomalies
+            if event.modality == .heartRate, event.payload["anomaly"] == "true" {
+                return "ANOMALY"
+            }
+            // Show low SpO2 badge
+            if event.modality == .bloodOxygen,
+               let spo2 = Double(event.payload["spo2"] ?? "100"),
+               spo2 < 95 {
+                return "LOW"
+            }
+            // Show aggregated count badge for HR
+            if event.modality == .heartRate, let count = event.payload["count"] {
+                return "\(count)x avg"
+            }
+            return nil
         case .meal(let food):
             if let cal = food.calories, cal > 0 {
                 return "\(cal) cal"
@@ -703,13 +1060,33 @@ struct TimelineEventRow: View {
             return "\(steps) steps"
         case .heartRate:
             let bpm = event.payload["bpm"] ?? "0"
+            let isAnomaly = event.payload["anomaly"] == "true"
+            // Aggregated event: show range
+            if let minBPM = event.payload["min"], let maxBPM = event.payload["max"], minBPM != maxBPM {
+                let prefix = isAnomaly ? "\u{26A0} " : ""
+                return "\(prefix)\(bpm) BPM (\(minBPM)–\(maxBPM))"
+            }
+            // Anomaly single reading
+            if isAnomaly {
+                return "\u{26A0} \(bpm) BPM"
+            }
             return "\(bpm) BPM"
         case .hrv:
             let sdnn = event.payload["sdnn"] ?? "0"
             return "\(sdnn) ms SDNN"
         case .sleep:
             let stage = event.payload["stage"] ?? "unknown"
-            return "Stage: \(stage)"
+            let stageLabel: String
+            switch stage {
+            case "inBed": stageLabel = "In Bed"
+            case "awake": stageLabel = "Awake"
+            case "asleep": stageLabel = "Asleep"
+            case "core": stageLabel = "Core Sleep"
+            case "deep": stageLabel = "Deep Sleep"
+            case "rem": stageLabel = "REM Sleep"
+            default: stageLabel = stage.capitalized
+            }
+            return stageLabel
         case .location:
             // 1. User-defined known place (Home, Work, Gym, etc.)
             if let label = event.payload["semanticLabel"], !label.isEmpty {
@@ -758,7 +1135,8 @@ struct TimelineEventRow: View {
             return "\(rate) breaths/min"
         case .bloodOxygen:
             let spo2 = event.payload["spo2"] ?? "0"
-            return "\(spo2)% SpO2"
+            let isLow = (Double(spo2) ?? 100) < 95
+            return isLow ? "\u{26A0} \(spo2)% SpO2" : "\(spo2)% SpO2"
         case .noiseExposure:
             let db = event.payload["decibels"] ?? "0"
             return "\(db) dB"

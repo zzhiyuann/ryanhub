@@ -9,10 +9,41 @@ import HealthKit
 ///
 /// Uses HKObserverQuery for background notifications on new data,
 /// and HKSampleQuery for batch fetching recent samples.
+///
+/// Heart rate data receives smart throttling: readings are buffered and
+/// emitted as 1-minute aggregates (avg/min/max/count) to prevent timeline
+/// spam from continuous Apple Watch monitoring (~12 readings/min).
+/// Anomalies (tachycardia, bradycardia, sudden spikes) bypass the throttle
+/// and emit immediately.
 final class HealthSensor {
     private let healthStore: HKHealthStore?
     private var observerQueries: [HKObserverQuery] = []
     private var isRunning = false
+
+    // MARK: - Heart Rate Throttling State
+
+    /// Buffer of BPM readings awaiting aggregation.
+    private var hrBuffer: [Double] = []
+
+    /// Timestamp of the last aggregated HR emit.
+    private var lastHREmitTime: Date?
+
+    /// Rolling average from the previous aggregation window, used for spike detection.
+    private var previousMinuteAvgBPM: Double?
+
+    /// Minimum interval (seconds) between aggregated HR emits.
+    private static let hrEmitInterval: TimeInterval = 60
+
+    // MARK: - Anomaly Thresholds
+
+    /// Resting heart rate above this is considered tachycardia.
+    private static let tachycardiaThreshold: Double = 100
+
+    /// Heart rate below this is considered bradycardia.
+    private static let bradycardiaThreshold: Double = 45
+
+    /// A jump larger than this from the previous minute's average triggers an anomaly.
+    private static let spikeThreshold: Double = 30
 
     /// The HealthKit data types POPO requests read access for.
     private static let readTypes: Set<HKSampleType> = {
@@ -78,7 +109,7 @@ final class HealthSensor {
         }
     }
 
-    /// Stop all observer queries.
+    /// Stop all observer queries and clear HR throttling state.
     func stop() {
         guard isRunning, let healthStore else { return }
         isRunning = false
@@ -86,6 +117,11 @@ final class HealthSensor {
             healthStore.stop(query)
         }
         observerQueries.removeAll()
+
+        // Reset HR throttling state
+        hrBuffer.removeAll()
+        lastHREmitTime = nil
+        previousMinuteAvgBPM = nil
     }
 
     // MARK: - Observer Queries
@@ -216,7 +252,16 @@ final class HealthSensor {
         fetchNoiseExposure()
     }
 
-    /// Fetch most recent heart rate samples (last 5 minutes).
+    /// Fetch recent heart rate samples and apply smart throttling.
+    ///
+    /// Instead of emitting every individual reading (which can be ~12/min with
+    /// continuous Apple Watch HR monitoring), readings are buffered and emitted
+    /// as a single aggregated event once per minute with avg/min/max/count.
+    ///
+    /// Anomalies bypass the throttle and emit immediately:
+    /// - Resting HR > 100 bpm (tachycardia)
+    /// - HR < 45 bpm (bradycardia)
+    /// - Sudden change > 30 bpm from previous minute's average
     private func fetchHeartRate() {
         guard let heartRateType = HKQuantityType.quantityType(forIdentifier: .heartRate) else { return }
         let fiveMinutesAgo = Date().addingTimeInterval(-300)
@@ -226,24 +271,101 @@ final class HealthSensor {
         let query = HKSampleQuery(
             sampleType: heartRateType,
             predicate: predicate,
-            limit: 5,
+            limit: 30,
             sortDescriptors: [sortDescriptor]
         ) { [weak self] _, samples, error in
-            guard let samples = samples as? [HKQuantitySample], error == nil else { return }
+            guard let self, let samples = samples as? [HKQuantitySample], error == nil else { return }
+            let source = samples.first?.sourceRevision.source.name ?? "watch"
+
             for sample in samples {
                 let bpm = sample.quantity.doubleValue(for: HKUnit(from: "count/min"))
-                let event = SensingEvent(
-                    timestamp: sample.startDate,
-                    modality: .heartRate,
-                    payload: [
-                        "bpm": String(format: "%.0f", bpm),
-                        "source": sample.sourceRevision.source.name
-                    ]
-                )
-                self?.onEvent?(event)
+
+                // Check for anomaly — emit immediately if detected
+                if self.isHeartRateAnomaly(bpm) {
+                    let event = SensingEvent(
+                        timestamp: sample.startDate,
+                        modality: .heartRate,
+                        payload: [
+                            "bpm": String(format: "%.0f", bpm),
+                            "anomaly": "true",
+                            "reason": self.anomalyReason(bpm),
+                            "source": source
+                        ]
+                    )
+                    self.onEvent?(event)
+                } else {
+                    // Normal reading — add to buffer
+                    self.hrBuffer.append(bpm)
+                }
             }
+
+            // Emit aggregated event if enough time has elapsed
+            self.emitAggregatedHeartRateIfReady(source: source)
         }
         healthStore?.execute(query)
+    }
+
+    /// Check if a heart rate value qualifies as an anomaly.
+    private func isHeartRateAnomaly(_ bpm: Double) -> Bool {
+        if bpm > Self.tachycardiaThreshold { return true }
+        if bpm < Self.bradycardiaThreshold { return true }
+        if let prevAvg = previousMinuteAvgBPM, abs(bpm - prevAvg) > Self.spikeThreshold {
+            return true
+        }
+        return false
+    }
+
+    /// Return a human-readable reason string for the anomaly.
+    private func anomalyReason(_ bpm: Double) -> String {
+        if bpm > Self.tachycardiaThreshold { return "tachycardia" }
+        if bpm < Self.bradycardiaThreshold { return "bradycardia" }
+        if let prevAvg = previousMinuteAvgBPM, abs(bpm - prevAvg) > Self.spikeThreshold {
+            let delta = bpm - prevAvg
+            return delta > 0 ? "sudden_increase" : "sudden_decrease"
+        }
+        return "unknown"
+    }
+
+    /// Emit a single aggregated HR event if at least 60 seconds have passed
+    /// since the last emit and the buffer is non-empty.
+    private func emitAggregatedHeartRateIfReady(source: String) {
+        let now = Date()
+
+        // First call ever — just set the timer, don't emit yet
+        if lastHREmitTime == nil {
+            lastHREmitTime = now
+            // If buffer already has data on first fetch, emit it
+            guard !hrBuffer.isEmpty else { return }
+        }
+
+        guard let lastEmit = lastHREmitTime,
+              now.timeIntervalSince(lastEmit) >= Self.hrEmitInterval,
+              !hrBuffer.isEmpty else {
+            return
+        }
+
+        let avg = hrBuffer.reduce(0, +) / Double(hrBuffer.count)
+        let minBPM = hrBuffer.min() ?? avg
+        let maxBPM = hrBuffer.max() ?? avg
+        let count = hrBuffer.count
+
+        let event = SensingEvent(
+            timestamp: now,
+            modality: .heartRate,
+            payload: [
+                "bpm": String(format: "%.0f", avg),
+                "min": String(format: "%.0f", minBPM),
+                "max": String(format: "%.0f", maxBPM),
+                "count": "\(count)",
+                "source": source
+            ]
+        )
+        onEvent?(event)
+
+        // Update rolling state
+        previousMinuteAvgBPM = avg
+        hrBuffer.removeAll()
+        lastHREmitTime = now
     }
 
     /// Fetch most recent HRV samples (last hour).

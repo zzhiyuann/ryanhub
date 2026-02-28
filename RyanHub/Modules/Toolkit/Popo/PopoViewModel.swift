@@ -470,8 +470,9 @@ final class PopoViewModel {
     /// Status of all sensing channels for the status bar.
     var channelStatuses: [ChannelStatus] {
         let channelModalities: [SensingModality] = [
-            .motion, .steps, .heartRate, .hrv, .location,
-            .screen, .battery, .wifi, .bluetooth, .activeEnergy, .sleep
+            .motion, .steps, .heartRate, .hrv, .bloodOxygen,
+            .respiratoryRate, .sleep, .workout, .activeEnergy, .basalEnergy,
+            .noiseExposure, .location, .screen, .battery, .wifi, .bluetooth
         ]
         let now = Date()
         let thirtyMinAgo = now.addingTimeInterval(-1800)
