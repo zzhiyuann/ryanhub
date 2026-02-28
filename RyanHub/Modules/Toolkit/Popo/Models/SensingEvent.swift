@@ -18,6 +18,7 @@ enum SensingModality: String, Codable, CaseIterable {
     case bloodOxygen     // SpO2 percentage
     case noiseExposure   // Environmental audio exposure (dB)
     case battery         // Battery level & charging state
+    case call            // Phone call state (incoming, connected, ended)
     case wifi            // Wi-Fi network info
     case bluetooth       // Bluetooth device connections
     case visit           // CLVisit-based place visits

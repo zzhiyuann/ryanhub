@@ -564,6 +564,7 @@ struct TimelineEventRow: View {
         case .bloodOxygen: return "drop.fill"
         case .noiseExposure: return "ear.fill"
         case .battery: return "battery.100"
+        case .call: return "phone.fill"
         case .wifi: return "wifi"
         case .bluetooth: return "antenna.radiowaves.left.and.right"
         case .visit: return "building.2.fill"
@@ -586,6 +587,7 @@ struct TimelineEventRow: View {
         case .bloodOxygen: return Color(red: 0.3, green: 0.5, blue: 0.9)      // Blue
         case .noiseExposure: return Color(red: 0.8, green: 0.5, blue: 0.2)    // Orange
         case .battery: return Color.hubAccentGreen
+        case .call: return Color.green
         case .wifi: return Color.hubPrimaryLight
         case .bluetooth: return Color.hubPrimary
         case .visit: return Color.hubAccentGreen
@@ -608,6 +610,7 @@ struct TimelineEventRow: View {
         case .bloodOxygen: return "Blood Oxygen"
         case .noiseExposure: return "Noise Level"
         case .battery: return "Battery"
+        case .call: return "Phone Call"
         case .wifi: return "Wi-Fi"
         case .bluetooth: return "Bluetooth"
         case .visit: return "Visit"
@@ -693,6 +696,30 @@ struct TimelineEventRow: View {
         case .noiseExposure:
             let db = event.payload["decibels"] ?? "0"
             return "\(db) dB"
+        case .call:
+            let state = event.payload["state"] ?? "unknown"
+            let hasConnected = event.payload["hasConnected"] == "true"
+            switch state {
+            case "incoming":
+                return "Incoming call"
+            case "outgoing":
+                return "Outgoing call"
+            case "connected":
+                return "Call connected"
+            case "ended":
+                if hasConnected, let durationStr = event.payload["duration"],
+                   let duration = Double(durationStr) {
+                    let minutes = Int(duration) / 60
+                    let seconds = Int(duration) % 60
+                    if minutes > 0 {
+                        return "Call ended \u{00B7} \(minutes)m \(seconds)s"
+                    }
+                    return "Call ended \u{00B7} \(seconds)s"
+                }
+                return hasConnected ? "Call ended" : "Missed call"
+            default:
+                return state
+            }
         case .battery:
             let level = event.payload["level"] ?? "?"
             return "\(level)%"

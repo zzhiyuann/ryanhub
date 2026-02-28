@@ -47,6 +47,7 @@ final class SensingEngine {
     private let locationSensor = LocationSensor()
     private let screenSensor = ScreenSensor()
     private let batterySensor = BatterySensor()
+    private let callSensor = CallSensor()
     private let wifiSensor = WiFiSensor()
     private let bluetoothSensor = BluetoothSensor()
 
@@ -92,6 +93,9 @@ final class SensingEngine {
         batterySensor.onEvent = { [weak self] event in
             Task { @MainActor in self?.recordEvent(event) }
         }
+        callSensor.onEvent = { [weak self] event in
+            Task { @MainActor in self?.recordEvent(event) }
+        }
         wifiSensor.onEvent = { [weak self] event in
             Task { @MainActor in self?.recordEvent(event) }
         }
@@ -105,6 +109,7 @@ final class SensingEngine {
         locationSensor.start()
         screenSensor.start()
         batterySensor.start()
+        callSensor.start()
         wifiSensor.start()
         bluetoothSensor.start()
 
@@ -134,6 +139,7 @@ final class SensingEngine {
         locationSensor.stop()
         screenSensor.stop()
         batterySensor.stop()
+        callSensor.stop()
         wifiSensor.stop()
         bluetoothSensor.stop()
 
