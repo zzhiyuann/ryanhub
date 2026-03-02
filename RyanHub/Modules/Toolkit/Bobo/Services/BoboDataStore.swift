@@ -18,8 +18,8 @@ final class BoboDataStore {
     /// File path for persisting synced event IDs.
     private let syncedIDsFilePath: URL
 
-    /// Maximum number of events to keep in memory (oldest are persisted on disk).
-    private static let maxInMemoryCount: Int = 2000
+    /// Maximum number of events to keep in memory.
+    private static let maxInMemoryCount: Int = 10_000
 
     // MARK: - Init
 
@@ -58,7 +58,13 @@ final class BoboDataStore {
 
         loadFromDisk()
         migrateMotionToEpisodes()
-        print("[BoboDataStore] Loaded \(events.count) events from disk")
+
+        // Diagnostic: count events per modality
+        var modalityCounts: [String: Int] = [:]
+        for event in events {
+            modalityCounts[event.modality.rawValue, default: 0] += 1
+        }
+        print("[BoboDataStore] Loaded \(events.count) events — \(modalityCounts)")
     }
 
     // MARK: - Public API
@@ -66,15 +72,15 @@ final class BoboDataStore {
     /// Save a new sensing event to the store.
     func save(_ event: SensingEvent) {
         events.append(event)
-        trimInMemoryIfNeeded()
         persistToDisk()
+        trimInMemoryOnly()
     }
 
     /// Save a batch of events to the store.
     func save(_ newEvents: [SensingEvent]) {
         events.append(contentsOf: newEvents)
-        trimInMemoryIfNeeded()
         persistToDisk()
+        trimInMemoryOnly()
     }
 
     /// Return all events that have not yet been synced to the server.
@@ -179,11 +185,23 @@ final class BoboDataStore {
 
     /// Load events and synced IDs from disk.
     private func loadFromDisk() {
-        // Load events
+        // Load events with robust per-event decoding
         if let data = try? Data(contentsOf: eventsFilePath) {
             let decoder = JSONDecoder()
             decoder.dateDecodingStrategy = .iso8601
-            events = (try? decoder.decode([SensingEvent].self, from: data)) ?? []
+
+            // Try batch decode first (fast path)
+            if let decoded = try? decoder.decode([SensingEvent].self, from: data) {
+                events = decoded
+            } else {
+                // Batch decode failed — decode individually to recover what we can
+                print("[BoboDataStore] WARNING: Batch decode failed, attempting per-event recovery...")
+                events = decodeEventsIndividually(from: data)
+                if !events.isEmpty {
+                    // Re-persist valid events so next load is clean
+                    persistToDisk()
+                }
+            }
         }
 
         // Load synced IDs
@@ -192,8 +210,36 @@ final class BoboDataStore {
             syncedEventIDs = (try? decoder.decode(Set<UUID>.self, from: data)) ?? []
         }
 
-        // Clean up stale data on load
-        trimInMemoryIfNeeded()
+        // Trim memory only (disk keeps full data)
+        trimInMemoryOnly()
+    }
+
+    /// Decode events one-by-one from a JSON array, skipping any that fail.
+    private func decodeEventsIndividually(from data: Data) -> [SensingEvent] {
+        guard let jsonArray = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+            print("[BoboDataStore] ERROR: File is not a valid JSON array — cannot recover events")
+            return []
+        }
+
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        var recovered: [SensingEvent] = []
+        var failedCount = 0
+
+        for (index, element) in jsonArray.enumerated() {
+            do {
+                let elementData = try JSONSerialization.data(withJSONObject: element)
+                let event = try decoder.decode(SensingEvent.self, from: elementData)
+                recovered.append(event)
+            } catch {
+                failedCount += 1
+                let modality = element["modality"] as? String ?? "unknown"
+                print("[BoboDataStore] Event[\(index)] decode failed (modality=\(modality)): \(error.localizedDescription)")
+            }
+        }
+
+        print("[BoboDataStore] Recovery complete: \(recovered.count) recovered, \(failedCount) failed")
+        return recovered
     }
 
     /// Persist current events to disk.
@@ -213,15 +259,12 @@ final class BoboDataStore {
         }
     }
 
-    /// Trim in-memory events if exceeding cap (keep newest). All events remain on disk.
-    private func trimInMemoryIfNeeded() {
-        if events.count > Self.maxInMemoryCount {
-            events.sort { $0.timestamp > $1.timestamp }
-            let trimmed = Array(events.prefix(Self.maxInMemoryCount))
-            // Persist ALL events to disk before trimming memory
-            persistToDisk()
-            events = trimmed
-        }
+    /// Trim in-memory events if exceeding cap (keep newest).
+    /// Does NOT write to disk — callers must persist first if needed.
+    private func trimInMemoryOnly() {
+        guard events.count > Self.maxInMemoryCount else { return }
+        events.sort { $0.timestamp > $1.timestamp }
+        events = Array(events.prefix(Self.maxInMemoryCount))
 
         // Clean up synced IDs for events no longer in memory
         let currentIDs = Set(events.map(\.id))
