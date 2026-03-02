@@ -120,48 +120,58 @@ final class BoboDataStore {
 
     // MARK: - Migration
 
-    /// One-time migration: remove unknown motion events, convert remaining to episode model.
+    /// One-time migration: remove unknown motion events, merge consecutive same-activity
+    /// episodes, and rebuild episode data (duration + nextActivity).
     private func migrateMotionToEpisodes() {
-        let migrationKey = "ryanhub_bobo_motion_episode_migration_v2"
+        let migrationKey = "ryanhub_bobo_motion_episode_migration_v3"
         guard !UserDefaults.standard.bool(forKey: migrationKey) else { return }
 
-        let before = events.count
+        // Step 1: Remove unknown motion events
+        events.removeAll { $0.modality == .motion && ($0.payload["activityType"] ?? "unknown") == "unknown" }
 
-        // Remove unknown and low-value motion events
-        events.removeAll { event in
-            guard event.modality == .motion else { return false }
-            let activity = event.payload["activityType"] ?? "unknown"
-            return activity == "unknown"
+        // Step 2: Merge consecutive motion events with the same activityType.
+        // Keep the first one (earliest timestamp), remove duplicates that follow.
+        let motionIDs = events.indices
+            .filter { events[$0].modality == .motion }
+            .sorted { events[$0].timestamp < events[$1].timestamp }
+
+        var idsToRemove: Set<UUID> = []
+        for (i, idx) in motionIDs.enumerated() {
+            guard i + 1 < motionIDs.count else { break }
+            let nextIdx = motionIDs[i + 1]
+            if events[idx].payload["activityType"] == events[nextIdx].payload["activityType"] {
+                // Next is same activity — mark it for removal (keep the earlier one)
+                idsToRemove.insert(events[nextIdx].id)
+            }
+        }
+        if !idsToRemove.isEmpty {
+            events.removeAll { idsToRemove.contains($0.id) }
         }
 
-        let removed = before - events.count
+        // Step 3: Rebuild episode data on the deduplicated motion events
+        let finalMotionIndices = events.indices
+            .filter { events[$0].modality == .motion }
+            .sorted { events[$0].timestamp < events[$1].timestamp }
 
-        // Rebuild episode data: sort motion events oldest-first, add duration + nextActivity
-        let motionIndices = events.indices.filter { events[$0].modality == .motion }
-        let sorted = motionIndices.sorted { events[$0].timestamp < events[$1].timestamp }
-
-        for (i, idx) in sorted.enumerated() {
-            // Clean up old transition-point fields
+        for (i, idx) in finalMotionIndices.enumerated() {
+            // Clean up old fields
             events[idx].payload.removeValue(forKey: "previousActivity")
             events[idx].payload.removeValue(forKey: "previousDuration")
             events[idx].payload.removeValue(forKey: "transitionType")
 
-            // Add episode data from the next transition
-            if i + 1 < sorted.count {
-                let nextIdx = sorted[i + 1]
+            if i + 1 < finalMotionIndices.count {
+                let nextIdx = finalMotionIndices[i + 1]
                 let duration = events[nextIdx].timestamp.timeIntervalSince(events[idx].timestamp)
-                let nextActivity = events[nextIdx].payload["activityType"] ?? "unknown"
                 events[idx].payload["duration"] = String(format: "%.0f", duration)
-                events[idx].payload["nextActivity"] = nextActivity
+                events[idx].payload["nextActivity"] = events[nextIdx].payload["activityType"] ?? "unknown"
             } else {
-                // Last event: ongoing, no duration yet
                 events[idx].payload.removeValue(forKey: "duration")
                 events[idx].payload.removeValue(forKey: "nextActivity")
             }
         }
 
         persistToDisk()
-        print("[BoboDataStore] Motion migration v2: removed \(removed) unknown events, rebuilt \(sorted.count) episodes")
+        print("[BoboDataStore] Motion migration v3: \(idsToRemove.count) duplicates merged, \(finalMotionIndices.count) episodes rebuilt")
         UserDefaults.standard.set(true, forKey: migrationKey)
     }
 
