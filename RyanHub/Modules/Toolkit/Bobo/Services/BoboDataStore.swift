@@ -129,7 +129,7 @@ final class BoboDataStore {
     /// One-time migration: remove unknown motion events, merge consecutive same-activity
     /// episodes, and rebuild episode data (duration + nextActivity).
     private func migrateMotionToEpisodes() {
-        let migrationKey = "ryanhub_bobo_motion_episode_migration_v3"
+        let migrationKey = "ryanhub_bobo_motion_episode_migration_v4"
         guard !UserDefaults.standard.bool(forKey: migrationKey) else { return }
 
         // Step 1: Remove unknown motion events
