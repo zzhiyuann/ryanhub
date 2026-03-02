@@ -75,6 +75,7 @@
 		98117DDA29248965C0C524EC /* PersonalContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84686D528D7CC4E2483C1304 /* PersonalContext.swift */; };
 		98B81A155F9E70956CDA31BA /* RyanHubApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD94D3E0824640F6802F86A4 /* RyanHubApp.swift */; };
 		990DCC48DBBAAC7D99FE697E /* NotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6FCA5345EBFCEA0EABD94A0C /* NotificationManager.swift */; };
+		9C8BE518FE72BA5BF22578C8 /* PhotoLibrarySensor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E39E5954FFE3AB171463540 /* PhotoLibrarySensor.swift */; };
 		9F010855B1B3ECEA2AFEE416 /* HealthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D06AEB0354C4C85106A24AE1 /* HealthView.swift */; };
 		A40E6627B20377EDD61A4772 /* CameraView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78CFF4214607AFA100F868C3 /* CameraView.swift */; };
 		A440D502E05A68D109AF8BC9 /* HubTextField.swift in Sources */ = {isa = PBXBuildFile; fileRef = E65564252C7D5721D9784435 /* HubTextField.swift */; };
@@ -139,6 +140,7 @@
 		1B9EA9D07E750C36E09F40F8 /* QueueViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QueueViewModel.swift; sourceTree = "<group>"; };
 		1BCFCFAC99A828A1B4933837 /* HubButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubButton.swift; sourceTree = "<group>"; };
 		1D41DFE1B728042F58D03141 /* BookFactoryViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookFactoryViewModel.swift; sourceTree = "<group>"; };
+		1E39E5954FFE3AB171463540 /* PhotoLibrarySensor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoLibrarySensor.swift; sourceTree = "<group>"; };
 		1E8670F423D769B8AC0EC3A7 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
 		21DAA3F09BEB33DF0B836FFF /* FluentStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FluentStore.swift; sourceTree = "<group>"; };
 		222000EAD2F5A19A79AF51B4 /* WebSocketClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebSocketClient.swift; sourceTree = "<group>"; };
@@ -469,6 +471,7 @@
 				F1075E7E8633CFDBDADF1D04 /* HealthSensor.swift */,
 				C553E08F5FEEC7043B53FB61 /* LocationSensor.swift */,
 				9478E5D175A24597C31A8C9F /* MotionSensor.swift */,
+				1E39E5954FFE3AB171463540 /* PhotoLibrarySensor.swift */,
 				DD36A392387C1373ED1B0750 /* ScreenSensor.swift */,
 				46382D54977CE607CFFB639A /* SensingEngine.swift */,
 				626C493A05270563EED2FD02 /* WiFiSensor.swift */,
@@ -839,6 +842,7 @@
 				194ECBCB064E544FE7C478F7 /* ParkingView.swift in Sources */,
 				558DE9429893FB50073C6AE7 /* ParkingViewModel.swift in Sources */,
 				98117DDA29248965C0C524EC /* PersonalContext.swift in Sources */,
+				9C8BE518FE72BA5BF22578C8 /* PhotoLibrarySensor.swift in Sources */,
 				F8D8E97DE66120A10A1D9EE1 /* QueueManagerView.swift in Sources */,
 				4D96295338EAC5B7FD4610A7 /* QueueViewModel.swift in Sources */,
 				98B81A155F9E70956CDA31BA /* RyanHubApp.swift in Sources */,

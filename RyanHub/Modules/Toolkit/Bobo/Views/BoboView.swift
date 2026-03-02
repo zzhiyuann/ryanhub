@@ -56,6 +56,7 @@ struct BoboView: View {
                     await viewModel.checkAndGenerateNudgesIfNeeded()
                 }
                 viewModel.resumeAudioStreamIfNeeded()
+                viewModel.checkForNewPhotos()
             }
         }
         .onChange(of: viewModel.selectedDate) {

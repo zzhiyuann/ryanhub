@@ -51,6 +51,7 @@ final class SensingEngine {
     private let wifiSensor = WiFiSensor()
     private let bluetoothSensor = BluetoothSensor()
     private let audioStreamSensor = AudioStreamSensor()
+    private let photoLibrarySensor = PhotoLibrarySensor()
 
     // MARK: - Services
 
@@ -106,6 +107,9 @@ final class SensingEngine {
         bluetoothSensor.onEvent = { [weak self] event in
             Task { @MainActor in self?.recordEvent(event) }
         }
+        photoLibrarySensor.onEvent = { [weak self] event in
+            Task { @MainActor in self?.recordEvent(event) }
+        }
 
         // Start all sensors
         motionSensor.start()
@@ -116,6 +120,7 @@ final class SensingEngine {
         callSensor.start()
         wifiSensor.start()
         bluetoothSensor.start()
+        photoLibrarySensor.start()
 
         // Restore last sync time from disk
         let savedSyncTime = UserDefaults.standard.double(forKey: "ryanhub_bobo_last_sync_time")
@@ -146,6 +151,7 @@ final class SensingEngine {
         callSensor.stop()
         wifiSensor.stop()
         bluetoothSensor.stop()
+        photoLibrarySensor.stop()
 
         syncTimer?.invalidate()
         syncTimer = nil
@@ -191,6 +197,12 @@ final class SensingEngine {
     func resumeHealthSensor() {
         guard isRunning else { return }
         healthSensor.resume()
+    }
+
+    /// Check for new photos taken while the app was in the background.
+    func checkForNewPhotos() {
+        guard isRunning else { return }
+        photoLibrarySensor.checkNow()
     }
 
     // MARK: - Event Recording

@@ -603,22 +603,35 @@ final class BoboViewModel {
     }
 
     /// Status of all sensing channels for the status bar.
+    /// Combines raw engine events (phone sensors) with HealthKit events
+    /// to give an accurate picture of all data sources.
     var channelStatuses: [ChannelStatus] {
         let channelModalities: [SensingModality] = [
             .motion, .steps, .heartRate, .hrv, .bloodOxygen,
             .respiratoryRate, .sleep, .workout, .activeEnergy, .basalEnergy,
-            .noiseExposure, .location, .screen, .battery, .wifi, .bluetooth
+            .noiseExposure, .location, .screen, .battery, .call, .wifi,
+            .bluetooth, .audio, .photo
         ]
         let now = Date()
         let thirtyMinAgo = now.addingTimeInterval(-1800)
+        let calendar = Calendar.current
 
-        return channelModalities.map { modality in
-            let events = engine.events(for: modality)
-            let latestTime = events.first?.timestamp
+        // Combine engine events (phone sensors) + HealthKit events for today
+        let todayEngineEvents = engine.recentEvents
+            .filter { calendar.isDate($0.timestamp, inSameDayAs: now) }
+        let todayHealthEvents = healthKitEvents
+            .filter { calendar.isDate($0.timestamp, inSameDayAs: now) }
+        let allTodayEvents = todayEngineEvents + todayHealthEvents
+
+        return channelModalities.compactMap { modality in
+            let events = allTodayEvents.filter { $0.modality == modality }
+            let latestTime = events.max(by: { $0.timestamp < $1.timestamp })?.timestamp
             let count = events.count
 
+            guard count > 0 else { return nil }
+
             let state: ChannelStatus.ChannelState
-            if !sensingEnabled || count == 0 {
+            if !sensingEnabled {
                 state = .inactive
             } else if let latest = latestTime, latest > thirtyMinAgo {
                 state = .active
@@ -1889,6 +1902,11 @@ final class BoboViewModel {
     /// Called when the app returns to the foreground.
     func resumeAudioStreamIfNeeded() {
         engine.resumeAudioStreamIfNeeded()
+    }
+
+    /// Check for new photos taken while the app was in the background.
+    func checkForNewPhotos() {
+        engine.checkForNewPhotos()
     }
 
     // MARK: - Storage Keys
