@@ -120,45 +120,48 @@ final class BoboDataStore {
 
     // MARK: - Migration
 
-    /// One-time migration: convert old transition-point motion events to episode-based model.
-    /// For consecutive motion events sorted by time, enrich each with duration and nextActivity
-    /// from the following motion event.
+    /// One-time migration: remove unknown motion events, convert remaining to episode model.
     private func migrateMotionToEpisodes() {
-        // Only run once
-        let migrationKey = "ryanhub_bobo_motion_episode_migration"
+        let migrationKey = "ryanhub_bobo_motion_episode_migration_v2"
         guard !UserDefaults.standard.bool(forKey: migrationKey) else { return }
 
-        // Collect motion events sorted oldest-first
+        let before = events.count
+
+        // Remove unknown and low-value motion events
+        events.removeAll { event in
+            guard event.modality == .motion else { return false }
+            let activity = event.payload["activityType"] ?? "unknown"
+            return activity == "unknown"
+        }
+
+        let removed = before - events.count
+
+        // Rebuild episode data: sort motion events oldest-first, add duration + nextActivity
         let motionIndices = events.indices.filter { events[$0].modality == .motion }
         let sorted = motionIndices.sorted { events[$0].timestamp < events[$1].timestamp }
 
-        var changed = false
         for (i, idx) in sorted.enumerated() {
-            // Skip events that already have episode data
-            guard events[idx].payload["duration"] == nil else { continue }
+            // Clean up old transition-point fields
+            events[idx].payload.removeValue(forKey: "previousActivity")
+            events[idx].payload.removeValue(forKey: "previousDuration")
+            events[idx].payload.removeValue(forKey: "transitionType")
 
+            // Add episode data from the next transition
             if i + 1 < sorted.count {
                 let nextIdx = sorted[i + 1]
                 let duration = events[nextIdx].timestamp.timeIntervalSince(events[idx].timestamp)
                 let nextActivity = events[nextIdx].payload["activityType"] ?? "unknown"
                 events[idx].payload["duration"] = String(format: "%.0f", duration)
                 events[idx].payload["nextActivity"] = nextActivity
-                changed = true
-            }
-
-            // Clean up old transition-point fields
-            if events[idx].payload["previousActivity"] != nil {
-                events[idx].payload.removeValue(forKey: "previousActivity")
-                events[idx].payload.removeValue(forKey: "previousDuration")
-                events[idx].payload.removeValue(forKey: "transitionType")
-                changed = true
+            } else {
+                // Last event: ongoing, no duration yet
+                events[idx].payload.removeValue(forKey: "duration")
+                events[idx].payload.removeValue(forKey: "nextActivity")
             }
         }
 
-        if changed {
-            persistToDisk()
-            print("[BoboDataStore] Migrated \(sorted.count) motion events to episode model")
-        }
+        persistToDisk()
+        print("[BoboDataStore] Motion migration v2: removed \(removed) unknown events, rebuilt \(sorted.count) episodes")
         UserDefaults.standard.set(true, forKey: migrationKey)
     }
 
