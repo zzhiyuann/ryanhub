@@ -391,6 +391,11 @@ final class SensingEngine {
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             activityManager.queryActivityStarting(from: start, to: end, to: queue) { [weak self] activities, error in
                 if let activities {
+                    // Apply the same HAR filtering as MotionSensor:
+                    // only emit transition points, skip unknown and low confidence.
+                    var lastActivity: String?
+                    var lastActivityTime: Date?
+
                     for activity in activities {
                         let activityType: String
                         if activity.walking { activityType = "walking" }
@@ -398,24 +403,44 @@ final class SensingEngine {
                         else if activity.cycling { activityType = "cycling" }
                         else if activity.automotive { activityType = "automotive" }
                         else if activity.stationary { activityType = "stationary" }
-                        else { activityType = "unknown" }
+                        else { continue } // Skip unknown
+
+                        // Skip low confidence
+                        guard activity.confidence != .low else { continue }
+
+                        // Only emit transitions (activity type changed)
+                        guard activityType != lastActivity else { continue }
 
                         let confidence: String
                         switch activity.confidence {
-                        case .low: confidence = "low"
                         case .medium: confidence = "medium"
                         case .high: confidence = "high"
-                        @unknown default: confidence = "unknown"
+                        default: confidence = "unknown"
                         }
+
+                        var payload: [String: String] = [
+                            "activityType": activityType,
+                            "confidence": confidence,
+                            "source": "background_backfill"
+                        ]
+
+                        // Include previous activity context for transition awareness
+                        if let prev = lastActivity {
+                            payload["previousActivity"] = prev
+                            payload["transitionType"] = "\(prev)_to_\(activityType)"
+                            if let prevTime = lastActivityTime {
+                                let duration = activity.startDate.timeIntervalSince(prevTime)
+                                payload["previousDuration"] = String(format: "%.0f", duration)
+                            }
+                        }
+
+                        lastActivity = activityType
+                        lastActivityTime = activity.startDate
 
                         let event = SensingEvent(
                             timestamp: activity.startDate,
                             modality: .motion,
-                            payload: [
-                                "activityType": activityType,
-                                "confidence": confidence,
-                                "source": "background_backfill"
-                            ]
+                            payload: payload
                         )
                         Task { @MainActor in
                             self?.recordEvent(event)
