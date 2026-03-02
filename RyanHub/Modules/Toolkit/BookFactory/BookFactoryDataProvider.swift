@@ -69,9 +69,10 @@ enum BookFactoryDataProvider: ToolkitDataProvider {
 
         // Action hints — ALWAYS present regardless of cache state
         lines.append("Actions:")
-        lines.append("- Generate a book NOW: use the Book Factory queue in the Toolkit tab — add a topic with 'Generate Now' or long-press an existing topic and select 'Generate Immediately'")
-        lines.append("- Add to queue: use the Book Factory queue in the Toolkit tab to add topics")
-        lines.append("- IMPORTANT: Do NOT write book content inline in chat. Always use the generation pipeline above.")
+        lines.append("- Generate a book NOW via API: curl -sk -X POST https://localhost:3443/api/books/generate -H 'Content-Type: application/json' -d '{\"topic\":\"Your Topic Here\"}'")
+        lines.append("  Returns {\"jobId\": \"...\", \"status\": \"running\"}. Check status: curl -sk https://localhost:3443/api/books/generate?jobId=JOB_ID")
+        lines.append("  The Book Factory server handles the entire pipeline (research, write, HTML, audio) — this is the ONLY correct way to generate books.")
+        lines.append("- CRITICAL: NEVER write book content inline in chat. ALWAYS delegate to Book Factory via the curl command above. You are NOT a book generator — you trigger the real pipeline.")
 
         lines.append("[End \(displayName)]")
         return lines.joined(separator: "\n")
