@@ -136,6 +136,13 @@ final class SensingEngine {
         startSyncTimer()
 
         print("[SensingEngine] Started all sensors — loaded \(recentEvents.count) events for today, \(pendingEventCount) pending sync")
+
+        // Backfill motion data from CoreMotion to recover any gaps
+        // (e.g., events lost to decode failure, or app was killed for a while)
+        let startOfDay = Calendar.current.startOfDay(for: Date())
+        Task {
+            await backfillMotionActivity(from: startOfDay, to: Date())
+        }
     }
 
     /// Stop all sensors and cancel the sync timer.
@@ -235,9 +242,26 @@ final class SensingEngine {
             return  // Don't create a new timeline row
         }
 
-        // Motion events: enrich the previous episode with duration and nextActivity
-        if event.modality == .motion, let newActivity = event.payload["activityType"] {
+        // Motion events: enrich the previous episode with duration and nextActivity.
+        // Skip for backfill events — they already come pre-enriched with duration/nextActivity.
+        if event.modality == .motion, let newActivity = event.payload["activityType"],
+           event.payload["source"] != "background_backfill" {
             enrichLastMotionEpisode(nextActivity: newActivity, transitionTime: event.timestamp)
+        }
+
+        // Deduplicate backfill motion events — skip if a motion event with
+        // the same activity type exists within 60 seconds of this timestamp
+        if event.modality == .motion, event.payload["source"] == "background_backfill" {
+            let ts = event.timestamp
+            let activity = event.payload["activityType"] ?? ""
+            let isDuplicate = recentEvents.contains { existing in
+                existing.modality == .motion
+                    && existing.payload["activityType"] == activity
+                    && abs(existing.timestamp.timeIntervalSince(ts)) < 60
+            }
+            if isDuplicate {
+                return
+            }
         }
 
         // Add to UI display list (newest first)
@@ -341,6 +365,12 @@ final class SensingEngine {
     }
 
     // MARK: - Convenience
+
+    /// Return persisted events for a specific date from the data store.
+    /// Used by the ViewModel to display phone sensing data for past dates.
+    func storedEvents(for date: Date) -> [SensingEvent] {
+        dataStore.events(for: date)
+    }
 
     /// Return events filtered by modality.
     func events(for modality: SensingModality) -> [SensingEvent] {

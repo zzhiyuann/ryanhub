@@ -209,16 +209,22 @@ final class BoboViewModel {
                 return (start: event.timestamp, end: event.timestamp.addingTimeInterval(duration))
             }
 
-        // Phone sensing data from the engine (exclude HealthKit modalities to avoid duplication)
-        let phoneSensing = engine.recentEvents
-            .filter { !Self.healthKitModalities.contains($0.modality) }
-            .filter { calendar.isDate($0.timestamp, inSameDayAs: selectedDate) }
-            .filter { event in
-                // Drop phone motion events that overlap with Watch workout periods
-                guard event.modality == .motion else { return true }
-                let ts = event.timestamp
-                return !workoutIntervals.contains { ts >= $0.start && ts <= $0.end }
-            }
+        // Phone sensing data: use live recentEvents for today, dataStore for past dates
+        let rawPhoneSensing: [SensingEvent]
+        if isSelectedDateToday {
+            rawPhoneSensing = engine.recentEvents
+                .filter { !Self.healthKitModalities.contains($0.modality) }
+                .filter { calendar.isDate($0.timestamp, inSameDayAs: selectedDate) }
+        } else {
+            rawPhoneSensing = engine.storedEvents(for: selectedDate)
+                .filter { !Self.healthKitModalities.contains($0.modality) }
+        }
+        let phoneSensing = rawPhoneSensing.filter { event in
+            // Drop phone motion events that overlap with Watch workout periods
+            guard event.modality == .motion else { return true }
+            let ts = event.timestamp
+            return !workoutIntervals.contains { ts >= $0.start && ts <= $0.end }
+        }
 
         return (phoneSensing + healthData).sorted { $0.timestamp > $1.timestamp }
     }
