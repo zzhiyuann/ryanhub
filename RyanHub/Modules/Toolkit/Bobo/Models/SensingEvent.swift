@@ -23,6 +23,7 @@ enum SensingModality: String, Codable, CaseIterable {
     case bluetooth       // Bluetooth device connections
     case visit           // CLVisit-based place visits
     case audio           // Audio stream transcription + speaker diarization
+    case photo           // Camera catch — photo captured into timeline
 }
 
 // MARK: - Sensing Event

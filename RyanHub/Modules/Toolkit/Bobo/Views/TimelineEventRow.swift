@@ -116,7 +116,9 @@ struct TimelineEventRow: View {
     private func sensingDetail(_ event: SensingEvent) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             // Audio events get a specialized expanded view
-            if event.modality == .audio, event.payload["status"] == "transcript" {
+            if event.modality == .photo {
+                photoDetail(event)
+            } else if event.modality == .audio, event.payload["status"] == "transcript" {
                 audioTranscriptDetail(event)
             } else if event.modality == .heartRate {
                 heartRateDetail(event)
@@ -478,6 +480,22 @@ struct TimelineEventRow: View {
                     text: source,
                     color: AdaptiveColors.textSecondary(for: colorScheme)
                 )
+            }
+        }
+    }
+
+    // MARK: - Photo Detail
+
+    /// Expanded detail for photo events — shows the captured image.
+    private func photoDetail(_ event: SensingEvent) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let fileId = event.payload["imageFileId"],
+               let image = BoboViewModel.loadPhoto(for: fileId) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxHeight: 300)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
             }
         }
     }
@@ -994,6 +1012,7 @@ struct TimelineEventRow: View {
         case .bluetooth: return "antenna.radiowaves.left.and.right"
         case .visit: return "building.2.fill"
         case .audio: return "waveform"
+        case .photo: return "camera.fill"
         }
     }
 
@@ -1018,6 +1037,7 @@ struct TimelineEventRow: View {
         case .bluetooth: return Color.hubPrimary
         case .visit: return Color.hubAccentGreen
         case .audio: return Color.hubAccentRed
+        case .photo: return Color.hubPrimary
         }
     }
 
@@ -1042,6 +1062,7 @@ struct TimelineEventRow: View {
         case .bluetooth: return "Bluetooth"
         case .visit: return "Visit"
         case .audio: return "Audio"
+        case .photo: return "Photo"
         }
     }
 
@@ -1213,6 +1234,8 @@ struct TimelineEventRow: View {
             default:
                 return "Audio Segment"
             }
+        case .photo:
+            return "Photo"
         }
     }
 

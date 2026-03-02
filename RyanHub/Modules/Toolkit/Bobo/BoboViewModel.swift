@@ -1,6 +1,7 @@
 import Foundation
 import AVFoundation
 import HealthKit
+import UIKit
 import UserNotifications
 
 // MARK: - Narration Recording State
@@ -1084,6 +1085,39 @@ final class BoboViewModel {
 
             isSubmittingTextDiary = false
         }
+    }
+
+    // MARK: - Camera Catch
+
+    /// Save a photo to disk and add it as a timeline event.
+    func savePhoto(_ imageData: Data) {
+        let event = SensingEvent(modality: .photo, payload: [:])
+
+        // Save JPEG to /Documents/bobo/photos/{eventId}.jpg
+        let photosDir = Self.photosDirectory
+        try? FileManager.default.createDirectory(at: photosDir, withIntermediateDirectories: true)
+        let fileURL = photosDir.appendingPathComponent("\(event.id.uuidString).jpg")
+        try? imageData.write(to: fileURL)
+
+        // Store reference in payload
+        var mutableEvent = event
+        mutableEvent.payload["imageFileId"] = event.id.uuidString
+
+        engine.recordEvent(mutableEvent)
+    }
+
+    /// Directory for storing timeline photos.
+    private static var photosDirectory: URL {
+        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("bobo/photos", isDirectory: true)
+    }
+
+    /// Load a photo from disk by event ID.
+    static func loadPhoto(for fileId: String) -> UIImage? {
+        let url = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("bobo/photos/\(fileId).jpg")
+        guard let data = try? Data(contentsOf: url) else { return nil }
+        return UIImage(data: data)
     }
 
     /// Request affect analysis for a text-only narration (no audio file to transcribe).

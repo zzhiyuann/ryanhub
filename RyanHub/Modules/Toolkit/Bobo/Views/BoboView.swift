@@ -12,6 +12,7 @@ struct BoboView: View {
     @State private var showChannelDetail = false
     @State private var isPressingMic = false
     @State private var isTimelineExpanded = false
+    @State private var showCamera = false
     @FocusState private var isTextDiaryFocused: Bool
 
     var body: some View {
@@ -307,6 +308,21 @@ struct BoboView: View {
                 .buttonStyle(.plain)
             }
 
+            // Camera button — tap to capture photo into timeline
+            Button {
+                showCamera = true
+            } label: {
+                Image(systemName: "camera.fill")
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(Color.hubPrimary)
+                    .frame(width: 36, height: 36)
+                    .background(
+                        Circle()
+                            .fill(Color.hubPrimary.opacity(0.12))
+                    )
+            }
+            .buttonStyle(.plain)
+
             // Mic icon — long-press to record
             micButton
         }
@@ -316,6 +332,11 @@ struct BoboView: View {
             RoundedRectangle(cornerRadius: 10)
                 .fill(AdaptiveColors.surfaceSecondary(for: colorScheme))
         )
+        .sheet(isPresented: $showCamera) {
+            CameraImagePicker { imageData in
+                viewModel.savePhoto(imageData)
+            }
+        }
     }
 
     /// Compact mic icon with long-press gesture to start/stop recording.
@@ -685,6 +706,7 @@ struct BoboView: View {
         case .wifi: return "wifi"
         case .bluetooth: return "antenna.radiowaves.left.and.right"
         case .audio: return "waveform"
+        case .photo: return "camera.fill"
         default: return "sensor"
         }
     }
@@ -708,6 +730,7 @@ struct BoboView: View {
         case .wifi: return "Wi-Fi"
         case .bluetooth: return "Bluetooth"
         case .audio: return "Audio Stream"
+        case .photo: return "Photo"
         default: return modality.rawValue.capitalized
         }
     }
