@@ -1144,29 +1144,28 @@ struct TimelineEventRow: View {
             let db = event.payload["decibels"] ?? "0"
             return "\(db) dB"
         case .call:
-            let state = event.payload["state"] ?? "unknown"
-            let hasConnected = event.payload["hasConnected"] == "true"
-            switch state {
-            case "incoming":
-                return "Incoming call"
-            case "outgoing":
-                return "Outgoing call"
-            case "connected":
-                return "Call connected"
-            case "ended":
-                if hasConnected, let durationStr = event.payload["duration"],
+            let direction = event.payload["direction"] ?? event.payload["state"] ?? "unknown"
+            let status = event.payload["status"] ?? "unknown"
+            let dirLabel = direction == "outgoing" ? "Outgoing" : "Incoming"
+
+            if status == "answered" {
+                if let durationStr = event.payload["duration"],
                    let duration = Double(durationStr) {
-                    let minutes = Int(duration) / 60
-                    let seconds = Int(duration) % 60
-                    if minutes > 0 {
-                        return "Call ended \u{00B7} \(minutes)m \(seconds)s"
-                    }
-                    return "Call ended \u{00B7} \(seconds)s"
+                    return "\(dirLabel) Call \u{00B7} \(formatDuration(duration))"
                 }
-                return hasConnected ? "Call ended" : "Missed call"
-            default:
-                return state
+                return "\(dirLabel) Call \u{00B7} ongoing"
+            } else if status == "missed" {
+                return "Missed Call"
+            } else if status == "no_answer" {
+                return "Outgoing Call \u{00B7} no answer"
             }
+            // Legacy events fallback
+            let state = event.payload["state"] ?? ""
+            if state == "ended", event.payload["hasConnected"] == "true",
+               let d = event.payload["duration"].flatMap(Double.init) {
+                return "\(dirLabel) Call \u{00B7} \(formatDuration(d))"
+            }
+            return "\(dirLabel) Call"
         case .battery:
             let level = event.payload["level"] ?? "?"
             return "\(level)%"

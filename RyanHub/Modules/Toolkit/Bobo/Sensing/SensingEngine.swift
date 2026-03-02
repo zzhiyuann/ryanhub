@@ -97,6 +97,9 @@ final class SensingEngine {
         callSensor.onEvent = { [weak self] event in
             Task { @MainActor in self?.recordEvent(event) }
         }
+        callSensor.onUpdateEvent = { [weak self] eventID, payload in
+            Task { @MainActor in self?.enrichCallEvent(id: eventID, merge: payload) }
+        }
         wifiSensor.onEvent = { [weak self] event in
             Task { @MainActor in self?.recordEvent(event) }
         }
@@ -259,6 +262,14 @@ final class SensingEngine {
             let merge = ["duration": durationStr, "nextActivity": nextActivity]
             recentEvents[index].payload.merge(merge) { _, new in new }
             dataStore.updateEventPayload(id: recentEvents[index].id, merge: merge)
+        }
+    }
+
+    /// Enrich a call event by ID (e.g., add duration after hangup).
+    private func enrichCallEvent(id: UUID, merge payload: [String: String]) {
+        if let index = recentEvents.firstIndex(where: { $0.id == id }) {
+            recentEvents[index].payload.merge(payload) { _, new in new }
+            dataStore.updateEventPayload(id: id, merge: payload)
         }
     }
 

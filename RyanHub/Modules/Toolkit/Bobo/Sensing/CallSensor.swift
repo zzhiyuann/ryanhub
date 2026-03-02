@@ -4,7 +4,9 @@ import CallKit
 // MARK: - Call Sensor
 
 /// Observes phone call state transitions using CXCallObserver.
-/// Tracks incoming, connected, and ended calls with duration measurement.
+/// Emits a single consolidated event per call:
+/// - Answered calls: one event at connect time, enriched with duration on hangup.
+/// - Unanswered calls: one event when the call ends (missed/declined).
 final class CallSensor: NSObject {
     private var isRunning = false
     private let callObserver = CXCallObserver()
@@ -12,11 +14,20 @@ final class CallSensor: NSObject {
     /// Callback invoked when a new sensing event is captured.
     var onEvent: ((SensingEvent) -> Void)?
 
-    /// Tracks when each active call connected (UUID -> connect time).
-    private var activeCalls: [UUID: Date] = [:]
+    /// Callback to update a previously emitted event's payload (for adding duration).
+    var onUpdateEvent: ((UUID, [String: String]) -> Void)?
 
-    /// Tracks which calls have been answered/connected.
-    private var connectedCalls: Set<UUID> = []
+    /// Tracks connect time per call UUID.
+    private var connectTimes: [UUID: Date] = [:]
+
+    /// Tracks whether each call is outgoing.
+    private var outgoingCalls: Set<UUID> = []
+
+    /// Tracks the emitted SensingEvent ID for connected calls, so we can enrich on hangup.
+    private var emittedEventIDs: [UUID: UUID] = [:]
+
+    /// Tracks calls we've already emitted an event for (to avoid duplicates).
+    private var processedCalls: Set<UUID> = []
 
     // MARK: - Lifecycle
 
@@ -31,8 +42,10 @@ final class CallSensor: NSObject {
     func stop() {
         guard isRunning else { return }
         isRunning = false
-        activeCalls.removeAll()
-        connectedCalls.removeAll()
+        connectTimes.removeAll()
+        outgoingCalls.removeAll()
+        emittedEventIDs.removeAll()
+        processedCalls.removeAll()
     }
 }
 
@@ -44,67 +57,58 @@ extension CallSensor: CXCallObserverDelegate {
 
         let callID = call.uuid
 
-        if call.hasEnded {
-            // Call ended — compute duration if it was connected
-            let hasConnected = connectedCalls.contains(callID)
-            var payload: [String: String] = [
-                "state": "ended",
-                "hasConnected": hasConnected ? "true" : "false"
-            ]
+        if call.isOutgoing && !call.hasConnected && !call.hasEnded {
+            // Outgoing call initiated — just track it
+            outgoingCalls.insert(callID)
 
-            if hasConnected, let connectTime = activeCalls[callID] {
-                let duration = Date().timeIntervalSince(connectTime)
-                payload["duration"] = String(format: "%.0f", duration)
-            }
+        } else if call.hasConnected && !call.hasEnded {
+            // Call answered — emit the single call event now
+            guard !processedCalls.contains(callID) else { return }
+            processedCalls.insert(callID)
 
-            let event = SensingEvent(modality: .call, payload: payload)
+            let now = Date()
+            connectTimes[callID] = now
+
+            let direction = outgoingCalls.contains(callID) ? "outgoing" : "incoming"
+            let event = SensingEvent(
+                modality: .call,
+                payload: [
+                    "direction": direction,
+                    "status": "answered",
+                ]
+            )
+            emittedEventIDs[callID] = event.id
             onEvent?(event)
 
-            // Clean up tracking state
-            activeCalls.removeValue(forKey: callID)
-            connectedCalls.remove(callID)
+        } else if call.hasEnded {
+            if let connectTime = connectTimes[callID],
+               let eventID = emittedEventIDs[callID] {
+                // Connected call ended — enrich the existing event with duration
+                let duration = Date().timeIntervalSince(connectTime)
+                onUpdateEvent?(eventID, [
+                    "duration": String(format: "%.0f", duration),
+                ])
+            } else if !processedCalls.contains(callID) {
+                // Never connected — emit a single missed/unanswered event
+                processedCalls.insert(callID)
 
-        } else if call.hasConnected {
-            // Call connected (answered)
-            if !connectedCalls.contains(callID) {
-                connectedCalls.insert(callID)
-                activeCalls[callID] = Date()
-
+                let direction = outgoingCalls.contains(callID) ? "outgoing" : "incoming"
+                let status = outgoingCalls.contains(callID) ? "no_answer" : "missed"
                 let event = SensingEvent(
                     modality: .call,
                     payload: [
-                        "state": "connected",
-                        "hasConnected": "true"
+                        "direction": direction,
+                        "status": status,
                     ]
                 )
                 onEvent?(event)
             }
 
-        } else if call.isOutgoing {
-            // Outgoing call initiated
-            activeCalls[callID] = nil
-
-            let event = SensingEvent(
-                modality: .call,
-                payload: [
-                    "state": "outgoing",
-                    "hasConnected": "false"
-                ]
-            )
-            onEvent?(event)
-
-        } else {
-            // Incoming call ringing
-            activeCalls[callID] = nil
-
-            let event = SensingEvent(
-                modality: .call,
-                payload: [
-                    "state": "incoming",
-                    "hasConnected": "false"
-                ]
-            )
-            onEvent?(event)
+            // Clean up
+            connectTimes.removeValue(forKey: callID)
+            outgoingCalls.remove(callID)
+            emittedEventIDs.removeValue(forKey: callID)
+            processedCalls.remove(callID)
         }
     }
 }
