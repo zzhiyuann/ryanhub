@@ -1129,10 +1129,20 @@ struct TimelineEventRow: View {
             return "\(type) — \(calories) kcal"
         case .activeEnergy:
             let kcal = event.payload["kcal"] ?? "0"
-            return "\(kcal) kcal active"
+            let hourLabel = event.payload["hourLabel"] ?? ""
+            let ongoing = event.payload["ongoing"] == "true"
+            if ongoing {
+                return "\(kcal) kcal so far since \(hourLabel.components(separatedBy: "-").first ?? "")"
+            }
+            return "\(hourLabel): \(kcal) kcal"
         case .basalEnergy:
             let kcal = event.payload["kcal"] ?? "0"
-            return "\(kcal) kcal resting"
+            let hourLabel = event.payload["hourLabel"] ?? ""
+            let ongoing = event.payload["ongoing"] == "true"
+            if ongoing {
+                return "\(kcal) kcal so far since \(hourLabel.components(separatedBy: "-").first ?? "")"
+            }
+            return "\(hourLabel): \(kcal) kcal"
         case .respiratoryRate:
             let rate = event.payload["breathsPerMin"] ?? "0"
             return "\(rate) breaths/min"

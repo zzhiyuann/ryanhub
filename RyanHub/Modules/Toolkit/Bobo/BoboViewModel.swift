@@ -1583,6 +1583,7 @@ final class BoboViewModel {
         }
 
         let calendar = Calendar.current
+        let now = Date()
         let dayStart = calendar.startOfDay(for: selectedDate)
         guard let dayEnd = calendar.date(byAdding: .day, value: 1, to: dayStart) else { return }
         let predicate = HKQuery.predicateForSamples(withStart: dayStart, end: dayEnd, options: .strictStartDate)
@@ -1683,44 +1684,26 @@ final class BoboViewModel {
         }
         store.execute(wq)
 
-        // Active energy — group by 5-minute windows
+        // Active energy — aggregate by hour
         if let type = HKQuantityType.quantityType(forIdentifier: .activeEnergyBurned) {
             group.enter()
             let q = HKSampleQuery(sampleType: type, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: [sort]) { _, samples, _ in
                 defer { group.leave() }
                 guard let samples = samples as? [HKQuantitySample] else { return }
-                var windowGroups: [Date: Double] = [:]
-                for s in samples {
-                    let kcal = s.quantity.doubleValue(for: .kilocalorie())
-                    let c = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: s.startDate)
-                    var wc = c; wc.minute = (c.minute ?? 0) / 5 * 5
-                    let windowStart = calendar.date(from: wc) ?? s.startDate
-                    windowGroups[windowStart, default: 0] += kcal
-                }
-                let source = samples.first?.sourceRevision.source.name ?? "watch"
-                for (windowStart, totalKcal) in windowGroups {
-                    allEvents.append(SensingEvent(timestamp: windowStart, modality: .activeEnergy, payload: [
-                        "kcal": String(format: "%.0f", totalKcal),
-                        "source": source,
-                    ]))
-                }
+                let hourlyEvents = Self.aggregateEnergyByHour(samples: samples, modality: .activeEnergy, calendar: calendar, now: now)
+                allEvents.append(contentsOf: hourlyEvents)
             }
             store.execute(q)
         }
 
-        // Basal energy
+        // Basal energy — aggregate by hour
         if let type = HKQuantityType.quantityType(forIdentifier: .basalEnergyBurned) {
             group.enter()
             let q = HKSampleQuery(sampleType: type, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: [sort]) { _, samples, _ in
                 defer { group.leave() }
                 guard let samples = samples as? [HKQuantitySample] else { return }
-                for s in samples {
-                    let kcal = s.quantity.doubleValue(for: .kilocalorie())
-                    allEvents.append(SensingEvent(timestamp: s.startDate, modality: .basalEnergy, payload: [
-                        "kcal": String(format: "%.1f", kcal),
-                        "source": s.sourceRevision.source.name,
-                    ]))
-                }
+                let hourlyEvents = Self.aggregateEnergyByHour(samples: samples, modality: .basalEnergy, calendar: calendar, now: now)
+                allEvents.append(contentsOf: hourlyEvents)
             }
             store.execute(q)
         }
@@ -1801,6 +1784,70 @@ final class BoboViewModel {
         case .stairClimbing: return "stairs"
         case .hiking: return "hiking"
         default: return "other"
+        }
+    }
+
+    /// Aggregate energy samples into hourly windows.
+    /// Each window is timestamped at the hour start (e.g. 9:00 AM).
+    /// The current hour is marked with `ongoing: true` so the display can show "so far".
+    private static func aggregateEnergyByHour(
+        samples: [HKQuantitySample],
+        modality: SensingModality,
+        calendar: Calendar,
+        now: Date
+    ) -> [SensingEvent] {
+        var hourlyBuckets: [Date: Double] = [:]
+        for s in samples {
+            let kcal = s.quantity.doubleValue(for: .kilocalorie())
+            let comps = calendar.dateComponents([.year, .month, .day, .hour], from: s.startDate)
+            let hourStart = calendar.date(from: comps) ?? s.startDate
+            hourlyBuckets[hourStart, default: 0] += kcal
+        }
+
+        let currentHourComps = calendar.dateComponents([.year, .month, .day, .hour], from: now)
+        let currentHourStart = calendar.date(from: currentHourComps)
+
+        let source = samples.first?.sourceRevision.source.name ?? "watch"
+        return hourlyBuckets.map { (hourStart, totalKcal) in
+            let nextHour = calendar.date(byAdding: .hour, value: 1, to: hourStart)!
+            let hourLabel = Self.hourRangeLabel(from: hourStart, to: nextHour)
+            let isOngoing = (hourStart == currentHourStart)
+            var payload: [String: String] = [
+                "kcal": String(format: "%.0f", totalKcal),
+                "hourLabel": hourLabel,
+                "source": source,
+            ]
+            if isOngoing {
+                payload["ongoing"] = "true"
+            }
+            return SensingEvent(timestamp: hourStart, modality: modality, payload: payload)
+        }
+    }
+
+    /// Format an hour range like "9-10AM" or "12-1PM".
+    private static func hourRangeLabel(from start: Date, to end: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+
+        // Check if both hours share the same AM/PM
+        let startHour = Calendar.current.component(.hour, from: start)
+        let endHour = Calendar.current.component(.hour, from: end)
+        let startIsAM = startHour < 12
+        let endIsAM = endHour < 12
+
+        if startIsAM == endIsAM {
+            // Same period: "9-10AM"
+            formatter.dateFormat = "h"
+            let s = formatter.string(from: start)
+            formatter.dateFormat = "ha"
+            let e = formatter.string(from: end)
+            return "\(s)-\(e)"
+        } else {
+            // Cross period: "11AM-12PM"
+            formatter.dateFormat = "ha"
+            let s = formatter.string(from: start)
+            let e = formatter.string(from: end)
+            return "\(s)-\(e)"
         }
     }
 
