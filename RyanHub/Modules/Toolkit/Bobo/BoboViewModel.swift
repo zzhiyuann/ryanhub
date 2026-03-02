@@ -769,9 +769,6 @@ final class BoboViewModel {
 
         // Fetch HealthKit data directly from Apple Health
         requestHealthKitAuthAndFetch()
-
-        // Seed the chat context cache with whatever data is available now
-        updateBoboProviderCache()
     }
 
     /// Request HealthKit read authorization (if not yet granted) and fetch data.
@@ -1845,7 +1842,6 @@ final class BoboViewModel {
             print("[BoBo] HealthKit direct query: fetched \(allEvents.count) events for \(self.selectedDate)")
             Task { @MainActor in
                 self.healthKitEvents = allEvents
-                self.updateBoboProviderCache()
             }
         }
     }
@@ -1943,138 +1939,7 @@ final class BoboViewModel {
         engine.checkForNewPhotos()
     }
 
-    // MARK: - Chat Context Cache
-
-    /// Update the BoboDataProvider static cache with current timeline data.
-    /// Called after data loads or changes so chat context reflects the latest state.
-    func updateBoboProviderCache() {
-        let timeFormatter = DateFormatter()
-        timeFormatter.dateFormat = "h:mm a"
-
-        let events = eventsForSelectedDate
-        let dayNarrations = narrationsForSelectedDate
-
-        // Build summary
-        let ds = daySummary
-        let summaryData = BoboDataProvider.Snapshot.SummaryData(
-            totalSteps: ds.totalSteps,
-            activityBreakdown: ds.activityBreakdown,
-            locationChanges: ds.locationChanges,
-            screenEvents: ds.screenEvents,
-            narrationCount: ds.narrationCount,
-            eventCount: ds.eventCount,
-            totalCaloriesConsumed: ds.totalCaloriesConsumed,
-            totalActivityMinutes: ds.totalActivityMinutes,
-            totalCaloriesBurned: ds.totalCaloriesBurned
-        )
-
-        // Build motion episodes (sorted chronologically)
-        let motionEpisodes: [BoboDataProvider.Snapshot.MotionEpisode] = events
-            .filter { $0.modality == .motion }
-            .sorted { $0.timestamp < $1.timestamp }
-            .map { event in
-                let activity = event.payload["activityType"] ?? "unknown"
-                let durationStr: String? = event.payload["duration"].flatMap { dur in
-                    guard let secs = Double(dur), secs > 0 else { return nil }
-                    let mins = Int(secs / 60)
-                    return mins > 0 ? "\(mins) min" : "\(Int(secs))s"
-                }
-                return BoboDataProvider.Snapshot.MotionEpisode(
-                    time: timeFormatter.string(from: event.timestamp),
-                    activity: activity,
-                    duration: durationStr,
-                    nextActivity: event.payload["nextActivity"]
-                )
-            }
-
-        // Build narration snippets
-        let narrationSnippets: [BoboDataProvider.Snapshot.NarrationSnippet] = dayNarrations
-            .sorted { $0.timestamp < $1.timestamp }
-            .map { nar in
-                let truncated = nar.transcript.count > 100
-                    ? String(nar.transcript.prefix(100)) + "..."
-                    : nar.transcript
-                return BoboDataProvider.Snapshot.NarrationSnippet(
-                    time: timeFormatter.string(from: nar.timestamp),
-                    transcript: truncated,
-                    primaryEmotion: nar.affectAnalysis?.primaryEmotion,
-                    mood: nar.affectAnalysis?.mood
-                )
-            }
-
-        // Build health highlights
-        var healthHighlights: [BoboDataProvider.Snapshot.HealthHighlight] = []
-
-        // Heart rate: avg and max
-        let hrEvents = events.filter { $0.modality == .heartRate }
-        if !hrEvents.isEmpty {
-            let bpms = hrEvents.compactMap { Double($0.payload["bpm"] ?? "") }
-            if !bpms.isEmpty {
-                let avg = Int(bpms.reduce(0, +) / Double(bpms.count))
-                let max = Int(bpms.max() ?? 0)
-                healthHighlights.append(.init(metric: "Heart Rate", value: "avg \(avg) bpm, max \(max) bpm"))
-            }
-        }
-
-        // HRV
-        let hrvEvents = events.filter { $0.modality == .hrv }
-        if let latestHRV = hrvEvents.first, let sdnn = latestHRV.payload["sdnn"] {
-            healthHighlights.append(.init(metric: "HRV", value: "\(sdnn) ms"))
-        }
-
-        // Sleep
-        let sleepEvents = events.filter { $0.modality == .sleep }
-        if !sleepEvents.isEmpty {
-            let totalSleepSecs = sleepEvents.compactMap { event -> Double? in
-                guard let start = event.payload["startDate"], let end = event.payload["endDate"] else { return nil }
-                let iso = ISO8601DateFormatter()
-                guard let s = iso.date(from: start), let e = iso.date(from: end) else { return nil }
-                return e.timeIntervalSince(s)
-            }.reduce(0, +)
-            let hours = Int(totalSleepSecs / 3600)
-            let mins = Int((totalSleepSecs.truncatingRemainder(dividingBy: 3600)) / 60)
-            if hours > 0 || mins > 0 {
-                healthHighlights.append(.init(metric: "Sleep", value: "\(hours)h \(mins)m"))
-            }
-        }
-
-        // Active energy
-        let energyEvents = events.filter { $0.modality == .activeEnergy }
-        if !energyEvents.isEmpty {
-            let totalKcal = energyEvents.compactMap { Double($0.payload["kcal"] ?? "") }.reduce(0, +)
-            if totalKcal > 0 {
-                healthHighlights.append(.init(metric: "Active Energy", value: "\(Int(totalKcal)) kcal"))
-            }
-        }
-
-        // Blood oxygen
-        let spo2Events = events.filter { $0.modality == .bloodOxygen }
-        if let latest = spo2Events.first, let spo2 = latest.payload["spo2"] {
-            healthHighlights.append(.init(metric: "Blood Oxygen", value: "\(spo2)%"))
-        }
-
-        // Workouts
-        let workoutEvents = events.filter { $0.modality == .workout }
-        for w in workoutEvents {
-            let type = w.payload["type"] ?? "exercise"
-            var desc = type
-            if let dur = w.payload["duration"], let secs = Double(dur) {
-                desc += " \(Int(secs / 60)) min"
-            }
-            if let cal = w.payload["calories"] {
-                desc += ", \(cal) cal"
-            }
-            healthHighlights.append(.init(metric: "Workout", value: desc))
-        }
-
-        BoboDataProvider.cachedSnapshot = BoboDataProvider.Snapshot(
-            date: selectedDate,
-            summary: summaryData,
-            motionEpisodes: motionEpisodes,
-            narrations: narrationSnippets,
-            healthHighlights: healthHighlights
-        )
-    }
+    // MARK: - Server Narration Sync
 
     /// Pull narrations from bridge server to pick up agent-created entries.
     func pullNarrationsFromServer() async {
@@ -2097,7 +1962,6 @@ final class BoboViewModel {
                 narrations.sort { $0.timestamp > $1.timestamp }
                 saveNarrations()
                 print("[BoBo] Pulled \(newNarrations.count) new narrations from server")
-                updateBoboProviderCache()
             }
         } catch {
             print("[BoBo] Failed to pull narrations from server: \(error.localizedDescription)")

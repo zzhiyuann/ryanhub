@@ -58,12 +58,10 @@ struct BoboView: View {
                 }
                 viewModel.resumeAudioStreamIfNeeded()
                 viewModel.checkForNewPhotos()
-                viewModel.updateBoboProviderCache()
             }
         }
         .onChange(of: viewModel.selectedDate) {
             viewModel.fetchHealthKitEvents()
-            viewModel.updateBoboProviderCache()
         }
     }
 
