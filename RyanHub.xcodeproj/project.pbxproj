@@ -81,6 +81,7 @@
 		A440D502E05A68D109AF8BC9 /* HubTextField.swift in Sources */ = {isa = PBXBuildFile; fileRef = E65564252C7D5721D9784435 /* HubTextField.swift */; };
 		A67D87D9ECA15A068F404093 /* SSHConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 451A5D81323FC8ABDC20C701 /* SSHConnection.swift */; };
 		AB3C20EDEFED295D54AD7F52 /* ToolkitTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0D1D7BFF0973ACC109D2297 /* ToolkitTests.swift */; };
+		AC7FE87050DFD60168C3629C /* BoboDataProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFD7A7D51DF4CC4913F26E5E /* BoboDataProvider.swift */; };
 		AC926C15910B628851A926E3 /* SensingEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 327B76A77F58B8E695E0A660 /* SensingEvent.swift */; };
 		B3CB4EA04A8ED2E6B0F445EE /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 925B470E17A407A342F947A5 /* ChatView.swift */; };
 		B3DA11875470725BE119C406 /* ChatViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16AA3B6CD78A2A3E597642C3 /* ChatViewModel.swift */; };
@@ -245,6 +246,7 @@
 		FBB4632AD98A761C6891EDFC /* FluentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FluentView.swift; sourceTree = "<group>"; };
 		FDA7223EFC10C281D46964EB /* BookFactoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookFactoryTests.swift; sourceTree = "<group>"; };
 		FED78D1EEEF5E019B862807A /* AccessibilityID.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityID.swift; sourceTree = "<group>"; };
+		FFD7A7D51DF4CC4913F26E5E /* BoboDataProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoboDataProvider.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -573,6 +575,7 @@
 		D40038C5CBC8341ED305EEEE /* Bobo */ = {
 			isa = PBXGroup;
 			children = (
+				FFD7A7D51DF4CC4913F26E5E /* BoboDataProvider.swift */,
 				10CCB714953A5915382AFF19 /* BoboViewModel.swift */,
 				A950349796612DFC264C6BAB /* Models */,
 				9DAB643A9F08A34D54CDF214 /* Sensing */,
@@ -782,6 +785,7 @@
 				D91D52956D58B3696D41FEFB /* BatterySensor.swift in Sources */,
 				FDEDEB3A4213E03315353DC0 /* BluetoothSensor.swift in Sources */,
 				6681317081E3682162B077D4 /* BoAvatar.swift in Sources */,
+				AC7FE87050DFD60168C3629C /* BoboDataProvider.swift in Sources */,
 				85F41B9342763DBF9500FEBD /* BoboDataStore.swift in Sources */,
 				3863910D12EFCFE24D9A5A72 /* BoboSyncService.swift in Sources */,
 				6ED2A4ECD3FB8023B9F98337 /* BoboView.swift in Sources */,

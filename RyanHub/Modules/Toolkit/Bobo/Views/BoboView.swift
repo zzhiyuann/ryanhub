@@ -54,13 +54,16 @@ struct BoboView: View {
                 viewModel.refreshHealthData()
                 Task {
                     await viewModel.checkAndGenerateNudgesIfNeeded()
+                    await viewModel.pullNarrationsFromServer()
                 }
                 viewModel.resumeAudioStreamIfNeeded()
                 viewModel.checkForNewPhotos()
+                viewModel.updateBoboProviderCache()
             }
         }
         .onChange(of: viewModel.selectedDate) {
             viewModel.fetchHealthKitEvents()
+            viewModel.updateBoboProviderCache()
         }
     }
 

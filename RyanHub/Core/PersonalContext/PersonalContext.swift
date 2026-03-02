@@ -17,6 +17,7 @@ enum PersonalContext {
         ParkingDataProvider.self,
         CalendarDataProvider.self,
         BookFactoryDataProvider.self,
+        BoboDataProvider.self,
     ]
 
     /// Build context by injecting ALL provider summaries into every message.

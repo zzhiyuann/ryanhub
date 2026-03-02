@@ -1262,6 +1262,11 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
             self._append_health_entry(_ADD_ENDPOINTS[path])
             return
 
+        # BoBo narration single-entry append (for chat agent)
+        if path == "/popo/narrations/add":
+            self._append_narration_entry()
+            return
+
         # Server-side data write (health + chat + popo)
         if path in DATA_FILES:
             self._write_data_file(path)
@@ -1449,6 +1454,66 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
             self._send_json(200, {"ok": True, "id": entry["id"], "count": len(data)})
         except IOError as e:
             self._send_json(500, {"error": f"Failed to write: {e}"})
+
+    def _append_narration_entry(self):
+        """Append a single narration entry (for chat agent adding text diary).
+
+        Accepts a JSON object with at least 'transcript'. Generates 'id' and
+        'timestamp' if missing. Sets duration=0 (text entry, no audio).
+        Merges into the narrations file by id."""
+        try:
+            content_length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(content_length)
+            entry = json.loads(body) if body else {}
+        except (json.JSONDecodeError, ValueError) as e:
+            self._send_json(400, {"error": f"Invalid body: {e}"})
+            return
+
+        if not isinstance(entry, dict):
+            self._send_json(400, {"error": "Expected a JSON object"})
+            return
+
+        if not entry.get("transcript"):
+            self._send_json(400, {"error": "Missing required field: transcript"})
+            return
+
+        import uuid
+        from datetime import datetime, timezone
+
+        if "id" not in entry:
+            entry["id"] = str(uuid.uuid4()).upper()
+        if "timestamp" not in entry:
+            entry["timestamp"] = datetime.now(timezone.utc).isoformat()
+        entry.setdefault("duration", 0)
+        entry.setdefault("transcript", "")
+
+        filepath = DATA_FILES.get("/popo/narrations")
+        if not filepath:
+            self._send_json(500, {"error": "Narrations data path not configured"})
+            return
+
+        with _narrations_file_lock:
+            existing = []
+            if os.path.exists(filepath):
+                try:
+                    with open(filepath, "r") as f:
+                        content = f.read()
+                    existing = json.loads(content) if content.strip() else []
+                except (json.JSONDecodeError, IOError):
+                    existing = []
+
+            merged = {}
+            for item in existing:
+                if isinstance(item, dict) and "id" in item:
+                    merged[item["id"]] = item
+            merged[entry["id"]] = entry
+
+            try:
+                with open(filepath, "w") as f:
+                    json.dump(list(merged.values()), f, ensure_ascii=False)
+                self._send_json(200, {"ok": True, "id": entry["id"]})
+            except IOError as e:
+                self._send_json(500, {"error": f"Failed to write: {e}"})
 
     # -----------------------------------------------------------------------
     # POPO data endpoints
