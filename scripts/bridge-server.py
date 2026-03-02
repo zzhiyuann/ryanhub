@@ -97,6 +97,9 @@ DATA_FILES = {
     "/popo/daily-summary": os.path.join(BRIDGE_DATA_DIR, "popo_summaries.json"),
 }
 
+# Processed timeline snapshot (single JSON object, overwritten by iOS app)
+POPO_TIMELINE_FILE = os.path.join(BRIDGE_DATA_DIR, "popo_timeline.json")
+
 # POPO audio storage directory
 POPO_AUDIO_DIR = os.path.join(BRIDGE_DATA_DIR, "popo_audio")
 os.makedirs(POPO_AUDIO_DIR, exist_ok=True)
@@ -1205,6 +1208,8 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
             self._send_json(200, {"status": "ok"})
         elif path in PARKING_FILES:
             self._serve_parking_file(path)
+        elif path == "/popo/timeline":
+            self._serve_timeline()
         elif path.startswith("/popo/audio/"):
             self._serve_audio_file(path)
         elif path in DATA_FILES and path.startswith("/popo/"):
@@ -1260,6 +1265,11 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
         }
         if path in _ADD_ENDPOINTS:
             self._append_health_entry(_ADD_ENDPOINTS[path])
+            return
+
+        # BoBo processed timeline snapshot (overwrite)
+        if path == "/popo/timeline":
+            self._write_timeline()
             return
 
         # BoBo narration single-entry append (for chat agent)
@@ -1454,6 +1464,31 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
             self._send_json(200, {"ok": True, "id": entry["id"], "count": len(data)})
         except IOError as e:
             self._send_json(500, {"error": f"Failed to write: {e}"})
+
+    def _serve_timeline(self):
+        """Serve the processed timeline snapshot (same data the phone UI shows)."""
+        if not os.path.exists(POPO_TIMELINE_FILE):
+            self._send_json(200, {"date": "", "totalEvents": 0, "summary": {}, "items": []})
+            return
+        try:
+            with open(POPO_TIMELINE_FILE, "r") as f:
+                data = json.load(f)
+            self._send_json(200, data)
+        except (IOError, json.JSONDecodeError) as e:
+            self._send_json(500, {"error": f"Failed to read timeline: {e}"})
+
+    def _write_timeline(self):
+        """Store the processed timeline snapshot from the iOS app."""
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(length) if length else b""
+            data = json.loads(body) if body else {}
+            with open(POPO_TIMELINE_FILE, "w") as f:
+                json.dump(data, f, ensure_ascii=False)
+            count = len(data.get("items", []))
+            self._send_json(200, {"ok": True, "items": count})
+        except (json.JSONDecodeError, IOError) as e:
+            self._send_json(500, {"error": f"Failed to write timeline: {e}"})
 
     def _append_narration_entry(self):
         """Append a single narration entry (for chat agent adding text diary).

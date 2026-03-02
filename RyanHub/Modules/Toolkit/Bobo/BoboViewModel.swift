@@ -1939,6 +1939,288 @@ final class BoboViewModel {
         engine.checkForNewPhotos()
     }
 
+    // MARK: - Processed Timeline Push
+
+    /// Push the processed timeline (same data the UI shows) to the bridge server
+    /// so the chat agent can read clean, filtered data instead of raw sensing events.
+    func pushTimelineToServer() {
+        let items = timelineItems
+        let summary = daySummary
+
+        let timeFormatter = DateFormatter()
+        timeFormatter.dateFormat = "h:mm a"
+
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd (EEEE)"
+
+        // Build compact JSON entries matching what the phone UI displays
+        var jsonItems: [[String: String]] = []
+        for item in items {
+            let time = timeFormatter.string(from: item.timestamp)
+            let (type, detail) = timelineItemDisplay(item)
+            jsonItems.append(["time": time, "type": type, "detail": detail])
+        }
+
+        // Build summary dict
+        var summaryDict: [String: Any] = [
+            "steps": summary.totalSteps,
+            "narrations": summary.narrationCount,
+            "nudges": summary.nudgeCount,
+            "screenEvents": summary.screenEvents,
+            "locationChanges": summary.locationChanges,
+            "caloriesConsumed": summary.totalCaloriesConsumed,
+            "caloriesBurned": summary.totalCaloriesBurned,
+            "activityMinutes": summary.totalActivityMinutes,
+        ]
+        if !summary.activityBreakdown.isEmpty {
+            summaryDict["activityBreakdown"] = summary.activityBreakdown
+        }
+
+        let payload: [String: Any] = [
+            "date": dateFormatter.string(from: selectedDate),
+            "totalEvents": items.count,
+            "summary": summaryDict,
+            "items": jsonItems,
+        ]
+
+        guard let url = URL(string: "\(Self.bridgeBaseURL)/bobo/timeline"),
+              let body = try? JSONSerialization.data(withJSONObject: payload) else { return }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = body
+
+        Task.detached {
+            do {
+                let (_, response) = try await URLSession.shared.data(for: request)
+                if let http = response as? HTTPURLResponse, http.statusCode == 200 {
+                    print("[BoBo] Pushed processed timeline (\(items.count) items) to bridge server")
+                }
+            } catch {
+                print("[BoBo] Failed to push timeline: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    /// Generate display text (type, detail) for a timeline item — mirrors TimelineEventRow rendering.
+    private func timelineItemDisplay(_ item: TimelineItem) -> (type: String, detail: String) {
+        switch item {
+        case .sensing(let event):
+            return (modalityDisplayName(event.modality), sensingEventSummary(event))
+        case .narration(let narration):
+            let type = narration.duration > 0 ? "Voice Narration" : "Text Narration"
+            let detail = narration.transcript.isEmpty ? "Text entry" : narration.transcript
+            return (type, detail)
+        case .nudge(let nudge):
+            return ("Bo says", nudge.content)
+        case .meal(let food):
+            return (food.mealType.displayName, food.aiSummary ?? food.description)
+        case .activity(let activity):
+            var parts: [String] = [activityFormattedDuration(activity.duration)]
+            if let cal = activity.caloriesBurned, cal > 0 {
+                parts.append("\(cal) cal burned")
+            }
+            return (activity.type, parts.joined(separator: " \u{00B7} "))
+        }
+    }
+
+    // MARK: - Display Helpers (mirror TimelineEventRow)
+
+    private func modalityDisplayName(_ modality: SensingModality) -> String {
+        switch modality {
+        case .motion: return "Motion"
+        case .steps: return "Steps"
+        case .heartRate: return "Heart Rate"
+        case .hrv: return "HRV"
+        case .sleep: return "Sleep"
+        case .location: return "Location"
+        case .screen: return "Screen"
+        case .workout: return "Workout"
+        case .activeEnergy: return "Active Energy"
+        case .basalEnergy: return "Resting Energy"
+        case .respiratoryRate: return "Respiratory Rate"
+        case .bloodOxygen: return "Blood Oxygen"
+        case .noiseExposure: return "Noise Level"
+        case .battery: return "Battery"
+        case .call: return "Phone Call"
+        case .wifi: return "Wi-Fi"
+        case .bluetooth: return "Bluetooth"
+        case .visit: return "Visit"
+        case .audio: return "Audio"
+        case .photo: return "Photo"
+        }
+    }
+
+    private func sensingEventSummary(_ event: SensingEvent) -> String {
+        switch event.modality {
+        case .motion:
+            let activity = (event.payload["activityType"] ?? "unknown").capitalized
+            if let durationStr = event.payload["duration"],
+               let duration = Double(durationStr),
+               let nextActivity = event.payload["nextActivity"] {
+                return "\(activity) (\(formatDuration(duration))) \u{2192} \(nextActivity.capitalized)"
+            }
+            return activity
+        case .steps:
+            return "\(event.payload["steps"] ?? "0") steps"
+        case .heartRate:
+            let bpm = event.payload["bpm"] ?? "0"
+            let isAnomaly = event.payload["anomaly"] == "true"
+            if let minBPM = event.payload["min"], let maxBPM = event.payload["max"], minBPM != maxBPM {
+                let prefix = isAnomaly ? "\u{26A0} " : ""
+                return "\(prefix)\(bpm) BPM (\(minBPM)\u{2013}\(maxBPM))"
+            }
+            return isAnomaly ? "\u{26A0} \(bpm) BPM" : "\(bpm) BPM"
+        case .hrv:
+            return "\(event.payload["sdnn"] ?? "0") ms SDNN"
+        case .sleep:
+            let stage = event.payload["stage"] ?? "unknown"
+            switch stage {
+            case "inBed": return "In Bed"
+            case "awake": return "Awake"
+            case "asleep": return "Asleep"
+            case "core": return "Core Sleep"
+            case "deep": return "Deep Sleep"
+            case "rem": return "REM Sleep"
+            default: return stage.capitalized
+            }
+        case .location:
+            if let label = event.payload["semanticLabel"], !label.isEmpty {
+                if let placeName = event.payload["placeName"], !placeName.isEmpty {
+                    return "\(label) \u{00B7} \(placeName)"
+                }
+                return label
+            }
+            if let placeName = event.payload["placeName"], !placeName.isEmpty {
+                let placeType = event.payload["placeType"] ?? ""
+                return placeType.isEmpty ? placeName : "\(placeName) (\(placeType))"
+            }
+            if let address = event.payload["address"], !address.isEmpty {
+                let neighborhood = event.payload["neighborhood"] ?? ""
+                return neighborhood.isEmpty ? address : "\(neighborhood) \u{00B7} \(address)"
+            }
+            let lat = event.payload["latitude"] ?? "?"
+            let lon = event.payload["longitude"] ?? "?"
+            return event.payload["visit"] == "true" ? "Visit at (\(lat), \(lon))" : "(\(lat), \(lon))"
+        case .screen:
+            let state = event.payload["state"] ?? "unknown"
+            if state == "hourly_aggregate" {
+                let count = event.payload["count"] ?? "0"
+                let openLabel = count == "1" ? "open" : "opens"
+                var parts = ["Screen \u{00B7} \(count) \(openLabel)"]
+                if let totalDurStr = event.payload["totalDuration"],
+                   let totalDur = Double(totalDurStr), totalDur > 0 {
+                    parts.append("\(formatDuration(totalDur)) total")
+                }
+                return parts.joined(separator: " \u{00B7} ")
+            }
+            guard state == "on" else { return "Screen \(state)" }
+            var parts: [String] = ["Screen On"]
+            if let onDurStr = event.payload["onDuration"],
+               let onDur = Double(onDurStr), onDur > 0 {
+                parts[0] = "Screen On \u{00B7} \(formatDuration(onDur))"
+            }
+            if let offDurStr = event.payload["offDuration"],
+               let offDur = Double(offDurStr), offDur > 0 {
+                parts.append("Off for \(formatDuration(offDur))")
+            }
+            return parts.joined(separator: " \u{00B7} ")
+        case .workout:
+            let type = event.payload["type"] ?? "unknown"
+            let calories = event.payload["calories"] ?? "0"
+            return "\(type) \u{2014} \(calories) kcal"
+        case .activeEnergy:
+            let kcal = event.payload["kcal"] ?? "0"
+            let hourLabel = event.payload["hourLabel"] ?? ""
+            if event.payload["ongoing"] == "true" {
+                return "\(kcal) kcal so far since \(hourLabel.components(separatedBy: "-").first ?? "")"
+            }
+            return "\(hourLabel): \(kcal) kcal"
+        case .basalEnergy:
+            let kcal = event.payload["kcal"] ?? "0"
+            let hourLabel = event.payload["hourLabel"] ?? ""
+            if event.payload["ongoing"] == "true" {
+                return "\(kcal) kcal so far since \(hourLabel.components(separatedBy: "-").first ?? "")"
+            }
+            return "\(hourLabel): \(kcal) kcal"
+        case .respiratoryRate:
+            return "\(event.payload["breathsPerMin"] ?? "0") breaths/min"
+        case .bloodOxygen:
+            let spo2 = event.payload["spo2"] ?? "0"
+            return (Double(spo2) ?? 100) < 95 ? "\u{26A0} \(spo2)% SpO2" : "\(spo2)% SpO2"
+        case .noiseExposure:
+            return "\(event.payload["decibels"] ?? "0") dB"
+        case .call:
+            let direction = event.payload["direction"] ?? event.payload["state"] ?? "unknown"
+            let status = event.payload["status"] ?? "unknown"
+            let dirLabel = direction == "outgoing" ? "Outgoing" : "Incoming"
+            if status == "answered" {
+                if let d = event.payload["duration"].flatMap(Double.init) {
+                    return "\(dirLabel) Call \u{00B7} \(formatDuration(d))"
+                }
+                return "\(dirLabel) Call \u{00B7} ongoing"
+            } else if status == "missed" {
+                return "Missed Call"
+            } else if status == "no_answer" {
+                return "Outgoing Call \u{00B7} no answer"
+            }
+            let state = event.payload["state"] ?? ""
+            if state == "ended", event.payload["hasConnected"] == "true",
+               let d = event.payload["duration"].flatMap(Double.init) {
+                return "\(dirLabel) Call \u{00B7} \(formatDuration(d))"
+            }
+            return "\(dirLabel) Call"
+        case .battery:
+            return "\(event.payload["level"] ?? "?")%"
+        case .wifi:
+            return event.payload["ssid"] ?? "unknown"
+        case .bluetooth:
+            if let total = event.payload["deviceCount"], let named = event.payload["namedCount"] {
+                return "\(total) devices nearby (\(named) named)"
+            }
+            return event.payload["device"] ?? "unknown"
+        case .visit:
+            return event.payload["description"] ?? "unknown"
+        case .audio:
+            let status = event.payload["status"] ?? ""
+            switch status {
+            case "listening": return "Listening..."
+            case "transcript":
+                let text = event.payload["text"] ?? ""
+                let preview = text.prefix(60)
+                let suffix = text.count > 60 ? "..." : ""
+                if let speaker = event.payload["speaker"], !speaker.isEmpty {
+                    return "\(speaker.capitalized): \(preview)\(suffix)"
+                }
+                return String(preview) + suffix
+            case "error": return event.payload["error"] ?? "Audio error"
+            default: return "Audio Segment"
+            }
+        case .photo:
+            return "Photo"
+        }
+    }
+
+    private func formatDuration(_ seconds: TimeInterval) -> String {
+        let totalSeconds = Int(seconds)
+        let hours = totalSeconds / 3600
+        let minutes = (totalSeconds % 3600) / 60
+        let secs = totalSeconds % 60
+        if hours > 0 { return minutes > 0 ? "\(hours)h \(minutes)m" : "\(hours)h" }
+        if minutes > 0 { return secs > 0 ? "\(minutes)m \(secs)s" : "\(minutes)m" }
+        return "\(secs)s"
+    }
+
+    private func activityFormattedDuration(_ minutes: Int) -> String {
+        if minutes >= 60 {
+            let h = minutes / 60
+            let m = minutes % 60
+            return m > 0 ? "\(h)h \(m)m" : "\(h)h"
+        }
+        return "\(minutes)m"
+    }
+
     // MARK: - Server Narration Sync
 
     /// Pull narrations from bridge server to pick up agent-created entries.

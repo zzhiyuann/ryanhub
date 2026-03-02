@@ -3,9 +3,8 @@ import Foundation
 // MARK: - BoBo Data Provider
 
 /// Provides BoBo API access instructions for chat context injection.
-/// Does NOT inject actual timeline data (too large). Instead tells the agent
-/// how to query the bridge server for sensing events, narrations, and summaries
-/// on demand when the user asks BoBo-related questions.
+/// Tells the agent how to read the processed timeline (same as what the phone UI displays)
+/// and how to write diary entries via the bridge server.
 enum BoboDataProvider: ToolkitDataProvider {
 
     static let toolkitId = "bobo"
@@ -26,12 +25,11 @@ enum BoboDataProvider: ToolkitDataProvider {
 
         lines.append("BoBo is the user's behavioral sensing system that tracks motion, steps, heart rate, HRV, sleep, location, screen usage, workouts, and more. It also stores voice/text diary narrations with emotion analysis.")
         lines.append("")
-        lines.append("READ — Query timeline data from bridge server when the user asks about their behavior, activity, health metrics, or diary:")
-        lines.append("- Sensing events for a date: curl -s http://localhost:18790/bobo/sensing?date=YYYY-MM-DD")
-        lines.append("  Returns JSON array of {id, timestamp, modality, payload}. Modalities: motion, steps, heartRate, hrv, sleep, location, screen, workout, activeEnergy, basalEnergy, respiratoryRate, bloodOxygen, noiseExposure, battery, call, wifi, bluetooth, audio, photo")
-        lines.append("- Narrations (diary entries): curl -s http://localhost:18790/bobo/narrations")
-        lines.append("  Returns JSON array of {id, timestamp, transcript, duration, affectAnalysis: {mood, energy, stress, primaryEmotion, valence, arousal}}")
-        lines.append("- Use today's date if no date specified. Filter and analyze the JSON to answer the user's questions.")
+        lines.append("READ — Get the user's processed timeline (filtered, deduplicated, same as what the phone UI shows):")
+        lines.append("curl -s http://localhost:18790/bobo/timeline")
+        lines.append("Returns JSON: {date, totalEvents, summary: {steps, narrations, nudges, screenEvents, locationChanges, caloriesConsumed, caloriesBurned, activityMinutes, activityBreakdown}, items: [{time, type, detail}, ...]}.")
+        lines.append("Items are sorted newest-first. Each item has: time (e.g. '12:08 PM'), type (e.g. 'Motion', 'Heart Rate', 'Location'), detail (e.g. 'Walking (8s) → Stationary', '91 BPM', 'University of Virginia').")
+        lines.append("This is the ONLY endpoint to use for timeline analysis — it contains all processed data from the phone.")
         lines.append("")
         lines.append("WRITE — Add a diary entry to BoBo timeline:")
         lines.append("curl -s -X POST http://localhost:18790/bobo/narrations/add -H 'Content-Type: application/json' -d '{\"transcript\":\"what the user said or described\"}'")

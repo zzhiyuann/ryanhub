@@ -56,12 +56,14 @@ struct BoboView: View {
                     await viewModel.checkAndGenerateNudgesIfNeeded()
                     await viewModel.pullNarrationsFromServer()
                 }
+                viewModel.pushTimelineToServer()
                 viewModel.resumeAudioStreamIfNeeded()
                 viewModel.checkForNewPhotos()
             }
         }
         .onChange(of: viewModel.selectedDate) {
             viewModel.fetchHealthKitEvents()
+            viewModel.pushTimelineToServer()
         }
     }
 
