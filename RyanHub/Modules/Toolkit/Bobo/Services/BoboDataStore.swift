@@ -57,6 +57,7 @@ final class BoboDataStore {
         self.syncedIDsFilePath = boboDir.appendingPathComponent("bobo_synced_ids.json")
 
         loadFromDisk()
+        migrateMotionToEpisodes()
         print("[BoboDataStore] Loaded \(events.count) events from disk")
     }
 
@@ -115,6 +116,50 @@ final class BoboDataStore {
     /// Return the count of pending (unsynced) events.
     var pendingCount: Int {
         events.count - syncedEventIDs.intersection(events.map(\.id)).count
+    }
+
+    // MARK: - Migration
+
+    /// One-time migration: convert old transition-point motion events to episode-based model.
+    /// For consecutive motion events sorted by time, enrich each with duration and nextActivity
+    /// from the following motion event.
+    private func migrateMotionToEpisodes() {
+        // Only run once
+        let migrationKey = "ryanhub_bobo_motion_episode_migration"
+        guard !UserDefaults.standard.bool(forKey: migrationKey) else { return }
+
+        // Collect motion events sorted oldest-first
+        let motionIndices = events.indices.filter { events[$0].modality == .motion }
+        let sorted = motionIndices.sorted { events[$0].timestamp < events[$1].timestamp }
+
+        var changed = false
+        for (i, idx) in sorted.enumerated() {
+            // Skip events that already have episode data
+            guard events[idx].payload["duration"] == nil else { continue }
+
+            if i + 1 < sorted.count {
+                let nextIdx = sorted[i + 1]
+                let duration = events[nextIdx].timestamp.timeIntervalSince(events[idx].timestamp)
+                let nextActivity = events[nextIdx].payload["activityType"] ?? "unknown"
+                events[idx].payload["duration"] = String(format: "%.0f", duration)
+                events[idx].payload["nextActivity"] = nextActivity
+                changed = true
+            }
+
+            // Clean up old transition-point fields
+            if events[idx].payload["previousActivity"] != nil {
+                events[idx].payload.removeValue(forKey: "previousActivity")
+                events[idx].payload.removeValue(forKey: "previousDuration")
+                events[idx].payload.removeValue(forKey: "transitionType")
+                changed = true
+            }
+        }
+
+        if changed {
+            persistToDisk()
+            print("[BoboDataStore] Migrated \(sorted.count) motion events to episode model")
+        }
+        UserDefaults.standard.set(true, forKey: migrationKey)
     }
 
     // MARK: - Persistence
