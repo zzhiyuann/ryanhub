@@ -184,7 +184,7 @@ final class BoboViewModel {
     /// HealthKit modalities that come from direct Apple Health queries.
     /// These are excluded from engine.recentEvents to avoid duplication.
     private static let healthKitModalities: Set<SensingModality> = [
-        .heartRate, .hrv, .sleep, .workout, .activeEnergy,
+        .steps, .heartRate, .hrv, .sleep, .workout, .activeEnergy,
         .basalEnergy, .respiratoryRate, .bloodOxygen, .noiseExposure,
     ]
 
@@ -1639,6 +1639,30 @@ final class BoboViewModel {
         // Query all HealthKit types in parallel, collect results
         var allEvents: [SensingEvent] = []
         let group = DispatchGroup()
+
+        // Step count — daily total via statistics query
+        if let type = HKQuantityType.quantityType(forIdentifier: .stepCount) {
+            group.enter()
+            let statsQuery = HKStatisticsQuery(
+                quantityType: type,
+                quantitySamplePredicate: predicate,
+                options: .cumulativeSum
+            ) { _, statistics, _ in
+                defer { group.leave() }
+                guard let sum = statistics?.sumQuantity() else { return }
+                let steps = Int(sum.doubleValue(for: HKUnit.count()))
+                guard steps > 0 else { return }
+                allEvents.append(SensingEvent(
+                    timestamp: dayStart,
+                    modality: .steps,
+                    payload: [
+                        "steps": "\(steps)",
+                        "source": "healthkit",
+                    ]
+                ))
+            }
+            store.execute(statsQuery)
+        }
 
         // Heart rate
         if let type = HKQuantityType.quantityType(forIdentifier: .heartRate) {
