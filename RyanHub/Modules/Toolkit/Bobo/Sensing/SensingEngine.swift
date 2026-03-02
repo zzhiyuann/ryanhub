@@ -220,6 +220,11 @@ final class SensingEngine {
             return  // Don't create a new timeline row
         }
 
+        // Motion events: enrich the previous episode with duration and nextActivity
+        if event.modality == .motion, let newActivity = event.payload["activityType"] {
+            enrichLastMotionEpisode(nextActivity: newActivity, transitionTime: event.timestamp)
+        }
+
         // Add to UI display list (newest first)
         recentEvents.insert(event, at: 0)
 
@@ -242,6 +247,18 @@ final class SensingEngine {
             recentEvents[index].payload["onDuration"] = onDuration
             // Also update in the persisted data store
             dataStore.updateEventPayload(id: recentEvents[index].id, merge: ["onDuration": onDuration])
+        }
+    }
+
+    /// Find the most recent motion event and add `duration` and `nextActivity` to close the episode.
+    private func enrichLastMotionEpisode(nextActivity: String, transitionTime: Date) {
+        if let index = recentEvents.firstIndex(where: { $0.modality == .motion }) {
+            let episodeStart = recentEvents[index].timestamp
+            let duration = transitionTime.timeIntervalSince(episodeStart)
+            let durationStr = String(format: "%.0f", duration)
+            let merge = ["duration": durationStr, "nextActivity": nextActivity]
+            recentEvents[index].payload.merge(merge) { _, new in new }
+            dataStore.updateEventPayload(id: recentEvents[index].id, merge: merge)
         }
     }
 
@@ -391,11 +408,17 @@ final class SensingEngine {
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             activityManager.queryActivityStarting(from: start, to: end, to: queue) { [weak self] activities, error in
                 if let activities {
-                    // Apply the same HAR filtering as MotionSensor:
-                    // only emit transition points, skip unknown and low confidence.
-                    var lastActivity: String?
-                    var lastActivityTime: Date?
+                    // Build episode-based transitions: filter to meaningful state changes,
+                    // then enrich each episode with duration and nextActivity.
+                    struct Episode {
+                        let activityType: String
+                        let confidence: String
+                        let startDate: Date
+                    }
 
+                    // Pass 1: collect transitions (skip unknown + low confidence)
+                    var transitions: [Episode] = []
+                    var lastType: String?
                     for activity in activities {
                         let activityType: String
                         if activity.walking { activityType = "walking" }
@@ -403,13 +426,10 @@ final class SensingEngine {
                         else if activity.cycling { activityType = "cycling" }
                         else if activity.automotive { activityType = "automotive" }
                         else if activity.stationary { activityType = "stationary" }
-                        else { continue } // Skip unknown
+                        else { continue }
 
-                        // Skip low confidence
                         guard activity.confidence != .low else { continue }
-
-                        // Only emit transitions (activity type changed)
-                        guard activityType != lastActivity else { continue }
+                        guard activityType != lastType else { continue }
 
                         let confidence: String
                         switch activity.confidence {
@@ -418,27 +438,25 @@ final class SensingEngine {
                         default: confidence = "unknown"
                         }
 
+                        transitions.append(Episode(activityType: activityType, confidence: confidence, startDate: activity.startDate))
+                        lastType = activityType
+                    }
+
+                    // Pass 2: emit episodes with duration and nextActivity from the following transition
+                    for (i, ep) in transitions.enumerated() {
                         var payload: [String: String] = [
-                            "activityType": activityType,
-                            "confidence": confidence,
+                            "activityType": ep.activityType,
+                            "confidence": ep.confidence,
                             "source": "background_backfill"
                         ]
-
-                        // Include previous activity context for transition awareness
-                        if let prev = lastActivity {
-                            payload["previousActivity"] = prev
-                            payload["transitionType"] = "\(prev)_to_\(activityType)"
-                            if let prevTime = lastActivityTime {
-                                let duration = activity.startDate.timeIntervalSince(prevTime)
-                                payload["previousDuration"] = String(format: "%.0f", duration)
-                            }
+                        if i + 1 < transitions.count {
+                            let next = transitions[i + 1]
+                            let duration = next.startDate.timeIntervalSince(ep.startDate)
+                            payload["duration"] = String(format: "%.0f", duration)
+                            payload["nextActivity"] = next.activityType
                         }
-
-                        lastActivity = activityType
-                        lastActivityTime = activity.startDate
-
                         let event = SensingEvent(
-                            timestamp: activity.startDate,
+                            timestamp: ep.startDate,
                             modality: .motion,
                             payload: payload
                         )

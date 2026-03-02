@@ -4,10 +4,9 @@ import CoreMotion
 // MARK: - Motion Sensor
 
 /// Observes user motion activity and step counts using CoreMotion.
-/// Activity updates (walking, running, driving, stationary, cycling) arrive
-/// automatically when the state changes. Implements HAR (Human Activity Recognition)
-/// temporal clustering to reduce noise — only emits transition events when activity
-/// type changes with sufficient confidence and cooldown.
+/// Emits episode-based activity events: each event represents the START of an activity.
+/// When the activity changes, SensingEngine enriches the previous episode with
+/// duration and nextActivity. Unknown and low-confidence readings are ignored.
 final class MotionSensor {
     private let activityManager = CMMotionActivityManager()
     private let pedometer = CMPedometer()
@@ -16,16 +15,16 @@ final class MotionSensor {
     /// Callback invoked when a new sensing event is captured.
     var onEvent: ((SensingEvent) -> Void)?
 
-    // MARK: - HAR Temporal Clustering State
+    // MARK: - Episode Tracking
 
-    /// The last activity type that was actually reported (emitted as an event).
-    private var lastReportedActivity: String?
-
-    /// Timestamp when the last activity transition was reported.
-    private var lastActivityChangeTime: Date?
+    /// The current activity type being tracked.
+    private var currentActivity: String?
 
     /// Minimum time (seconds) between activity transitions to avoid noisy flapping.
     private static let transitionCooldown: TimeInterval = 10
+
+    /// Timestamp when the current activity episode started.
+    private var currentActivityStartTime: Date?
 
     // MARK: - Lifecycle
 
@@ -52,9 +51,9 @@ final class MotionSensor {
     // MARK: - Activity Updates
 
     /// Monitor real-time activity type changes (walking, running, driving, etc).
-    /// Applies HAR temporal clustering: only emits a transition event when the
-    /// activity type changes, confidence is at least medium, and the transition
-    /// cooldown has elapsed.
+    /// Each emitted event marks the START of an activity episode. SensingEngine
+    /// enriches the previous episode with duration and nextActivity upon receiving
+    /// the new event. Unknown and low-confidence readings are silently ignored.
     private func startActivityUpdates() {
         let queue = OperationQueue()
         queue.name = "com.ryanhub.bobo.motion"
@@ -65,50 +64,33 @@ final class MotionSensor {
 
             let activityType = Self.activityTypeString(from: activity)
 
-            // Ignore "unknown" — these are transient classifier uncertainty (picking up phone, shifting position)
-            // Not a real activity transition; do not update lastReportedActivity or lastActivityChangeTime
+            // Ignore unknown — transient classifier noise
             guard activityType != "unknown" else { return }
 
-            let confidence = activity.confidence
+            // Ignore low confidence — too noisy
+            guard activity.confidence != .low else { return }
 
-            // Filter 1: Ignore low-confidence readings — too noisy
-            guard confidence != .low else { return }
+            // Only emit when activity type actually changes
+            guard activityType != self.currentActivity else { return }
 
-            // Filter 2: Only emit when activity type actually changes
-            guard activityType != self.lastReportedActivity else { return }
-
-            // Filter 3: Enforce transition cooldown to prevent rapid flapping
+            // Enforce cooldown to prevent rapid flapping
             let now = Date()
-            if let lastChange = self.lastActivityChangeTime,
-               now.timeIntervalSince(lastChange) < Self.transitionCooldown {
+            if let start = self.currentActivityStartTime,
+               now.timeIntervalSince(start) < Self.transitionCooldown {
                 return
             }
 
-            // Build transition payload with episode context
-            var payload: [String: String] = [
-                "activityType": activityType,
-                "confidence": Self.confidenceString(from: confidence)
-            ]
-
-            // Include previous activity context for transition awareness
-            if let previousActivity = self.lastReportedActivity {
-                payload["previousActivity"] = previousActivity
-                payload["transitionType"] = "\(previousActivity)_to_\(activityType)"
-
-                // Calculate how long the previous activity lasted
-                if let lastChange = self.lastActivityChangeTime {
-                    let previousDuration = now.timeIntervalSince(lastChange)
-                    payload["previousDuration"] = String(format: "%.0f", previousDuration)
-                }
-            }
-
             // Update tracking state
-            self.lastReportedActivity = activityType
-            self.lastActivityChangeTime = now
+            self.currentActivity = activityType
+            self.currentActivityStartTime = now
 
+            // Emit episode start — SensingEngine will enrich the previous episode
             let event = SensingEvent(
                 modality: .motion,
-                payload: payload
+                payload: [
+                    "activityType": activityType,
+                    "confidence": Self.confidenceString(from: activity.confidence),
+                ]
             )
             self.onEvent?(event)
         }

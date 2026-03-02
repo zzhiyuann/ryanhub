@@ -1049,16 +1049,15 @@ struct TimelineEventRow: View {
         switch event.modality {
         case .motion:
             let activity = (event.payload["activityType"] ?? "unknown").capitalized
-            let confidence = event.payload["confidence"] ?? ""
-            // Show transition info if available (HAR clustering output)
-            if let previousActivity = event.payload["previousActivity"],
-               let durationStr = event.payload["previousDuration"],
-               let duration = Double(durationStr) {
-                let minutes = Int(duration) / 60
-                let durationText = minutes > 0 ? "\(minutes)m" : "\(Int(duration))s"
-                return "\(previousActivity.capitalized) \u{2192} \(activity) \u{00B7} was \(previousActivity) for \(durationText)"
+            // Episode-based display: show duration and next activity when available
+            if let durationStr = event.payload["duration"],
+               let duration = Double(durationStr),
+               let nextActivity = event.payload["nextActivity"] {
+                let durationText = formatDuration(duration)
+                return "\(activity) (\(durationText)) \u{2192} \(nextActivity.capitalized)"
             }
-            return "\(activity) (\(confidence))"
+            // Ongoing episode (no duration yet)
+            return "\(activity)"
         case .steps:
             let steps = event.payload["steps"] ?? "0"
             return "\(steps) steps"
