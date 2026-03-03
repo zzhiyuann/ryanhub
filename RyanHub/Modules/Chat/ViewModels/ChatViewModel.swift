@@ -117,6 +117,7 @@ final class ChatViewModel {
         ChatMessage.migrateFromMultiSession()
         messages = ChatMessage.loadSaved()
         setupWebSocketCallbacks()
+        setupBoNudgeObserver()
         // Sync from bridge server (source of truth for cross-device sync)
         Task { @MainActor [weak self] in
             if let serverMessages = await ChatMessage.loadFromServer(), !serverMessages.isEmpty {
@@ -712,6 +713,21 @@ final class ChatViewModel {
         messages.append(message)
         messageUpdateTrigger += 1
         saveMessages()
+    }
+
+    /// Listen for Bo nudge notifications and inject them as chat messages.
+    private func setupBoNudgeObserver() {
+        NotificationCenter.default.addObserver(
+            forName: .boNudgeGenerated, object: nil, queue: .main
+        ) { [weak self] notification in
+            guard let content = notification.userInfo?["content"] as? String else { return }
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                let boMessage = ChatMessage.assistant(content, id: "bo-\(UUID().uuidString)")
+                self.appendMessage(boMessage)
+                self.sendLocalNotificationIfNeeded(content: content, messageId: boMessage.id)
+            }
+        }
     }
 
     private func setupWebSocketCallbacks() {

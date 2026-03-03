@@ -81,6 +81,7 @@ struct RyanHubApp: App {
         let syncTask = Task { @MainActor in
             let engine = SensingEngine.shared
             await engine.handleBackgroundWake()
+            await generateNudgesInBackground()
         }
 
         // If the system cancels the task, cancel our async work
@@ -91,6 +92,71 @@ struct RyanHubApp: App {
         Task {
             _ = await syncTask.result
             task.setTaskCompleted(success: true)
+        }
+    }
+
+    // MARK: - Background Nudge Generation
+
+    /// Bridge server base URL (same logic as BoboViewModel).
+    private static var bridgeBaseURL: String {
+        UserDefaults.standard.string(forKey: "ryanhub_server_url")
+            .flatMap { URL(string: $0)?.host }
+            .map { "http://\($0):18790" }
+            ?? AppState.defaultFoodAnalysisURL
+    }
+
+    /// Ask the bridge server to generate nudges if enough time has elapsed.
+    /// Sends a local notification for each nudge returned.
+    @MainActor
+    private static func generateNudgesInBackground() async {
+        let endpoint = "\(bridgeBaseURL)/bobo/nudge-check"
+        guard let url = URL(string: endpoint) else { return }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = Data("{}".utf8)
+        request.timeoutInterval = 60
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse,
+                  (200..<300).contains(httpResponse.statusCode) else { return }
+
+            struct NudgeCheckResponse: Decodable {
+                let ok: Bool
+                let nudges: [BackgroundNudge]?
+                let skipped: Bool?
+            }
+            struct BackgroundNudge: Decodable {
+                let id: String
+                let content: String
+                let type: String
+            }
+
+            let result = try JSONDecoder().decode(NudgeCheckResponse.self, from: data)
+            guard let nudges = result.nudges, !nudges.isEmpty else { return }
+
+            // Send a local notification for each nudge
+            for nudge in nudges {
+                let content = UNMutableNotificationContent()
+                content.title = "Bo"
+                content.body = nudge.content
+                content.sound = .default
+                content.userInfo = ["destination": "bobo"]
+
+                let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
+                let request = UNNotificationRequest(
+                    identifier: nudge.id,
+                    content: content,
+                    trigger: trigger
+                )
+                try? await UNUserNotificationCenter.current().add(request)
+            }
+
+            print("[RyanHubApp] Background nudge check: \(nudges.count) nudges generated")
+        } catch {
+            print("[RyanHubApp] Background nudge check failed: \(error.localizedDescription)")
         }
     }
 }

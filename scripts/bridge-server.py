@@ -53,6 +53,7 @@ import json
 import subprocess
 import sys
 import tempfile
+import time
 import base64
 import os
 import shutil
@@ -1257,6 +1258,11 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
             self._handle_behavioral_analysis()
             return
 
+        # POPO background nudge check (server-side generation)
+        if path == "/popo/nudge-check":
+            self._handle_nudge_check()
+            return
+
         # Health data single-entry append (for chat agent)
         _ADD_ENDPOINTS = {
             "/health-data/weight/add": "/health-data/weight",
@@ -1775,9 +1781,10 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
             self._send_json(400, {"error": "Invalid request body: %s" % e})
             return
 
-        sensing_events = data.get("sensing_events", [])
+        # Accept both key formats for backwards compatibility (iOS sends "events"/"day_summary")
+        sensing_events = data.get("sensing_events", data.get("events", []))
         narrations = data.get("narrations", [])
-        daily_summary = data.get("daily_summary")
+        daily_summary = data.get("daily_summary", data.get("day_summary"))
 
         if not isinstance(sensing_events, list):
             sensing_events = []
@@ -1846,6 +1853,107 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
             "method": method_used,
             "summary_length": len(summary_text),
         })
+
+    # -----------------------------------------------------------------------
+    # Background nudge check (server-side generation)
+    # -----------------------------------------------------------------------
+
+    def _handle_nudge_check(self):
+        """Generate nudges server-side if >2 hours since last generation.
+        Reads stored sensing data from popo_sensing.json.
+        Used by iOS background sync task."""
+        timestamp_file = os.path.join(BRIDGE_DATA_DIR, "popo_last_nudge_gen.txt")
+
+        # Check if enough time has passed since last generation
+        last_gen = 0
+        if os.path.exists(timestamp_file):
+            try:
+                with open(timestamp_file, "r") as f:
+                    last_gen = float(f.read().strip())
+            except (ValueError, IOError):
+                last_gen = 0
+
+        elapsed = time.time() - last_gen
+        if elapsed < 7200:  # 2 hours
+            self._send_json(200, {"ok": True, "nudges": [], "skipped": True,
+                                  "seconds_until_next": int(7200 - elapsed)})
+            return
+
+        # Load today's sensing events
+        sensing_file = DATA_FILES.get("/popo/sensing")
+        events = []
+        if sensing_file and os.path.exists(sensing_file):
+            try:
+                with open(sensing_file, "r") as f:
+                    content = f.read()
+                all_events = json.loads(content) if content.strip() else []
+                # Filter to last 6 hours
+                cutoff = (datetime.now() - timedelta(hours=6)).isoformat()
+                events = [e for e in all_events
+                          if isinstance(e, dict) and e.get("timestamp", "") >= cutoff]
+            except (json.JSONDecodeError, IOError):
+                events = []
+
+        # Load today's narrations
+        narrations_file = DATA_FILES.get("/popo/narrations")
+        narrations = []
+        if narrations_file and os.path.exists(narrations_file):
+            try:
+                with open(narrations_file, "r") as f:
+                    content = f.read()
+                all_narrations = json.loads(content) if content.strip() else []
+                cutoff = datetime.now().replace(hour=0, minute=0, second=0).isoformat()
+                narrations = [n for n in all_narrations
+                              if isinstance(n, dict) and n.get("timestamp", "") >= cutoff]
+            except (json.JSONDecodeError, IOError):
+                narrations = []
+
+        if not events and not narrations:
+            self._send_json(200, {"ok": True, "nudges": [], "skipped": True,
+                                  "reason": "no_data"})
+            return
+
+        print("[NudgeCheck] Processing %d events, %d narrations" % (len(events), len(narrations)))
+
+        # Summarize and generate
+        summary_text = summarize_sensing_data(events, narrations)
+        raw_nudges = generate_nudges_llm(summary_text)
+
+        if raw_nudges is None:
+            self._send_json(500, {"ok": False, "error": "LLM generation failed", "nudges": []})
+            return
+
+        # Normalize nudge records
+        now_iso = datetime.now().isoformat()
+        nudge_records = []
+        for raw in raw_nudges:
+            if not isinstance(raw, dict):
+                continue
+            nudge = {
+                "id": str(uuid.uuid4()),
+                "timestamp": now_iso,
+                "type": raw.get("type", "insight"),
+                "content": raw.get("content", ""),
+                "trigger": raw.get("trigger", "background_check"),
+                "priority": raw.get("priority", "normal"),
+                "relatedModalities": raw.get("relatedModalities", []),
+            }
+            if nudge["type"] not in ("insight", "reminder", "encouragement", "alert"):
+                nudge["type"] = "insight"
+            if nudge["priority"] not in ("normal", "high"):
+                nudge["priority"] = "normal"
+            if not isinstance(nudge["relatedModalities"], list):
+                nudge["relatedModalities"] = []
+            nudge_records.append(nudge)
+
+        # Store nudges and update timestamp
+        if nudge_records:
+            store_generated_nudges(nudge_records)
+        with open(timestamp_file, "w") as f:
+            f.write(str(time.time()))
+
+        print("[NudgeCheck] Generated %d nudges in background" % len(nudge_records))
+        self._send_json(200, {"ok": True, "nudges": nudge_records})
 
     # -----------------------------------------------------------------------
     # Location enrichment endpoints

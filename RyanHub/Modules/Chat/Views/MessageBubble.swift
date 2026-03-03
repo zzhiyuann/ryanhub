@@ -39,9 +39,14 @@ struct MessageBubble: View {
                 }
                 Spacer(minLength: 32)
             } else {
-                // Bot avatar — Facai's actual photo
-                FacaiAvatar(size: 30)
-                    .offset(y: -2)
+                // Bot avatar — Bo for nudge messages, Facai for regular
+                if message.id.hasPrefix("bo-") {
+                    BoAvatar(size: 30)
+                        .offset(y: -2)
+                } else {
+                    FacaiAvatar(size: 30)
+                        .offset(y: -2)
+                }
             }
 
             VStack(alignment: isUser ? .trailing : .leading, spacing: 2) {

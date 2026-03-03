@@ -55,6 +55,7 @@ struct BoboView: View {
                 Task {
                     await viewModel.checkAndGenerateNudgesIfNeeded()
                     await viewModel.pullNarrationsFromServer()
+                    await viewModel.pullNudgesFromServer()
                 }
                 viewModel.pushTimelineToServer()
                 viewModel.resumeAudioStreamIfNeeded()
