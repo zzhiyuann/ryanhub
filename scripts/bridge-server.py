@@ -59,7 +59,7 @@ import os
 import shutil
 import uuid
 import threading
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any, List
 from urllib.parse import urlparse, parse_qs
 
@@ -756,6 +756,8 @@ def parse_food_json(text: str) -> dict:
 BEHAVIORAL_ANALYSIS_SYSTEM_PROMPT = """\
 You are Facai (发财), a proactive AI companion cat. You observe your human's behavioral data and generate caring, actionable nudges.
 
+IMPORTANT: All timestamps in the data are in the user's LOCAL timezone (already converted). Use them directly when referencing time of day. The current local time is included in the summary header.
+
 Analyze the behavioral data and generate 1-3 nudges. Each nudge should be:
 - Specific (reference actual data: "you walked 8000 steps" not "great activity")
 - Caring but not preachy (friendly cat personality)
@@ -774,15 +776,51 @@ Return a JSON array of nudges. Each nudge must have exactly these fields:
 Return ONLY the JSON array, no other text or markdown formatting."""
 
 
+def _utc_to_local_str(ts_str):
+    # type: (str) -> str
+    """Convert an ISO 8601 UTC timestamp string to local time display string."""
+    if not ts_str:
+        return ts_str
+    try:
+        dt = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
+        local_dt = dt.astimezone()  # Convert to system local timezone
+        return local_dt.strftime("%Y-%m-%d %H:%M")
+    except (ValueError, TypeError):
+        return ts_str[:16]
+
+
+def _get_local_timezone_name():
+    # type: () -> str
+    """Get the local timezone name (e.g. 'EST', 'America/New_York')."""
+    try:
+        import subprocess
+        result = subprocess.run(
+            ["readlink", "/etc/localtime"],
+            capture_output=True, text=True, timeout=5
+        )
+        # e.g. /var/db/timezone/zoneinfo/America/New_York
+        path = result.stdout.strip()
+        if "zoneinfo/" in path:
+            return path.split("zoneinfo/")[-1]
+    except Exception:
+        pass
+    # Fallback: use UTC offset
+    now = datetime.now().astimezone()
+    return now.strftime("%Z (UTC%z)")
+
+
 def summarize_sensing_data(events, narrations, daily_summary=None):
     # type: (List[Dict], List[Dict], Optional[Dict]) -> str
     """Convert raw sensing events and narrations into a readable summary for the LLM.
 
-    Groups events by modality and extracts key metrics for each."""
+    Groups events by modality and extracts key metrics for each.
+    All timestamps are converted from UTC to the server's local timezone."""
     lines = []  # type: List[str]
     now = datetime.now()
+    tz_name = _get_local_timezone_name()
     lines.append("=== Behavioral Data Summary ===")
-    lines.append("Current time: %s" % now.strftime("%Y-%m-%d %H:%M"))
+    lines.append("Current time: %s (%s)" % (now.strftime("%Y-%m-%d %H:%M"), tz_name))
+    lines.append("All times below are in %s." % tz_name)
     lines.append("")
 
     if not events and not narrations and not daily_summary:
@@ -948,7 +986,7 @@ def summarize_sensing_data(events, narrations, daily_summary=None):
             transcript = nar.get("transcript", "")
             mood = nar.get("extractedMood", "")
             affect = nar.get("affectAnalysis", {})
-            ts = nar.get("timestamp", "")[:16]
+            ts = _utc_to_local_str(nar.get("timestamp", ""))
             if transcript:
                 lines.append('  [%s] "%s"' % (ts, transcript[:120]))
                 if mood:
