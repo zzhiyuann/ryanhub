@@ -73,11 +73,11 @@ targets:
   RyanHubWatch:
     type: application
     platform: watchOS
-    bundleIdOverride: com.zwang.ryanhub.RyanHub.watchapp
     deploymentTarget:
       watchOS: "10.0"
     settings:
       base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.zwang.ryanhub.RyanHub.watchapp
         WATCHOS_DEPLOYMENT_TARGET: "10.0"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     sources:
