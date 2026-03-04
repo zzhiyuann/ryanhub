@@ -22,7 +22,8 @@ final class WatchSessionManager: NSObject {
     private(set) var isWatchReachable = false
 
     /// Whether the Watch is actively streaming audio data.
-    private(set) var isWatchStreaming = false
+    /// Internal setter so SensingEngine can reset on fallback.
+    var isWatchStreaming = false
 
     // MARK: - Audio Data Callback
 
@@ -113,9 +114,15 @@ extension WatchSessionManager: WCSessionDelegate {
         let reachable = session.isReachable
         print("[WatchSessionManager] Watch reachability changed: \(reachable)")
         Task { @MainActor in
+            let wasReachable = self.isWatchReachable
             self.isWatchReachable = reachable
-            // If Watch becomes unreachable while streaming, notify
-            if !reachable && self.isWatchStreaming {
+
+            if reachable && !wasReachable {
+                // Watch just became reachable
+                NotificationCenter.default.post(name: .watchDidBecomeReachable, object: nil)
+                print("[WatchSessionManager] Watch became reachable — posted notification")
+            } else if !reachable && self.isWatchStreaming {
+                // Watch disconnected during active stream
                 self.isWatchStreaming = false
                 NotificationCenter.default.post(name: .watchAudioStreamDidStop, object: nil)
                 print("[WatchSessionManager] Watch disconnected during stream — posted stop notification")
@@ -136,4 +143,7 @@ extension WatchSessionManager: WCSessionDelegate {
 extension Notification.Name {
     /// Posted when Watch audio streaming stops unexpectedly (e.g., Watch disconnects).
     static let watchAudioStreamDidStop = Notification.Name("watchAudioStreamDidStop")
+
+    /// Posted when the Watch becomes reachable (was unreachable, now reachable).
+    static let watchDidBecomeReachable = Notification.Name("watchDidBecomeReachable")
 }

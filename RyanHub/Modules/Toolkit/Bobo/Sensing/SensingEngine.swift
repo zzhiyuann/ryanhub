@@ -180,6 +180,7 @@ final class SensingEngine {
 
     /// Start the audio stream sensor independently of the main sensing toggle.
     /// If the Watch is reachable, uses Watch mic; otherwise falls back to local mic.
+    /// Observes Watch reachability changes to auto-switch sources dynamically.
     func startAudioStream() {
         guard !isAudioStreamEnabled else { return }
         isAudioStreamEnabled = true
@@ -187,23 +188,12 @@ final class SensingEngine {
             Task { @MainActor in self?.recordEvent(event) }
         }
 
+        // Always observe Watch reachability changes while audio is enabled
+        observeWatchReachability()
+
         let watchManager = WatchSessionManager.shared
         if watchManager.isWatchReachable {
-            // Start in external (Watch) mode — WebSocket only, no local mic
-            audioStreamSensor.startExternal()
-            watchManager.startWatchAudio()
-            watchManager.onAudioData = { [weak self] data in
-                self?.audioStreamSensor.feedExternalAudio(data)
-            }
-            // Listen for Watch disconnect to auto-fallback
-            NotificationCenter.default.addObserver(
-                forName: .watchAudioStreamDidStop,
-                object: nil,
-                queue: .main
-            ) { [weak self] _ in
-                self?.handleWatchDisconnect()
-            }
-            print("[SensingEngine] Audio stream started (Watch mic)")
+            startWatchMicStream()
         } else {
             // Fall back to local iPhone mic
             audioStreamSensor.start()
@@ -224,18 +214,49 @@ final class SensingEngine {
         }
 
         audioStreamSensor.stop()
-        NotificationCenter.default.removeObserver(self, name: .watchAudioStreamDidStop, object: nil)
+        removeWatchObservers()
         print("[SensingEngine] Audio stream stopped")
     }
 
     /// Resume the audio stream sensor if it was enabled but the connection/engine died.
     /// Called on foreground resume to recover from iOS background suspension.
+    /// Also checks if Watch is now reachable and switches to it if so.
     func resumeAudioStreamIfNeeded() {
         guard isAudioStreamEnabled else { return }
-        // Only resume local source — Watch streaming is managed via WCSession
+
+        let watchManager = WatchSessionManager.shared
+
         if audioStreamSensor.currentSource == .local {
-            audioStreamSensor.resumeIfNeeded()
+            // If Watch became reachable while we were in background, switch to it
+            if watchManager.isWatchReachable {
+                print("[SensingEngine] Foreground resume — Watch is reachable, switching to Watch mic")
+                audioStreamSensor.stop()
+                startWatchMicStream()
+            } else {
+                audioStreamSensor.resumeIfNeeded()
+            }
+        } else if audioStreamSensor.currentSource == .watch {
+            // If Watch is no longer reachable, fallback to local
+            if !watchManager.isWatchReachable {
+                print("[SensingEngine] Foreground resume — Watch unreachable, falling back to local mic")
+                watchManager.onAudioData = nil
+                watchManager.isWatchStreaming = false
+                audioStreamSensor.switchToLocalSource()
+            }
         }
+    }
+
+    // MARK: - Watch Audio Helpers
+
+    /// Start streaming audio from Watch mic.
+    private func startWatchMicStream() {
+        let watchManager = WatchSessionManager.shared
+        audioStreamSensor.startExternal()
+        watchManager.startWatchAudio()
+        watchManager.onAudioData = { [weak self] data in
+            self?.audioStreamSensor.feedExternalAudio(data)
+        }
+        print("[SensingEngine] Audio stream started (Watch mic)")
     }
 
     /// Handle Watch disconnect during active streaming — auto-fallback to local mic.
@@ -244,6 +265,44 @@ final class SensingEngine {
         print("[SensingEngine] Watch disconnected — falling back to local mic")
         WatchSessionManager.shared.onAudioData = nil
         audioStreamSensor.switchToLocalSource()
+    }
+
+    /// Handle Watch becoming reachable — auto-switch from local mic to Watch mic.
+    private func handleWatchBecameReachable() {
+        guard isAudioStreamEnabled, audioStreamSensor.currentSource == .local else { return }
+        print("[SensingEngine] Watch became reachable — switching from local to Watch mic")
+        // Stop local audio engine but keep running state
+        audioStreamSensor.switchToExternalSource()
+        // Start Watch mic stream
+        let watchManager = WatchSessionManager.shared
+        watchManager.startWatchAudio()
+        watchManager.onAudioData = { [weak self] data in
+            self?.audioStreamSensor.feedExternalAudio(data)
+        }
+    }
+
+    /// Start observing Watch reachability notifications.
+    private func observeWatchReachability() {
+        NotificationCenter.default.addObserver(
+            forName: .watchAudioStreamDidStop,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.handleWatchDisconnect()
+        }
+        NotificationCenter.default.addObserver(
+            forName: .watchDidBecomeReachable,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.handleWatchBecameReachable()
+        }
+    }
+
+    /// Remove all Watch reachability observers.
+    private func removeWatchObservers() {
+        NotificationCenter.default.removeObserver(self, name: .watchAudioStreamDidStop, object: nil)
+        NotificationCenter.default.removeObserver(self, name: .watchDidBecomeReachable, object: nil)
     }
 
     /// Resume the health sensor on foreground return. Re-fetches all HealthKit data
