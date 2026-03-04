@@ -34,6 +34,7 @@ targets:
       - package: swift-nio-ssh
         product: NIOSSH
       - sdk: HealthKit.framework
+      - sdk: WatchConnectivity.framework
     info:
       path: RyanHub/Info.plist
       properties:
@@ -66,6 +67,31 @@ targets:
         com.apple.developer.healthkit: true
         com.apple.developer.healthkit.background-delivery: true
         # com.apple.developer.networking.wifi-info: true  # Requires paid Apple Developer Program
+    settings:
+      base:
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+  RyanHubWatch:
+    type: application
+    platform: watchOS
+    deploymentTarget:
+      watchOS: "10.0"
+    sources:
+      - path: RyanHubWatch
+        excludes:
+          - "**/.DS_Store"
+    dependencies:
+      - sdk: HealthKit.framework
+      - sdk: WatchConnectivity.framework
+    info:
+      path: RyanHubWatch/Info.plist
+      properties:
+        WKCompanionAppBundleIdentifier: com.zwang.ryanhub.RyanHub
+        NSMicrophoneUsageDescription: "RyanHub Watch streams microphone audio for real-time speech analysis."
+        NSHealthShareUsageDescription: "RyanHub Watch uses a mindfulness session to keep the microphone active in the background."
+    entitlements:
+      path: RyanHubWatch/RyanHubWatch.entitlements
+      properties:
+        com.apple.developer.healthkit: true
     settings:
       base:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon

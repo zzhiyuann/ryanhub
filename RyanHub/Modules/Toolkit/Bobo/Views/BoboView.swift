@@ -137,15 +137,28 @@ struct BoboView: View {
             }
 
             // Audio stream toggle — independent always-on mic sensor
-            Button {
-                viewModel.audioStreamEnabled.toggle()
-            } label: {
-                Image(systemName: viewModel.audioStreamEnabled ? "mic.circle.fill" : "mic.slash.circle")
-                    .font(.system(size: 22, weight: .medium))
-                    .foregroundStyle(viewModel.audioStreamEnabled ? Color.hubAccentRed : Color.gray)
-                    .symbolEffect(.pulse, isActive: viewModel.audioStreamEnabled)
+            VStack(spacing: 2) {
+                Button {
+                    viewModel.audioStreamEnabled.toggle()
+                } label: {
+                    Image(systemName: viewModel.audioStreamEnabled ? "mic.circle.fill" : "mic.slash.circle")
+                        .font(.system(size: 22, weight: .medium))
+                        .foregroundStyle(viewModel.audioStreamEnabled ? Color.hubAccentRed : Color.gray)
+                        .symbolEffect(.pulse, isActive: viewModel.audioStreamEnabled)
+                }
+                .buttonStyle(.plain)
+
+                // Watch mic indicator
+                if viewModel.isUsingWatchMic {
+                    HStack(spacing: 2) {
+                        Image(systemName: "applewatch.radiowaves.left.and.right")
+                            .font(.system(size: 8))
+                        Text("Watch")
+                            .font(.system(size: 8, weight: .medium))
+                    }
+                    .foregroundStyle(.green)
+                }
             }
-            .buttonStyle(.plain)
 
             Toggle("", isOn: $viewModel.sensingEnabled)
                 .labelsHidden()

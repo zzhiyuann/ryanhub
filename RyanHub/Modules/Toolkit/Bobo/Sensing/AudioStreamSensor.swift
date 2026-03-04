@@ -24,6 +24,10 @@ final class AudioStreamSensor {
     /// Tracks whether the audio engine needs a restart (e.g. after an interruption).
     private var needsAudioRestart = false
 
+    /// Whether audio is coming from a local mic or an external source (e.g. Watch).
+    enum AudioSource { case local, watch }
+    private(set) var currentSource: AudioSource = .local
+
     /// Callback invoked when a new sensing event is captured.
     var onEvent: ((SensingEvent) -> Void)?
 
@@ -487,6 +491,101 @@ final class AudioStreamSensor {
             ]
         )
         onEvent?(event)
+    }
+
+    // MARK: - External Audio Source (Watch)
+
+    /// Feed raw PCM data from an external source (e.g. Apple Watch mic).
+    /// Writes directly to the WebSocket, bypassing the local AVAudioEngine.
+    func feedExternalAudio(_ data: Data) {
+        guard isRunning, currentSource == .watch, let task = webSocketTask else { return }
+        task.send(.data(data)) { error in
+            if let error {
+                print("[AudioStreamSensor] Failed to send external audio data: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    /// Switch to external audio source: stop the local AVAudioEngine but keep the
+    /// WebSocket connection alive to receive data from `feedExternalAudio()`.
+    func switchToExternalSource() {
+        currentSource = .watch
+
+        // Stop local audio capture (timer + engine) but keep WebSocket open
+        sendTimer?.invalidate()
+        sendTimer = nil
+
+        if audioEngine.isRunning {
+            audioEngine.inputNode.removeTap(onBus: 0)
+            audioEngine.stop()
+        }
+
+        print("[AudioStreamSensor] Switched to external audio source (Watch)")
+    }
+
+    /// Switch back to local microphone: restart the AVAudioEngine and send timer.
+    func switchToLocalSource() {
+        currentSource = .local
+
+        guard isRunning else { return }
+
+        // Restart local audio engine
+        do {
+            try setupAudioEngine()
+            startSendTimer()
+            print("[AudioStreamSensor] Switched back to local audio source")
+        } catch {
+            print("[AudioStreamSensor] Failed to restart local audio: \(error.localizedDescription)")
+            emitErrorEvent(message: "Local audio restart failed: \(error.localizedDescription)")
+        }
+    }
+
+    /// Start streaming in external mode: connect WebSocket and send start message,
+    /// but do NOT start the local AVAudioEngine. Audio will come via `feedExternalAudio()`.
+    func startExternal() {
+        guard !isRunning else { return }
+        currentSource = .watch
+
+        #if os(iOS)
+        // Connect WebSocket only — no mic permission or audio engine needed
+        guard let url = Self.streamURL else {
+            print("[AudioStreamSensor] Invalid stream URL")
+            return
+        }
+
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 10
+        let session = URLSession(configuration: config)
+        self.urlSession = session
+
+        let task = session.webSocketTask(with: url)
+        self.webSocketTask = task
+        task.resume()
+        isWebSocketConnected = true
+
+        // Send start message
+        let startMessage = "{\"type\": \"start\"}"
+        task.send(.string(startMessage)) { [weak self] error in
+            if let error {
+                print("[AudioStreamSensor] Failed to send start message: \(error.localizedDescription)")
+                self?.emitErrorEvent(message: "WebSocket start failed: \(error.localizedDescription)")
+                return
+            }
+            print("[AudioStreamSensor] Sent start message (external mode)")
+        }
+
+        startReceiving()
+        isRunning = true
+        needsAudioRestart = false
+
+        let listeningEvent = SensingEvent(
+            modality: .audio,
+            payload: ["status": "listening", "source": "watch"]
+        )
+        onEvent?(listeningEvent)
+
+        print("[AudioStreamSensor] Started in external mode (Watch) — WebSocket only")
+        #endif
     }
 }
 

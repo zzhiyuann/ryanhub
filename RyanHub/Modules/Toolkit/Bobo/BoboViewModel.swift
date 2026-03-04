@@ -104,6 +104,11 @@ final class BoboViewModel {
         }
     }
 
+    /// Whether audio is currently streaming from the Apple Watch mic.
+    var isUsingWatchMic: Bool {
+        engine.isUsingWatchMic
+    }
+
     /// The currently selected modality filter for the event list (nil = all).
     var selectedModality: SensingModality?
 
