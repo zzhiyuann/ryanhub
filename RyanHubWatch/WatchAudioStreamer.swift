@@ -272,30 +272,39 @@ extension WatchAudioStreamer: WCSessionDelegate {
         if let error {
             print("[WatchAudioStreamer] WCSession activation failed: \(error.localizedDescription)")
         } else {
-            print("[WatchAudioStreamer] WCSession activated: \(activationState.rawValue)")
-            isPhoneReachable = session.isReachable
+            print("[WatchAudioStreamer] WCSession activated: \(activationState.rawValue), reachable: \(session.isReachable)")
+            DispatchQueue.main.async { [weak self] in
+                self?.isPhoneReachable = session.isReachable
+            }
         }
     }
 
     func sessionReachabilityDidChange(_ session: WCSession) {
-        isPhoneReachable = session.isReachable
-        print("[WatchAudioStreamer] Phone reachability changed: \(session.isReachable)")
+        let reachable = session.isReachable
+        print("[WatchAudioStreamer] Phone reachability changed: \(reachable)")
 
-        // If phone becomes unreachable while streaming, stop capture
-        if !session.isReachable && isStreaming {
-            print("[WatchAudioStreamer] Phone unreachable — stopping capture")
-            stopCapture()
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.isPhoneReachable = reachable
+
+            // If phone becomes unreachable while streaming, stop capture
+            if !reachable && self.isStreaming {
+                print("[WatchAudioStreamer] Phone unreachable — stopping capture")
+                self.stopCapture()
+            }
         }
     }
 
     func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {
-        switch message["command"] as? String {
-        case "start_audio":
-            startCapture()
-        case "stop_audio":
-            stopCapture()
-        default:
-            break
+        DispatchQueue.main.async { [weak self] in
+            switch message["command"] as? String {
+            case "start_audio":
+                self?.startCapture()
+            case "stop_audio":
+                self?.stopCapture()
+            default:
+                break
+            }
         }
     }
 }
