@@ -57,14 +57,16 @@ final class WatchSessionManager: NSObject {
     // MARK: - Commands
 
     /// Send a command to the Watch to start audio capture.
+    /// Does not pre-check isReachable — attempts to send regardless.
+    /// The error handler silently absorbs failures (Watch will respond when reachable).
     func startWatchAudio() {
-        guard let session = wcSession, session.isReachable else {
-            print("[WatchSessionManager] Cannot start Watch audio — Watch not reachable")
+        guard let session = wcSession else {
+            print("[WatchSessionManager] Cannot start Watch audio — no WCSession")
             return
         }
 
         session.sendMessage(["command": "start_audio"], replyHandler: nil) { error in
-            print("[WatchSessionManager] Failed to send start_audio: \(error.localizedDescription)")
+            print("[WatchSessionManager] start_audio send failed (will retry when reachable): \(error.localizedDescription)")
         }
         isWatchStreaming = true
         print("[WatchSessionManager] Sent start_audio command to Watch")
