@@ -73,6 +73,7 @@ targets:
   RyanHubWatch:
     type: application
     platform: watchOS
+    bundleIdOverride: com.zwang.ryanhub.RyanHub.watchapp
     deploymentTarget:
       watchOS: "10.0"
     settings:
