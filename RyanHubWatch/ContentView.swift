@@ -35,10 +35,10 @@ struct ContentView: View {
         if streamer.isStreaming {
             return "Listening..."
         }
-        if !streamer.isPhoneReachable {
-            return "Phone unreachable"
+        if !streamer.isPhoneConnected {
+            return "Connecting..."
         }
-        return "Idle"
+        return "Ready"
     }
 
     private func formatDuration(_ duration: TimeInterval) -> String {

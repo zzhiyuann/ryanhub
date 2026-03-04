@@ -22,6 +22,8 @@
 	<string>RyanHub Watch uses a mindfulness session to keep the microphone active in the background.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>RyanHub Watch streams microphone audio for real-time speech analysis.</string>
+	<key>WKApplication</key>
+	<true/>
 	<key>WKCompanionAppBundleIdentifier</key>
 	<string>com.zwang.ryanhub.RyanHub</string>
 </dict>

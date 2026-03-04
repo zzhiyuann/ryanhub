@@ -17,8 +17,9 @@ final class WatchAudioStreamer: NSObject {
     /// Whether audio is currently being captured and streamed.
     private(set) var isStreaming = false
 
-    /// Whether the paired iPhone is reachable.
-    private(set) var isPhoneReachable = false
+    /// Whether the WCSession is activated and paired with the iPhone.
+    /// This is stable (unlike isReachable which flickers constantly).
+    private(set) var isPhoneConnected = false
 
     /// Duration of the current streaming session.
     private(set) var streamDuration: TimeInterval = 0
@@ -49,6 +50,9 @@ final class WatchAudioStreamer: NSObject {
 
     private var streamStartTime: Date?
     private var durationTimer: Timer?
+
+    /// Debounce timer — only used to delay stopping capture on unreachable.
+    private var unreachableDebounceTimer: Timer?
 
     // MARK: - Init
 
@@ -272,9 +276,9 @@ extension WatchAudioStreamer: WCSessionDelegate {
         if let error {
             print("[WatchAudioStreamer] WCSession activation failed: \(error.localizedDescription)")
         } else {
-            print("[WatchAudioStreamer] WCSession activated: \(activationState.rawValue), reachable: \(session.isReachable)")
+            print("[WatchAudioStreamer] WCSession activated: \(activationState.rawValue), companionInstalled: \(session.isCompanionAppInstalled)")
             DispatchQueue.main.async { [weak self] in
-                self?.isPhoneReachable = session.isReachable
+                self?.isPhoneConnected = (activationState == .activated)
             }
         }
     }
@@ -285,12 +289,21 @@ extension WatchAudioStreamer: WCSessionDelegate {
 
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
-            self.isPhoneReachable = reachable
 
-            // If phone becomes unreachable while streaming, stop capture
+            // Cancel any pending debounce
+            self.unreachableDebounceTimer?.invalidate()
+            self.unreachableDebounceTimer = nil
+
             if !reachable && self.isStreaming {
-                print("[WatchAudioStreamer] Phone unreachable — stopping capture")
-                self.stopCapture()
+                // Debounce: only stop capture if unreachable persists for 5 seconds
+                self.unreachableDebounceTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: false) { [weak self] _ in
+                    guard let self else { return }
+                    let stillUnreachable = !(self.wcSession?.isReachable ?? false)
+                    if stillUnreachable && self.isStreaming {
+                        print("[WatchAudioStreamer] Phone unreachable (confirmed after 5s) — stopping capture")
+                        self.stopCapture()
+                    }
+                }
             }
         }
     }
