@@ -1,0 +1,63 @@
+{
+  "moduleId": "catCare",
+  "moduleName": "CatCare",
+  "displayName": "Cat Care",
+  "shortName": "Cat",
+  "subtitle": "Track feeding times and vet visits",
+  "icon": "pawprint.fill",
+  "iconColor": "hubAccentGreen",
+  "relevanceKeywords": [
+    "cat",
+    "feeding",
+    "vet",
+    "pet",
+    "feline",
+    "\u732b",
+    "\u5582\u98df",
+    "\u517d\u533b",
+    "\u5ba0\u7269",
+    "\u5c31\u8bca"
+  ],
+  "dataFields": [
+    {
+      "name": "eventType",
+      "type": "String",
+      "label": "Event Type"
+    },
+    {
+      "name": "timestamp",
+      "type": "String",
+      "label": "Date & Time"
+    },
+    {
+      "name": "foodName",
+      "type": "String?",
+      "label": "Food / Brand"
+    },
+    {
+      "name": "portionGrams",
+      "type": "Double?",
+      "label": "Portion (g)"
+    },
+    {
+      "name": "vetClinic",
+      "type": "String?",
+      "label": "Vet Clinic"
+    },
+    {
+      "name": "vetReason",
+      "type": "String?",
+      "label": "Visit Reason"
+    },
+    {
+      "name": "nextVisitDue",
+      "type": "String?",
+      "label": "Next Visit Due"
+    },
+    {
+      "name": "note",
+      "type": "String?",
+      "label": "Note"
+    }
+  ]
+}

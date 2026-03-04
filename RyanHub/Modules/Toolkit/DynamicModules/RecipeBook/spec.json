@@ -1,0 +1,63 @@
+{
+  "moduleId": "recipeBook",
+  "moduleName": "RecipeBook",
+  "displayName": "Recipe Book",
+  "shortName": "Recipes",
+  "subtitle": "Save recipes with ingredients and prep time",
+  "icon": "fork.knife",
+  "iconColor": "hubAccentYellow",
+  "relevanceKeywords": [
+    "recipe",
+    "ingredients",
+    "cooking",
+    "food",
+    "meal",
+    "prep time",
+    "dish",
+    "\u83dc\u8c31",
+    "\u98df\u6750",
+    "\u70f9\u996a"
+  ],
+  "dataFields": [
+    {
+      "name": "title",
+      "type": "String",
+      "label": "Recipe Name"
+    },
+    {
+      "name": "ingredients",
+      "type": "String",
+      "label": "Ingredients"
+    },
+    {
+      "name": "prepTime",
+      "type": "Int",
+      "label": "Prep Time (min)"
+    },
+    {
+      "name": "cookTime",
+      "type": "Int",
+      "label": "Cook Time (min)"
+    },
+    {
+      "name": "servings",
+      "type": "Int",
+      "label": "Servings"
+    },
+    {
+      "name": "instructions",
+      "type": "String",
+      "label": "Instructions"
+    },
+    {
+      "name": "category",
+      "type": "String",
+      "label": "Category"
+    },
+    {
+      "name": "note",
+      "type": "String?",
+      "label": "Notes"
+    }
+  ]
+}

@@ -1,0 +1,50 @@
+{
+  "moduleId": "moodJournal",
+  "moduleName": "MoodJournal",
+  "displayName": "Mood Journal",
+  "shortName": "Mood",
+  "subtitle": "Track your daily mood",
+  "icon": "face.smiling.fill",
+  "iconColor": "hubAccentYellow",
+  "relevanceKeywords": [
+    "mood",
+    "journal",
+    "emotion",
+    "feeling",
+    "mental health",
+    "daily",
+    "rating",
+    "wellbeing",
+    "\u60c5\u7eea",
+    "\u65e5\u8bb0",
+    "\u5fc3\u60c5",
+    "\u8bc4\u5206"
+  ],
+  "dataFields": [
+    {
+      "name": "rating",
+      "type": "Int",
+      "label": "Mood Rating (1\u201310)"
+    },
+    {
+      "name": "mood",
+      "type": "String",
+      "label": "Mood Label"
+    },
+    {
+      "name": "energy",
+      "type": "Int",
+      "label": "Energy Level (1\u201310)"
+    },
+    {
+      "name": "date",
+      "type": "String",
+      "label": "Date"
+    },
+    {
+      "name": "note",
+      "type": "String?",
+      "label": "Notes"
+    }
+  ]
+}

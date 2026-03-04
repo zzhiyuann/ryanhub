@@ -1,0 +1,68 @@
+{
+  "moduleId": "commuteLog",
+  "moduleName": "CommuteLog",
+  "displayName": "Commute Log",
+  "shortName": "Commute",
+  "subtitle": "Track daily commute time and route",
+  "icon": "car.fill",
+  "iconColor": "hubPrimary",
+  "relevanceKeywords": [
+    "commute",
+    "travel",
+    "route",
+    "traffic",
+    "drive",
+    "transit",
+    "\u901a\u52e4",
+    "\u8def\u7ebf",
+    "\u65f6\u95f4",
+    "\u51fa\u884c"
+  ],
+  "dataFields": [
+    {
+      "name": "date",
+      "type": "String",
+      "label": "Date"
+    },
+    {
+      "name": "departureTime",
+      "type": "String",
+      "label": "Departure Time"
+    },
+    {
+      "name": "arrivalTime",
+      "type": "String",
+      "label": "Arrival Time"
+    },
+    {
+      "name": "durationMinutes",
+      "type": "Double",
+      "label": "Duration (min)"
+    },
+    {
+      "name": "origin",
+      "type": "String",
+      "label": "Starting Point"
+    },
+    {
+      "name": "destination",
+      "type": "String",
+      "label": "Destination"
+    },
+    {
+      "name": "transportMode",
+      "type": "String",
+      "label": "Transport Mode"
+    },
+    {
+      "name": "distanceKm",
+      "type": "Double?",
+      "label": "Distance (km)"
+    },
+    {
+      "name": "note",
+      "type": "String?",
+      "label": "Note"
+    }
+  ]
+}

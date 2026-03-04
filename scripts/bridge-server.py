@@ -50,6 +50,7 @@ The server requires `claude` CLI for analysis endpoints.
 
 import http.server
 import json
+import re
 import subprocess
 import sys
 import tempfile
@@ -1258,7 +1259,14 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
         elif path in DATA_FILES:
             self._serve_data_file(path)
         else:
-            self._send_json(404, {"error": "Not found"})
+            # Dynamic module data: GET /modules/<id>/data
+            module_match = re.match(r'^/modules/([a-zA-Z0-9_-]+)/data$', path)
+            if module_match:
+                module_id = module_match.group(1)
+                filepath = os.path.join(BRIDGE_DATA_DIR, f"module_{module_id}.json")
+                self._serve_module_data_file(filepath)
+            else:
+                self._send_json(404, {"error": "Not found"})
 
     def do_POST(self):
         path = urlparse(self.path).path
@@ -1321,6 +1329,18 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
             self._append_narration_entry()
             return
 
+        # Dynamic module data: POST /modules/<id>/data or /modules/<id>/data/add
+        module_match = re.match(r'^/modules/([a-zA-Z0-9_-]+)/data(/add)?$', path)
+        if module_match:
+            module_id = module_match.group(1)
+            is_add = module_match.group(2) == "/add"
+            filepath = os.path.join(BRIDGE_DATA_DIR, f"module_{module_id}.json")
+            if is_add:
+                self._append_module_entry(filepath)
+            else:
+                self._write_module_data_file(filepath)
+            return
+
         # Server-side data write (health + chat + popo)
         if path in DATA_FILES:
             self._write_data_file(path)
@@ -1345,14 +1365,24 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
             self._handle_food_analysis(data)
 
     def do_DELETE(self):
-        path = urlparse(self.path).path
+        parsed = urlparse(self.path)
+        path = parsed.path
         if path in DATA_FILES:
             filepath = DATA_FILES[path]
             if os.path.exists(filepath):
                 os.remove(filepath)
             self._send_json(200, {"ok": True})
         else:
-            self._send_json(404, {"error": "Not found"})
+            # Dynamic module data: DELETE /modules/<id>/data?id=<entry_id>
+            module_match = re.match(r'^/modules/([a-zA-Z0-9_-]+)/data$', path)
+            if module_match:
+                module_id = module_match.group(1)
+                filepath = os.path.join(BRIDGE_DATA_DIR, f"module_{module_id}.json")
+                query = parse_qs(parsed.query)
+                entry_id = query.get("id", [None])[0]
+                self._delete_module_entry(filepath, entry_id)
+            else:
+                self._send_json(404, {"error": "Not found"})
 
     # -----------------------------------------------------------------------
     # Data file endpoints (health + chat)
@@ -1506,6 +1536,124 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
             with open(filepath, "w") as f:
                 json.dump(data, f, ensure_ascii=False)
             self._send_json(200, {"ok": True, "id": entry["id"], "count": len(data)})
+        except IOError as e:
+            self._send_json(500, {"error": f"Failed to write: {e}"})
+
+    # -----------------------------------------------------------------------
+    # Dynamic module data endpoints
+    # -----------------------------------------------------------------------
+
+    def _serve_module_data_file(self, filepath):
+        """Serve a dynamic module JSON data file. Returns [] if file doesn't exist."""
+        if not os.path.exists(filepath):
+            self._send_json(200, [])
+            return
+        try:
+            with open(filepath, "r") as f:
+                content = f.read()
+            data = json.loads(content) if content.strip() else []
+            self._send_json(200, data)
+        except (json.JSONDecodeError, IOError):
+            self._send_json(200, [])
+
+    def _write_module_data_file(self, filepath):
+        """Overwrite a dynamic module JSON data file with the request body."""
+        try:
+            content_length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(content_length)
+            data = json.loads(body) if body else []
+        except (json.JSONDecodeError, ValueError) as e:
+            self._send_json(400, {"error": f"Invalid body: {e}"})
+            return
+
+        try:
+            with open(filepath, "w") as f:
+                json.dump(data, f, ensure_ascii=False)
+            count = len(data) if isinstance(data, list) else 1
+            self._send_json(200, {"ok": True, "count": count})
+        except IOError as e:
+            self._send_json(500, {"error": f"Failed to write: {e}"})
+
+    def _append_module_entry(self, filepath):
+        """Append a single JSON object to a dynamic module data file.
+
+        Accepts a single JSON object (not an array). Generates an 'id' if
+        missing and adds 'date' defaulting to now if missing. Merges into
+        the existing array by id (upsert).
+        """
+        try:
+            content_length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(content_length)
+            entry = json.loads(body) if body else {}
+        except (json.JSONDecodeError, ValueError) as e:
+            self._send_json(400, {"error": f"Invalid body: {e}"})
+            return
+
+        if not isinstance(entry, dict):
+            self._send_json(400, {"error": "Expected a JSON object, not an array"})
+            return
+
+        # Auto-generate id if missing
+        if "id" not in entry:
+            entry["id"] = str(uuid.uuid4()).upper()
+
+        # Auto-add date if missing (ISO 8601)
+        if "date" not in entry:
+            entry["date"] = datetime.now(timezone.utc).isoformat()
+
+        # Load existing data
+        existing = []
+        if os.path.exists(filepath):
+            try:
+                with open(filepath, "r") as f:
+                    content = f.read()
+                existing = json.loads(content) if content.strip() else []
+            except (json.JSONDecodeError, IOError):
+                existing = []
+
+        # Merge by id (upsert)
+        merged = {}
+        for item in existing:
+            if isinstance(item, dict) and "id" in item:
+                merged[item["id"]] = item
+        merged[entry["id"]] = entry
+        data = list(merged.values())
+
+        try:
+            with open(filepath, "w") as f:
+                json.dump(data, f, ensure_ascii=False)
+            self._send_json(200, {"ok": True, "id": entry["id"], "count": len(data)})
+        except IOError as e:
+            self._send_json(500, {"error": f"Failed to write: {e}"})
+
+    def _delete_module_entry(self, filepath, entry_id):
+        """Delete a specific entry by id from a dynamic module data file."""
+        if not entry_id:
+            self._send_json(400, {"error": "Missing 'id' query parameter"})
+            return
+
+        if not os.path.exists(filepath):
+            self._send_json(404, {"error": "Entry not found"})
+            return
+
+        try:
+            with open(filepath, "r") as f:
+                content = f.read()
+            data = json.loads(content) if content.strip() else []
+        except (json.JSONDecodeError, IOError):
+            data = []
+
+        original_count = len(data)
+        data = [item for item in data if not (isinstance(item, dict) and item.get("id") == entry_id)]
+
+        if len(data) == original_count:
+            self._send_json(404, {"error": "Entry not found"})
+            return
+
+        try:
+            with open(filepath, "w") as f:
+                json.dump(data, f, ensure_ascii=False)
+            self._send_json(200, {"ok": True, "count": len(data)})
         except IOError as e:
             self._send_json(500, {"error": f"Failed to write: {e}"})
 

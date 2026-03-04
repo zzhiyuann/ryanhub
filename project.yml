@@ -29,6 +29,7 @@ targets:
       - path: RyanHub
         excludes:
           - "**/.DS_Store"
+          - "**/DynamicModules/**/spec.json"
     dependencies:
       - package: SwiftTerm
       - package: swift-nio-ssh

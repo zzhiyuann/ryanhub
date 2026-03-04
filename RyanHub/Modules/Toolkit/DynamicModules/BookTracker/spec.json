@@ -1,0 +1,63 @@
+{
+  "moduleId": "bookTracker",
+  "moduleName": "BookTracker",
+  "displayName": "Book Tracker",
+  "shortName": "Books",
+  "subtitle": "Track reading progress and notes",
+  "icon": "books.vertical.fill",
+  "iconColor": "hubPrimary",
+  "relevanceKeywords": [
+    "book",
+    "reading",
+    "progress",
+    "notes",
+    "library",
+    "\u9605\u8bfb",
+    "\u4e66",
+    "\u8fdb\u5ea6",
+    "\u7b14\u8bb0",
+    "fiction"
+  ],
+  "dataFields": [
+    {
+      "name": "title",
+      "type": "String",
+      "label": "Book Title"
+    },
+    {
+      "name": "author",
+      "type": "String",
+      "label": "Author"
+    },
+    {
+      "name": "totalPages",
+      "type": "Int",
+      "label": "Total Pages"
+    },
+    {
+      "name": "currentPage",
+      "type": "Int",
+      "label": "Current Page"
+    },
+    {
+      "name": "progressPercent",
+      "type": "Double",
+      "label": "Progress (%)"
+    },
+    {
+      "name": "startDate",
+      "type": "String",
+      "label": "Start Date"
+    },
+    {
+      "name": "isFinished",
+      "type": "Bool",
+      "label": "Finished"
+    },
+    {
+      "name": "note",
+      "type": "String?",
+      "label": "Notes"
+    }
+  ]
+}

@@ -1,0 +1,58 @@
+{
+  "moduleId": "subscriptionTracker",
+  "moduleName": "SubscriptionTracker",
+  "displayName": "Subscription Tracker",
+  "shortName": "Subs",
+  "subtitle": "Track recurring subscriptions",
+  "icon": "creditcard.fill",
+  "iconColor": "hubPrimary",
+  "relevanceKeywords": [
+    "subscription",
+    "recurring",
+    "billing",
+    "monthly",
+    "cost",
+    "expense",
+    "\u8ba2\u9605",
+    "\u8d39\u7528",
+    "\u8d26\u5355",
+    "\u6309\u6708"
+  ],
+  "dataFields": [
+    {
+      "name": "serviceName",
+      "type": "String",
+      "label": "Service Name"
+    },
+    {
+      "name": "monthlyCost",
+      "type": "Double",
+      "label": "Monthly Cost"
+    },
+    {
+      "name": "billingCycle",
+      "type": "String",
+      "label": "Billing Cycle"
+    },
+    {
+      "name": "nextBillingDate",
+      "type": "String",
+      "label": "Next Billing Date"
+    },
+    {
+      "name": "category",
+      "type": "String",
+      "label": "Category"
+    },
+    {
+      "name": "isActive",
+      "type": "Bool",
+      "label": "Active"
+    },
+    {
+      "name": "note",
+      "type": "String?",
+      "label": "Note"
+    }
+  ]
+}

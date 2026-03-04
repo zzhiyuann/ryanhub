@@ -1,0 +1,68 @@
+{
+  "moduleId": "plantWatering",
+  "moduleName": "PlantWatering",
+  "displayName": "Plant Watering",
+  "shortName": "Plants",
+  "subtitle": "Track watering schedule for houseplants",
+  "icon": "leaf.fill",
+  "iconColor": "hubAccentGreen",
+  "relevanceKeywords": [
+    "plant",
+    "watering",
+    "houseplant",
+    "schedule",
+    "garden",
+    "\u82b1",
+    "\u690d\u7269",
+    "\u6d47\u6c34",
+    "\u517b\u62a4",
+    "\u7eff\u690d"
+  ],
+  "dataFields": [
+    {
+      "name": "plantName",
+      "type": "String",
+      "label": "Plant Name"
+    },
+    {
+      "name": "wateringIntervalDays",
+      "type": "Int",
+      "label": "Watering Interval (days)"
+    },
+    {
+      "name": "lastWateredDate",
+      "type": "String",
+      "label": "Last Watered"
+    },
+    {
+      "name": "nextWateringDate",
+      "type": "String",
+      "label": "Next Watering"
+    },
+    {
+      "name": "location",
+      "type": "String?",
+      "label": "Location"
+    },
+    {
+      "name": "waterAmountMl",
+      "type": "Double?",
+      "label": "Water Amount (ml)"
+    },
+    {
+      "name": "sunlight",
+      "type": "String?",
+      "label": "Sunlight Level"
+    },
+    {
+      "name": "isOverdue",
+      "type": "Bool",
+      "label": "Overdue"
+    },
+    {
+      "name": "note",
+      "type": "String?",
+      "label": "Notes"
+    }
+  ]
+}

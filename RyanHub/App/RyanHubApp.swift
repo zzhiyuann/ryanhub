@@ -12,6 +12,9 @@ struct RyanHubApp: App {
     private static let boboSyncTaskID = "com.zwang.ryanhub.bobo-sync"
 
     init() {
+        // Register all dynamically generated toolkit modules
+        DynamicModuleRegistry.bootstrapAll()
+
         // Activate WatchConnectivity session early for Watch mic streaming
         _ = WatchSessionManager.shared
 

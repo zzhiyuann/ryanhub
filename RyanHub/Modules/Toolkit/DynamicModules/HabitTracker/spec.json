@@ -1,0 +1,58 @@
+{
+  "moduleId": "habitTracker",
+  "moduleName": "HabitTracker",
+  "displayName": "Habit Tracker",
+  "shortName": "Habits",
+  "subtitle": "Track daily habits with streaks",
+  "icon": "checkmark.seal.fill",
+  "iconColor": "hubAccentGreen",
+  "relevanceKeywords": [
+    "habit",
+    "streak",
+    "meditation",
+    "journaling",
+    "daily",
+    "routine",
+    "consistency",
+    "\u4e60\u60ef",
+    "\u51a5\u60f3",
+    "\u65e5\u8bb0"
+  ],
+  "dataFields": [
+    {
+      "name": "habitName",
+      "type": "String",
+      "label": "Habit Name"
+    },
+    {
+      "name": "isCompleted",
+      "type": "Bool",
+      "label": "Completed Today"
+    },
+    {
+      "name": "currentStreak",
+      "type": "Int",
+      "label": "Current Streak (days)"
+    },
+    {
+      "name": "longestStreak",
+      "type": "Int",
+      "label": "Longest Streak (days)"
+    },
+    {
+      "name": "targetDurationMinutes",
+      "type": "Double?",
+      "label": "Target Duration (min)"
+    },
+    {
+      "name": "completedAt",
+      "type": "String?",
+      "label": "Completed At"
+    },
+    {
+      "name": "note",
+      "type": "String?",
+      "label": "Note"
+    }
+  ]
+}

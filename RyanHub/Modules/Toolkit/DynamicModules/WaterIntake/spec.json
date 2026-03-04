@@ -1,0 +1,58 @@
+{
+  "moduleId": "waterIntake",
+  "moduleName": "WaterIntake",
+  "displayName": "Water Intake",
+  "shortName": "Water",
+  "subtitle": "Track daily hydration",
+  "icon": "drop.fill",
+  "iconColor": "hubPrimary",
+  "relevanceKeywords": [
+    "water",
+    "hydration",
+    "drink",
+    "glasses",
+    "daily goal",
+    "\u559d\u6c34",
+    "\u996e\u6c34",
+    "\u6c34\u5206",
+    "\u8865\u6c34",
+    "\u5065\u5eb7"
+  ],
+  "dataFields": [
+    {
+      "name": "glassesConsumed",
+      "type": "Int",
+      "label": "Glasses Consumed"
+    },
+    {
+      "name": "dailyGoal",
+      "type": "Int",
+      "label": "Daily Goal (glasses)"
+    },
+    {
+      "name": "glassSizeML",
+      "type": "Double",
+      "label": "Glass Size (mL)"
+    },
+    {
+      "name": "totalML",
+      "type": "Double",
+      "label": "Total Intake (mL)"
+    },
+    {
+      "name": "goalReached",
+      "type": "Bool",
+      "label": "Goal Reached"
+    },
+    {
+      "name": "lastDrinkTime",
+      "type": "String?",
+      "label": "Last Drink Time"
+    },
+    {
+      "name": "note",
+      "type": "String?",
+      "label": "Note"
+    }
+  ]
+}

@@ -24,8 +24,14 @@ enum PersonalContext {
     /// No keyword filtering — the agent always has the full picture and decides
     /// what's relevant. Returns original text unchanged only if every provider
     /// returns nil (no data at all).
+    @MainActor
     static func buildContext(for userText: String) -> String {
-        let sections = providers.compactMap { $0.buildContextSummary() }
+        var allProviders: [any ToolkitDataProvider.Type] = providers
+        // Include dynamically generated module providers
+        for descriptor in DynamicModuleRegistry.shared.modules.values {
+            allProviders.append(descriptor.dataProviderType)
+        }
+        let sections = allProviders.compactMap { $0.buildContextSummary() }
         guard !sections.isEmpty else { return userText }
 
         var parts = ["[Personal Context]"]
@@ -36,8 +42,13 @@ enum PersonalContext {
     }
 
     /// Build a full snapshot from ALL providers (for daily briefing / debug).
+    @MainActor
     static func buildFullSnapshot() -> String? {
-        let sections = providers.compactMap { $0.buildContextSummary() }
+        var allProviders: [any ToolkitDataProvider.Type] = providers
+        for descriptor in DynamicModuleRegistry.shared.modules.values {
+            allProviders.append(descriptor.dataProviderType)
+        }
+        let sections = allProviders.compactMap { $0.buildContextSummary() }
         guard !sections.isEmpty else { return nil }
 
         var parts = ["[Personal Context — Full Snapshot]"]

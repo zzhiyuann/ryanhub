@@ -10,15 +10,22 @@ struct ToolkitHomeView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(AppState.self) private var appState
     @State private var selectedPlugin: ToolkitPlugin?
+    @State private var selectedDynamicModule: String?
     @State private var menuBarAppeared = false
     @State private var pluginOrder: [ToolkitPlugin] = ToolkitPlugin.loadOrder()
     @Namespace private var menuAnimation
+
+    /// Whether any module (static or dynamic) is selected.
+    private var hasSelection: Bool {
+        selectedPlugin != nil || selectedDynamicModule != nil
+    }
 
     var body: some View {
         VStack(spacing: 0) {
             // macOS-style menu bar — always visible at top
             ToolkitMenuBar(
                 selectedPlugin: $selectedPlugin,
+                selectedDynamicModule: $selectedDynamicModule,
                 pluginOrder: pluginOrder,
                 namespace: menuAnimation,
                 appeared: menuBarAppeared
@@ -36,15 +43,25 @@ struct ToolkitHomeView: View {
                             insertion: .opacity.combined(with: .move(edge: .trailing)),
                             removal: .opacity.combined(with: .move(edge: .leading))
                         ))
+                } else if let moduleId = selectedDynamicModule,
+                          let descriptor = DynamicModuleRegistry.shared.modules[moduleId] {
+                    descriptor.viewBuilder()
+                        .id(moduleId)
+                        .transition(.asymmetric(
+                            insertion: .opacity.combined(with: .move(edge: .trailing)),
+                            removal: .opacity.combined(with: .move(edge: .leading))
+                        ))
                 } else {
                     ToolkitDesktopGrid(
                         selectedPlugin: $selectedPlugin,
+                        selectedDynamicModule: $selectedDynamicModule,
                         pluginOrder: $pluginOrder
                     )
                     .transition(.opacity.combined(with: .scale(scale: 0.98)))
                 }
             }
             .animation(.easeInOut(duration: 0.3), value: selectedPlugin)
+            .animation(.easeInOut(duration: 0.3), value: selectedDynamicModule)
         }
         .background(AdaptiveColors.background(for: colorScheme))
         .onAppear {
@@ -53,20 +70,24 @@ struct ToolkitHomeView: View {
             }
         }
         .onChange(of: selectedPlugin) { _, newValue in
-            appState.isInToolkitModule = newValue != nil
+            appState.isInToolkitModule = newValue != nil || selectedDynamicModule != nil
+            if newValue != nil { selectedDynamicModule = nil }
+        }
+        .onChange(of: selectedDynamicModule) { _, newValue in
+            appState.isInToolkitModule = selectedPlugin != nil || newValue != nil
+            if newValue != nil { selectedPlugin = nil }
         }
         .onChange(of: appState.toolkitHomeSignal) {
             withAnimation(.easeInOut(duration: 0.25)) {
                 selectedPlugin = nil
+                selectedDynamicModule = nil
             }
         }
     }
 
     // MARK: - Tool Content
 
-    /// Returns the content view for each tool. Only tools that use `.toolbar`
-    /// items are wrapped in NavigationStack (Calendar). Others render
-    /// directly to avoid redundant navigation chrome.
+    /// Returns the content view for each static tool.
     @ViewBuilder
     private func toolContent(for plugin: ToolkitPlugin) -> some View {
         switch plugin {
@@ -94,9 +115,15 @@ struct ToolkitHomeView: View {
 struct ToolkitMenuBar: View {
     @Environment(\.colorScheme) private var colorScheme
     @Binding var selectedPlugin: ToolkitPlugin?
+    @Binding var selectedDynamicModule: String?
     var pluginOrder: [ToolkitPlugin]
     var namespace: Namespace.ID
     var appeared: Bool
+
+    /// Whether nothing is selected (home state).
+    private var isHome: Bool {
+        selectedPlugin == nil && selectedDynamicModule == nil
+    }
 
     /// Height of the menu bar content area (excluding divider).
     private let barHeight: CGFloat = 44
@@ -117,6 +144,10 @@ struct ToolkitMenuBar: View {
                     HStack(spacing: 4) {
                         ForEach(pluginOrder) { plugin in
                             menuItem(for: plugin)
+                        }
+                        // Dynamic module menu items
+                        ForEach(DynamicModuleRegistry.shared.orderedModules) { descriptor in
+                            dynamicMenuItem(for: descriptor)
                         }
                     }
                     .padding(.trailing, 12)
@@ -141,12 +172,13 @@ struct ToolkitMenuBar: View {
         Button {
             withAnimation(.easeInOut(duration: 0.25)) {
                 selectedPlugin = nil
+                selectedDynamicModule = nil
             }
         } label: {
             Image(systemName: "square.grid.2x2")
                 .font(.system(size: 16, weight: .medium))
                 .foregroundStyle(
-                    selectedPlugin == nil
+                    isHome
                         ? Color.hubPrimary
                         : AdaptiveColors.textSecondary(for: colorScheme)
                 )
@@ -154,7 +186,7 @@ struct ToolkitMenuBar: View {
                 .background(
                     RoundedRectangle(cornerRadius: 8)
                         .fill(
-                            selectedPlugin == nil
+                            isHome
                                 ? Color.hubPrimary.opacity(0.12)
                                 : Color.clear
                         )
@@ -172,7 +204,7 @@ struct ToolkitMenuBar: View {
             .frame(width: 1, height: 24)
     }
 
-    // MARK: - Menu Item
+    // MARK: - Menu Item (Static Plugin)
 
     private func menuItem(for plugin: ToolkitPlugin) -> some View {
         let isSelected = selectedPlugin == plugin
@@ -216,6 +248,47 @@ struct ToolkitMenuBar: View {
         .buttonStyle(.plain)
         .accessibilityIdentifier(AccessibilityID.toolkitMenuItem(plugin.rawValue))
     }
+
+    // MARK: - Menu Item (Dynamic Module)
+
+    private func dynamicMenuItem(for descriptor: DynamicModuleDescriptor) -> some View {
+        let isSelected = selectedDynamicModule == descriptor.toolkitId
+
+        return Button {
+            withAnimation(.easeInOut(duration: 0.25)) {
+                selectedDynamicModule = descriptor.toolkitId
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: descriptor.icon)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(
+                        isSelected ? descriptor.iconColor : AdaptiveColors.textSecondary(for: colorScheme)
+                    )
+
+                Text(descriptor.shortName)
+                    .font(.system(size: 13, weight: isSelected ? .semibold : .medium))
+                    .foregroundStyle(
+                        isSelected
+                            ? AdaptiveColors.textPrimary(for: colorScheme)
+                            : AdaptiveColors.textSecondary(for: colorScheme)
+                    )
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .background(
+                Group {
+                    if isSelected {
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(descriptor.iconColor.opacity(0.12))
+                            .matchedGeometryEffect(id: "menuHighlight", in: namespace)
+                    }
+                }
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier(AccessibilityID.toolkitMenuItem(descriptor.toolkitId))
+    }
 }
 
 // MARK: - Desktop Grid
@@ -225,6 +298,7 @@ struct ToolkitMenuBar: View {
 struct ToolkitDesktopGrid: View {
     @Environment(\.colorScheme) private var colorScheme
     @Binding var selectedPlugin: ToolkitPlugin?
+    @Binding var selectedDynamicModule: String?
     @Binding var pluginOrder: [ToolkitPlugin]
 
     /// Whether the grid is in reorder (jiggle) mode.
@@ -265,11 +339,16 @@ struct ToolkitDesktopGrid: View {
                 }
                 .padding(.top, 8)
 
-                // Plugin grid
+                // Plugin grid (static + dynamic)
                 LazyVGrid(columns: columns, spacing: HubLayout.itemSpacing) {
                     ForEach(pluginOrder) { plugin in
                         cardView(for: plugin)
                             .accessibilityIdentifier(AccessibilityID.toolkitCard(plugin.rawValue))
+                    }
+                    // Dynamic module cards
+                    ForEach(DynamicModuleRegistry.shared.orderedModules) { descriptor in
+                        dynamicCardView(for: descriptor)
+                            .accessibilityIdentifier(AccessibilityID.toolkitCard(descriptor.toolkitId))
                     }
                 }
                 .coordinateSpace(name: "desktopGrid")
@@ -403,6 +482,18 @@ struct ToolkitDesktopGrid: View {
         )
     }
 
+    // MARK: - Dynamic Module Card View
+
+    private func dynamicCardView(for descriptor: DynamicModuleDescriptor) -> some View {
+        DynamicModuleCard(descriptor: descriptor)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    selectedDynamicModule = descriptor.toolkitId
+                }
+            }
+    }
+
     /// Check if the dragged card should swap with another card.
     private func checkSwap(for plugin: ToolkitPlugin, at location: CGPoint) {
         guard let sourceIndex = pluginOrder.firstIndex(of: plugin) else { return }
@@ -506,6 +597,55 @@ private struct ToolkitPluginCard: View {
                 jiggleSeed = Double.random(in: 0...1)
             }
         }
+    }
+}
+
+// MARK: - Dynamic Module Card
+
+/// A card for a dynamically generated module, matching the visual style of ToolkitPluginCard.
+private struct DynamicModuleCard: View {
+    @Environment(\.colorScheme) private var colorScheme
+    let descriptor: DynamicModuleDescriptor
+
+    var body: some View {
+        VStack(spacing: 10) {
+            ZStack {
+                Circle()
+                    .fill(descriptor.iconColor.opacity(0.12))
+                    .frame(width: 48, height: 48)
+
+                Image(systemName: descriptor.icon)
+                    .font(.system(size: 22, weight: .medium))
+                    .foregroundStyle(descriptor.iconColor)
+            }
+
+            VStack(spacing: 3) {
+                Text(descriptor.displayName)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                    .lineLimit(1)
+
+                Text(descriptor.subtitle)
+                    .font(.system(size: 11, weight: .regular))
+                    .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: 110)
+        .background(
+            RoundedRectangle(cornerRadius: HubLayout.cardCornerRadius)
+                .fill(AdaptiveColors.surface(for: colorScheme))
+                .shadow(
+                    color: colorScheme == .dark
+                        ? Color.black.opacity(0.3)
+                        : Color.black.opacity(0.06),
+                    radius: 8,
+                    x: 0,
+                    y: 2
+                )
+        )
     }
 }
 
