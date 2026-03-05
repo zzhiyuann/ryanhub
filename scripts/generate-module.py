@@ -285,6 +285,76 @@ def summarize_swift_code(code: str) -> str:
     return "\n".join(result)
 
 
+def extract_vm_public_api(vm_code: str) -> str:
+    """Extract a strict public API contract from ViewModel code.
+    Returns a clear listing of every public property name, type, and method signature
+    that Views are allowed to use. Much more reliable than summarize_swift_code()."""
+    lines = vm_code.split("\n")
+    properties = []
+    methods = []
+    in_class = False
+    brace_depth = 0
+
+    for line in lines:
+        stripped = line.strip()
+
+        # Track class start
+        if re.match(r"(final\s+)?class\s+\w+ViewModel", stripped):
+            in_class = True
+            brace_depth = 0
+
+        if not in_class:
+            brace_depth += stripped.count("{") - stripped.count("}")
+            continue
+
+        # Only look at top-level members (brace_depth == 1)
+        brace_depth += stripped.count("{") - stripped.count("}")
+
+        # Skip private/fileprivate members
+        if "private " in stripped or "fileprivate " in stripped:
+            continue
+
+        # Detect stored properties: var name: Type = default
+        stored_match = re.match(r"var\s+(\w+)\s*:\s*(.+?)\s*=", stripped)
+        if stored_match and brace_depth <= 2:
+            pname, ptype = stored_match.groups()
+            ptype = ptype.strip().rstrip("{")
+            properties.append(f"  var {pname}: {ptype}  // stored")
+            continue
+
+        # Detect computed properties: var name: Type {
+        computed_match = re.match(r"var\s+(\w+)\s*:\s*(.+?)\s*\{", stripped)
+        if computed_match and brace_depth <= 2:
+            pname, ptype = computed_match.groups()
+            ptype = ptype.strip()
+            properties.append(f"  var {pname}: {ptype}  // computed")
+            continue
+
+        # Detect methods: func name(...) async? ...
+        func_match = re.match(r"func\s+(\w+)\s*\(([^)]*)\)(.*?)(?:\{|$)", stripped)
+        if func_match and brace_depth <= 2:
+            fname, params, rest = func_match.groups()
+            is_async = "async" in rest
+            async_str = " async" if is_async else ""
+            methods.append(f"  func {fname}({params}){async_str}")
+            continue
+
+        # Track class end
+        if brace_depth <= 0:
+            in_class = False
+
+    result = "VIEWMODEL PUBLIC API CONTRACT — Views MUST ONLY use these exact names:\n\n"
+    result += "PROPERTIES:\n"
+    result += "\n".join(properties) if properties else "  (none found)"
+    result += "\n\nMETHODS (async methods MUST be wrapped in Task { await ... }):\n"
+    result += "\n".join(methods) if methods else "  (none found)"
+    result += "\n\nRULES:\n"
+    result += "- If a property is not listed above, it does NOT exist — do not invent names\n"
+    result += "- Use exact property names as shown (e.g., if it says 'currentStreak', do NOT use 'streak')\n"
+    result += "- All async methods (addEntry, deleteEntry, loadData) MUST be called inside Task { await ... }\n"
+    return result
+
+
 # ─────────────────────────────────────────────────────────────────────
 # Phase 1: Deep Planning (Opus)
 # ─────────────────────────────────────────────────────────────────────
@@ -731,7 +801,7 @@ def _generate_single_view(name: str, display_name: str, view_role: str, view_nam
                            models_code: str, vm_code: str, spec: dict,
                            extra_context: str = "") -> str:
     """Generate a single view file via Claude. Returns Swift code or empty string on failure."""
-    vm_summary = summarize_swift_code(vm_code)
+    vm_api_contract = extract_vm_public_api(vm_code)
 
     role_instructions = {
         "dashboard": f"""Generate {name}{view_name}.swift — a rich Dashboard view.
@@ -769,8 +839,12 @@ def _generate_single_view(name: str, display_name: str, view_role: str, view_nam
 
 {instruction}
 
-VIEWMODEL PUBLIC API (only use these properties and methods):
-{vm_summary}
+{vm_api_contract}
+
+FULL VIEWMODEL CODE (reference for exact property names and types):
+```swift
+{vm_code}
+```
 
 MODELS (use these exact types):
 ```swift
@@ -782,7 +856,7 @@ MODELS (use these exact types):
 DESIGN RULES:
 - @Environment(\\.colorScheme) private var colorScheme
 - `let viewModel: {name}ViewModel` (not @State, not @Bindable — it's passed from parent)
-- Use Color.hubPrimary, Color.hubAccentGreen, Color.hubAccentRed, Color.hubAccentYellow
+- Use Color.hubPrimary, Color.hubAccentGreen, Color.hubAccentRed, Color.hubAccentYellow (always prefix with Color.)
 - Use AdaptiveColors.textPrimary(for: colorScheme), AdaptiveColors.textSecondary(for: colorScheme)
 - Use AdaptiveColors.background(for: colorScheme) for ScrollView background
 - Use .hubTitle, .hubHeading, .hubBody, .hubCaption for fonts
@@ -791,7 +865,9 @@ DESIGN RULES:
 - Do NOT import Charts (ModuleChartView handles it internally)
 - StatCard(title: String, value: String, icon: String, color: Color)
 - StatGrid {{ content }} wraps StatCards in a 2x2 grid
-- SectionHeader(title: String) for section labels
+- SectionHeader(title: "Label") — requires title: argument label
+- HubTextField(placeholder: "Label", text: $binding) — requires placeholder: argument label
+- Button actions that call async methods: Button {{ Task {{ await viewModel.deleteEntry(entry) }} }} label: {{ ... }}
 
 IMPORTANT: Your entire output will be saved directly as a .swift file.
 Do NOT write any explanation, description, or commentary.
@@ -891,6 +967,8 @@ ACTUAL VIEWMODEL (ONLY use properties/methods defined here — read carefully):
 {vm_code}
 ```
 
+{extract_vm_public_api(vm_code)}
+
 VIEW SPEC:
 {view_specs_json}
 
@@ -944,6 +1022,10 @@ ABSOLUTE RULES:
 - Sub-views: `let viewModel: {name}ViewModel` (not @State, not @Bindable)
 - ScrollView body: .background(AdaptiveColors.background(for: colorScheme))
 - Do NOT import Charts — ModuleChartView handles it internally
+- ALL async method calls (addEntry, deleteEntry, loadData) MUST be wrapped: Task {{ await viewModel.method(...) }}
+- HubTextField(placeholder: "Label", text: $binding) — requires placeholder: argument label
+- SectionHeader(title: "Label") — requires title: argument label
+- Always use Color.hubPrimary, Color.hubAccentGreen etc. (with Color. prefix) in .foregroundStyle()
 
 OUTPUT FORMAT — separate each file with this exact pattern:
 --- FileName.swift ---
@@ -1629,6 +1711,110 @@ extension DynamicModuleRegistry {{
 
 
 # ─────────────────────────────────────────────────────────────────────
+# Phase 2.5: Deterministic Auto-Fixes (runs before build)
+# ─────────────────────────────────────────────────────────────────────
+
+def deterministic_fixes(module_dir: str, vm_code: str) -> int:
+    """Apply regex-based fixes for known error patterns. Returns count of fixes applied.
+    These are patterns that Claude consistently gets wrong — fix them deterministically
+    instead of relying on another Claude call."""
+    fix_count = 0
+
+    # Extract public property names and async method names from ViewModel
+    vm_public_props = set()
+    vm_async_methods = set()
+    for line in vm_code.split("\n"):
+        stripped = line.strip()
+        if "private " in stripped or "fileprivate " in stripped:
+            continue
+        # Stored/computed properties
+        prop_match = re.match(r"var\s+(\w+)\s*:", stripped)
+        if prop_match:
+            vm_public_props.add(prop_match.group(1))
+        # Async methods
+        func_match = re.match(r"func\s+(\w+)\s*\(", stripped)
+        if func_match and "async" in stripped:
+            vm_async_methods.add(func_match.group(1))
+
+    for fname in os.listdir(module_dir):
+        if not fname.endswith(".swift") or "ViewModel" in fname or "Models" in fname:
+            continue
+        if "DataProvider" in fname or "Registration" in fname:
+            continue
+
+        fpath = os.path.join(module_dir, fname)
+        with open(fpath) as f:
+            original = f.read()
+        code = original
+
+        # Fix 1: Async calls without Task { await } wrapper in Button actions
+        # Pattern: viewModel.deleteEntry(...) or viewModel.addEntry(...) without Task { await }
+        for method in vm_async_methods:
+            # Fix: viewModel.method(xxx) alone (not already in Task { await })
+            # Match Button { viewModel.asyncMethod(args) } — needs Task { await } wrapper
+            pattern = rf'(Button\s*\{{[^{{}}]*?)(?<!await\s)viewModel\.{method}\(([^)]*)\)([^{{}}]*?\}})'
+            replacement = rf'\1Task {{ await viewModel.{method}(\2) }}\3'
+            code, n = re.subn(pattern, replacement, code, flags=re.DOTALL)
+            fix_count += n
+
+            # Also fix standalone calls in closures: { viewModel.method(args) }
+            # But not if already wrapped in Task { await }
+            pattern2 = rf'(?<!\bawait\s)(?<!\bTask\s\{{\s)viewModel\.{method}\(([^)]*)\)'
+            # Only apply in non-ViewModel files (Views)
+            matches = list(re.finditer(pattern2, code))
+            for m in reversed(matches):
+                # Check if already inside Task { await }
+                preceding = code[max(0, m.start()-50):m.start()]
+                if "Task {" in preceding and "await" in preceding:
+                    continue
+                # Check if already preceded by await
+                if preceding.rstrip().endswith("await"):
+                    continue
+                old = m.group(0)
+                new = f"Task {{ await viewModel.{method}({m.group(1)}) }}"
+                code = code[:m.start()] + new + code[m.end():]
+                fix_count += 1
+
+        # Fix 2: .hubAccentYellow / .hubAccentGreen / .hubAccentRed without Color. prefix
+        # in .foregroundStyle() context
+        for color in ["hubAccentYellow", "hubAccentGreen", "hubAccentRed", "hubPrimary", "hubPrimaryLight"]:
+            # Match .foregroundStyle(.hubXxx) — needs Color. prefix
+            pattern = rf'\.foregroundStyle\(\s*\.{color}'
+            replacement = f'.foregroundStyle(Color.{color}'
+            code, n = re.subn(pattern, replacement, code)
+            fix_count += n
+            # Also in .fill() and .stroke() contexts
+            for ctx in [".fill(", ".stroke(", ".tint("]:
+                pattern = rf'{re.escape(ctx)}\s*\.{color}'
+                replacement = f'{ctx}Color.{color}'
+                code, n = re.subn(pattern, replacement, code)
+                fix_count += n
+
+        # Fix 3: HubTextField("label", text:) → HubTextField(placeholder: "label", text:)
+        pattern = r'HubTextField\("([^"]*)",\s*text:'
+        replacement = r'HubTextField(placeholder: "\1", text:'
+        code, n = re.subn(pattern, replacement, code)
+        fix_count += n
+
+        # Fix 4: SectionHeader("label") → SectionHeader(title: "label")
+        pattern = r'SectionHeader\("([^"]*?)"\)'
+        replacement = r'SectionHeader(title: "\1")'
+        code, n = re.subn(pattern, replacement, code)
+        fix_count += n
+
+        # Fix 5: Remove `import Charts` — ModuleChartView handles it
+        code, n = re.subn(r'\nimport Charts\n', '\n', code)
+        fix_count += n
+
+        if code != original:
+            with open(fpath, "w") as f:
+                f.write(code)
+            print(f"    [AUTOFIX] {fname}: applied deterministic fixes")
+
+    return fix_count
+
+
+# ─────────────────────────────────────────────────────────────────────
 # Phase 3: Build + Auto-Fix
 # ─────────────────────────────────────────────────────────────────────
 
@@ -1723,6 +1909,90 @@ Only include files that need changes. No markdown fences. No explanation.
 # Phase 4: Quality Gate
 # ─────────────────────────────────────────────────────────────────────
 
+def cross_validate_views_vs_vm(module_dir: str, spec: dict) -> tuple[int, list[str]]:
+    """Cross-validate that all viewModel.xxx references in Views actually exist in ViewModel.
+    Returns (fix_count, remaining_issues). Attempts auto-fix where possible."""
+    name = spec["moduleName"]
+    vm_file = os.path.join(module_dir, f"{name}ViewModel.swift")
+    if not os.path.exists(vm_file):
+        return 0, ["ViewModel file not found"]
+
+    with open(vm_file) as f:
+        vm_code = f.read()
+
+    # Extract all public property/method names from ViewModel
+    vm_public_names = set()
+    vm_all_names = set()  # Including private, for fuzzy matching
+    for line in vm_code.split("\n"):
+        stripped = line.strip()
+        # Properties
+        prop_match = re.match(r"(?:private\s+)?var\s+(\w+)\s*:", stripped)
+        if prop_match:
+            pname = prop_match.group(1)
+            vm_all_names.add(pname)
+            if "private " not in stripped:
+                vm_public_names.add(pname)
+        # Methods
+        func_match = re.match(r"(?:private\s+)?func\s+(\w+)\s*\(", stripped)
+        if func_match:
+            fname_m = func_match.group(1)
+            vm_all_names.add(fname_m)
+            if "private " not in stripped:
+                vm_public_names.add(fname_m)
+
+    # Always-available base properties
+    vm_public_names.update(["entries", "isLoading", "errorMessage"])
+
+    fix_count = 0
+    issues = []
+
+    # Scan all view files for viewModel.xxx references
+    for fname in os.listdir(module_dir):
+        if not fname.endswith(".swift"):
+            continue
+        if "ViewModel" in fname or "Models" in fname or "DataProvider" in fname or "Registration" in fname:
+            continue
+
+        fpath = os.path.join(module_dir, fname)
+        with open(fpath) as f:
+            view_code = f.read()
+
+        # Find all viewModel.xxx references
+        refs = re.findall(r'viewModel\.(\w+)', view_code)
+        unique_refs = set(refs)
+
+        missing = unique_refs - vm_public_names
+        if not missing:
+            continue
+
+        # Try to auto-fix by finding close matches in VM
+        original_code = view_code
+        for ref in missing:
+            # Check if it's a private property — make it public in VM
+            if ref in vm_all_names and ref not in vm_public_names:
+                # It exists but is private — make it non-private in ViewModel
+                vm_code_new = re.sub(
+                    rf'(\s+)private\s+(var\s+{ref}\s*:)',
+                    r'\1\2',
+                    vm_code
+                )
+                if vm_code_new != vm_code:
+                    vm_code = vm_code_new
+                    vm_public_names.add(ref)
+                    fix_count += 1
+                    print(f"    [XVAL] Made {ref} public in ViewModel (referenced by {fname})")
+                    continue
+
+            # Otherwise it's a truly missing property — log as issue
+            issues.append(f"{fname} references viewModel.{ref} which doesn't exist in ViewModel")
+
+        # Write back VM if modified
+        with open(vm_file, "w") as f:
+            f.write(vm_code)
+
+    return fix_count, issues
+
+
 def phase4_quality_gate(module_dir: str, spec: dict) -> list[str]:
     """Check quality criteria. Returns list of issues (empty = pass)."""
     issues = []
@@ -1740,6 +2010,7 @@ def phase4_quality_gate(module_dir: str, spec: dict) -> list[str]:
 
     # Check ViewModel richness
     vm_file = os.path.join(module_dir, f"{name}ViewModel.swift")
+    vm_code = ""
     if os.path.exists(vm_file):
         with open(vm_file) as f:
             vm_code = f.read()
@@ -1758,10 +2029,76 @@ def phase4_quality_gate(module_dir: str, spec: dict) -> list[str]:
         fpath = os.path.join(module_dir, fname)
         with open(fpath) as f:
             code = f.read()
-        # Check for TextField used for number/bool inputs
         tf_count = code.count("TextField(")
         if tf_count > 3:
             issues.append(f"{fname}: {tf_count} TextFields (prefer Stepper/Slider/Picker)")
+
+    # NEW: Check async wrapper compliance
+    vm_async_methods = set()
+    for line in vm_code.split("\n"):
+        stripped = line.strip()
+        if "private " in stripped:
+            continue
+        func_match = re.match(r"func\s+(\w+)\s*\(", stripped)
+        if func_match and "async" in stripped:
+            vm_async_methods.add(func_match.group(1))
+
+    for fname in swift_files:
+        if "ViewModel" in fname or "Models" in fname or "DataProvider" in fname or "Registration" in fname:
+            continue
+        fpath = os.path.join(module_dir, fname)
+        with open(fpath) as f:
+            code = f.read()
+
+        for method in vm_async_methods:
+            # Find calls to async methods not inside Task { await }
+            pattern = rf'(?<!\bawait\s)viewModel\.{method}\('
+            bare_calls = re.findall(pattern, code)
+            if bare_calls:
+                # Check if each is already inside a Task block
+                for m in re.finditer(pattern, code):
+                    preceding = code[max(0, m.start()-80):m.start()]
+                    if "Task {" not in preceding and "Task{" not in preceding:
+                        issues.append(f"{fname}: viewModel.{method}() called without Task {{ await }} wrapper")
+                        break
+
+    # NEW: Check View↔ViewModel property references
+    vm_public_names = set(["entries", "isLoading", "errorMessage"])
+    for line in vm_code.split("\n"):
+        stripped = line.strip()
+        if "private " in stripped or "fileprivate " in stripped:
+            continue
+        prop_match = re.match(r"var\s+(\w+)\s*:", stripped)
+        if prop_match:
+            vm_public_names.add(prop_match.group(1))
+        func_match = re.match(r"func\s+(\w+)\s*\(", stripped)
+        if func_match:
+            vm_public_names.add(func_match.group(1))
+
+    for fname in swift_files:
+        if "ViewModel" in fname or "Models" in fname or "DataProvider" in fname or "Registration" in fname:
+            continue
+        fpath = os.path.join(module_dir, fname)
+        with open(fpath) as f:
+            code = f.read()
+        refs = set(re.findall(r'viewModel\.(\w+)', code))
+        missing = refs - vm_public_names
+        for ref in missing:
+            issues.append(f"{fname}: references viewModel.{ref} which doesn't exist")
+
+    # NEW: Check argument label patterns
+    for fname in swift_files:
+        if "ViewModel" in fname or "Models" in fname or "DataProvider" in fname or "Registration" in fname:
+            continue
+        fpath = os.path.join(module_dir, fname)
+        with open(fpath) as f:
+            code = f.read()
+        # HubTextField without placeholder: label
+        if re.search(r'HubTextField\("[^"]*",\s*text:', code):
+            issues.append(f"{fname}: HubTextField missing placeholder: argument label")
+        # SectionHeader without title: label
+        if re.search(r'SectionHeader\("[^"]*"\)', code):
+            issues.append(f"{fname}: SectionHeader missing title: argument label")
 
     return issues
 
@@ -1836,6 +2173,21 @@ def generate_module(description: str, skip_build: bool = False) -> bool:
 
     # Update bootstrap
     update_bootstrap()
+
+    # Phase 2.5: Deterministic fixes + cross-validation
+    vm_code = files.get(f"{name}ViewModel.swift", "")
+    print("\n[Phase 2.5] Deterministic auto-fixes...")
+    det_fixes = deterministic_fixes(module_dir, vm_code)
+    print(f"  Applied {det_fixes} deterministic fixes")
+
+    print("[Phase 2.5] Cross-validating Views vs ViewModel...")
+    xval_fixes, xval_issues = cross_validate_views_vs_vm(module_dir, spec)
+    if xval_fixes:
+        print(f"  Auto-fixed {xval_fixes} cross-validation issues")
+    if xval_issues:
+        print(f"  Remaining cross-validation issues ({len(xval_issues)}):")
+        for issue in xval_issues:
+            print(f"    - {issue}")
 
     # Phase 4: Quality Gate (pre-build)
     print("\n[Phase 4] Quality gate...")
@@ -1915,6 +2267,17 @@ def batch_generate(scenarios_file: str, skip_build: bool = False):
                     if os.path.exists(spec_path):
                         with open(spec_path) as f:
                             mod_spec = json.load(f)
+                        # First try deterministic fixes
+                        vm_path = os.path.join(mod_dir, f"{mod_name}ViewModel.swift")
+                        vm_c = ""
+                        if os.path.exists(vm_path):
+                            with open(vm_path) as vf:
+                                vm_c = vf.read()
+                        det_n = deterministic_fixes(mod_dir, vm_c)
+                        cross_validate_views_vs_vm(mod_dir, mod_spec)
+                        if det_n > 0:
+                            print(f"  [AUTOFIX] {mod_name}: {det_n} deterministic fixes")
+                        # Then Claude-based fix for remaining errors
                         print(f"  Auto-fixing {mod_name} ({mod_errs.count(chr(10))+1} errors)...")
                         fix_compilation_errors(mod_spec, mod_dir, mod_errs)
                     else:
