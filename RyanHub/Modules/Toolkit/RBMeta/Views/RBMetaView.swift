@@ -23,6 +23,8 @@ struct RBMetaView: View {
                 // Already configured or unavailable — safe to ignore
             }
             viewModel.setupDAT(wearables: Wearables.shared)
+            // Import any RB Meta photos/videos from Photo Library
+            RBMetaMediaImporter.shared.importNewMedia()
         }
         .onOpenURL { url in
             guard

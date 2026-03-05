@@ -32,6 +32,7 @@
 		0E0815FBFBA9E96E5FD795DB /* GroceryListHistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77D24C326937BAFC3C1D226B /* GroceryListHistoryView.swift */; };
 		0F6FBB84B5414B30734726FF /* GratitudeJournalViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F0D5ECD38A41F2A1BAC61BF /* GratitudeJournalViewModel.swift */; };
 		10CF7B83FD089B1778C6637C /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E8670F423D769B8AC0EC3A7 /* APIClient.swift */; };
+		110BBEDFF0C103E9C704467E /* RBMetaMediaImporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C3E246DFCE747C23501418D /* RBMetaMediaImporter.swift */; };
 		114301E8E8648B02BE539F2F /* ParkingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E40972F08206EADAFF0227E /* ParkingTests.swift */; };
 		119E211E0CF2B936A89F8A45 /* MoodJournalAnalyticsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD1BEF2D304A966AD1DB4E90 /* MoodJournalAnalyticsView.swift */; };
 		11F1AD12F9FF55F9A76FE437 /* TimelineEventRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88DE304FF10E2E406E4EA68C /* TimelineEventRow.swift */; };
@@ -427,6 +428,7 @@
 		4AD0CBF73B859088687163F3 /* HealthModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthModels.swift; sourceTree = "<group>"; };
 		4BD5E8B218C1DC88C3B09FA0 /* MedicationTrackerHistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MedicationTrackerHistoryView.swift; sourceTree = "<group>"; };
 		4C06A5F4C4505AC3DFF2C8D7 /* SpendingTrackerModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpendingTrackerModels.swift; sourceTree = "<group>"; };
+		4C3E246DFCE747C23501418D /* RBMetaMediaImporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RBMetaMediaImporter.swift; sourceTree = "<group>"; };
 		4C573E576A3EEFA03B9B3563 /* CatCareTrackerDataProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CatCareTrackerDataProvider.swift; sourceTree = "<group>"; };
 		51A56AB393B7FF813B6525F6 /* GratitudeJournalEntrySheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GratitudeJournalEntrySheet.swift; sourceTree = "<group>"; };
 		51EF5D040B73B2BF2DF330F8 /* ScreenTimeTrackerRegistration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenTimeTrackerRegistration.swift; sourceTree = "<group>"; };
@@ -713,6 +715,7 @@
 				3BBF6362A1E9D223FCF12364 /* RBMetaCameraManager.swift */,
 				8A20E1358762BB1BE3F59FB6 /* RBMetaConfig.swift */,
 				C9695EBF670BD60F160A0B18 /* RBMetaGeminiService.swift */,
+				4C3E246DFCE747C23501418D /* RBMetaMediaImporter.swift */,
 				CFB2C12107B16EDA40181036 /* RBMetaOpenClawBridge.swift */,
 				FFDABDE787C14C549D4410C3 /* RBMetaToolCallModels.swift */,
 				6CB77277E72E6C494BDE5DCF /* RBMetaToolCallRouter.swift */,
@@ -1855,6 +1858,7 @@
 				B8D78B3FA8E0634D1C13810D /* RBMetaCameraManager.swift in Sources */,
 				320EEB1892A753AAC4847694 /* RBMetaConfig.swift in Sources */,
 				F365F87F68E1477481CA5B7E /* RBMetaGeminiService.swift in Sources */,
+				110BBEDFF0C103E9C704467E /* RBMetaMediaImporter.swift in Sources */,
 				8AFBC2F96F769A811158AF4F /* RBMetaOpenClawBridge.swift in Sources */,
 				AB57D69D5C218B9EEADF65CA /* RBMetaToolCallModels.swift in Sources */,
 				BE7068F9BAFCA49CC114BC36 /* RBMetaToolCallRouter.swift in Sources */,

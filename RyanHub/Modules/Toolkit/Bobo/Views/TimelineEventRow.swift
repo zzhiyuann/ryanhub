@@ -991,6 +991,22 @@ struct TimelineEventRow: View {
 
     // MARK: - Modality Helpers
 
+    /// Source tag from the sensing event's payload, if available.
+    private var sensingSource: String? {
+        if case .sensing(let event) = item {
+            return event.payload["source"]
+        }
+        return nil
+    }
+
+    /// Media type from the sensing event's payload (photo/video).
+    private var sensingMediaType: String? {
+        if case .sensing(let event) = item {
+            return event.payload["mediaType"]
+        }
+        return nil
+    }
+
     private func modalityIcon(_ modality: SensingModality) -> String {
         switch modality {
         case .motion: return "figure.walk"
@@ -1012,7 +1028,11 @@ struct TimelineEventRow: View {
         case .bluetooth: return "antenna.radiowaves.left.and.right"
         case .visit: return "building.2.fill"
         case .audio: return "waveform"
-        case .photo: return "camera.fill"
+        case .photo:
+            if let source = sensingSource, source.hasPrefix("rb_meta") {
+                return "eyeglasses"
+            }
+            return "camera.fill"
         }
     }
 
@@ -1062,7 +1082,12 @@ struct TimelineEventRow: View {
         case .bluetooth: return "Bluetooth"
         case .visit: return "Visit"
         case .audio: return "Audio"
-        case .photo: return "Photo"
+        case .photo:
+            if let source = sensingSource, source.hasPrefix("rb_meta") {
+                let isVideo = sensingMediaType == "video"
+                return isVideo ? "RB Meta Video" : "RB Meta Photo"
+            }
+            return "Photo"
         }
     }
 
@@ -1235,6 +1260,13 @@ struct TimelineEventRow: View {
                 return "Audio Segment"
             }
         case .photo:
+            if let source = event.payload["source"], source.hasPrefix("rb_meta") {
+                let isVideo = event.payload["mediaType"] == "video"
+                if isVideo, let dur = event.payload["duration"] {
+                    return "Video (\(dur)s)"
+                }
+                return isVideo ? "Video Capture" : "Photo Capture"
+            }
             return "Photo"
         }
     }

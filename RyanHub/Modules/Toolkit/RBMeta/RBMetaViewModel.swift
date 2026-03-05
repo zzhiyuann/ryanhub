@@ -492,7 +492,7 @@ final class RBMetaViewModel {
     }
 
     /// Upload photo JPEG to bridge server for iMac storage.
-    private static func uploadPhotoToServer(jpegData: Data, eventId: String, source: String) async {
+    static func uploadPhotoToServer(jpegData: Data, eventId: String, source: String) async {
         let baseURL = UserDefaults.standard.string(forKey: "ryanhub_server_url")
             .flatMap { URL(string: $0)?.host }
             .map { "http://\($0):18790" }
