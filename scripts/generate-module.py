@@ -1811,6 +1811,99 @@ def deterministic_fixes(module_dir: str, vm_code: str) -> int:
                 f.write(code)
             print(f"    [AUTOFIX] {fname}: applied deterministic fixes")
 
+    # Fix 6: Enum name collisions with other modules
+    # Scan all Swift files in project for enum declarations, rename collisions in this module
+    module_name = os.path.basename(module_dir)
+    module_enums = {}  # enum_name -> file
+    for fname in os.listdir(module_dir):
+        if not fname.endswith(".swift"):
+            continue
+        fpath = os.path.join(module_dir, fname)
+        with open(fpath) as f:
+            for line in f:
+                m = re.match(r'enum\s+(\w+)\s*:', line)
+                if m:
+                    module_enums[m.group(1)] = fpath
+
+    if module_enums:
+        # Find all enum declarations outside this module
+        import glob as glob_mod
+        project_enums = set()
+        ryanhub_src = os.path.join(RYANHUB_ROOT, "RyanHub")
+        for sf in glob_mod.glob(os.path.join(ryanhub_src, "**", "*.swift"), recursive=True):
+            if module_dir in sf:
+                continue  # Skip our own module
+            with open(sf) as f:
+                for line in f:
+                    em = re.match(r'enum\s+(\w+)\s*:', line)
+                    if em:
+                        project_enums.add(em.group(1))
+
+        for enum_name in module_enums:
+            if enum_name in project_enums:
+                # Collision! Rename this module's enum with a module-specific prefix
+                new_name = f"{module_name}{enum_name}"
+                print(f"    [AUTOFIX] Renaming colliding enum {enum_name} -> {new_name}")
+                for fname in os.listdir(module_dir):
+                    if not fname.endswith(".swift"):
+                        continue
+                    fpath = os.path.join(module_dir, fname)
+                    with open(fpath) as f:
+                        code = f.read()
+                    new_code = re.sub(r'\b' + enum_name + r'\b', new_name, code)
+                    if new_code != code:
+                        with open(fpath, "w") as f:
+                            f.write(new_code)
+                        fix_count += 1
+
+    # Fix 7: Int/Double type mismatches in entry sheets
+    # Model declares field as Double, but entry sheet @State var uses Int
+    model_file = os.path.join(module_dir, f"{module_name}Models.swift")
+    entry_file = os.path.join(module_dir, f"{module_name}EntrySheet.swift")
+    if os.path.exists(model_file) and os.path.exists(entry_file):
+        with open(model_file) as f:
+            model_code = f.read()
+        double_fields = set(re.findall(r'var\s+(\w+)\s*:\s*Double', model_code))
+        with open(entry_file) as f:
+            entry_code = f.read()
+        for match in re.finditer(r'@State\s+private\s+var\s+(\w+)\s*:\s*Int\s*=\s*\d+', entry_code):
+            var_name = match.group(1)
+            clean = var_name.replace('input', '').replace('Input', '').lower()
+            for df in double_fields:
+                if df.lower() == clean:
+                    old_decl = match.group(0)
+                    new_decl = re.sub(r':\s*Int\s*=\s*\d+', ': Double = 0.0', old_decl)
+                    entry_code = entry_code.replace(old_decl, new_decl)
+                    fix_count += 1
+                    print(f"    [AUTOFIX] {module_name}EntrySheet: {var_name} Int -> Double")
+                    break
+        with open(entry_file, "w") as f:
+            f.write(entry_code)
+
+    # Fix 8: Swift reserved keywords used as enum cases
+    reserved_keywords = {"class", "struct", "enum", "protocol", "func", "var", "let",
+                         "import", "return", "if", "else", "for", "while", "switch",
+                         "case", "break", "continue", "default", "do", "try", "catch",
+                         "throw", "throws", "as", "is", "in", "where", "self", "Self",
+                         "super", "init", "deinit", "extension", "subscript", "typealias",
+                         "operator", "associatedtype", "static", "true", "false", "nil"}
+    for fname in os.listdir(module_dir):
+        if not fname.endswith(".swift"):
+            continue
+        fpath = os.path.join(module_dir, fname)
+        with open(fpath) as f:
+            code = f.read()
+        original = code
+        for kw in reserved_keywords:
+            # case keyword -> case keywordItem
+            code = re.sub(rf'(\bcase\s+){kw}\b(?!\w)', rf'\1{kw}Item', code)
+            code = re.sub(rf'(\.){kw}\b(?!\w)', rf'\1{kw}Item', code)
+        if code != original:
+            with open(fpath, "w") as f:
+                f.write(code)
+            fix_count += 1
+            print(f"    [AUTOFIX] {fname}: replaced reserved keyword enum cases")
+
     return fix_count
 
 
