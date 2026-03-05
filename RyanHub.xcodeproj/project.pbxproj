@@ -12,10 +12,12 @@
 		01E1685F6315919B09B17B88 /* GratitudeJournalModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 275B2A3F93167E53E1F84E18 /* GratitudeJournalModels.swift */; };
 		020AD1032BE0305253DD78C1 /* LearningTrackerDashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48119D6EFE7EF2BED10AA93B /* LearningTrackerDashboardView.swift */; };
 		027BB4546D88E95559E54361 /* HydrationTrackerEntrySheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5A4E676D29D0F717276E5FD /* HydrationTrackerEntrySheet.swift */; };
+		056104E243A7633758A0B5ED /* MWDATCore in Frameworks */ = {isa = PBXBuildFile; productRef = 3855EBAE3F5420B5FA203B98 /* MWDATCore */; };
 		06F99EFD1F4C8539594EEAC1 /* FluentSeedData.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAD61D9A181F72ABF2EED38C /* FluentSeedData.swift */; };
 		0725695D8FB1DB40A7F0B666 /* WatchAudioStreamer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 343531AFD479A4518E9BDEE8 /* WatchAudioStreamer.swift */; };
 		072B5A60EF15756F8EE16ABE /* CaffeineTrackerDataProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02B32135574348B061C1369B /* CaffeineTrackerDataProvider.swift */; };
 		0774152033AF5D8FB5D5D86A /* LearningTrackerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8E5D4B6C8EAFA1D25356B2E /* LearningTrackerView.swift */; };
+		07CA05F62B8872675FD38A1F /* RBMetaView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A842F9B75373FCC05289C3B0 /* RBMetaView.swift */; };
 		07F239D437812A0D31BE70E6 /* CatCareTrackerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E6DB5A41B303A402A8B463A /* CatCareTrackerView.swift */; };
 		07F554FA002F89244E87229C /* GroceryListDashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AF60AB3737FD01CF648C516 /* GroceryListDashboardView.swift */; };
 		086B8E3A17F05ECE1E5F2C70 /* MiniPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0563D9301CFC9B123A77F6B /* MiniPlayerView.swift */; };
@@ -75,6 +77,7 @@
 		3073F84628D8C5AA6D2A4F30 /* DailySummaryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8324A0F5B9279548ED9454E9 /* DailySummaryView.swift */; };
 		310D3AC1B9B8CF5856A438F8 /* MoodJournalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D99CBD4E1D69BFF756B8B94 /* MoodJournalView.swift */; };
 		31A862D3FD2956CDE06E596C /* RyanHubUITestBase.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2B7D92280D24E6039581B5B /* RyanHubUITestBase.swift */; };
+		320EEB1892A753AAC4847694 /* RBMetaConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A20E1358762BB1BE3F59FB6 /* RBMetaConfig.swift */; };
 		321BF2B2DB4832E86DA02CDA /* ScreenTimeTrackerRegistration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51EF5D040B73B2BF2DF330F8 /* ScreenTimeTrackerRegistration.swift */; };
 		326E2219C3465FB89292CEB2 /* ScreenTimeTrackerModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48DB2CEBB2A6C78570789836 /* ScreenTimeTrackerModels.swift */; };
 		3491C0C51BD1153E6EA03828 /* FocusSessionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91CFB66C78A01C8C2225260A /* FocusSessionView.swift */; };
@@ -149,7 +152,9 @@
 		6ED2A4ECD3FB8023B9F98337 /* BoboView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81B02F6A093A666AE0A51583 /* BoboView.swift */; };
 		71C458AF991F67889B6364E5 /* CatCareTrackerViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BC046E995850B235F7BD745 /* CatCareTrackerViewModel.swift */; };
 		72BD157E30A390D356391A7D /* DailyAffirmationsModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = E185A1387E16FB6D9A5EB35D /* DailyAffirmationsModels.swift */; };
+		733B7DD45433FD9AE3004AF2 /* MWDATCamera in Frameworks */ = {isa = PBXBuildFile; productRef = 38FD7B46C48F14267B37034F /* MWDATCamera */; };
 		74AA9FFE63978B05D1F336DD /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B16DCA2295106985F51F2AD4 /* ContentView.swift */; };
+		74BD551E0D434A4DBAE111DD /* RBMetaViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 094C379985684E980A2C4700 /* RBMetaViewModel.swift */; };
 		753333E7C00CBF3ECEB2D60C /* RecipeBoxModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = F32FF8C600AD6C2C023DA9FE /* RecipeBoxModels.swift */; };
 		770A536F6C58A45AE14090EF /* ScreenTimeTrackerDashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1204B6FA62422C359D58C33 /* ScreenTimeTrackerDashboardView.swift */; };
 		772006840BAF7537AC0C5C2E /* CatCareTrackerAnalyticsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EC7D3DC9C8345E2A61DD099 /* CatCareTrackerAnalyticsView.swift */; };
@@ -175,6 +180,7 @@
 		8855DD918784BA9F466D40D6 /* SubscriptionTrackerAnalyticsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD4515E5FB15541AB434F569 /* SubscriptionTrackerAnalyticsView.swift */; };
 		8973B7A0E538EC15C0C0A9B8 /* PlantCareTrackerModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F619F777FCA72BF99E76EFB /* PlantCareTrackerModels.swift */; };
 		89E13509E7778599B77DA12A /* TerminalTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2BD9A50AFEFA22CD60FADBF /* TerminalTests.swift */; };
+		8AFBC2F96F769A811158AF4F /* RBMetaOpenClawBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFB2C12107B16EDA40181036 /* RBMetaOpenClawBridge.swift */; };
 		8C7237A5CFAEB6F34BB85EE9 /* ParkingModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D5B11EECA4F5D375FAC8DF3 /* ParkingModels.swift */; };
 		8DED6F865DD03FC1D881CBE1 /* GratitudeJournalDataProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3E8374BAB7E0F66687A602B /* GratitudeJournalDataProvider.swift */; };
 		8DF83FCF7140989F360CB87F /* ReadingTrackerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E729F2C3F4683754B47EC27 /* ReadingTrackerView.swift */; };
@@ -203,6 +209,7 @@
 		9E444B2C4DF2AFE067956856 /* ReadingTrackerAnalyticsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEB7A9A475A7E5D8FBF4F020 /* ReadingTrackerAnalyticsView.swift */; };
 		9F010855B1B3ECEA2AFEE416 /* HealthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D06AEB0354C4C85106A24AE1 /* HealthView.swift */; };
 		9F0C71B49AC4AC486CB2D973 /* FocusSessionModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 989ADC31609DE94FBCAA92DD /* FocusSessionModels.swift */; };
+		A029126B70D40D6C608C5419 /* RBMetaAudioManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74E9C0351907E54415C0092A /* RBMetaAudioManager.swift */; };
 		A0B382F74C5E1DDBE5B6CF90 /* MoodJournalDashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F014532D0D4E1436B23ECB17 /* MoodJournalDashboardView.swift */; };
 		A2095E12C715C6D6CA0C5B5E /* MoodJournalHistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 959C9B0F5AA70C10D4D8A363 /* MoodJournalHistoryView.swift */; };
 		A3288EDE57F45ED0AE34DC8F /* HydrationTrackerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6FB57A8CC78D01FB313D2637 /* HydrationTrackerView.swift */; };
@@ -216,6 +223,7 @@
 		A9B0A16307454F9DC480B47E /* SpendingTrackerAnalyticsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9120B1E0A9428C7D04FB6CA /* SpendingTrackerAnalyticsView.swift */; };
 		A9F9FAF91BC0AE6BEFC6FB82 /* GratitudeJournalDashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5A842699E1723C38A07F35D /* GratitudeJournalDashboardView.swift */; };
 		AB3C20EDEFED295D54AD7F52 /* ToolkitTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0D1D7BFF0973ACC109D2297 /* ToolkitTests.swift */; };
+		AB57D69D5C218B9EEADF65CA /* RBMetaToolCallModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFDABDE787C14C549D4410C3 /* RBMetaToolCallModels.swift */; };
 		ABB4516357A5EF0B9D786024 /* PeopleJournalHistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9437C0FEED191E1B36D8DD69 /* PeopleJournalHistoryView.swift */; };
 		AC7FE87050DFD60168C3629C /* BoboDataProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFD7A7D51DF4CC4913F26E5E /* BoboDataProvider.swift */; };
 		AC926C15910B628851A926E3 /* SensingEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 327B76A77F58B8E695E0A660 /* SensingEvent.swift */; };
@@ -228,6 +236,7 @@
 		B4AD4B5FF7A114B810B7FCED /* LearningTrackerDataProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A480A291AB2172E12D915B53 /* LearningTrackerDataProvider.swift */; };
 		B5C925AB99A9F237B1002FDF /* TabNavigationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E58926E0B8755BD153826FD8 /* TabNavigationTests.swift */; };
 		B6989682EC1AC53E552E4517 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D083DD2A5B38D1F4C3A9A64 /* SettingsView.swift */; };
+		B8D78B3FA8E0634D1C13810D /* RBMetaCameraManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BBF6362A1E9D223FCF12364 /* RBMetaCameraManager.swift */; };
 		B9D666E5941ED18AAF22F181 /* GratitudeJournalHistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A01C57BA0E0E2E565320BE0 /* GratitudeJournalHistoryView.swift */; };
 		BA5CBE3AAC60C46505B4E1DF /* SubscriptionTrackerModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 633D50118AB44DC90EAA9CC2 /* SubscriptionTrackerModels.swift */; };
 		BA5E9DBEC50AEB69338AE61B /* AudioStreamSensor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77A2DF799AA2C183954422AA /* AudioStreamSensor.swift */; };
@@ -241,6 +250,7 @@
 		BD100B6110735DA563B36EF1 /* CalendarPluginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67A6E494EFD12F06C3C783F1 /* CalendarPluginView.swift */; };
 		BDCAE9885CA36D59A6DB2C8F /* PlantCareTrackerDashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3170F53BB069688442D633EF /* PlantCareTrackerDashboardView.swift */; };
 		BE1CAEA7FA6BE10375BA9A1D /* ProgressRingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADBE11AC8E35CE4F46605C73 /* ProgressRingView.swift */; };
+		BE7068F9BAFCA49CC114BC36 /* RBMetaToolCallRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6CB77277E72E6C494BDE5DCF /* RBMetaToolCallRouter.swift */; };
 		BF58C0620273681DEB3BB9DC /* MedicationTrackerDashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2815F80DF7C7FBB8E23699DA /* MedicationTrackerDashboardView.swift */; };
 		C0CF612B2668201CA9EF113D /* SpendingTrackerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17DAD15C78C500414BEDE13C /* SpendingTrackerView.swift */; };
 		C1B8B2567875F742A259909A /* SleepTrackerModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFA5B5546960004BEBC28CC1 /* SleepTrackerModels.swift */; };
@@ -300,6 +310,7 @@
 		F1698707251EEDC8F9FAD821 /* WatchSessionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 939BDEB9FD6D6252F75828A0 /* WatchSessionManager.swift */; };
 		F1A793927DCA044BD223C4AE /* GroceryListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 903640E243D3B29B55DFF295 /* GroceryListView.swift */; };
 		F336238395BFA892A3ACD299 /* FluentReviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E5DFE94BFC993641FAAE8FB /* FluentReviewView.swift */; };
+		F365F87F68E1477481CA5B7E /* RBMetaGeminiService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9695EBF670BD60F160A0B18 /* RBMetaGeminiService.swift */; };
 		F3A0FBE3BCE547DBCEA548A9 /* CommuteTrackerAnalyticsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DF5749BF199077567B4218F /* CommuteTrackerAnalyticsView.swift */; };
 		F41257676B6C15D64F899179 /* ScreenTimeTrackerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82B4E053E5009D36792AB1E6 /* ScreenTimeTrackerView.swift */; };
 		F44DF37E2E4D1C5BD5A73F73 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 335BA591A35FB41B6FD8EEC1 /* Localizable.strings */; };
@@ -336,6 +347,7 @@
 		026DF5BE84A6E963CAEDFCFE /* FluentVocabularyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FluentVocabularyView.swift; sourceTree = "<group>"; };
 		02B32135574348B061C1369B /* CaffeineTrackerDataProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaffeineTrackerDataProvider.swift; sourceTree = "<group>"; };
 		04D371B24B95449E08325C65 /* RecipeBoxDashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecipeBoxDashboardView.swift; sourceTree = "<group>"; };
+		094C379985684E980A2C4700 /* RBMetaViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RBMetaViewModel.swift; sourceTree = "<group>"; };
 		09DAB3227A6B01A2DC91D553 /* MedicationTrackerRegistration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MedicationTrackerRegistration.swift; sourceTree = "<group>"; };
 		0A16D958CF5594C6A90D10E6 /* ReadingTrackerDashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingTrackerDashboardView.swift; sourceTree = "<group>"; };
 		0A3DDE57D67FB09CB8F66A21 /* ReadingTrackerModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingTrackerModels.swift; sourceTree = "<group>"; };
@@ -395,6 +407,7 @@
 		3A2373AC9E3B2806D467A4D9 /* SleepTrackerViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SleepTrackerViewModel.swift; sourceTree = "<group>"; };
 		3A7EA111787ABCC556F36D7B /* ScreenTimeTrackerDataProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenTimeTrackerDataProvider.swift; sourceTree = "<group>"; };
 		3AD552AEF71D52E34C3DC8CB /* CaffeineTrackerRegistration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaffeineTrackerRegistration.swift; sourceTree = "<group>"; };
+		3BBF6362A1E9D223FCF12364 /* RBMetaCameraManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RBMetaCameraManager.swift; sourceTree = "<group>"; };
 		3D4F5DFD508B8E17C8D87D9E /* HydrationTrackerModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HydrationTrackerModels.swift; sourceTree = "<group>"; };
 		3DE0FA10CF68A3ADDA93E3D3 /* DynamicModuleBootstrap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DynamicModuleBootstrap.swift; sourceTree = "<group>"; };
 		3DFE2DC031C4E043D1D4753F /* DailyAffirmationsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyAffirmationsViewModel.swift; sourceTree = "<group>"; };
@@ -447,6 +460,7 @@
 		69C94AEC9084D2B64ED6F60E /* SubscriptionTrackerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubscriptionTrackerView.swift; sourceTree = "<group>"; };
 		6BD40A3E7A182CD45DA9DB1C /* CaffeineTrackerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaffeineTrackerView.swift; sourceTree = "<group>"; };
 		6CAD700B97BEAEA443CDDC9C /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		6CB77277E72E6C494BDE5DCF /* RBMetaToolCallRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RBMetaToolCallRouter.swift; sourceTree = "<group>"; };
 		6D083DD2A5B38D1F4C3A9A64 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		6D6B8993B43F99FAB78875B0 /* CaffeineTrackerAnalyticsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaffeineTrackerAnalyticsView.swift; sourceTree = "<group>"; };
 		6D81FD1D4462E12FF6BD418D /* AudioPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPlayerView.swift; sourceTree = "<group>"; };
@@ -463,6 +477,7 @@
 		74958864CED965AD35F81B91 /* PlantCareTrackerHistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlantCareTrackerHistoryView.swift; sourceTree = "<group>"; };
 		74C29930E5D567105A01F8DA /* MedicationTrackerDataProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MedicationTrackerDataProvider.swift; sourceTree = "<group>"; };
 		74DF6594BA50D7E0AA9CCED6 /* SleepTrackerAnalyticsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SleepTrackerAnalyticsView.swift; sourceTree = "<group>"; };
+		74E9C0351907E54415C0092A /* RBMetaAudioManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RBMetaAudioManager.swift; sourceTree = "<group>"; };
 		75BD223A2DD8D357BDBA7F54 /* CalendarModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarModels.swift; sourceTree = "<group>"; };
 		75F056B1F39C388632A5ADDD /* FocusSessionViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusSessionViewModel.swift; sourceTree = "<group>"; };
 		76FF68B58295C65D962AAA9B /* PlantCareTrackerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlantCareTrackerView.swift; sourceTree = "<group>"; };
@@ -498,6 +513,7 @@
 		88DE304FF10E2E406E4EA68C /* TimelineEventRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineEventRow.swift; sourceTree = "<group>"; };
 		89A79BC66646889BE2915A02 /* HabitTrackerRegistration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HabitTrackerRegistration.swift; sourceTree = "<group>"; };
 		8A01C57BA0E0E2E565320BE0 /* GratitudeJournalHistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GratitudeJournalHistoryView.swift; sourceTree = "<group>"; };
+		8A20E1358762BB1BE3F59FB6 /* RBMetaConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RBMetaConfig.swift; sourceTree = "<group>"; };
 		8C314031F1A95FB1683136E0 /* CaffeineTrackerViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaffeineTrackerViewModel.swift; sourceTree = "<group>"; };
 		8EC7D3DC9C8345E2A61DD099 /* CatCareTrackerAnalyticsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CatCareTrackerAnalyticsView.swift; sourceTree = "<group>"; };
 		8F0E9328648251F751610194 /* SpendingTrackerEntrySheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpendingTrackerEntrySheet.swift; sourceTree = "<group>"; };
@@ -530,6 +546,7 @@
 		A6B2E720F4F39767B499E204 /* ReadingTrackerViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingTrackerViewModel.swift; sourceTree = "<group>"; };
 		A71E1B23CB15B3D54DAD8929 /* CaffeineTrackerHistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaffeineTrackerHistoryView.swift; sourceTree = "<group>"; };
 		A7404F328903542EFA75AD70 /* CalendarService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarService.swift; sourceTree = "<group>"; };
+		A842F9B75373FCC05289C3B0 /* RBMetaView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RBMetaView.swift; sourceTree = "<group>"; };
 		A84C3474D58EA186392C2FCB /* FocusSessionDataProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusSessionDataProvider.swift; sourceTree = "<group>"; };
 		A95F37A517595C5CE6A5C246 /* SleepTrackerDataProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SleepTrackerDataProvider.swift; sourceTree = "<group>"; };
 		AA78B453B0C88A9BD3EF3437 /* ToolkitDataProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolkitDataProvider.swift; sourceTree = "<group>"; };
@@ -569,11 +586,13 @@
 		C4D40B06DEE0FABF0F9F66E6 /* BookModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookModels.swift; sourceTree = "<group>"; };
 		C553E08F5FEEC7043B53FB61 /* LocationSensor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationSensor.swift; sourceTree = "<group>"; };
 		C7F914B6AD9655F231D8E86B /* GroceryListEntrySheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroceryListEntrySheet.swift; sourceTree = "<group>"; };
+		C9695EBF670BD60F160A0B18 /* RBMetaGeminiService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RBMetaGeminiService.swift; sourceTree = "<group>"; };
 		CAF23D6C066A4D5D48D285C7 /* HydrationTrackerDashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HydrationTrackerDashboardView.swift; sourceTree = "<group>"; };
 		CD1BEF2D304A966AD1DB4E90 /* MoodJournalAnalyticsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoodJournalAnalyticsView.swift; sourceTree = "<group>"; };
 		CD692591DB01C3FF28254872 /* ReadingTrackerHistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingTrackerHistoryView.swift; sourceTree = "<group>"; };
 		CD86AE08D1796BF465BC38E2 /* ChatMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatMessage.swift; sourceTree = "<group>"; };
 		CF08A389291EC57C9A1078D4 /* WeightTimelineChart.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeightTimelineChart.swift; sourceTree = "<group>"; };
+		CFB2C12107B16EDA40181036 /* RBMetaOpenClawBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RBMetaOpenClawBridge.swift; sourceTree = "<group>"; };
 		D06AEB0354C4C85106A24AE1 /* HealthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthView.swift; sourceTree = "<group>"; };
 		D16D2295813670830D5C718A /* ParkingViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParkingViewModel.swift; sourceTree = "<group>"; };
 		D2D2F296C32C06D3413FAF76 /* SleepTrackerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SleepTrackerView.swift; sourceTree = "<group>"; };
@@ -642,6 +661,7 @@
 		FF31BD59A2A3DFFBD3858C57 /* CaffeineTrackerDashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaffeineTrackerDashboardView.swift; sourceTree = "<group>"; };
 		FFA5B5546960004BEBC28CC1 /* SleepTrackerModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SleepTrackerModels.swift; sourceTree = "<group>"; };
 		FFD7A7D51DF4CC4913F26E5E /* BoboDataProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoboDataProvider.swift; sourceTree = "<group>"; };
+		FFDABDE787C14C549D4410C3 /* RBMetaToolCallModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RBMetaToolCallModels.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -662,6 +682,8 @@
 				81F1409EBE3971344F74F2F5 /* NIOSSH in Frameworks */,
 				1CE896816E79C98434C97347 /* HealthKit.framework in Frameworks */,
 				B4398C5033AC401E4D7F1BA0 /* WatchConnectivity.framework in Frameworks */,
+				056104E243A7633758A0B5ED /* MWDATCore in Frameworks */,
+				733B7DD45433FD9AE3004AF2 /* MWDATCamera in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -682,6 +704,20 @@
 				26F92B928035CBAB03FB7A9B /* PeopleJournalViewModel.swift */,
 			);
 			path = PeopleJournal;
+			sourceTree = "<group>";
+		};
+		0E683702DA337EE6E2E1CF84 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				74E9C0351907E54415C0092A /* RBMetaAudioManager.swift */,
+				3BBF6362A1E9D223FCF12364 /* RBMetaCameraManager.swift */,
+				8A20E1358762BB1BE3F59FB6 /* RBMetaConfig.swift */,
+				C9695EBF670BD60F160A0B18 /* RBMetaGeminiService.swift */,
+				CFB2C12107B16EDA40181036 /* RBMetaOpenClawBridge.swift */,
+				FFDABDE787C14C549D4410C3 /* RBMetaToolCallModels.swift */,
+				6CB77277E72E6C494BDE5DCF /* RBMetaToolCallRouter.swift */,
+			);
+			path = Services;
 			sourceTree = "<group>";
 		};
 		130B25ABC7868919556C0A60 /* Fluent */ = {
@@ -995,6 +1031,14 @@
 			path = GroceryList;
 			sourceTree = "<group>";
 		};
+		8171FEF7A9061BE07BF31A77 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				A842F9B75373FCC05289C3B0 /* RBMetaView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
 		8EF8C41FA826FB367BE02155 /* SpendingTracker */ = {
 			isa = PBXGroup;
 			children = (
@@ -1072,6 +1116,7 @@
 				130B25ABC7868919556C0A60 /* Fluent */,
 				EC9CB57E20405AD648F55CCD /* Health */,
 				C428C88F11F6A32043A3A53B /* Parking */,
+				D67E8EF5D4ACD99EB3EF0BA6 /* RBMeta */,
 			);
 			path = Toolkit;
 			sourceTree = "<group>";
@@ -1230,6 +1275,16 @@
 				7FD0F1F2B627851F674E44BB /* Frameworks */,
 				244FC5BD6EC74E5A3C294ECD /* Products */,
 			);
+			sourceTree = "<group>";
+		};
+		D67E8EF5D4ACD99EB3EF0BA6 /* RBMeta */ = {
+			isa = PBXGroup;
+			children = (
+				094C379985684E980A2C4700 /* RBMetaViewModel.swift */,
+				0E683702DA337EE6E2E1CF84 /* Services */,
+				8171FEF7A9061BE07BF31A77 /* Views */,
+			);
+			path = RBMeta;
 			sourceTree = "<group>";
 		};
 		D796A4EEBDC2604DF33A9A76 /* ViewModels */ = {
@@ -1487,6 +1542,8 @@
 			packageProductDependencies = (
 				05EF287CF861CA9F565EEEFD /* SwiftTerm */,
 				5B169081B2ADA1F2222DCEC3 /* NIOSSH */,
+				3855EBAE3F5420B5FA203B98 /* MWDATCore */,
+				38FD7B46C48F14267B37034F /* MWDATCamera */,
 			);
 			productName = RyanHub;
 			productReference = 5FC6F16E27429DFEA760C170 /* RyanHub.app */;
@@ -1547,6 +1604,7 @@
 			mainGroup = D44A34788177DA1563EA6932;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
+				264BE69B4E8475883E0047CD /* XCRemoteSwiftPackageReference "meta-wearables-dat-ios" */,
 				EACE64B3E3B5C1CC7C299A54 /* XCRemoteSwiftPackageReference "SwiftTerm" */,
 				508A5875AEFC89F96B4C8371 /* XCRemoteSwiftPackageReference "swift-nio-ssh" */,
 			);
@@ -1793,6 +1851,15 @@
 				F8D8E97DE66120A10A1D9EE1 /* QueueManagerView.swift in Sources */,
 				4D96295338EAC5B7FD4610A7 /* QueueViewModel.swift in Sources */,
 				B0D17474723879F1CB8BF49A /* QuickEntrySheet.swift in Sources */,
+				A029126B70D40D6C608C5419 /* RBMetaAudioManager.swift in Sources */,
+				B8D78B3FA8E0634D1C13810D /* RBMetaCameraManager.swift in Sources */,
+				320EEB1892A753AAC4847694 /* RBMetaConfig.swift in Sources */,
+				F365F87F68E1477481CA5B7E /* RBMetaGeminiService.swift in Sources */,
+				8AFBC2F96F769A811158AF4F /* RBMetaOpenClawBridge.swift in Sources */,
+				AB57D69D5C218B9EEADF65CA /* RBMetaToolCallModels.swift in Sources */,
+				BE7068F9BAFCA49CC114BC36 /* RBMetaToolCallRouter.swift in Sources */,
+				07CA05F62B8872675FD38A1F /* RBMetaView.swift in Sources */,
+				74BD551E0D434A4DBAE111DD /* RBMetaViewModel.swift in Sources */,
 				9E444B2C4DF2AFE067956856 /* ReadingTrackerAnalyticsView.swift in Sources */,
 				8E9491DA86E94B2261E1EA9E /* ReadingTrackerDashboardView.swift in Sources */,
 				E057F35D0B549E957EA39751 /* ReadingTrackerDataProvider.swift in Sources */,
@@ -2197,6 +2264,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		264BE69B4E8475883E0047CD /* XCRemoteSwiftPackageReference "meta-wearables-dat-ios" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/facebook/meta-wearables-dat-ios";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.4.0;
+			};
+		};
 		508A5875AEFC89F96B4C8371 /* XCRemoteSwiftPackageReference "swift-nio-ssh" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/apple/swift-nio-ssh.git";
@@ -2220,6 +2295,16 @@
 			isa = XCSwiftPackageProductDependency;
 			package = EACE64B3E3B5C1CC7C299A54 /* XCRemoteSwiftPackageReference "SwiftTerm" */;
 			productName = SwiftTerm;
+		};
+		3855EBAE3F5420B5FA203B98 /* MWDATCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 264BE69B4E8475883E0047CD /* XCRemoteSwiftPackageReference "meta-wearables-dat-ios" */;
+			productName = MWDATCore;
+		};
+		38FD7B46C48F14267B37034F /* MWDATCamera */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 264BE69B4E8475883E0047CD /* XCRemoteSwiftPackageReference "meta-wearables-dat-ios" */;
+			productName = MWDATCamera;
 		};
 		5B169081B2ADA1F2222DCEC3 /* NIOSSH */ = {
 			isa = XCSwiftPackageProductDependency;

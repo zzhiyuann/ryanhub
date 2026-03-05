@@ -26,6 +26,8 @@
 "toolkit_health_desc" = "追踪健康与健身";
 "toolkit_bobo" = "BoBo";
 "toolkit_bobo_desc" = "主动行为感知";
+"toolkit_rb_meta" = "RB Meta";
+"toolkit_rb_meta_desc" = "AI 智能眼镜助手";
 
 /* Settings */
 "settings_title" = "设置";

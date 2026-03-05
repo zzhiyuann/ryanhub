@@ -26,6 +26,8 @@
 "toolkit_health_desc" = "Track wellness & fitness";
 "toolkit_bobo" = "BoBo";
 "toolkit_bobo_desc" = "Proactive behavioral sensing";
+"toolkit_rb_meta" = "RB Meta";
+"toolkit_rb_meta_desc" = "AI smart glasses assistant";
 
 /* Settings */
 "settings_title" = "Settings";

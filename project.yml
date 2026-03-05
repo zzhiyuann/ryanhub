@@ -12,6 +12,9 @@ packages:
   swift-nio-ssh:
     url: https://github.com/apple/swift-nio-ssh.git
     from: "0.9.0"
+  MetaWearablesDAT:
+    url: https://github.com/facebook/meta-wearables-dat-ios
+    from: "0.4.0"
 settings:
   base:
     SWIFT_VERSION: "5.9"
@@ -36,6 +39,10 @@ targets:
         product: NIOSSH
       - sdk: HealthKit.framework
       - sdk: WatchConnectivity.framework
+      - package: MetaWearablesDAT
+        product: MWDATCore
+      - package: MetaWearablesDAT
+        product: MWDATCamera
     info:
       path: RyanHub/Info.plist
       properties:
@@ -50,14 +57,26 @@ targets:
         NSMotionUsageDescription: "Ryan Hub uses motion data to detect your activity (walking, running, driving) for the BOBO sensing engine."
         NSLocationWhenInUseUsageDescription: "Ryan Hub uses your location for contextual behavioral sensing in the BOBO module."
         NSLocationAlwaysAndWhenInUseUsageDescription: "Ryan Hub uses background location for continuous behavioral sensing in the BOBO module."
-        NSBluetoothAlwaysUsageDescription: "BOBO detects nearby Bluetooth devices to understand your context (e.g., connected to car, wearing AirPods)."
+        NSBluetoothAlwaysUsageDescription: "Ryan Hub uses Bluetooth to connect to Meta Ray-Ban smart glasses and detect nearby devices for BOBO sensing."
         # WiFi SSID access also requires the com.apple.developer.networking.wifi-info entitlement.
         # The WiFiSensor will gracefully return nil without it.
+        UISupportedExternalAccessoryProtocols:
+          - com.meta.ar.wearable
+        MWDAT:
+          AppLinkURLScheme: "ryanhub://"
+          MetaAppID: ""
+          ClientToken: ""
+          TeamID: "WRR5PDXKX3"
+        CFBundleURLTypes:
+          - CFBundleURLSchemes:
+              - ryanhub
         UIBackgroundModes:
           - audio
           - fetch
           - processing
           - location
+          - bluetooth-peripheral
+          - external-accessory
         BGTaskSchedulerPermittedIdentifiers:
           - com.zwang.ryanhub.bobo-sync
         NSAppTransportSecurity:

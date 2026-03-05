@@ -34,6 +34,8 @@ enum L10n {
     static var toolkitHealthDesc: String { localized("toolkit_health_desc") }
     static var toolkitBobo: String { localized("toolkit_bobo") }
     static var toolkitBoboDesc: String { localized("toolkit_bobo_desc") }
+    static var toolkitRBMeta: String { localized("toolkit_rb_meta") }
+    static var toolkitRBMetaDesc: String { localized("toolkit_rb_meta_desc") }
 
     // MARK: - Settings
 

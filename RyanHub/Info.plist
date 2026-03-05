@@ -20,17 +20,37 @@
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
 	<string>1.0</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>ryanhub</string>
+			</array>
+		</dict>
+	</array>
 	<key>CFBundleVersion</key>
 	<string>1</string>
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.productivity</string>
+	<key>MWDAT</key>
+	<dict>
+		<key>AppLinkURLScheme</key>
+		<string>ryanhub://</string>
+		<key>ClientToken</key>
+		<string></string>
+		<key>MetaAppID</key>
+		<string></string>
+		<key>TeamID</key>
+		<string>WRR5PDXKX3</string>
+	</dict>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>
 		<true/>
 	</dict>
 	<key>NSBluetoothAlwaysUsageDescription</key>
-	<string>BOBO detects nearby Bluetooth devices to understand your context (e.g., connected to car, wearing AirPods).</string>
+	<string>Ryan Hub uses Bluetooth to connect to Meta Ray-Ban smart glasses and detect nearby devices for BOBO sensing.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Ryan Hub needs camera access to capture photos for chat.</string>
 	<key>NSHealthShareUsageDescription</key>
@@ -51,9 +71,15 @@
 		<string>fetch</string>
 		<string>processing</string>
 		<string>location</string>
+		<string>bluetooth-peripheral</string>
+		<string>external-accessory</string>
 	</array>
 	<key>UILaunchScreen</key>
 	<dict/>
+	<key>UISupportedExternalAccessoryProtocols</key>
+	<array>
+		<string>com.meta.ar.wearable</string>
+	</array>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>

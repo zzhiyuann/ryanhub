@@ -103,6 +103,8 @@ struct ToolkitHomeView: View {
             HealthView()
         case .bobo:
             BoboView()
+        case .rbMeta:
+            RBMetaView()
         }
     }
 }
@@ -659,6 +661,7 @@ enum ToolkitPlugin: String, CaseIterable, Identifiable {
     case calendar
     case health
     case bobo
+    case rbMeta
 
     var id: String { rawValue }
 
@@ -670,6 +673,7 @@ enum ToolkitPlugin: String, CaseIterable, Identifiable {
         case .calendar: return L10n.toolkitCalendar
         case .health: return L10n.toolkitHealth
         case .bobo: return L10n.toolkitBobo
+        case .rbMeta: return L10n.toolkitRBMeta
         }
     }
 
@@ -682,6 +686,7 @@ enum ToolkitPlugin: String, CaseIterable, Identifiable {
         case .calendar: return "Calendar"
         case .health: return "Health"
         case .bobo: return "BOBO"
+        case .rbMeta: return "RB Meta"
         }
     }
 
@@ -693,6 +698,7 @@ enum ToolkitPlugin: String, CaseIterable, Identifiable {
         case .calendar: return L10n.toolkitCalendarDesc
         case .health: return L10n.toolkitHealthDesc
         case .bobo: return L10n.toolkitBoboDesc
+        case .rbMeta: return L10n.toolkitRBMetaDesc
         }
     }
 
@@ -704,6 +710,7 @@ enum ToolkitPlugin: String, CaseIterable, Identifiable {
         case .calendar: return "calendar"
         case .health: return "heart.fill"
         case .bobo: return "waveform.path.ecg"
+        case .rbMeta: return "eyeglasses"
         }
     }
 
@@ -715,6 +722,7 @@ enum ToolkitPlugin: String, CaseIterable, Identifiable {
         case .calendar: return .hubAccentYellow
         case .health: return .hubAccentRed
         case .bobo: return .hubPrimaryLight
+        case .rbMeta: return .hubAccentGreen
         }
     }
 
