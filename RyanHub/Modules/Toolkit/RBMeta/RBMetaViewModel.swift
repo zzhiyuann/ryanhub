@@ -40,6 +40,10 @@ final class RBMetaViewModel {
     var streamingMode: RBMetaStreamingMode = .glasses
     var hasActiveDevice: Bool = false
 
+    // DAT Registration
+    var isRegistering: Bool = false
+    var isRegistered: Bool = false
+
     var isStreaming: Bool { streamingStatus != .stopped }
 
     // MARK: - Private services
@@ -59,6 +63,7 @@ final class RBMetaViewModel {
     private var videoFrameListenerToken: AnyListenerToken?
     private var errorListenerToken: AnyListenerToken?
     private var deviceMonitorTask: Task<Void, Never>?
+    private var registrationTask: Task<Void, Never>?
 
     // iPhone camera
     private var cameraManager: RBMetaCameraManager?
@@ -67,6 +72,9 @@ final class RBMetaViewModel {
 
     func setupDAT(wearables: WearablesInterface) {
         self.wearables = wearables
+        self.isRegistered = wearables.registrationState == .registered
+        self.isRegistering = wearables.registrationState == .registering
+
         let selector = AutoDeviceSelector(wearables: wearables)
         self.deviceSelector = selector
         let config = StreamSessionConfig(
@@ -82,7 +90,46 @@ final class RBMetaViewModel {
             }
         }
 
+        registrationTask = Task { @MainActor in
+            for await state in wearables.registrationStateStream() {
+                self.isRegistered = state == .registered
+                self.isRegistering = state == .registering
+            }
+        }
+
         attachDATListeners()
+    }
+
+    // MARK: - DAT Registration
+
+    func connectGlasses() {
+        guard let wearables, !isRegistering else { return }
+        Task {
+            do {
+                try await wearables.startRegistration()
+            } catch {
+                errorMessage = "Registration failed: \(error.localizedDescription)"
+            }
+        }
+    }
+
+    func disconnectGlasses() {
+        guard let wearables else { return }
+        Task {
+            do {
+                try await wearables.startUnregistration()
+            } catch {
+                errorMessage = "Disconnect failed: \(error.localizedDescription)"
+            }
+        }
+    }
+
+    func handleDATCallback(url: URL) async {
+        do {
+            _ = try await Wearables.shared.handleUrl(url)
+        } catch {
+            errorMessage = "Registration callback error: \(error.localizedDescription)"
+        }
     }
 
     // MARK: - Gemini Session

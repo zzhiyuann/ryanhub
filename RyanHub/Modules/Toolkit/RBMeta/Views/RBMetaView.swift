@@ -24,6 +24,15 @@ struct RBMetaView: View {
             }
             viewModel.setupDAT(wearables: Wearables.shared)
         }
+        .onOpenURL { url in
+            guard
+                let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+                components.queryItems?.contains(where: { $0.name == "metaWearablesAction" }) == true
+            else { return }
+            Task {
+                await viewModel.handleDATCallback(url: url)
+            }
+        }
         .alert("Error", isPresented: .init(
             get: { viewModel.errorMessage != nil },
             set: { if !$0 { viewModel.errorMessage = nil } }
@@ -71,8 +80,8 @@ struct RBMetaView: View {
 
                     statusCard(
                         title: "Ray-Ban Meta",
-                        status: viewModel.hasActiveDevice ? "Connected" : "Not Found",
-                        color: viewModel.hasActiveDevice ? .hubAccentGreen : .gray,
+                        status: glassesStatusText,
+                        color: glassesStatusColor,
                         icon: "eyeglasses"
                     )
                 }
@@ -92,12 +101,11 @@ struct RBMetaView: View {
                                 await viewModel.startGlassesStreaming()
                             }
                         }
+                    } else if viewModel.isRegistered {
+                        HubSecondaryButton("Waiting for Glasses...") {}
                     } else {
-                        HubSecondaryButton("Connect Glasses (Developer Mode)") {
-                            // Open Meta AI app
-                            if let url = URL(string: "fb-metaai://") {
-                                UIApplication.shared.open(url)
-                            }
+                        HubSecondaryButton(viewModel.isRegistering ? "Connecting..." : "Connect Glasses") {
+                            viewModel.connectGlasses()
                         }
                     }
                 }
@@ -394,6 +402,20 @@ struct RBMetaView: View {
         case .unreachable: return "OpenClaw Off"
         case .notConfigured: return "No OpenClaw"
         }
+    }
+
+    private var glassesStatusText: String {
+        if viewModel.hasActiveDevice { return "Connected" }
+        if viewModel.isRegistered { return "Registered" }
+        if viewModel.isRegistering { return "Connecting..." }
+        return "Not Connected"
+    }
+
+    private var glassesStatusColor: Color {
+        if viewModel.hasActiveDevice { return .hubAccentGreen }
+        if viewModel.isRegistered { return .hubAccentYellow }
+        if viewModel.isRegistering { return .hubAccentYellow }
+        return .gray
     }
 }
 
