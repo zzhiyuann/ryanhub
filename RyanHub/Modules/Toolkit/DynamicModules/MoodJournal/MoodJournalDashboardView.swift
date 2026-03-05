@@ -32,7 +32,7 @@ struct MoodJournalDashboardView: View {
                     StatCard(
                         title: "Today",
                         value: "\(viewModel.todayEntries.count)",
-                        icon: "face.smiling",
+                        icon: "face.smiling.inverse",
                         color: .hubPrimary
                     )
                     StatCard(

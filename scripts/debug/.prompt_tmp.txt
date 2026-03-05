@@ -1,0 +1,205 @@
+Generate ONE SwiftUI view file for a RyanHub module.
+
+Generate CaffeineTrackerAnalyticsView.swift — an analytics view.
+- ModuleChartView with the ACTUAL chart data property from ViewModel (check the summary: chartData? weeklyChartData? weeklyData?)
+- If ViewModel has insights as [String], use ForEach with Text in HubCard
+- If ViewModel has insights as [ModuleInsight], use InsightsList(insights: viewModel.insights)
+- Domain-specific summary stats in HubCard — highlight what makes this Caffeine Tracker tracker unique
+- Show total count, current streak, best streak etc using ACTUAL ViewModel property names
+
+VIEWMODEL PUBLIC API (only use these properties and methods):
+
+
+MODELS (use these exact types):
+```swift
+import Foundation
+
+// MARK: - CaffeineTracker Models
+
+enum CoffeeDrinkType: String, Codable, CaseIterable, Identifiable {
+    case espresso
+    case drip
+    case pourOver
+    case coldBrew
+    case latte
+    case cappuccino
+    case americano
+    case instantCoffee
+    case matcha
+    case tea
+    case energyDrink
+    case decaf
+    var id: String { rawValue }
+    var displayName: String {
+        switch self {
+        case .espresso: return "Espresso"
+        case .drip: return "Drip Coffee"
+        case .pourOver: return "Pour Over"
+        case .coldBrew: return "Cold Brew"
+        case .latte: return "Latte"
+        case .cappuccino: return "Cappuccino"
+        case .americano: return "Americano"
+        case .instantCoffee: return "Instant"
+        case .matcha: return "Matcha"
+        case .tea: return "Tea"
+        case .energyDrink: return "Energy Drink"
+        case .decaf: return "Decaf"
+        }
+    }
+    var icon: String {
+        switch self {
+        case .espresso: return "cup.and.saucer.fill"
+        case .drip: return "mug.fill"
+        case .pourOver: return "drop.fill"
+        case .coldBrew: return "snowflake"
+        case .latte: return "cup.and.saucer"
+        case .cappuccino: return "cloud.fill"
+        case .americano: return "drop.triangle.fill"
+        case .instantCoffee: return "bolt.fill"
+        case .matcha: return "leaf.fill"
+        case .tea: return "leaf"
+        case .energyDrink: return "battery.100.bolt"
+        case .decaf: return "moon.fill"
+        }
+    }
+}
+
+enum DrinkSize: String, Codable, CaseIterable, Identifiable {
+    case small
+    case medium
+    case large
+    case extraLarge
+    var id: String { rawValue }
+    var displayName: String {
+        switch self {
+        case .small: return "Small (8oz)"
+        case .medium: return "Medium (12oz)"
+        case .large: return "Large (16oz)"
+        case .extraLarge: return "XL (20oz)"
+        }
+    }
+    var icon: String {
+        switch self {
+        case .small: return "s.circle.fill"
+        case .medium: return "m.circle.fill"
+        case .large: return "l.circle.fill"
+        case .extraLarge: return "xmark.circle.fill"
+        }
+    }
+}
+
+struct CaffeineTrackerEntry: Codable, Identifiable {
+    var id: String = UUID().uuidString
+    var date: String = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd HH:mm"
+        return f.string(from: Date())
+    }()
+    var drinkType: CoffeeDrinkType
+    var size: DrinkSize
+    var caffeineMg: Int
+    var time: Date
+    var rating: Int
+    var notes: String
+
+    var summaryLine: String {
+        var parts: [String] = [date]
+        parts.append("\(drinkType)")
+        parts.append("\(size)")
+        parts.append("\(caffeineMg)")
+        parts.append("\(time)")
+        parts.append("\(rating)")
+        parts.append("\(notes)")
+        return parts.joined(separator: " | ")
+    }
+}
+
+```
+
+
+SHARED REUSABLE COMPONENTS (already exist, import SwiftUI + Charts to use):
+
+1. ModuleChartView — Line/area/bar chart via Swift Charts
+   ModuleChartView(
+       title: String,
+       subtitle: String? = nil,
+       dataPoints: [ChartDataPoint],   // ChartDataPoint(label: String, value: Double)
+       style: ChartStyle = .line,       // .line or .bar
+       color: Color = .hubPrimary,
+       showArea: Bool = true
+   )
+
+2. ProgressRingView — Circular goal progress indicator
+   ProgressRingView(
+       progress: Double,    // 0.0 to 1.0
+       current: String,     // center display value
+       unit: String = "",
+       goal: String? = nil, // "of 8 glasses"
+       color: Color = .hubPrimary,
+       size: CGFloat = 120,
+       lineWidth: CGFloat = 10
+   )
+   CompactProgressRing(progress: Double, color: Color = .hubPrimary, size: CGFloat = 24)
+
+3. StatCard — Metric + trend indicator in a card
+   StatCard(
+       title: String,
+       value: String,
+       icon: String = "chart.bar.fill",
+       trend: StatTrend? = nil,
+       color: Color = .hubPrimary
+   )
+   StatTrend.from(change: Double, format: String = "%.1f", invertPositive: Bool = false)
+   StatGrid { StatCard(...) StatCard(...) }  // 2-column grid layout
+
+4. StreakCounter — Current/longest streak with flame
+   StreakCounter(
+       currentStreak: Int,
+       longestStreak: Int,
+       unit: String = "days",
+       isActiveToday: Bool = false
+   )
+
+5. CalendarHeatmap — GitHub-style activity grid
+   CalendarHeatmap(
+       title: String = "Activity",
+       data: [Date: Double],   // date -> intensity value
+       color: Color = .hubPrimary,
+       weeks: Int = 12
+   )
+
+6. QuickEntrySheet — Modal sheet for data entry
+   QuickEntrySheet(
+       title: String,
+       icon: String = "plus.circle.fill",
+       saveLabel: String = "Save",
+       canSave: Bool = true,
+       onSave: @escaping () -> Void
+   ) { content views }
+   EntryFormSection(title: String) { content }
+   QuickEntryFAB(action: { ... })   // Floating action button
+
+7. InsightCard — AI/computed insight display
+   InsightCard(insight: ModuleInsight)
+   ModuleInsight(type: .trend/.achievement/.suggestion/.warning, title: String, message: String)
+   InsightsList(insights: [ModuleInsight])
+
+
+DESIGN RULES:
+- @Environment(\.colorScheme) private var colorScheme
+- `let viewModel: CaffeineTrackerViewModel` (not @State, not @Bindable — it's passed from parent)
+- Use Color.hubPrimary, Color.hubAccentGreen, Color.hubAccentRed, Color.hubAccentYellow
+- Use AdaptiveColors.textPrimary(for: colorScheme), AdaptiveColors.textSecondary(for: colorScheme)
+- Use AdaptiveColors.background(for: colorScheme) for ScrollView background
+- Use .hubTitle, .hubHeading, .hubBody, .hubCaption for fonts
+- Use HubLayout.standardPadding, HubLayout.sectionSpacing, HubLayout.itemSpacing
+- Use HubCard { content } for card containers
+- Do NOT import Charts (ModuleChartView handles it internally)
+- StatCard(title: String, value: String, icon: String, color: Color)
+- StatGrid { content } wraps StatCards in a 2x2 grid
+- SectionHeader(title: String) for section labels
+
+IMPORTANT: Your entire output will be saved directly as a .swift file.
+Do NOT write any explanation, description, or commentary.
+Do NOT use markdown fences (```).
+Your very first line of output must be: import SwiftUI

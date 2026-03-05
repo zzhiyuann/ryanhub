@@ -12,10 +12,10 @@ struct RecipeBoxDashboardView: View {
                 HubCard {
                     HStack {
                         VStack(alignment: .leading, spacing: 4) {
-                            Text("\(viewModel.entries.count)")
+                            Text("\(viewModel.todayEntries.count)")
                                 .font(.system(size: 32, weight: .bold, design: .rounded))
                                 .foregroundStyle(Color.hubPrimary)
-                            Text("Total recipes")
+                            Text("Today's entries")
                                 .font(.hubCaption)
                                 .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
                         }
@@ -30,21 +30,21 @@ struct RecipeBoxDashboardView: View {
                 // Stats
                 StatGrid {
                     StatCard(
-                        title: "Favorites",
-                        value: "\(viewModel.favoriteRecipes.count)",
-                        icon: "heart.fill",
-                        color: .hubAccentRed
+                        title: "Today",
+                        value: "\(viewModel.todayEntries.count)",
+                        icon: "book.closed.fill",
+                        color: .hubPrimary
                     )
                     StatCard(
                         title: "Streak",
-                        value: "\(viewModel.cookingStreak)d",
+                        value: "\(viewModel.currentStreak)d",
                         icon: "flame.fill",
                         color: .hubAccentYellow
                     )
                     StatCard(
-                        title: "Cooked",
-                        value: "\(viewModel.totalTimesCooked)",
-                        icon: "frying.pan.fill",
+                        title: "Best",
+                        value: "\(viewModel.longestStreak)d",
+                        icon: "trophy.fill",
                         color: .hubAccentGreen
                     )
                     StatCard(
@@ -58,16 +58,16 @@ struct RecipeBoxDashboardView: View {
 
                 // Streak
                 StreakCounter(
-                    currentStreak: viewModel.cookingStreak,
-                    longestStreak: viewModel.cookingStreak,
-                    isActiveToday: viewModel.recipesAddedThisWeek > 0
+                    currentStreak: viewModel.currentStreak,
+                    longestStreak: viewModel.longestStreak,
+                    isActiveToday: !viewModel.todayEntries.isEmpty
                 )
 
                 // Recent Entries
-                if !viewModel.entries.isEmpty {
+                if !viewModel.todayEntries.isEmpty {
                     VStack(alignment: .leading, spacing: HubLayout.itemSpacing) {
-                        SectionHeader(title: "Recent Recipes")
-                        ForEach(viewModel.entries.prefix(5)) { entry in
+                        SectionHeader(title: "Today")
+                        ForEach(viewModel.todayEntries.reversed()) { entry in
                             HubCard {
                                 HStack {
                                     VStack(alignment: .leading, spacing: 4) {

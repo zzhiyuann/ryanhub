@@ -4,13 +4,21 @@ struct MoodJournalEntrySheet: View {
     @Environment(\.colorScheme) private var colorScheme
     let viewModel: MoodJournalViewModel
     var onSave: (() -> Void)?
-    @State private var inputRating: Double = 5
-    @State private var inputEnergy: Double = 5
-    @State private var selectedEmotion: MoodEmotion = .happy
-    @State private var inputActivities: Set<MoodActivity> = []
-    @State private var inputSleepquality: Double = 5
-    @State private var selectedSociallevel: SocialLevel = .alone
-    @State private var inputNotes: String = ""
+
+    @State private var entry = MoodJournalEntry()
+    @State private var selectedDate = Date()
+
+    private var moodBinding: Binding<Double> {
+        Binding(get: { Double(entry.moodRating) }, set: { entry.moodRating = Int($0.rounded()) })
+    }
+
+    private var energyBinding: Binding<Double> {
+        Binding(get: { Double(entry.energyLevel) }, set: { entry.energyLevel = Int($0.rounded()) })
+    }
+
+    private var anxietyBinding: Binding<Double> {
+        Binding(get: { Double(entry.anxietyLevel) }, set: { entry.anxietyLevel = Int($0.rounded()) })
+    }
 
     var body: some View {
         QuickEntrySheet(
@@ -18,98 +26,107 @@ struct MoodJournalEntrySheet: View {
             icon: "plus.circle.fill",
             canSave: true,
             onSave: {
-                let entry = MoodJournalEntry(rating: Int(inputRating), energy: Int(inputEnergy), emotion: selectedEmotion, activities: Array(inputActivities), sleepQuality: Int(inputSleepquality), socialLevel: selectedSociallevel, notes: inputNotes)
+                let f = DateFormatter()
+                f.dateFormat = "yyyy-MM-dd HH:mm"
+                entry.date = f.string(from: selectedDate)
                 Task { await viewModel.addEntry(entry) }
                 onSave?()
             }
         ) {
+            EntryFormSection(title: "Date & Time") {
+                DatePicker(
+                    "Date & Time",
+                    selection: $selectedDate,
+                    displayedComponents: [.date, .hourAndMinute]
+                )
+                .font(.hubBody)
+                .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+            }
 
-                EntryFormSection(title: "Mood Rating") {
-                    VStack {
-                        HStack {
-                            Text("\(Int(inputRating))")
-                                .font(.system(size: 24, weight: .bold, design: .rounded))
-                                .foregroundStyle(Color.hubPrimary)
-                            Spacer()
-                        }
-                        Slider(value: $inputRating, in: 1...10, step: 1)
-                            .tint(Color.hubPrimary)
+            EntryFormSection(title: "Mood") {
+                VStack(spacing: HubLayout.itemSpacing) {
+                    HStack {
+                        Text("Mood")
+                            .font(.hubBody)
+                            .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                        Spacer()
+                        Text("\(entry.moodRating)/10  \(entry.moodEmoji)  \(entry.moodLabel)")
+                            .font(.hubCaption)
+                            .foregroundStyle(Color.hubPrimary)
+                    }
+                    Slider(value: moodBinding, in: 1...10, step: 1)
+                        .tint(Color.hubPrimary)
+                }
+            }
+
+            EntryFormSection(title: "Energy") {
+                VStack(spacing: HubLayout.itemSpacing) {
+                    HStack {
+                        Text("Energy Level")
+                            .font(.hubBody)
+                            .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                        Spacer()
+                        Text("\(entry.energyLevel)/10  \(entry.energyLabel)")
+                            .font(.hubCaption)
+                            .foregroundStyle(Color.hubAccentGreen)
+                    }
+                    Slider(value: energyBinding, in: 1...10, step: 1)
+                        .tint(Color.hubAccentGreen)
+                }
+            }
+
+            EntryFormSection(title: "Anxiety") {
+                VStack(spacing: HubLayout.itemSpacing) {
+                    HStack {
+                        Text("Anxiety Level")
+                            .font(.hubBody)
+                            .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                        Spacer()
+                        Text("\(entry.anxietyLevel)/10  \(entry.anxietyLabel)")
+                            .font(.hubCaption)
+                            .foregroundStyle(Color.hubAccentRed)
+                    }
+                    Slider(value: anxietyBinding, in: 1...10, step: 1)
+                        .tint(Color.hubAccentRed)
+                }
+            }
+
+            EntryFormSection(title: "Activity") {
+                Picker("Activity", selection: $entry.activity) {
+                    ForEach(MoodActivity.allCases) { activity in
+                        Label(activity.displayName, systemImage: activity.icon)
+                            .tag(activity)
                     }
                 }
+                .pickerStyle(.menu)
+                .font(.hubBody)
+                .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
 
-                EntryFormSection(title: "Energy Level") {
-                    VStack {
-                        HStack {
-                            Text("\(Int(inputEnergy))")
-                                .font(.system(size: 24, weight: .bold, design: .rounded))
-                                .foregroundStyle(Color.hubPrimary)
-                            Spacer()
-                        }
-                        Slider(value: $inputEnergy, in: 1...10, step: 1)
-                            .tint(Color.hubPrimary)
+            EntryFormSection(title: "Social Context") {
+                Picker("Social Context", selection: $entry.socialContext) {
+                    ForEach(SocialContext.allCases) { context in
+                        Label(context.displayName, systemImage: context.icon)
+                            .tag(context)
                     }
                 }
+                .pickerStyle(.menu)
+                .font(.hubBody)
+                .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
 
-                EntryFormSection(title: "Primary Emotion") {
-                    Picker("Primary Emotion", selection: $selectedEmotion) {
-                        ForEach(MoodEmotion.allCases) { item in
-                            Label(item.displayName, systemImage: item.icon).tag(item)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                }
-
-                EntryFormSection(title: "Activities") {
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 90), spacing: 8)], spacing: 8) {
-                        ForEach(MoodActivity.allCases) { activity in
-                            Button {
-                                if inputActivities.contains(activity) {
-                                    inputActivities.remove(activity)
-                                } else {
-                                    inputActivities.insert(activity)
-                                }
-                            } label: {
-                                HStack(spacing: 4) {
-                                    Image(systemName: activity.icon)
-                                        .font(.caption)
-                                    Text(activity.displayName)
-                                        .font(.caption)
-                                }
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 6)
-                                .background(inputActivities.contains(activity) ? Color.hubPrimary.opacity(0.2) : AdaptiveColors.surfaceSecondary(for: colorScheme))
-                                .foregroundStyle(inputActivities.contains(activity) ? Color.hubPrimary : AdaptiveColors.textSecondary(for: colorScheme))
-                                .clipShape(Capsule())
-                            }
-                        }
-                    }
-                }
-
-                EntryFormSection(title: "Sleep Quality") {
-                    VStack {
-                        HStack {
-                            Text("\(Int(inputSleepquality))")
-                                .font(.system(size: 24, weight: .bold, design: .rounded))
-                                .foregroundStyle(Color.hubPrimary)
-                            Spacer()
-                        }
-                        Slider(value: $inputSleepquality, in: 1...10, step: 1)
-                            .tint(Color.hubPrimary)
-                    }
-                }
-
-                EntryFormSection(title: "Social Interaction") {
-                    Picker("Social Interaction", selection: $selectedSociallevel) {
-                        ForEach(SocialLevel.allCases) { item in
-                            Label(item.displayName, systemImage: item.icon).tag(item)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                }
-
-                EntryFormSection(title: "Journal Notes") {
-                    HubTextField(placeholder: "Journal Notes", text: $inputNotes)
-                }
+            EntryFormSection(title: "Notes") {
+                TextField(
+                    "How are you feeling? (optional)",
+                    text: $entry.notes,
+                    axis: .vertical
+                )
+                .font(.hubBody)
+                .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                .lineLimit(3...6)
+            }
         }
     }
 }

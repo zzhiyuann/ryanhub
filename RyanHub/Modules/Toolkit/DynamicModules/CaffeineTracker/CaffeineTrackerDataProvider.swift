@@ -1,11 +1,11 @@
 import Foundation
 
-// MARK: - CoffeeTracker Data Provider
+// MARK: - CaffeineTracker Data Provider
 
-enum CoffeeTrackerDataProvider: ToolkitDataProvider {
-    static let toolkitId = "coffeeTracker"
-    static let displayName = "Coffee Tracker"
-    static let relevanceKeywords: [String] = ["coffee", "caffeine", "espresso", "cups", "latte", "brew", "energy", "drinks", "morning", "intake"]
+enum CaffeineTrackerDataProvider: ToolkitDataProvider {
+    static let toolkitId = "caffeineTracker"
+    static let displayName = "Caffeine Tracker"
+    static let relevanceKeywords: [String] = ["coffee", "caffeine", "espresso", "latte", "energy", "cups", "drinks", "milligrams", "sleep", "productivity"]
 
     private static var bridgeBaseURL: String {
         UserDefaults.standard.string(forKey: "ryanhub_server_url")
@@ -15,8 +15,8 @@ enum CoffeeTrackerDataProvider: ToolkitDataProvider {
     }
 
     static func buildContextSummary() -> String? {
-        guard let data = UserDefaults.standard.data(forKey: "dynamic_module_coffeeTracker_cache"),
-              let entries = try? JSONDecoder().decode([CoffeeTrackerEntry].self, from: data),
+        guard let data = UserDefaults.standard.data(forKey: "dynamic_module_caffeineTracker_cache"),
+              let entries = try? JSONDecoder().decode([CaffeineTrackerEntry].self, from: data),
               !entries.isEmpty else {
             return nil
         }
@@ -28,8 +28,8 @@ enum CoffeeTrackerDataProvider: ToolkitDataProvider {
             lines.append("  - \(entry.summaryLine)")
         }
         lines.append("Actions:")
-        lines.append("  - Add: POST http://localhost:18790/modules/coffeeTracker/data/add")
-        lines.append("  - View: GET http://localhost:18790/modules/coffeeTracker/data")
+        lines.append("  - Add: POST http://localhost:18790/modules/caffeineTracker/data/add")
+        lines.append("  - View: GET http://localhost:18790/modules/caffeineTracker/data")
         lines.append("[End \(displayName)]")
         return lines.joined(separator: "\n")
     }

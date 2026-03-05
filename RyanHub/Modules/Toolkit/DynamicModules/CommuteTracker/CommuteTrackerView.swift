@@ -14,7 +14,7 @@ struct CommuteTrackerView: View {
                     Circle()
                         .fill(Color.hubPrimary.opacity(0.12))
                         .frame(width: 40, height: 40)
-                    Image(systemName: "car.rear.road.lane")
+                    Image(systemName: "car.front.waves.up")
                         .font(.system(size: 18, weight: .medium))
                         .foregroundStyle(Color.hubPrimary)
                 }

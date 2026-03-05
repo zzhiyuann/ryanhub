@@ -32,7 +32,7 @@ struct LearningTrackerDashboardView: View {
                     StatCard(
                         title: "Today",
                         value: "\(viewModel.todayEntries.count)",
-                        icon: "brain.head.profile",
+                        icon: "book.and.wreath",
                         color: .hubPrimary
                     )
                     StatCard(

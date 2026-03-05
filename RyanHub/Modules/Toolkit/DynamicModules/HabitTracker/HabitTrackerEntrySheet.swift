@@ -2,75 +2,140 @@ import SwiftUI
 
 struct HabitTrackerEntrySheet: View {
     @Environment(\.colorScheme) private var colorScheme
+
     let viewModel: HabitTrackerViewModel
     var onSave: (() -> Void)?
-    @State private var inputHabitname: String = ""
-    @State private var selectedCategory: HabitCategory = .mindfulness
-    @State private var inputCompleted: Bool = false
-    @State private var inputDuration: Int = 1
-    @State private var inputQuality: Double = 5
-    @State private var selectedTimeofday: TimeOfDay = .morning
-    @State private var inputNotes: String = ""
+
+    @State private var habitName: String = ""
+    @State private var category: HabitCategory = .health
+    @State private var completed: Bool = false
+    @State private var durationMinutes: Int = 0
+    @State private var satisfaction: Int = 3
+    @State private var timeOfDay: TimeOfDay = .anytime
+    @State private var notes: String = ""
+    @State private var date: Date = Date()
+
+    private var canSave: Bool {
+        !habitName.trimmingCharacters(in: .whitespaces).isEmpty
+    }
 
     var body: some View {
         QuickEntrySheet(
             title: "Add Habit Tracker",
             icon: "plus.circle.fill",
-            canSave: true,
-            onSave: {
-                let entry = HabitTrackerEntry(habitName: inputHabitname, category: selectedCategory, completed: inputCompleted, duration: inputDuration, quality: Int(inputQuality), timeOfDay: selectedTimeofday, notes: inputNotes)
-                Task { await viewModel.addEntry(entry) }
-                onSave?()
-            }
+            canSave: canSave,
+            onSave: saveEntry
         ) {
+            EntryFormSection(title: "Habit Details") {
+                TextField("Habit name", text: $habitName)
+                    .font(.hubBody)
+                    .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
 
-                EntryFormSection(title: "Habit Name") {
-                    HubTextField(placeholder: "Habit Name", text: $inputHabitname)
-                }
-
-                EntryFormSection(title: "Category") {
-                    Picker("Category", selection: $selectedCategory) {
-                        ForEach(HabitCategory.allCases) { item in
-                            Label(item.displayName, systemImage: item.icon).tag(item)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                }
-
-                EntryFormSection(title: "Completed") {
-                    Toggle("Completed", isOn: $inputCompleted)
-                        .tint(Color.hubPrimary)
-                }
-
-                EntryFormSection(title: "Duration (min)") {
-                    Stepper("\(inputDuration) duration (min)", value: $inputDuration, in: 0...9999)
-                }
-
-                EntryFormSection(title: "Session Quality") {
-                    VStack {
-                        HStack {
-                            Text("\(Int(inputQuality))")
-                                .font(.system(size: 24, weight: .bold, design: .rounded))
-                                .foregroundStyle(Color.hubPrimary)
-                            Spacer()
-                        }
-                        Slider(value: $inputQuality, in: 1...10, step: 1)
-                            .tint(Color.hubPrimary)
+                Picker("Category", selection: $category) {
+                    ForEach(HabitCategory.allCases) { cat in
+                        Label(cat.displayName, systemImage: cat.icon).tag(cat)
                     }
                 }
+                .font(.hubBody)
 
-                EntryFormSection(title: "Time of Day") {
-                    Picker("Time of Day", selection: $selectedTimeofday) {
-                        ForEach(TimeOfDay.allCases) { item in
-                            Label(item.displayName, systemImage: item.icon).tag(item)
+                Picker("Time of Day", selection: $timeOfDay) {
+                    ForEach(TimeOfDay.allCases) { time in
+                        Label(time.displayName, systemImage: time.icon).tag(time)
+                    }
+                }
+                .font(.hubBody)
+            }
+
+            EntryFormSection(title: "Completion") {
+                Toggle(isOn: $completed) {
+                    Label("Completed", systemImage: completed ? "checkmark.circle.fill" : "circle")
+                        .font(.hubBody)
+                        .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                }
+                .tint(Color.hubAccentGreen)
+
+                Stepper(value: $durationMinutes, in: 0...480, step: 5) {
+                    HStack {
+                        Text("Duration")
+                            .font(.hubBody)
+                            .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                        Spacer()
+                        Text(durationMinutes == 0 ? "None" : "\(durationMinutes) min")
+                            .font(.hubBody)
+                            .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                    }
+                }
+            }
+
+            EntryFormSection(title: "Satisfaction") {
+                HStack {
+                    Text("Rating")
+                        .font(.hubBody)
+                        .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                    Spacer()
+                    HStack(spacing: 4) {
+                        ForEach(1...5, id: \.self) { i in
+                            Image(systemName: i <= satisfaction ? "star.fill" : "star")
+                                .font(.system(size: 16))
+                                .foregroundStyle(i <= satisfaction ? Color.hubAccentYellow : AdaptiveColors.textSecondary(for: colorScheme))
                         }
                     }
-                    .pickerStyle(.menu)
+                    Text(satisfactionLabel)
+                        .font(.hubCaption)
+                        .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                        .frame(minWidth: 60, alignment: .trailing)
                 }
 
-                EntryFormSection(title: "Reflection Notes") {
-                    HubTextField(placeholder: "Reflection Notes", text: $inputNotes)
-                }
+                Stepper("", value: $satisfaction, in: 1...5)
+                    .labelsHidden()
+            }
+
+            EntryFormSection(title: "Date & Time") {
+                DatePicker(
+                    "Date",
+                    selection: $date,
+                    displayedComponents: [.date, .hourAndMinute]
+                )
+                .font(.hubBody)
+                .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+            }
+
+            EntryFormSection(title: "Notes") {
+                TextField("Add notes (optional)...", text: $notes, axis: .vertical)
+                    .font(.hubBody)
+                    .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                    .lineLimit(3...6)
+            }
         }
+    }
+
+    private var satisfactionLabel: String {
+        switch satisfaction {
+        case 1: return "Poor"
+        case 2: return "Fair"
+        case 3: return "Good"
+        case 4: return "Great"
+        case 5: return "Excellent"
+        default: return "—"
+        }
+    }
+
+    private func saveEntry() {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd HH:mm"
+
+        let entry = HabitTrackerEntry(
+            date: formatter.string(from: date),
+            habitName: habitName.trimmingCharacters(in: .whitespaces),
+            category: category,
+            completed: completed,
+            durationMinutes: durationMinutes,
+            satisfaction: satisfaction,
+            timeOfDay: timeOfDay,
+            notes: notes.trimmingCharacters(in: .whitespaces)
+        )
+
+        Task { await viewModel.addEntry(entry) }
+        onSave?()
     }
 }

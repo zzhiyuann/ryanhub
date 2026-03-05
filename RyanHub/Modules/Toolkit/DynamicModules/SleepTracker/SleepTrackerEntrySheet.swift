@@ -1,17 +1,18 @@
 import SwiftUI
 
 struct SleepTrackerEntrySheet: View {
-    @Environment(\.colorScheme) private var colorScheme
     let viewModel: SleepTrackerViewModel
     var onSave: (() -> Void)?
-    @State private var inputBedtime: Date = Date()
-    @State private var inputWaketime: Date = Date()
-    @State private var inputSleephours: Double = 7.0
-    @State private var inputQualityrating: Double = 5
-    @State private var selectedWakeupmood: WakeUpMood = .energized
-    @State private var selectedSleepfactor: SleepFactor = .none
-    @State private var inputHaddreams: Bool = false
-    @State private var inputNotes: String = ""
+
+    @Environment(\.colorScheme) private var colorScheme
+
+    @State private var bedtime: Date = Calendar.current.date(bySettingHour: 22, minute: 0, second: 0, of: Date()) ?? Date()
+    @State private var wakeTime: Date = Calendar.current.date(bySettingHour: 6, minute: 0, second: 0, of: Date()) ?? Date()
+    @State private var qualityRating: Int = 3
+    @State private var wakeUpMood: WakeUpMood = .neutral
+    @State private var sleepDisruptor: SleepDisruptor = .none
+    @State private var dreamRecall: Bool = false
+    @State private var notes: String = ""
 
     var body: some View {
         QuickEntrySheet(
@@ -19,63 +20,122 @@ struct SleepTrackerEntrySheet: View {
             icon: "plus.circle.fill",
             canSave: true,
             onSave: {
-                let entry = SleepTrackerEntry(bedtime: inputBedtime, wakeTime: inputWaketime, sleepHours: inputSleephours, qualityRating: Int(inputQualityrating), wakeUpMood: selectedWakeupmood, sleepFactor: selectedSleepfactor, hadDreams: inputHaddreams, notes: inputNotes)
+                var entry = SleepTrackerEntry()
+                entry.bedtime = bedtime
+                entry.wakeTime = wakeTime
+                entry.qualityRating = qualityRating
+                entry.wakeUpMood = wakeUpMood
+                entry.sleepDisruptor = sleepDisruptor
+                entry.dreamRecall = dreamRecall
+                entry.notes = notes
                 Task { await viewModel.addEntry(entry) }
                 onSave?()
             }
         ) {
+            EntryFormSection(title: "Sleep Times") {
+                DatePicker("Bedtime", selection: $bedtime, displayedComponents: .hourAndMinute)
+                    .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                    .font(.hubBody)
 
-                EntryFormSection(title: "Bedtime") {
-                    DatePicker("Bedtime", selection: $inputBedtime, displayedComponents: .hourAndMinute)
+                DatePicker("Wake Time", selection: $wakeTime, displayedComponents: .hourAndMinute)
+                    .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                    .font(.hubBody)
+
+                HStack {
+                    Image(systemName: "moon.zzz.fill")
+                        .foregroundStyle(Color.hubPrimary)
+                    Text("Duration")
+                        .font(.hubBody)
+                        .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                    Spacer()
+                    Text(computedDurationLabel)
+                        .font(.hubBody)
+                        .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
                 }
+                .padding(.vertical, 2)
+            }
 
-                EntryFormSection(title: "Wake Time") {
-                    DatePicker("Wake Time", selection: $inputWaketime, displayedComponents: .hourAndMinute)
+            EntryFormSection(title: "Sleep Quality") {
+                VStack(alignment: .leading, spacing: HubLayout.itemSpacing) {
+                    HStack {
+                        Text("Rating")
+                            .font(.hubBody)
+                            .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                        Spacer()
+                        Text(qualityStarsLabel)
+                            .font(.hubBody)
+                        Text("(\(qualityRating)/\(SleepTrackerConstants.maxQualityRating))")
+                            .font(.hubCaption)
+                            .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                    }
+                    Slider(
+                        value: Binding(
+                            get: { Double(qualityRating) },
+                            set: { qualityRating = Int($0.rounded()) }
+                        ),
+                        in: Double(SleepTrackerConstants.minQualityRating)...Double(SleepTrackerConstants.maxQualityRating),
+                        step: 1
+                    )
+                    .tint(Color.hubPrimary)
                 }
+            }
 
-                EntryFormSection(title: "Hours Slept") {
-                    Stepper(String(format: "%.1f hours slept", inputSleephours), value: $inputSleephours, in: 0...24, step: 0.5)
-                }
-
-                EntryFormSection(title: "Sleep Quality (1–5)") {
-                    VStack {
-                        HStack {
-                            Text("\(Int(inputQualityrating))")
-                                .font(.system(size: 24, weight: .bold, design: .rounded))
-                                .foregroundStyle(Color.hubPrimary)
-                            Spacer()
-                        }
-                        Slider(value: $inputQualityrating, in: 1...10, step: 1)
-                            .tint(Color.hubPrimary)
+            EntryFormSection(title: "Wake Up Mood") {
+                Picker("Mood", selection: $wakeUpMood) {
+                    ForEach(WakeUpMood.allCases) { mood in
+                        Label(mood.displayName, systemImage: mood.icon)
+                            .tag(mood)
                     }
                 }
+                .pickerStyle(.menu)
+                .font(.hubBody)
+                .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+            }
 
-                EntryFormSection(title: "Wake-Up Mood") {
-                    Picker("Wake-Up Mood", selection: $selectedWakeupmood) {
-                        ForEach(WakeUpMood.allCases) { item in
-                            Label(item.displayName, systemImage: item.icon).tag(item)
-                        }
+            EntryFormSection(title: "Sleep Disruptor") {
+                Picker("Disruptor", selection: $sleepDisruptor) {
+                    ForEach(SleepDisruptor.allCases) { disruptor in
+                        Label(disruptor.displayName, systemImage: disruptor.icon)
+                            .tag(disruptor)
                     }
-                    .pickerStyle(.menu)
                 }
+                .pickerStyle(.menu)
+                .font(.hubBody)
+                .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+            }
 
-                EntryFormSection(title: "Primary Factor") {
-                    Picker("Primary Factor", selection: $selectedSleepfactor) {
-                        ForEach(SleepFactor.allCases) { item in
-                            Label(item.displayName, systemImage: item.icon).tag(item)
-                        }
+            EntryFormSection(title: "Additional Details") {
+                Toggle(isOn: $dreamRecall) {
+                    HStack(spacing: HubLayout.itemSpacing) {
+                        Image(systemName: "sparkles")
+                            .foregroundStyle(Color.hubAccentYellow)
+                        Text("Dream Recall")
+                            .font(.hubBody)
+                            .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
                     }
-                    .pickerStyle(.menu)
                 }
+                .tint(Color.hubPrimary)
 
-                EntryFormSection(title: "Had Dreams") {
-                    Toggle("Had Dreams", isOn: $inputHaddreams)
-                        .tint(Color.hubPrimary)
-                }
-
-                EntryFormSection(title: "Notes") {
-                    HubTextField(placeholder: "Notes", text: $inputNotes)
-                }
+                TextField("Notes (optional)", text: $notes, axis: .vertical)
+                    .lineLimit(3...5)
+                    .font(.hubBody)
+                    .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+            }
         }
+    }
+
+    // MARK: - Helpers
+
+    private var computedDurationLabel: String {
+        let interval = wakeTime.timeIntervalSince(bedtime)
+        let adjusted = interval < 0 ? interval + 86_400 : interval
+        let hours = Int(adjusted / 3_600)
+        let minutes = Int((adjusted.truncatingRemainder(dividingBy: 3_600)) / 60)
+        return minutes == 0 ? "\(hours)h" : "\(hours)h \(minutes)m"
+    }
+
+    private var qualityStarsLabel: String {
+        String(repeating: "★", count: qualityRating) +
+        String(repeating: "☆", count: SleepTrackerConstants.maxQualityRating - qualityRating)
     }
 }

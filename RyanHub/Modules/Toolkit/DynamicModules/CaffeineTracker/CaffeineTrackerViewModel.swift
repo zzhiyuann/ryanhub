@@ -1,12 +1,12 @@
 import Foundation
 import SwiftUI
 
-// MARK: - CoffeeTracker View Model
+// MARK: - CaffeineTracker View Model
 
 @Observable
 @MainActor
-final class CoffeeTrackerViewModel {
-    var entries: [CoffeeTrackerEntry] = []
+final class CaffeineTrackerViewModel {
+    var entries: [CaffeineTrackerEntry] = []
     var isLoading = false
     var errorMessage: String?
 
@@ -21,7 +21,7 @@ final class CoffeeTrackerViewModel {
 
     // MARK: - Computed Properties
 
-    var todayEntries: [CoffeeTrackerEntry] {
+    var todayEntries: [CaffeineTrackerEntry] {
         let today = DateFormatter()
         today.dateFormat = "yyyy-MM-dd"
         let todayStr = today.string(from: Date())
@@ -95,18 +95,18 @@ final class CoffeeTrackerViewModel {
         isLoading = true
         defer { isLoading = false }
         do {
-            let url = URL(string: "\(bridgeBaseURL)/modules/coffeeTracker/data")!
+            let url = URL(string: "\(bridgeBaseURL)/modules/caffeineTracker/data")!
             let (data, _) = try await URLSession.shared.data(from: url)
-            entries = try JSONDecoder().decode([CoffeeTrackerEntry].self, from: data)
-            UserDefaults.standard.set(data, forKey: "dynamic_module_coffeeTracker_cache")
+            entries = try JSONDecoder().decode([CaffeineTrackerEntry].self, from: data)
+            UserDefaults.standard.set(data, forKey: "dynamic_module_caffeineTracker_cache")
         } catch {
             entries = []
         }
     }
 
-    func addEntry(_ entry: CoffeeTrackerEntry) async {
+    func addEntry(_ entry: CaffeineTrackerEntry) async {
         do {
-            let url = URL(string: "\(bridgeBaseURL)/modules/coffeeTracker/data/add")!
+            let url = URL(string: "\(bridgeBaseURL)/modules/caffeineTracker/data/add")!
             var request = URLRequest(url: url)
             request.httpMethod = "POST"
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -118,9 +118,9 @@ final class CoffeeTrackerViewModel {
         }
     }
 
-    func deleteEntry(_ entry: CoffeeTrackerEntry) async {
+    func deleteEntry(_ entry: CaffeineTrackerEntry) async {
         do {
-            let url = URL(string: "\(bridgeBaseURL)/modules/coffeeTracker/data?id=\(entry.id)")!
+            let url = URL(string: "\(bridgeBaseURL)/modules/caffeineTracker/data?id=\(entry.id)")!
             var request = URLRequest(url: url)
             request.httpMethod = "DELETE"
             _ = try await URLSession.shared.data(for: request)

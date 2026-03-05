@@ -4,11 +4,12 @@ struct SubscriptionTrackerEntrySheet: View {
     @Environment(\.colorScheme) private var colorScheme
     let viewModel: SubscriptionTrackerViewModel
     var onSave: (() -> Void)?
-    @State private var inputName: String = ""
-    @State private var inputAmount: Double = 0
-    @State private var selectedCategory: SubscriptionCategory = .entertainment
+    @State private var inputServicename: String = ""
+    @State private var inputAmount: Double = 1.0
     @State private var selectedBillingcycle: BillingCycle = .weekly
-    @State private var inputRenewalday: Int = 1
+    @State private var selectedCategory: SubscriptionCategory = .entertainment
+    @State private var inputNextrenewaldate: Date = Date()
+    @State private var inputUsagerating: Double = 5
     @State private var inputIsactive: Bool = false
     @State private var inputNotes: String = ""
 
@@ -18,29 +19,18 @@ struct SubscriptionTrackerEntrySheet: View {
             icon: "plus.circle.fill",
             canSave: true,
             onSave: {
-                let entry = SubscriptionTrackerEntry(name: inputName, amount: inputAmount, category: selectedCategory, billingCycle: selectedBillingcycle, renewalDay: inputRenewalday, isActive: inputIsactive, notes: inputNotes)
+                let entry = SubscriptionTrackerEntry(serviceName: inputServicename, amount: inputAmount, billingCycle: selectedBillingcycle, category: selectedCategory, nextRenewalDate: inputNextrenewaldate, usageRating: Int(inputUsagerating), isActive: inputIsactive, notes: inputNotes)
                 Task { await viewModel.addEntry(entry) }
                 onSave?()
             }
         ) {
 
-                EntryFormSection(title: "Subscription Name") {
-                    HubTextField(placeholder: "Subscription Name", text: $inputName)
+                EntryFormSection(title: "Service Name") {
+                    HubTextField(placeholder: "Service Name", text: $inputServicename)
                 }
 
-                EntryFormSection(title: "Amount") {
-                    TextField("Amount", value: $inputAmount, format: .currency(code: "USD"))
-                        .keyboardType(.decimalPad)
-                        .textFieldStyle(.roundedBorder)
-                }
-
-                EntryFormSection(title: "Category") {
-                    Picker("Category", selection: $selectedCategory) {
-                        ForEach(SubscriptionCategory.allCases) { item in
-                            Label(item.displayName, systemImage: item.icon).tag(item)
-                        }
-                    }
-                    .pickerStyle(.menu)
+                EntryFormSection(title: "Amount per Cycle") {
+                    Stepper(String(format: "$%.2f per cycle", inputAmount), value: $inputAmount, in: 0...9999, step: 1.0)
                 }
 
                 EntryFormSection(title: "Billing Cycle") {
@@ -52,12 +42,34 @@ struct SubscriptionTrackerEntrySheet: View {
                     .pickerStyle(.menu)
                 }
 
-                EntryFormSection(title: "Renewal Day of Month") {
-                    Stepper("\(inputRenewalday) renewal day of month", value: $inputRenewalday, in: 0...9999)
+                EntryFormSection(title: "Category") {
+                    Picker("Category", selection: $selectedCategory) {
+                        ForEach(SubscriptionCategory.allCases) { item in
+                            Label(item.displayName, systemImage: item.icon).tag(item)
+                        }
+                    }
+                    .pickerStyle(.menu)
                 }
 
-                EntryFormSection(title: "Active") {
-                    Toggle("Active", isOn: $inputIsactive)
+                EntryFormSection(title: "Next Renewal Date") {
+                    DatePicker("Next Renewal Date", selection: $inputNextrenewaldate, displayedComponents: .hourAndMinute)
+                }
+
+                EntryFormSection(title: "How Much You Use It") {
+                    VStack {
+                        HStack {
+                            Text("\(Int(inputUsagerating))")
+                                .font(.system(size: 24, weight: .bold, design: .rounded))
+                                .foregroundStyle(Color.hubPrimary)
+                            Spacer()
+                        }
+                        Slider(value: $inputUsagerating, in: 1...10, step: 1)
+                            .tint(Color.hubPrimary)
+                    }
+                }
+
+                EntryFormSection(title: "Currently Active") {
+                    Toggle("Currently Active", isOn: $inputIsactive)
                         .tint(Color.hubPrimary)
                 }
 

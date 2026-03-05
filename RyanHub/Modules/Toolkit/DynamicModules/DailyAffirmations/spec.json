@@ -3,24 +3,24 @@
   "moduleName": "DailyAffirmations",
   "displayName": "Daily Affirmations",
   "shortName": "Affirmations",
-  "subtitle": "Nurture your mindset, one affirmation at a time",
+  "subtitle": "Nurture your mindset daily",
   "icon": "sparkles",
-  "iconColor": "hubPrimaryLight",
+  "iconColor": "hubAccentYellow",
   "relevanceKeywords": [
     "affirmation",
     "positive",
     "mindset",
-    "self-talk",
+    "self-care",
     "mantra",
     "intention",
-    "gratitude",
-    "confidence",
+    "wellbeing",
     "motivation",
-    "wellness"
+    "gratitude",
+    "mental health"
   ],
   "dataFields": [
     {
-      "name": "affirmationText",
+      "name": "affirmation",
       "type": "String",
       "label": "Affirmation",
       "control": "text"
@@ -34,19 +34,31 @@
     {
       "name": "moodBefore",
       "type": "Int",
-      "label": "Mood Before Practice",
+      "label": "Mood Before (1-5)",
       "control": "slider"
     },
     {
       "name": "moodAfter",
       "type": "Int",
-      "label": "Mood After Practice",
+      "label": "Mood After (1-5)",
       "control": "slider"
     },
     {
-      "name": "practiceMinutes",
+      "name": "resonance",
       "type": "Int",
-      "label": "Practice Duration (min)",
+      "label": "Resonance (1-5)",
+      "control": "slider"
+    },
+    {
+      "name": "practiceTime",
+      "type": "PracticeTime",
+      "label": "Practice Time",
+      "control": "picker"
+    },
+    {
+      "name": "repetitions",
+      "type": "Int",
+      "label": "Repetitions",
       "control": "stepper"
     },
     {
@@ -56,9 +68,9 @@
       "control": "toggle"
     },
     {
-      "name": "reflectionNote",
+      "name": "reflection",
       "type": "String",
-      "label": "Reflection",
+      "label": "Reflection Note",
       "control": "text"
     }
   ],
@@ -72,9 +84,14 @@
           "icon": "heart.fill"
         },
         {
-          "name": "career",
-          "displayName": "Career & Purpose",
-          "icon": "briefcase.fill"
+          "name": "gratitude",
+          "displayName": "Gratitude",
+          "icon": "hands.sparkles.fill"
+        },
+        {
+          "name": "abundance",
+          "displayName": "Abundance",
+          "icon": "sparkles"
         },
         {
           "name": "health",
@@ -87,24 +104,44 @@
           "icon": "person.2.fill"
         },
         {
-          "name": "abundance",
-          "displayName": "Abundance",
-          "icon": "sparkles"
+          "name": "career",
+          "displayName": "Career & Purpose",
+          "icon": "briefcase.fill"
         },
         {
-          "name": "gratitude",
-          "displayName": "Gratitude",
-          "icon": "hands.clap.fill"
+          "name": "courage",
+          "displayName": "Courage & Growth",
+          "icon": "flame.fill"
         },
         {
-          "name": "resilience",
-          "displayName": "Resilience",
-          "icon": "shield.fill"
+          "name": "peace",
+          "displayName": "Peace & Calm",
+          "icon": "leaf.fill"
+        }
+      ]
+    },
+    {
+      "name": "PracticeTime",
+      "cases": [
+        {
+          "name": "morning",
+          "displayName": "Morning",
+          "icon": "sunrise.fill"
         },
         {
-          "name": "creativity",
-          "displayName": "Creativity",
-          "icon": "paintbrush.fill"
+          "name": "midday",
+          "displayName": "Midday",
+          "icon": "sun.max.fill"
+        },
+        {
+          "name": "evening",
+          "displayName": "Evening",
+          "icon": "sunset.fill"
+        },
+        {
+          "name": "bedtime",
+          "displayName": "Bedtime",
+          "icon": "moon.stars.fill"
         }
       ]
     }
@@ -112,126 +149,141 @@
   "views": [
     {
       "name": "DashboardView",
-      "purpose": "Main hub showing today's featured affirmation, practice streak ring, mood lift summary, and quick-add button. Highlights favorite affirmations and shows a motivational progress overview.",
+      "purpose": "Main dashboard showing today's affirmation count, current streak, mood lift gauge, favorite affirmation spotlight, and quick-add floating button",
       "components": [
-        "ProgressRingView",
         "StatGrid",
+        "ProgressRingView",
         "QuickEntryFAB",
-        "InsightsList"
+        "SpotlightCard"
       ]
     },
     {
       "name": "EntrySheet",
-      "purpose": "Quick-entry modal for logging an affirmation practice session: write or select an affirmation, pick a category, rate mood before and after, log duration, optionally reflect.",
+      "purpose": "Quick entry modal: write or pick an affirmation, select category, rate mood before/after, set repetitions, optionally write a reflection",
       "components": [
         "QuickEntrySheet",
-        "EntryFormSection"
+        "EntryFormSection",
+        "MoodSliderPair"
       ]
     },
     {
       "name": "HistoryView",
-      "purpose": "Chronological and filterable list of all past affirmation entries. Group by date, filter by category or favorites. Tap to revisit and re-read past affirmations.",
+      "purpose": "Date-grouped list of past affirmations with category filter chips, favorite filter, and mood-lift badges on each entry",
       "components": [
-        "CalendarHeatmap"
+        "CalendarHeatmap",
+        "FilterChipBar",
+        "EntryRow"
       ]
     },
     {
       "name": "AnalyticsView",
-      "purpose": "Rich analytics: mood lift trend over time (before vs after delta), category distribution pie chart, practice consistency heatmap, weekly/monthly averages, and AI-style textual insights.",
+      "purpose": "Charts for mood lift trend over time, category distribution pie chart, practice time heatmap, streak history, and AI-generated insights on which categories and times yield highest resonance",
       "components": [
         "ModuleChartView",
-        "InsightsList"
+        "InsightsList",
+        "CategoryPieChart",
+        "MoodLiftTrendLine"
       ]
     }
   ],
   "viewModelComputedProperties": [
     {
-      "name": "todayEntries",
-      "type": "[DailyAffirmationsEntry]",
-      "description": "All affirmation entries logged today"
-    },
-    {
-      "name": "todayPracticeMinutes",
+      "name": "todayAffirmationCount",
       "type": "Int",
-      "description": "Total minutes spent practicing affirmations today"
+      "description": "Number of affirmations practiced today"
     },
     {
       "name": "todayAverageMoodLift",
       "type": "Double",
-      "description": "Average (moodAfter - moodBefore) for today's sessions, representing the immediate emotional impact of practice"
+      "description": "Average (moodAfter - moodBefore) for today's entries, measures immediate emotional impact"
     },
     {
       "name": "currentStreak",
       "type": "Int",
-      "description": "Consecutive days with at least one affirmation practice session"
+      "description": "Consecutive days with at least one affirmation entry"
     },
     {
       "name": "longestStreak",
       "type": "Int",
-      "description": "All-time longest consecutive practice streak in days"
+      "description": "All-time longest consecutive practice streak"
     },
     {
-      "name": "weeklyPracticeMinutes",
+      "name": "weeklyPracticeCount",
       "type": "Int",
-      "description": "Total practice minutes in the current calendar week"
+      "description": "Total affirmation entries in the current week (Mon-Sun)"
     },
     {
       "name": "weeklyMoodLiftTrend",
       "type": "Double",
-      "description": "This week's average mood lift compared to last week's average, expressed as a percentage change"
+      "description": "This week's average mood lift minus last week's average; positive means improving effectiveness"
     },
     {
-      "name": "categoryDistribution",
-      "type": "[(String, Int)]",
-      "description": "Count of entries per AffirmationCategory for pie chart visualization"
-    },
-    {
-      "name": "favoriteAffirmations",
-      "type": "[DailyAffirmationsEntry]",
-      "description": "All entries marked as favorite, sorted by most recent, for quick revisit"
-    },
-    {
-      "name": "moodLiftChartData",
-      "type": "[(Date, Double)]",
-      "description": "Daily average mood lift (after minus before) over the last 30 days for trend line chart"
-    },
-    {
-      "name": "practiceConsistencyRate",
+      "name": "averageResonance",
       "type": "Double",
-      "description": "Percentage of the last 30 days that had at least one practice session"
+      "description": "Rolling 30-day average resonance score across all entries"
     },
     {
       "name": "topCategory",
       "type": "AffirmationCategory?",
-      "description": "The most frequently used affirmation category in the last 30 days"
+      "description": "Most frequently used category in the last 30 days"
+    },
+    {
+      "name": "categoryBreakdown",
+      "type": "[(AffirmationCategory, Int)]",
+      "description": "Entry count per category for pie chart visualization"
+    },
+    {
+      "name": "moodLiftByCategory",
+      "type": "[(AffirmationCategory, Double)]",
+      "description": "Average mood lift grouped by category to identify which themes are most effective"
+    },
+    {
+      "name": "practiceTimeDistribution",
+      "type": "[(PracticeTime, Int)]",
+      "description": "Entry count per practice time slot for heatmap display"
+    },
+    {
+      "name": "favoriteAffirmations",
+      "type": "[DailyAffirmationsEntry]",
+      "description": "All entries marked as favorite, sorted by resonance descending for spotlight rotation"
+    },
+    {
+      "name": "weeklyChartData",
+      "type": "[(Date, Double)]",
+      "description": "Daily average mood lift for the past 7 days, used for trend line chart"
+    },
+    {
+      "name": "monthlyChartData",
+      "type": "[(Date, Double)]",
+      "description": "Daily average mood lift for the past 30 days for long-term trend analysis"
     },
     {
       "name": "goalProgress",
       "type": "Double",
-      "description": "Fraction of daily practice goal completed today (todayPracticeMinutes / dailyGoalMinutes)"
+      "description": "Fraction of daily goal completed (todayAffirmationCount / dailyGoal), capped at 1.0"
     },
     {
       "name": "insights",
       "type": "[String]",
-      "description": "Generated insight strings: e.g., 'Your mood lifts most with Self-Worth affirmations', 'You practice most on Mondays', 'Your average mood lift improved 15% this week'"
+      "description": "Generated insight strings: best performing category, optimal practice time, streak encouragement, mood lift milestones"
     }
   ],
   "domainLogic": {
     "dailyGoal": {
-      "description": "Target number of minutes spent on affirmation practice per day",
-      "defaultValue": "5"
+      "description": "Target number of affirmations to practice per day",
+      "defaultValue": "3"
     },
-    "streakDefinition": "A day counts as active if the user logged at least one affirmation practice entry (any duration, any category)",
-    "trendAnalysis": "Track weekly average mood lift (moodAfter - moodBefore) compared to the prior week. Also track practice consistency rate (days practiced / total days) on a rolling 30-day window. Flag if mood lift is declining despite consistent practice, suggesting the user refresh their affirmations.",
+    "streakDefinition": "A day counts as active if the user logs at least 1 affirmation entry on that calendar day. Streak breaks if any calendar day (excluding future dates) has zero entries.",
+    "trendAnalysis": "Compare this week's average mood lift (moodAfter - moodBefore) against previous week. Track 30-day rolling resonance average. Identify which AffirmationCategory yields the highest average mood lift and surface it as the user's 'power category'. Track practice time patterns to recommend optimal time of day.",
     "insights": [
-      "Most impactful category: which AffirmationCategory yields the highest average mood lift",
-      "Best practice time: hour of day when mood lift is greatest (derived from entry timestamps)",
-      "Consistency momentum: 'You've practiced X of the last 7 days \u2014 Y away from a full week'",
-      "Mood trend direction: 'Your average mood lift is trending up/down X% vs last week'",
-      "Favorite density: 'You've favorited X affirmations \u2014 revisiting favorites can reinforce positive neural pathways'",
-      "Category balance: 'You've focused heavily on Career this month \u2014 consider adding Self-Worth or Gratitude affirmations for balance'",
-      "Streak celebration: milestone messages at 7, 14, 30, 60, 100, 365 day streaks",
-      "Practice depth: 'Your average session is X minutes \u2014 longer sessions (5+ min) correlate with higher mood lifts in your data'"
+      "Power Category: 'Your [category] affirmations lift your mood by [X] points on average \u2014 lean into this theme.'",
+      "Optimal Timing: 'You feel the strongest shift when practicing in the [morning/evening] \u2014 consider making it a ritual.'",
+      "Streak Motivation: 'You're on a [N]-day streak! Your longest is [M] days \u2014 keep going!'",
+      "Mood Lift Milestone: 'Your average mood lift this month is [X] \u2014 that's [up/down] from last month.'",
+      "Resonance Trend: 'Your resonance scores are trending [up/down] \u2014 try refreshing your affirmations if they feel stale.'",
+      "Favorite Spotlight: 'Your most resonant affirmation is: \"[text]\" \u2014 revisit it when you need a boost.'",
+      "Consistency Insight: 'You've practiced [N] times this week vs [M] last week \u2014 [encouragement or praise].'",
+      "Category Diversity: 'You've explored [N] of 8 categories this month \u2014 trying new themes can deepen your practice.'"
     ]
   }
 }

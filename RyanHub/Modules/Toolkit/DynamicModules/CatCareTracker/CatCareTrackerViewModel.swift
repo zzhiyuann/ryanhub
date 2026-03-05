@@ -10,6 +10,8 @@ final class CatCareTrackerViewModel {
     var isLoading = false
     var errorMessage: String?
 
+    let dailyGoal: Int = 3
+
     // MARK: - Bridge URL
 
     private var bridgeBaseURL: String {
@@ -66,10 +68,7 @@ final class CatCareTrackerViewModel {
             var request = URLRequest(url: url)
             request.httpMethod = "DELETE"
             let (_, _) = try await URLSession.shared.data(for: request)
-            entries.removeAll { $0.id == entry.id }
-            if let data = try? JSONEncoder().encode(entries) {
-                UserDefaults.standard.set(data, forKey: "dynamic_module_catCareTracker_cache")
-            }
+            await loadData()
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -77,373 +76,455 @@ final class CatCareTrackerViewModel {
 
     // MARK: - Date Helpers
 
-    private var startOfToday: Date { Calendar.current.startOfDay(for: Date()) }
-
-    private func startOfDay(daysAgo: Int) -> Date {
-        Calendar.current.date(byAdding: .day, value: -daysAgo, to: startOfToday) ?? startOfToday
-    }
-
     var todayEntries: [CatCareTrackerEntry] {
         entries.filter { Calendar.current.isDateInToday($0.parsedDate) }
     }
 
     var weekEntries: [CatCareTrackerEntry] {
-        let cutoff = startOfDay(daysAgo: 7)
+        let cutoff = Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date()
         return entries.filter { $0.parsedDate >= cutoff }
     }
 
-    var monthEntries: [CatCareTrackerEntry] {
-        let cutoff = startOfDay(daysAgo: 30)
+    var last30DaysEntries: [CatCareTrackerEntry] {
+        let cutoff = Calendar.current.date(byAdding: .day, value: -30, to: Date()) ?? Date()
         return entries.filter { $0.parsedDate >= cutoff }
     }
 
     // MARK: - Feeding Computed Properties
 
     var todayFeedingCount: Int {
-        todayEntries.filter { $0.eventType == .feeding && $0.feedType != .water }.count
+        todayEntries.filter { $0.eventType == .feeding }.count
     }
 
-    var todayFeedingTimes: [Date] {
-        todayEntries
-            .filter { $0.eventType == .feeding && $0.feedType != .water }
-            .map { $0.eventTime }
-            .sorted()
+    var lastFeedingTime: Date? {
+        entries.filter { $0.eventType == .feeding }
+               .sorted { $0.parsedDate > $1.parsedDate }
+               .first?.parsedDate
     }
 
-    var dailyFeedingGoalProgress: Double {
-        let goal = Double(CatCareTrackerEntry.dailyFeedingGoal)
-        guard goal > 0 else { return 0 }
-        return min(Double(todayFeedingCount) / goal, 1.0)
+    var timeSinceLastFeeding: String {
+        guard let last = lastFeedingTime else { return "No feedings yet" }
+        let elapsed = Date().timeIntervalSince(last)
+        let hours = Int(elapsed) / 3600
+        let minutes = (Int(elapsed) % 3600) / 60
+        if hours == 0 {
+            return "\(minutes)m ago"
+        } else if minutes == 0 {
+            return "\(hours)h ago"
+        } else {
+            return "\(hours)h \(minutes)m ago"
+        }
     }
 
-    var mealCompletionRate: Double {
-        let feedings = weekEntries.filter { $0.eventType == .feeding && $0.feedType.countsMeal }
-        guard !feedings.isEmpty else { return 0 }
-        let eaten = feedings.filter { $0.wasEaten }.count
-        return Double(eaten) / Double(feedings.count)
+    var timeSinceLastFeedingIsAlert: Bool {
+        guard let last = lastFeedingTime else { return false }
+        let elapsed = Date().timeIntervalSince(last)
+        return elapsed > 8 * 3600
     }
 
-    var feedingConsistencyScore: Double {
-        let feedings = entries.filter { $0.eventType == .feeding && $0.feedType.countsMeal }
-        guard feedings.count >= 2 else { return feedings.isEmpty ? 0 : 100 }
+    var feedingStreak: Int {
+        let calendar = Calendar.current
+        var streak = 0
+        var checkDate = calendar.startOfDay(for: Date())
 
-        let minutesFromMidnight: [Double] = feedings.map {
-            let comps = Calendar.current.dateComponents([.hour, .minute], from: $0.eventTime)
-            return Double((comps.hour ?? 0) * 60 + (comps.minute ?? 0))
+        // Check today first — if today has no feeding, start from yesterday
+        let todayFeedings = entries.filter {
+            $0.eventType == .feeding && calendar.isDate($0.parsedDate, inSameDayAs: checkDate)
+        }
+        if todayFeedings.isEmpty {
+            guard let yesterday = calendar.date(byAdding: .day, value: -1, to: checkDate) else { return 0 }
+            checkDate = yesterday
         }
 
-        let mean = minutesFromMidnight.reduce(0, +) / Double(minutesFromMidnight.count)
-        let variance = minutesFromMidnight.map { pow($0 - mean, 2) }.reduce(0, +) / Double(minutesFromMidnight.count)
-        let stdDev = sqrt(variance)
-
-        // 0 min std dev = score 100; 120 min (2 hrs) std dev = score 0
-        return min(max(100.0 - (stdDev / 120.0) * 100.0, 0), 100)
-    }
-
-    var weeklyFeedingAverage: Double {
-        Double(weekEntries.filter { $0.countsForStreak }.count) / 7.0
-    }
-
-    var feedingTrend: String {
-        let thisWeekCutoff = startOfDay(daysAgo: 7)
-        let lastWeekCutoff = startOfDay(daysAgo: 14)
-
-        let thisWeek = entries.filter { $0.parsedDate >= thisWeekCutoff && $0.countsForStreak }.count
-        let lastWeek = entries.filter {
-            $0.parsedDate >= lastWeekCutoff && $0.parsedDate < thisWeekCutoff && $0.countsForStreak
-        }.count
-
-        let diff = thisWeek - lastWeek
-        if diff > 2 { return "increasing" }
-        if diff < -2 { return "decreasing" }
-        return "stable"
-    }
-
-    // MARK: - Weight Computed Properties
-
-    var currentWeight: Int? {
-        entries
-            .filter { $0.eventType == .weightCheck }
-            .sorted { $0.parsedDate > $1.parsedDate }
-            .first?
-            .weightGrams
-    }
-
-    var weightTrend: [(Date, Int)] {
-        let cutoff = Calendar.current.date(byAdding: .day, value: -90, to: Date()) ?? Date()
-        return entries
-            .filter { $0.eventType == .weightCheck && $0.parsedDate >= cutoff }
-            .sorted { $0.parsedDate < $1.parsedDate }
-            .map { ($0.parsedDate, $0.weightGrams) }
-    }
-
-    var weightChangePercent: Double? {
-        let checks = entries
-            .filter { $0.eventType == .weightCheck }
-            .sorted { $0.parsedDate > $1.parsedDate }
-        guard checks.count >= 2 else { return nil }
-        let latest = Double(checks[0].weightGrams)
-        let previous = Double(checks[1].weightGrams)
-        guard previous > 0 else { return nil }
-        return (latest - previous) / previous * 100.0
-    }
-
-    // MARK: - Vet Visit Computed Properties
-
-    var lastVetVisitDate: Date? {
-        entries
-            .filter { $0.eventType == .vetVisit }
-            .sorted { $0.parsedDate > $1.parsedDate }
-            .first?
-            .parsedDate
-    }
-
-    var daysSinceLastVetVisit: Int? {
-        guard let last = lastVetVisitDate else { return nil }
-        return Calendar.current.dateComponents([.day], from: last, to: Date()).day
-    }
-
-    // MARK: - Streak
-
-    var careStreak: Int {
-        var streak = 0
-        var checkDate = startOfToday
-
         while true {
-            let hasFeeding = entries.contains {
-                $0.countsForStreak && Calendar.current.isDate($0.parsedDate, inSameDayAs: checkDate)
+            let dayFeedings = entries.filter {
+                $0.eventType == .feeding && calendar.isDate($0.parsedDate, inSameDayAs: checkDate)
             }
-            guard hasFeeding else { break }
+            if dayFeedings.isEmpty { break }
             streak += 1
-            guard let prev = Calendar.current.date(byAdding: .day, value: -1, to: checkDate) else { break }
+            guard let prev = calendar.date(byAdding: .day, value: -1, to: checkDate) else { break }
             checkDate = prev
         }
 
         return streak
     }
 
-    // MARK: - Cost
+    var averageDailyFeedings: Double {
+        let calendar = Calendar.current
+        guard let sevenDaysAgo = calendar.date(byAdding: .day, value: -7, to: Date()) else { return 0 }
+        let recent = entries.filter { $0.eventType == .feeding && $0.parsedDate >= sevenDaysAgo }
+        return Double(recent.count) / 7.0
+    }
 
-    var monthlyVetCosts: Int {
-        entries.filter {
+    var averageDailyFeedingsPriorWeek: Double {
+        let calendar = Calendar.current
+        guard
+            let fourteenDaysAgo = calendar.date(byAdding: .day, value: -14, to: Date()),
+            let sevenDaysAgo = calendar.date(byAdding: .day, value: -7, to: Date())
+        else { return 0 }
+        let prior = entries.filter {
+            $0.eventType == .feeding && $0.parsedDate >= fourteenDaysAgo && $0.parsedDate < sevenDaysAgo
+        }
+        return Double(prior.count) / 7.0
+    }
+
+    var feedingTrendDirection: String {
+        let delta = averageDailyFeedings - averageDailyFeedingsPriorWeek
+        if delta > 0.2 { return "↑" }
+        if delta < -0.2 { return "↓" }
+        return "→"
+    }
+
+    var goalProgress: Double {
+        min(Double(todayFeedingCount) / Double(dailyGoal), 1.0)
+    }
+
+    // MARK: - Weight Computed Properties
+
+    var weightEntries: [CatCareTrackerEntry] {
+        entries.filter { $0.eventType == .weightCheck && $0.catWeight > 0 }
+               .sorted { $0.parsedDate < $1.parsedDate }
+    }
+
+    var latestWeight: Double? {
+        weightEntries.last?.catWeight
+    }
+
+    var weightTrend: Double? {
+        guard weightEntries.count >= 2 else { return nil }
+        let last = weightEntries[weightEntries.count - 1].catWeight
+        let prev = weightEntries[weightEntries.count - 2].catWeight
+        return last - prev
+    }
+
+    var weightHistory: [(Date, Double)] {
+        weightEntries.map { ($0.parsedDate, $0.catWeight) }
+    }
+
+    // MARK: - Vet Computed Properties
+
+    var vetEntries: [CatCareTrackerEntry] {
+        entries.filter { $0.eventType == .vetVisit }
+               .sorted { $0.parsedDate > $1.parsedDate }
+    }
+
+    var daysSinceLastVetVisit: Int? {
+        guard let lastVet = vetEntries.first?.parsedDate else { return nil }
+        return Calendar.current.dateComponents([.day], from: lastVet, to: Date()).day
+    }
+
+    var totalVetCostsThisYear: Double {
+        let year = Calendar.current.component(.year, from: Date())
+        return entries.filter {
             $0.eventType == .vetVisit &&
-            Calendar.current.isDate($0.parsedDate, equalTo: Date(), toGranularity: .month)
-        }.reduce(0) { $0 + $1.costCents }
+            Calendar.current.component(.year, from: $0.parsedDate) == year
+        }.reduce(0) { $0 + $1.cost }
     }
 
-    // MARK: - Mood Distribution
+    // MARK: - Dashboard Computed Properties
 
-    var moodDistribution: [(CatMood, Int)] {
-        let cutoff = startOfDay(daysAgo: 30)
-        let recent = entries.filter { $0.parsedDate >= cutoff }
-        return CatMood.allCases.compactMap { mood in
-            let count = recent.filter { $0.mood == mood }.count
-            return count > 0 ? (mood, count) : nil
-        }
+    var hasUnresolvedSymptomToday: Bool {
+        todayEntries.contains { $0.eventType == .symptom }
     }
 
-    // MARK: - Overdue Care Alerts
+    var latestWeightFormatted: String {
+        guard let w = latestWeight else { return "—" }
+        return String(format: "%.1f lbs", w)
+    }
 
-    var overdueCareAlerts: [String] {
-        var alerts: [String] = []
+    var feedingProgress: Double { goalProgress }
 
-        if todayFeedingCount == 0 {
-            alerts.append("No feeding logged today — don't forget to feed your cat!")
-        }
+    var dailyFeedingGoal: Int { dailyGoal }
 
-        if let days = daysSinceLastVetVisit {
-            if days > 365 {
-                alerts.append("Vet checkup overdue — last visit was \(days) days ago. Annual exams are recommended.")
+    func todayCountForFeedType(_ feedType: FeedType) -> Int {
+        todayEntries.filter { $0.eventType == .feeding && $0.feedType == feedType }.count
+    }
+
+    var currentStreak: Int { feedingStreak }
+
+    var longestStreak: Int {
+        let calendar = Calendar.current
+        let feedingDates = Set(
+            entries.filter { $0.eventType == .feeding }
+                .map { calendar.startOfDay(for: $0.parsedDate) }
+        )
+        guard !feedingDates.isEmpty else { return 0 }
+        let sorted = feedingDates.sorted()
+        var longest = 1
+        var current = 1
+        for i in 1..<sorted.count {
+            if calendar.dateComponents([.day], from: sorted[i-1], to: sorted[i]).day == 1 {
+                current += 1
+                longest = max(longest, current)
+            } else {
+                current = 1
             }
-        } else {
-            alerts.append("No vet visit on record. Schedule a wellness checkup soon.")
         }
-
-        let lastFleaTick = entries
-            .filter { $0.isFleaTickMedication }
-            .sorted { $0.parsedDate > $1.parsedDate }
-            .first
-        if let last = lastFleaTick {
-            let days = Calendar.current.dateComponents([.day], from: last.parsedDate, to: Date()).day ?? 0
-            if days > 30 {
-                alerts.append("Flea & tick treatment overdue — last applied \(days) days ago.")
-            }
-        }
-
-        if let change = weightChangePercent, abs(change) > 5 {
-            let direction = change > 0 ? "gained" : "lost"
-            alerts.append(String(format: "Significant weight change: cat has %@ %.1f%% since last check.", direction, abs(change)))
-        }
-
-        return alerts
+        return longest
     }
 
-    // MARK: - Heatmap & Chart Data
+    var hasEntryToday: Bool { !todayEntries.isEmpty }
 
-    var feedingsByHour: [Int: Int] {
-        var result: [Int: Int] = [:]
-        for entry in entries where entry.eventType == .feeding && entry.feedType != .water {
-            let hour = Calendar.current.component(.hour, from: entry.eventTime)
-            result[hour, default: 0] += 1
-        }
-        return result
+    var recentSymptomCount: Int {
+        let cutoff = Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date()
+        return entries.filter { $0.eventType == .symptom && $0.parsedDate >= cutoff }.count
     }
 
-    var weeklyChartData: [(String, Int)] {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "EEE"
-        return (0..<7).reversed().map { daysAgo in
-            let date = Calendar.current.date(byAdding: .day, value: -daysAgo, to: startOfToday) ?? startOfToday
-            let label = formatter.string(from: date)
+    var daysSinceLastVetVisitText: String {
+        guard let days = daysSinceLastVetVisit else { return "—" }
+        return "\(days)d"
+    }
+
+    var insights: [ModuleInsight] { moduleInsights }
+
+    // MARK: - Chart Data
+
+    var weeklyFeedingData: [DailyCount] {
+        let calendar = Calendar.current
+        return (0..<7).reversed().map { offset -> DailyCount in
+            let date = calendar.date(byAdding: .day, value: -offset, to: calendar.startOfDay(for: Date())) ?? Date()
             let count = entries.filter {
-                $0.countsForStreak && Calendar.current.isDate($0.parsedDate, inSameDayAs: date)
+                $0.eventType == .feeding && calendar.isDate($0.parsedDate, inSameDayAs: date)
             }.count
-            return (label, count)
+            return DailyCount(date: date, count: count)
         }
     }
 
-    // MARK: - Chart Data (ModuleChartView)
+    var feedTypeDistribution: [FeedType: Int] {
+        let cutoff = Calendar.current.date(byAdding: .day, value: -30, to: Date()) ?? Date()
+        let recent = entries.filter { $0.eventType == .feeding && $0.parsedDate >= cutoff }
+        var dist: [FeedType: Int] = [:]
+        for entry in recent {
+            dist[entry.feedType, default: 0] += 1
+        }
+        return dist
+    }
 
-    var chartData: [ChartDataPoint] {
-        weeklyChartData.map { ChartDataPoint(label: $0.0, value: Double($0.1)) }
+    var symptomFrequency: [SymptomType: Int] {
+        let cutoff = Calendar.current.date(byAdding: .day, value: -30, to: Date()) ?? Date()
+        let recent = entries.filter { $0.eventType == .symptom && $0.parsedDate >= cutoff }
+        var freq: [SymptomType: Int] = [:]
+        for entry in recent {
+            freq[entry.symptomType, default: 0] += 1
+        }
+        return freq
+    }
+
+    var moodDistribution: [CatMood: Int] {
+        let cutoff = Calendar.current.date(byAdding: .day, value: -30, to: Date()) ?? Date()
+        let recent = entries.filter { $0.parsedDate >= cutoff }
+        var dist: [CatMood: Int] = [:]
+        for entry in recent {
+            dist[entry.catMood, default: 0] += 1
+        }
+        return dist
+    }
+
+    // MARK: - Feeding Consistency Score
+
+    var feedingConsistencyScore: Double {
+        let calendar = Calendar.current
+        guard let sevenDaysAgo = calendar.date(byAdding: .day, value: -7, to: Date()) else { return 0 }
+        let recentFeedings = entries.filter { $0.eventType == .feeding && $0.parsedDate >= sevenDaysAgo }
+        guard recentFeedings.count >= 2 else { return recentFeedings.isEmpty ? 0 : 50 }
+
+        let hours = recentFeedings.map { Double($0.hourOfDay) }
+        let mean = hours.reduce(0, +) / Double(hours.count)
+        let variance = hours.map { pow($0 - mean, 2) }.reduce(0, +) / Double(hours.count)
+        let stdDev = sqrt(variance)
+
+        // stdDev of 0 = perfect score 100, stdDev of 6+ hours = score 0
+        let score = max(0, min(100, 100 - (stdDev / 6.0) * 100))
+        return score
     }
 
     // MARK: - Insights
 
-    var insights: [ModuleInsight] {
+    var healthInsights: [String] {
+        var insights: [String] = []
+
+        // 1. Feeding gap alert (daytime 6am-10pm)
+        if let last = lastFeedingTime {
+            let elapsed = Date().timeIntervalSince(last) / 3600
+            let hour = Calendar.current.component(.hour, from: Date())
+            if elapsed > 10 && hour >= 6 && hour <= 22 {
+                let hrs = Int(elapsed)
+                insights.append("⚠️ Feeding gap: \(hrs) hours since last feeding. Consider feeding soon.")
+            }
+        } else {
+            insights.append("⚠️ No feedings logged yet. Start tracking meals to monitor your cat's health.")
+        }
+
+        // 2. Weight change alert
+        if let trend = weightTrend {
+            if abs(trend) > 0.5 {
+                let direction = trend > 0 ? "gained" : "lost"
+                insights.append("⚠️ Weight alert: Your cat has \(direction) \(String(format: "%.1f", abs(trend))) lbs since the last check.")
+            }
+        }
+
+        // 3. Consecutive weight trend (3+ in same direction)
+        if weightEntries.count >= 3 {
+            let last3 = weightEntries.suffix(3)
+            let weights = last3.map { $0.catWeight }
+            if weights[0] < weights[1] && weights[1] < weights[2] {
+                insights.append("📈 Weight trend: Your cat's weight has been increasing over the last 3 checks.")
+            } else if weights[0] > weights[1] && weights[1] > weights[2] {
+                insights.append("📉 Weight trend: Your cat's weight has been decreasing over the last 3 checks.")
+            }
+        }
+
+        // 4. Vet reminder
+        if let days = daysSinceLastVetVisit {
+            if days > 365 {
+                insights.append("🚨 Urgent: It's been \(days) days since the last vet visit. Please schedule a checkup immediately.")
+            } else if days > 180 {
+                insights.append("🏥 Vet reminder: It's been \(days) days since the last vet visit. Consider scheduling a routine checkup.")
+            }
+        } else {
+            insights.append("🏥 No vet visits recorded. Regular checkups are recommended for your cat's health.")
+        }
+
+        // 5. Symptom cluster warning
+        let sevenDaysAgo = Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date()
+        let recentSymptoms = entries.filter { $0.eventType == .symptom && $0.parsedDate >= sevenDaysAgo }
+        if recentSymptoms.count >= 3 {
+            insights.append("⚠️ Symptom cluster: \(recentSymptoms.count) symptoms logged in the past 7 days. A vet visit is recommended.")
+        }
+
+        // 6. Mood shift detection
+        let sevenDaysMoods = entries.filter { $0.parsedDate >= sevenDaysAgo }
+        let prevSevenDaysAgo = Calendar.current.date(byAdding: .day, value: -14, to: Date()) ?? Date()
+        let prevWeekMoods = entries.filter { $0.parsedDate >= prevSevenDaysAgo && $0.parsedDate < sevenDaysAgo }
+
+        if !sevenDaysMoods.isEmpty && !prevWeekMoods.isEmpty {
+            let recentPositiveRatio = Double(sevenDaysMoods.filter { $0.catMood.isPositive }.count) / Double(sevenDaysMoods.count)
+            let prevPositiveRatio = Double(prevWeekMoods.filter { $0.catMood.isPositive }.count) / Double(prevWeekMoods.count)
+            if prevPositiveRatio >= 0.5 && recentPositiveRatio < 0.4 {
+                insights.append("😟 Mood shift detected: Your cat's mood has shifted toward negative states this week. Monitor closely.")
+            }
+        }
+
+        // 7. Feeding consistency praise
+        if feedingConsistencyScore > 80 {
+            insights.append("🌟 Great consistency! Your cat is being fed on a very regular schedule (score: \(Int(feedingConsistencyScore))/100).")
+        }
+
+        // 8. Annual vet cost summary
+        if totalVetCostsThisYear > 0 {
+            let visitCount = vetEntries.filter {
+                Calendar.current.component(.year, from: $0.parsedDate) == Calendar.current.component(.year, from: Date())
+            }.count
+            let avgCost = visitCount > 0 ? totalVetCostsThisYear / Double(visitCount) : 0
+            insights.append("💰 Vet costs this year: $\(String(format: "%.2f", totalVetCostsThisYear)) across \(visitCount) visit(s) (avg $\(String(format: "%.2f", avgCost))/visit).")
+        }
+
+        return insights
+    }
+
+    // MARK: - ModuleInsight Array
+
+    var moduleInsights: [ModuleInsight] {
         var result: [ModuleInsight] = []
 
-        // Streak achievements
-        if careStreak >= 30 {
-            result.append(ModuleInsight(
-                type: .achievement,
-                title: "\(careStreak)-Day Streak!",
-                message: "Incredible consistency — your cat has been fed every day for \(careStreak) days."
-            ))
-        } else if careStreak >= 7 {
-            result.append(ModuleInsight(
-                type: .achievement,
-                title: "\(careStreak)-Day Feeding Streak",
-                message: "Great job keeping up a daily feeding routine for \(careStreak) days."
-            ))
-        } else if careStreak == 0 {
+        // Feeding gap
+        if let last = lastFeedingTime {
+            let elapsed = Date().timeIntervalSince(last) / 3600
+            let hour = Calendar.current.component(.hour, from: Date())
+            if elapsed > 10 && hour >= 6 && hour <= 22 {
+                result.append(ModuleInsight(
+                    type: .warning,
+                    title: "Feeding Gap",
+                    message: "\(Int(elapsed)) hours since last meal. Time to feed your cat!"
+                ))
+            }
+        }
+
+        // Weight alert
+        if let trend = weightTrend, abs(trend) > 0.5 {
+            let dir = trend > 0 ? "gained" : "lost"
             result.append(ModuleInsight(
                 type: .warning,
-                title: "Streak Reset",
-                message: "No qualifying feeding was logged yesterday. Log a meal today to start a new streak."
+                title: "Weight Change",
+                message: "Your cat has \(dir) \(String(format: "%.1f", abs(trend))) lbs since last check."
+            ))
+        }
+
+        // Vet reminder
+        if let days = daysSinceLastVetVisit, days > 180 {
+            result.append(ModuleInsight(
+                type: days > 365 ? .warning : .suggestion,
+                title: days > 365 ? "Urgent Vet Visit" : "Vet Reminder",
+                message: "Last visit was \(days) days ago. \(days > 365 ? "Please schedule immediately." : "Consider booking a checkup.")"
+            ))
+        }
+
+        // Symptom cluster
+        let sevenDaysAgo = Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date()
+        let recentSymptomCount = entries.filter { $0.eventType == .symptom && $0.parsedDate >= sevenDaysAgo }.count
+        if recentSymptomCount >= 3 {
+            result.append(ModuleInsight(
+                type: .warning,
+                title: "Symptom Cluster",
+                message: "\(recentSymptomCount) symptoms in 7 days. A vet visit is recommended."
+            ))
+        }
+
+        // Consistency praise
+        if feedingConsistencyScore > 80 {
+            result.append(ModuleInsight(
+                type: .achievement,
+                title: "Consistent Feeding",
+                message: "Excellent feeding schedule consistency! Score: \(Int(feedingConsistencyScore))/100."
             ))
         }
 
         // Feeding trend
-        switch feedingTrend {
-        case "increasing":
+        if averageDailyFeedings > 0 {
             result.append(ModuleInsight(
                 type: .trend,
-                title: "Feeding Frequency Increasing",
-                message: "This week's feedings are higher than last week's."
+                title: "Weekly Feeding Average",
+                message: "\(String(format: "%.1f", averageDailyFeedings)) meals/day this week \(feedingTrendDirection) vs last week."
             ))
-        case "decreasing":
-            result.append(ModuleInsight(
-                type: .warning,
-                title: "Feeding Frequency Dropping",
-                message: "Fewer feedings this week than last. Monitor your cat's appetite."
-            ))
-        default:
-            break
         }
 
-        // Meal completion rate
-        if mealCompletionRate > 0 && mealCompletionRate < 0.7 {
-            result.append(ModuleInsight(
-                type: .warning,
-                title: "Low Meal Completion",
-                message: String(
-                    format: "Only %.0f%% of meals were finished this week. Consider a vet check if this persists.",
-                    mealCompletionRate * 100
-                )
-            ))
-        } else if mealCompletionRate >= 0.95 {
+        // Streak achievement
+        if feedingStreak >= 7 {
             result.append(ModuleInsight(
                 type: .achievement,
-                title: "Excellent Appetite",
-                message: String(
-                    format: "%.0f%% meal completion this week — your cat is eating great!",
-                    mealCompletionRate * 100
-                )
+                title: "Feeding Streak",
+                message: "\(feedingStreak)-day streak of daily feedings! Keep it up."
             ))
-        }
-
-        // Feeding consistency
-        if feedingConsistencyScore >= 80 {
-            result.append(ModuleInsight(
-                type: .achievement,
-                title: "Consistent Feeding Schedule",
-                message: String(
-                    format: "Feeding consistency score: %.0f/100. Your cat has a reliable routine.",
-                    feedingConsistencyScore
-                )
-            ))
-        } else if feedingConsistencyScore < 50 && feedingConsistencyScore > 0 {
-            result.append(ModuleInsight(
-                type: .suggestion,
-                title: "Irregular Feeding Times",
-                message: "Feeding times vary significantly day to day. Cats thrive on a consistent schedule."
-            ))
-        }
-
-        // Weight change
-        if let change = weightChangePercent {
-            if abs(change) > 5 {
-                let direction = change > 0 ? "increase" : "decrease"
-                result.append(ModuleInsight(
-                    type: .warning,
-                    title: "Significant Weight Change",
-                    message: String(
-                        format: "A %.1f%% weight %@ detected since the last check. Consult your vet if concerned.",
-                        abs(change), direction
-                    )
-                ))
-            }
-        }
-
-        // Vet visit reminder
-        if let days = daysSinceLastVetVisit {
-            if days > 335 {
-                result.append(ModuleInsight(
-                    type: .suggestion,
-                    title: "Annual Checkup Due",
-                    message: "Last vet visit was \(days) days ago. Schedule a wellness exam soon."
-                ))
-            }
-        }
-
-        // Concerning moods
-        let concernCount = monthEntries.filter { $0.mood.isConcerning }.count
-        let totalCount = monthEntries.count
-        if totalCount > 0 && Double(concernCount) / Double(totalCount) > 0.3 {
-            result.append(ModuleInsight(
-                type: .warning,
-                title: "Frequent Concerning Moods",
-                message: "Your cat has been lethargic, anxious, or hiding often this month. A vet visit may help."
-            ))
-        }
-
-        // Overdue flea & tick
-        let lastFleaTick = entries
-            .filter { $0.isFleaTickMedication }
-            .sorted { $0.parsedDate > $1.parsedDate }
-            .first
-        if let last = lastFleaTick {
-            let days = Calendar.current.dateComponents([.day], from: last.parsedDate, to: Date()).day ?? 0
-            if days >= 28 {
-                result.append(ModuleInsight(
-                    type: .suggestion,
-                    title: "Flea & Tick Treatment Due",
-                    message: "Last treatment was \(days) days ago. Most monthly treatments should be reapplied now."
-                ))
-            }
         }
 
         return result
+    }
+
+    // MARK: - Chart Data Points
+
+    var weeklyFeedingChartData: [ChartDataPoint] {
+        weeklyFeedingData.map { daily in
+            let label = daily.date.formatted(.dateTime.weekday(.abbreviated))
+            return ChartDataPoint(label: label, value: Double(daily.count))
+        }
+    }
+
+    var weightHistoryChartData: [ChartDataPoint] {
+        weightHistory.map { (date, weight) in
+            let label = date.formatted(.dateTime.month(.abbreviated).day())
+            return ChartDataPoint(label: label, value: weight)
+        }
+    }
+
+    var feedTypeChartData: [ChartDataPoint] {
+        feedTypeDistribution.map { feedType, count in
+            ChartDataPoint(label: feedType.displayName, value: Double(count))
+        }.sorted { $0.value > $1.value }
+    }
+
+    var moodChartData: [ChartDataPoint] {
+        moodDistribution.map { mood, count in
+            ChartDataPoint(label: mood.displayName, value: Double(count))
+        }.sorted { $0.value > $1.value }
     }
 }

@@ -5,7 +5,7 @@ import Foundation
 enum PeopleNotesDataProvider: ToolkitDataProvider {
     static let toolkitId = "peopleNotes"
     static let displayName = "People Notes"
-    static let relevanceKeywords: [String] = ["people", "contacts", "networking", "meetings", "relationships", "notes", "crm", "follow-up", "connections", "remember"]
+    static let relevanceKeywords: [String] = ["people", "contacts", "meetings", "relationships", "networking", "notes", "follow-up", "crm", "connections", "social"]
 
     private static var bridgeBaseURL: String {
         UserDefaults.standard.string(forKey: "ryanhub_server_url")

@@ -1,0 +1,318 @@
+{
+  "moduleId": "caffeineTracker",
+  "moduleName": "CaffeineTracker",
+  "displayName": "Caffeine Tracker",
+  "shortName": "Caffeine",
+  "subtitle": "Track cups, caffeine & energy patterns",
+  "icon": "cup.and.saucer.fill",
+  "iconColor": "hubAccentYellow",
+  "relevanceKeywords": [
+    "coffee",
+    "caffeine",
+    "espresso",
+    "latte",
+    "energy",
+    "cups",
+    "drinks",
+    "milligrams",
+    "sleep",
+    "productivity"
+  ],
+  "dataFields": [
+    {
+      "name": "drinkType",
+      "type": "CoffeeDrinkType",
+      "label": "Drink Type",
+      "control": "picker"
+    },
+    {
+      "name": "size",
+      "type": "DrinkSize",
+      "label": "Size",
+      "control": "picker"
+    },
+    {
+      "name": "caffeineMg",
+      "type": "Int",
+      "label": "Caffeine (mg)",
+      "control": "stepper"
+    },
+    {
+      "name": "time",
+      "type": "Date",
+      "label": "Time",
+      "control": "datePicker"
+    },
+    {
+      "name": "rating",
+      "type": "Int",
+      "label": "Enjoyment",
+      "control": "slider"
+    },
+    {
+      "name": "notes",
+      "type": "String",
+      "label": "Notes",
+      "control": "text"
+    }
+  ],
+  "enums": [
+    {
+      "name": "CoffeeDrinkType",
+      "cases": [
+        {
+          "name": "espresso",
+          "displayName": "Espresso",
+          "icon": "cup.and.saucer.fill",
+          "baseCaffeineMg": 63
+        },
+        {
+          "name": "drip",
+          "displayName": "Drip Coffee",
+          "icon": "mug.fill",
+          "baseCaffeineMg": 95
+        },
+        {
+          "name": "pourOver",
+          "displayName": "Pour Over",
+          "icon": "drop.fill",
+          "baseCaffeineMg": 100
+        },
+        {
+          "name": "coldBrew",
+          "displayName": "Cold Brew",
+          "icon": "snowflake",
+          "baseCaffeineMg": 200
+        },
+        {
+          "name": "latte",
+          "displayName": "Latte",
+          "icon": "cup.and.saucer",
+          "baseCaffeineMg": 75
+        },
+        {
+          "name": "cappuccino",
+          "displayName": "Cappuccino",
+          "icon": "cloud.fill",
+          "baseCaffeineMg": 75
+        },
+        {
+          "name": "americano",
+          "displayName": "Americano",
+          "icon": "drop.triangle.fill",
+          "baseCaffeineMg": 77
+        },
+        {
+          "name": "instantCoffee",
+          "displayName": "Instant",
+          "icon": "bolt.fill",
+          "baseCaffeineMg": 62
+        },
+        {
+          "name": "matcha",
+          "displayName": "Matcha",
+          "icon": "leaf.fill",
+          "baseCaffeineMg": 70
+        },
+        {
+          "name": "tea",
+          "displayName": "Tea",
+          "icon": "leaf",
+          "baseCaffeineMg": 47
+        },
+        {
+          "name": "energyDrink",
+          "displayName": "Energy Drink",
+          "icon": "battery.100.bolt",
+          "baseCaffeineMg": 160
+        },
+        {
+          "name": "decaf",
+          "displayName": "Decaf",
+          "icon": "moon.fill",
+          "baseCaffeineMg": 7
+        }
+      ]
+    },
+    {
+      "name": "DrinkSize",
+      "cases": [
+        {
+          "name": "small",
+          "displayName": "Small (8oz)",
+          "icon": "s.circle.fill",
+          "multiplier": 0.75
+        },
+        {
+          "name": "medium",
+          "displayName": "Medium (12oz)",
+          "icon": "m.circle.fill",
+          "multiplier": 1.0
+        },
+        {
+          "name": "large",
+          "displayName": "Large (16oz)",
+          "icon": "l.circle.fill",
+          "multiplier": 1.33
+        },
+        {
+          "name": "extraLarge",
+          "displayName": "XL (20oz)",
+          "icon": "xmark.circle.fill",
+          "multiplier": 1.67
+        }
+      ]
+    }
+  ],
+  "views": [
+    {
+      "name": "DashboardView",
+      "purpose": "Today's caffeine status: cups count, total mg, progress ring toward 400mg FDA limit, caffeine still active in body via half-life decay, and last-drink-to-safe-sleep countdown",
+      "components": [
+        "StatGrid",
+        "ProgressRingView",
+        "QuickEntryFAB",
+        "StreakBadge"
+      ]
+    },
+    {
+      "name": "EntrySheet",
+      "purpose": "Quick-add a drink with type picker (grid of icons), size selector, auto-calculated caffeine with manual override stepper, time picker defaulting to now",
+      "components": [
+        "QuickEntrySheet",
+        "EntryFormSection"
+      ]
+    },
+    {
+      "name": "HistoryView",
+      "purpose": "Date-grouped drink log with per-day caffeine totals, drink-type icons, and swipe-to-delete. Filter by drink type or date range",
+      "components": [
+        "CalendarHeatmap",
+        "FilterBar"
+      ]
+    },
+    {
+      "name": "AnalyticsView",
+      "purpose": "Weekly/monthly caffeine trend charts, daily timing heatmap (when you drink most), drink type breakdown pie chart, week-over-week comparison, and personalized insights",
+      "components": [
+        "ModuleChartView",
+        "InsightsList",
+        "PieBreakdownChart"
+      ]
+    }
+  ],
+  "viewModelComputedProperties": [
+    {
+      "name": "todayCups",
+      "type": "Int",
+      "description": "Total number of drinks logged today"
+    },
+    {
+      "name": "todayCaffeineMg",
+      "type": "Int",
+      "description": "Sum of all caffeine mg consumed today"
+    },
+    {
+      "name": "dailyGoalProgress",
+      "type": "Double",
+      "description": "todayCaffeineMg / dailyCaffeineLimit (0.0\u20131.0+), where limit defaults to 400mg"
+    },
+    {
+      "name": "caffeineRemainingMg",
+      "type": "Double",
+      "description": "Active caffeine still in body using half-life decay formula: sum of each drink's mg * pow(0.5, hoursElapsed / 5.0)"
+    },
+    {
+      "name": "estimatedSafeSleepTime",
+      "type": "Date?",
+      "description": "Earliest time caffeine remaining drops below 50mg, calculated from last drink using half-life. Nil if already below threshold"
+    },
+    {
+      "name": "lastDrinkTime",
+      "type": "Date?",
+      "description": "Timestamp of the most recent drink today, used for sleep-safety countdown"
+    },
+    {
+      "name": "currentStreak",
+      "type": "Int",
+      "description": "Consecutive days where total caffeine stayed at or under the daily limit (400mg default)"
+    },
+    {
+      "name": "bestStreak",
+      "type": "Int",
+      "description": "Longest-ever streak of days within caffeine limit"
+    },
+    {
+      "name": "weeklyAverageMg",
+      "type": "Double",
+      "description": "Average daily caffeine in mg over the last 7 days"
+    },
+    {
+      "name": "weeklyTrendPercent",
+      "type": "Double",
+      "description": "Percentage change: (thisWeekAvg - lastWeekAvg) / lastWeekAvg * 100. Positive = drinking more"
+    },
+    {
+      "name": "weeklyAverageCups",
+      "type": "Double",
+      "description": "Average daily cup count over the last 7 days"
+    },
+    {
+      "name": "mostPopularDrinkType",
+      "type": "CoffeeDrinkType?",
+      "description": "The drink type logged most frequently in the last 30 days"
+    },
+    {
+      "name": "drinkTypeBreakdown",
+      "type": "[(type: CoffeeDrinkType, count: Int, percentage: Double)]",
+      "description": "All drink types sorted by frequency with count and percentage for pie chart"
+    },
+    {
+      "name": "peakCaffeineHour",
+      "type": "Int",
+      "description": "Hour of day (0-23) when user most frequently logs drinks, derived from last 30 days"
+    },
+    {
+      "name": "chartData",
+      "type": "[(date: Date, caffeineMg: Int, cups: Int)]",
+      "description": "Daily aggregated data for the last 30 days for bar/line chart rendering"
+    },
+    {
+      "name": "hourlyDistribution",
+      "type": "[(hour: Int, averageMg: Double)]",
+      "description": "Average caffeine consumed at each hour of day over last 30 days for timing heatmap"
+    },
+    {
+      "name": "insights",
+      "type": "[InsightItem]",
+      "description": "Dynamic list of personalized insights: over-limit warnings, trend alerts, timing suggestions, streak celebrations, weekend vs weekday comparison"
+    }
+  ],
+  "domainLogic": {
+    "dailyGoal": {
+      "description": "FDA-recommended daily caffeine limit. User-adjustable. Progress ring shows consumption as fraction of limit. Green under 75%, yellow 75-100%, red over 100%",
+      "defaultValue": "400"
+    },
+    "caffeineAutoCalc": {
+      "description": "When user selects drinkType + size, auto-populate caffeineMg = baseCaffeineMg * sizeMultiplier (rounded to nearest Int). User can override via stepper.",
+      "formula": "caffeineMg = round(CoffeeDrinkType.baseCaffeineMg * DrinkSize.multiplier)"
+    },
+    "halfLifeDecay": {
+      "description": "Caffeine has a biological half-life of ~5 hours. For each drink, remaining = originalMg * pow(0.5, hoursElapsed / 5.0). Sum across all drinks for total active caffeine.",
+      "formula": "remainingMg = sum(drink.caffeineMg * pow(0.5, hoursElapsed / 5.0))"
+    },
+    "streakDefinition": "A day counts toward the streak if at least one drink was logged AND total daily caffeine did not exceed the user's daily limit. Missing a day (no entries) breaks the streak.",
+    "trendAnalysis": "Compare rolling 7-day average caffeine vs the previous 7-day window. Show percentage change with directional arrow. Also track cups-per-day trend separately. Flag if weekly average exceeds 80% of daily limit consistently.",
+    "insights": [
+      "Over-limit alert: 'You exceeded 400mg today \u2014 consider switching to decaf for your next cup'",
+      "Late caffeine warning: 'Your last coffee at 4:30 PM means caffeine won't clear until ~11 PM \u2014 this may affect sleep'",
+      "Trending up: 'Your caffeine intake is up 23% vs last week'",
+      "Trending down: 'Great progress! You've reduced caffeine by 15% this week'",
+      "Streak milestone: 'You've stayed within your limit for 7 days straight!'",
+      "Weekend pattern: 'You drink 40% more caffeine on weekdays than weekends'",
+      "Peak time: 'Most of your caffeine is consumed between 8-10 AM \u2014 your body's cortisol is already high then, try delaying to 10 AM'",
+      "Drink diversity: 'You've only had espresso this week \u2014 try a lower-caffeine option like tea'",
+      "Hydration reminder: 'Caffeine is a diuretic \u2014 with 3 cups today, aim for extra water'"
+    ]
+  }
+}

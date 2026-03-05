@@ -1,23 +1,23 @@
 import SwiftUI
 
-struct CoffeeTrackerEntrySheet: View {
+struct CaffeineTrackerEntrySheet: View {
     @Environment(\.colorScheme) private var colorScheme
-    let viewModel: CoffeeTrackerViewModel
+    let viewModel: CaffeineTrackerViewModel
     var onSave: (() -> Void)?
     @State private var selectedDrinktype: CoffeeDrinkType = .espresso
-    @State private var selectedCupsize: CoffeeCupSize = .small
+    @State private var selectedSize: DrinkSize = .small
     @State private var inputCaffeinemg: Int = 1
     @State private var inputTime: Date = Date()
-    @State private var inputIsdecaf: Bool = false
+    @State private var inputRating: Double = 5
     @State private var inputNotes: String = ""
 
     var body: some View {
         QuickEntrySheet(
-            title: "Add Coffee Tracker",
+            title: "Add Caffeine Tracker",
             icon: "plus.circle.fill",
             canSave: true,
             onSave: {
-                let entry = CoffeeTrackerEntry(drinkType: selectedDrinktype, cupSize: selectedCupsize, caffeineMg: inputCaffeinemg, time: inputTime, isDecaf: inputIsdecaf, notes: inputNotes)
+                let entry = CaffeineTrackerEntry(drinkType: selectedDrinktype, size: selectedSize, caffeineMg: inputCaffeinemg, time: inputTime, rating: Int(inputRating), notes: inputNotes)
                 Task { await viewModel.addEntry(entry) }
                 onSave?()
             }
@@ -33,8 +33,8 @@ struct CoffeeTrackerEntrySheet: View {
                 }
 
                 EntryFormSection(title: "Size") {
-                    Picker("Size", selection: $selectedCupsize) {
-                        ForEach(CoffeeCupSize.allCases) { item in
+                    Picker("Size", selection: $selectedSize) {
+                        ForEach(DrinkSize.allCases) { item in
                             Label(item.displayName, systemImage: item.icon).tag(item)
                         }
                     }
@@ -49,9 +49,17 @@ struct CoffeeTrackerEntrySheet: View {
                     DatePicker("Time", selection: $inputTime, displayedComponents: .hourAndMinute)
                 }
 
-                EntryFormSection(title: "Decaf") {
-                    Toggle("Decaf", isOn: $inputIsdecaf)
-                        .tint(Color.hubPrimary)
+                EntryFormSection(title: "Enjoyment") {
+                    VStack {
+                        HStack {
+                            Text("\(Int(inputRating))")
+                                .font(.system(size: 24, weight: .bold, design: .rounded))
+                                .foregroundStyle(Color.hubPrimary)
+                            Spacer()
+                        }
+                        Slider(value: $inputRating, in: 1...10, step: 1)
+                            .tint(Color.hubPrimary)
+                    }
                 }
 
                 EntryFormSection(title: "Notes") {

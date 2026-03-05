@@ -32,7 +32,7 @@ struct FocusTimerDashboardView: View {
                     StatCard(
                         title: "Today",
                         value: "\(viewModel.todayEntries.count)",
-                        icon: "timer",
+                        icon: "brain.head.profile",
                         color: .hubPrimary
                     )
                     StatCard(
@@ -42,9 +42,9 @@ struct FocusTimerDashboardView: View {
                         color: .hubAccentYellow
                     )
                     StatCard(
-                        title: "Today",
-                        value: "\(viewModel.todayTotalMinutes)m",
-                        icon: "clock.fill",
+                        title: "Best",
+                        value: "\(viewModel.longestStreak)d",
+                        icon: "trophy.fill",
                         color: .hubAccentGreen
                     )
                     StatCard(
@@ -59,7 +59,7 @@ struct FocusTimerDashboardView: View {
                 // Streak
                 StreakCounter(
                     currentStreak: viewModel.currentStreak,
-                    longestStreak: viewModel.currentStreak,
+                    longestStreak: viewModel.longestStreak,
                     isActiveToday: !viewModel.todayEntries.isEmpty
                 )
 

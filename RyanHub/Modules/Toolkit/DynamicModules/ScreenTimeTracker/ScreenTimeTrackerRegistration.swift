@@ -10,8 +10,8 @@ extension DynamicModuleRegistry {
             displayName: "Screen Time Tracker",
             shortName: "Screen Time",
             subtitle: "Set goals and reclaim your hours",
-            icon: "hourglass",
-            iconColorName: "hubPrimary",
+            icon: "hourglass.bottomhalf.filled",
+            iconColorName: "hubAccentYellow",
             viewBuilder: { AnyView(ScreenTimeTrackerView()) },
             dataProviderType: ScreenTimeTrackerDataProvider.self
         ))

@@ -3,8 +3,8 @@
   "moduleName": "RecipeBox",
   "displayName": "Recipe Box",
   "shortName": "Recipes",
-  "subtitle": "Your personal cookbook",
-  "icon": "book.pages",
+  "subtitle": "Your personal digital cookbook",
+  "icon": "book.closed.fill",
   "iconColor": "hubAccentYellow",
   "relevanceKeywords": [
     "recipe",
@@ -13,9 +13,9 @@
     "meal",
     "food",
     "cuisine",
+    "cookbook",
     "kitchen",
     "prep",
-    "cookbook",
     "dinner"
   ],
   "dataFields": [
@@ -27,8 +27,8 @@
     },
     {
       "name": "category",
-      "type": "MealCategory",
-      "label": "Meal Type",
+      "type": "RecipeCategory",
+      "label": "Category",
       "control": "picker"
     },
     {
@@ -38,10 +38,10 @@
       "control": "picker"
     },
     {
-      "name": "servings",
-      "type": "Int",
-      "label": "Servings",
-      "control": "stepper"
+      "name": "difficulty",
+      "type": "DifficultyLevel",
+      "label": "Difficulty",
+      "control": "picker"
     },
     {
       "name": "prepTimeMinutes",
@@ -56,10 +56,16 @@
       "control": "stepper"
     },
     {
-      "name": "difficulty",
-      "type": "DifficultyLevel",
-      "label": "Difficulty",
-      "control": "picker"
+      "name": "servings",
+      "type": "Int",
+      "label": "Servings",
+      "control": "stepper"
+    },
+    {
+      "name": "rating",
+      "type": "Int",
+      "label": "Rating",
+      "control": "slider"
     },
     {
       "name": "ingredients",
@@ -74,12 +80,6 @@
       "control": "text"
     },
     {
-      "name": "rating",
-      "type": "Double",
-      "label": "Rating",
-      "control": "slider"
-    },
-    {
       "name": "isFavorite",
       "type": "Bool",
       "label": "Favorite",
@@ -92,6 +92,12 @@
       "control": "stepper"
     },
     {
+      "name": "caloriesPerServing",
+      "type": "Int",
+      "label": "Calories per Serving",
+      "control": "stepper"
+    },
+    {
       "name": "notes",
       "type": "String",
       "label": "Notes",
@@ -100,42 +106,47 @@
   ],
   "enums": [
     {
-      "name": "MealCategory",
+      "name": "RecipeCategory",
       "cases": [
         {
           "name": "breakfast",
           "displayName": "Breakfast",
-          "icon": "sunrise"
+          "icon": "sunrise.fill"
         },
         {
           "name": "lunch",
           "displayName": "Lunch",
-          "icon": "sun.max"
+          "icon": "sun.max.fill"
         },
         {
           "name": "dinner",
           "displayName": "Dinner",
-          "icon": "moon.stars"
+          "icon": "moon.fill"
         },
         {
           "name": "snack",
           "displayName": "Snack",
-          "icon": "carrot"
+          "icon": "leaf.fill"
         },
         {
           "name": "dessert",
           "displayName": "Dessert",
-          "icon": "birthday.cake"
+          "icon": "birthday.cake.fill"
         },
         {
           "name": "appetizer",
           "displayName": "Appetizer",
-          "icon": "fork.knife"
+          "icon": "fork.knife.circle.fill"
+        },
+        {
+          "name": "side",
+          "displayName": "Side Dish",
+          "icon": "leaf.circle.fill"
         },
         {
           "name": "drink",
           "displayName": "Drink",
-          "icon": "cup.and.saucer"
+          "icon": "cup.and.saucer.fill"
         }
       ]
     },
@@ -145,57 +156,57 @@
         {
           "name": "italian",
           "displayName": "Italian",
-          "icon": "flag"
+          "icon": "fork.knife"
         },
         {
           "name": "chinese",
           "displayName": "Chinese",
-          "icon": "flag"
+          "icon": "flame.fill"
         },
         {
           "name": "japanese",
           "displayName": "Japanese",
-          "icon": "flag"
+          "icon": "leaf.fill"
         },
         {
           "name": "mexican",
           "displayName": "Mexican",
-          "icon": "flag"
+          "icon": "sun.max.fill"
         },
         {
           "name": "indian",
           "displayName": "Indian",
-          "icon": "flag"
-        },
-        {
-          "name": "american",
-          "displayName": "American",
-          "icon": "flag"
-        },
-        {
-          "name": "mediterranean",
-          "displayName": "Mediterranean",
-          "icon": "leaf"
+          "icon": "sparkles"
         },
         {
           "name": "thai",
           "displayName": "Thai",
-          "icon": "flag"
+          "icon": "star.fill"
         },
         {
           "name": "french",
           "displayName": "French",
-          "icon": "flag"
+          "icon": "wineglass.fill"
+        },
+        {
+          "name": "american",
+          "displayName": "American",
+          "icon": "star.circle.fill"
         },
         {
           "name": "korean",
           "displayName": "Korean",
-          "icon": "flag"
+          "icon": "flame.circle.fill"
+        },
+        {
+          "name": "mediterranean",
+          "displayName": "Mediterranean",
+          "icon": "globe.europe.africa.fill"
         },
         {
           "name": "other",
           "displayName": "Other",
-          "icon": "globe"
+          "icon": "ellipsis.circle.fill"
         }
       ]
     },
@@ -205,17 +216,17 @@
         {
           "name": "easy",
           "displayName": "Easy",
-          "icon": "gauge.with.dots.needle.0percent"
+          "icon": "1.circle.fill"
         },
         {
           "name": "medium",
           "displayName": "Medium",
-          "icon": "gauge.with.dots.needle.50percent"
+          "icon": "2.circle.fill"
         },
         {
           "name": "hard",
           "displayName": "Hard",
-          "icon": "gauge.with.dots.needle.100percent"
+          "icon": "3.circle.fill"
         }
       ]
     }
@@ -223,34 +234,40 @@
   "views": [
     {
       "name": "DashboardView",
-      "purpose": "Collection overview showing total recipe count, favorites carousel, recently added recipes, cuisine distribution donut, and a quick-add FAB. Top stat cards show total recipes, times cooked this month, current cooking streak, and average rating.",
+      "purpose": "Main dashboard showing total recipe count, favorites count, cooking sessions, average rating, recently added recipes, and top-rated highlights with quick-add FAB",
       "components": [
         "StatGrid",
         "ProgressRingView",
-        "QuickEntryFAB"
+        "QuickEntryFAB",
+        "RecentRecipeCards"
       ]
     },
     {
       "name": "EntrySheet",
-      "purpose": "Multi-section recipe entry form: name and photo at top, meal category and cuisine pickers, servings/prep/cook time steppers in a row, difficulty picker, multi-line ingredients field (one per line), multi-line instructions field, rating slider, favorite toggle, and notes.",
+      "purpose": "Add or edit a recipe with structured fields: name, category, cuisine, difficulty, prep/cook time steppers, servings, ingredients text area, instructions text area, rating slider, favorite toggle, and optional calorie info",
       "components": [
         "QuickEntrySheet",
-        "EntryFormSection"
+        "EntryFormSection",
+        "IngredientEditor"
       ]
     },
     {
       "name": "HistoryView",
-      "purpose": "Searchable, filterable recipe collection. Cards show recipe name, cuisine badge, prep+cook total time, rating stars, and times cooked count. Filter by category, cuisine, difficulty, or favorites. Sort by date added, rating, times cooked, or total time.",
+      "purpose": "Browsable recipe collection with search, filtering by category/cuisine/difficulty/favorites, sorted by date added or rating or times cooked",
       "components": [
-        "CalendarHeatmap"
+        "FilterBar",
+        "RecipeCardList",
+        "SearchBar"
       ]
     },
     {
       "name": "AnalyticsView",
-      "purpose": "Cuisine distribution pie chart, category breakdown bar chart, cooking frequency over time line chart, average rating trend, top 5 most cooked recipes leaderboard, difficulty distribution, and AI-generated insights about cooking habits.",
+      "purpose": "Cooking analytics with cuisine distribution pie chart, difficulty breakdown bar chart, cooking frequency over time line chart, collection growth trend, time-profile analysis, and personalized insight cards",
       "components": [
         "ModuleChartView",
-        "InsightsList"
+        "InsightsList",
+        "CuisineDistributionChart",
+        "DifficultyBreakdownChart"
       ]
     }
   ],
@@ -258,100 +275,125 @@
     {
       "name": "totalRecipes",
       "type": "Int",
-      "description": "Total number of saved recipes in the collection"
+      "description": "Total number of recipes saved in the collection"
     },
     {
-      "name": "favoriteRecipes",
-      "type": "[Entry]",
-      "description": "All entries where isFavorite is true, sorted by rating descending"
-    },
-    {
-      "name": "recipesAddedThisWeek",
-      "type": "Int",
-      "description": "Count of recipes added in the current calendar week"
-    },
-    {
-      "name": "recipesAddedThisMonth",
-      "type": "Int",
-      "description": "Count of recipes added in the current calendar month"
-    },
-    {
-      "name": "totalTimesCooked",
+      "name": "totalCookingSessions",
       "type": "Int",
       "description": "Sum of timesCooked across all recipes"
     },
     {
-      "name": "timesCookedThisMonth",
-      "type": "Int",
-      "description": "Estimated cooking sessions this month based on entries with timesCooked incremented recently"
-    },
-    {
       "name": "averageRating",
       "type": "Double",
-      "description": "Mean rating across all recipes that have been rated (rating > 0)"
+      "description": "Mean rating across all recipes that have a rating > 0"
     },
     {
-      "name": "averageTotalTime",
-      "type": "Int",
-      "description": "Mean of (prepTimeMinutes + cookTimeMinutes) across all recipes"
+      "name": "favoriteRecipes",
+      "type": "[Entry]",
+      "description": "All recipes marked as favorite, sorted by rating descending"
     },
     {
-      "name": "cookingStreak",
+      "name": "favoriteCount",
       "type": "Int",
-      "description": "Consecutive weeks where at least one recipe was added or cooked, counting back from current week"
+      "description": "Count of recipes marked as favorite"
+    },
+    {
+      "name": "topRatedRecipes",
+      "type": "[Entry]",
+      "description": "Top 5 recipes by rating, breaking ties by timesCooked"
+    },
+    {
+      "name": "mostCookedRecipes",
+      "type": "[Entry]",
+      "description": "Top 5 recipes sorted by timesCooked descending"
     },
     {
       "name": "cuisineDistribution",
       "type": "[(String, Int)]",
-      "description": "Count of recipes per CuisineType for pie chart, sorted by count descending"
+      "description": "Recipe count grouped by cuisine type, sorted descending for chart display"
     },
     {
       "name": "categoryDistribution",
       "type": "[(String, Int)]",
-      "description": "Count of recipes per MealCategory for bar chart"
+      "description": "Recipe count grouped by meal category, sorted descending"
     },
     {
       "name": "difficultyBreakdown",
       "type": "[(String, Int)]",
-      "description": "Count of recipes per DifficultyLevel"
+      "description": "Recipe count by difficulty level: easy, medium, hard"
     },
     {
-      "name": "mostCookedRecipes",
-      "type": "[(String, Int)]",
-      "description": "Top 5 recipes by timesCooked, returning name and count"
-    },
-    {
-      "name": "weeklyAdditionTrend",
-      "type": "[Double]",
-      "description": "Recipes added per week for the last 8 weeks, for sparkline chart"
-    },
-    {
-      "name": "goalProgress",
+      "name": "averagePrepTime",
       "type": "Double",
-      "description": "Fraction of weekly new recipe goal achieved (recipesAddedThisWeek / weeklyGoal)"
+      "description": "Mean prep time in minutes across all recipes with prepTimeMinutes > 0"
+    },
+    {
+      "name": "averageCookTime",
+      "type": "Double",
+      "description": "Mean cook time in minutes across all recipes with cookTimeMinutes > 0"
+    },
+    {
+      "name": "averageTotalTime",
+      "type": "Double",
+      "description": "Mean total time (prepTimeMinutes + cookTimeMinutes) across all recipes"
+    },
+    {
+      "name": "recipesAddedThisWeek",
+      "type": "Int",
+      "description": "Number of new recipes added in the current calendar week"
+    },
+    {
+      "name": "weekOverWeekChange",
+      "type": "Double",
+      "description": "Percentage change in recipes added this week vs previous week; positive = growth"
+    },
+    {
+      "name": "uniqueCuisinesExplored",
+      "type": "Int",
+      "description": "Count of distinct cuisine types represented in the collection"
     },
     {
       "name": "quickRecipes",
       "type": "[Entry]",
-      "description": "Recipes where prepTimeMinutes + cookTimeMinutes <= 30, sorted by total time ascending"
+      "description": "Recipes with total time (prep + cook) under 30 minutes, sorted by total time ascending"
+    },
+    {
+      "name": "weeklyNewRecipesGoalProgress",
+      "type": "Double",
+      "description": "Fraction of weekly goal met (recipesAddedThisWeek / weeklyGoal), clamped to 0...1"
+    },
+    {
+      "name": "collectionInsights",
+      "type": "[String]",
+      "description": "Generated text insights: cuisine affinity, time profile, difficulty progression, underrepresented categories, most reliable recipe"
+    },
+    {
+      "name": "monthlyRecipeChartData",
+      "type": "[(String, Int)]",
+      "description": "Recipes added per month for the last 6 months, formatted as (monthLabel, count) for line/bar chart"
+    },
+    {
+      "name": "cookingStreak",
+      "type": "Int",
+      "description": "Consecutive days with at least one new recipe added or timesCooked incremented on any recipe"
     }
   ],
   "domainLogic": {
     "dailyGoal": {
-      "description": "Weekly new recipe goal \u2014 number of new recipes to add per week to grow your collection steadily",
-      "defaultValue": "2"
+      "description": "Weekly recipe collection target \u2014 encourages building a diverse personal cookbook and actually cooking from it",
+      "defaultValue": "3 new recipes per week"
     },
-    "streakDefinition": "A week counts as active if at least one recipe was added OR an existing recipe had its timesCooked incremented. Streak counts consecutive active weeks back from the current week.",
-    "trendAnalysis": "Track recipes added per week (8-week rolling window) vs previous 8-week period to show collection growth rate. Track average rating trend monthly to see if recipe quality/selection is improving. Monitor cuisine diversity index (unique cuisines used / total cuisines available) over time.",
+    "streakDefinition": "A day counts as active if the user added a new recipe OR incremented timesCooked on any existing recipe. Consecutive active days form the streak. Streak resets to 0 after one inactive day.",
+    "trendAnalysis": "Track 3 core trends: (1) Collection growth \u2014 weekly new recipes added vs previous week as percentage change. (2) Cuisine diversity index \u2014 number of unique cuisines / total cuisine types, flagging if user is stuck in 1-2 cuisines. (3) Difficulty progression \u2014 ratio of medium+hard recipes in last 30 days vs first 30 days, detecting if user is challenging themselves more over time.",
     "insights": [
-      "Cuisine diversity score: percentage of available cuisine types represented in collection, with encouragement to try underrepresented ones",
-      "Most cooked recipe highlight: surface the user's go-to recipe with total cook count",
-      "Time efficiency insight: compare average total time this month vs last month, flag if trending longer or shorter",
-      "Difficulty progression: track ratio of easy/medium/hard over time, note if user is leveling up",
-      "Neglected favorites: recipes marked favorite but timesCooked is 0 \u2014 nudge to actually cook them",
-      "Collection growth rate: recipes per week trend with motivational framing",
-      "Quick meal ratio: percentage of recipes under 30 minutes, helpful for busy week planning",
-      "Cooking consistency: weeks with at least one cook session, displayed as a percentage over last 3 months"
+      "Cuisine affinity \u2014 identify top 2 cuisines by count and their percentage of total collection (e.g., 'Italian dominates at 35% \u2014 try exploring Thai or Korean!')",
+      "Time profile \u2014 classify user as Quick Cook (<30min avg total), Moderate (30-60min), or Ambitious Chef (>60min) based on average prepTime + cookTime",
+      "Difficulty progression \u2014 compare difficulty distribution of last 10 recipes vs first 10 to detect skill growth",
+      "Collection completeness \u2014 identify meal categories with zero or fewer than 2 recipes and suggest filling gaps",
+      "Most reliable recipe \u2014 recipe with highest combination score of (rating * 0.6 + normalized_timesCooked * 0.4)",
+      "Cooking velocity \u2014 trend of timesCooked sum per week over last 4 weeks, flagging increase or decrease",
+      "Under-cooked gems \u2014 recipes rated 4+ stars but with timesCooked == 0, suggesting user should try them",
+      "Calorie awareness \u2014 average caloriesPerServing across tracked recipes, comparison by category"
     ]
   }
 }

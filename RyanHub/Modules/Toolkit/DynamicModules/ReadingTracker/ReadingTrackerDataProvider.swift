@@ -5,7 +5,7 @@ import Foundation
 enum ReadingTrackerDataProvider: ToolkitDataProvider {
     static let toolkitId = "readingTracker"
     static let displayName = "Reading Tracker"
-    static let relevanceKeywords: [String] = ["book", "reading", "pages", "library", "literature", "novel", "author", "bookshelf", "progress", "notes"]
+    static let relevanceKeywords: [String] = ["reading", "books", "pages", "literature", "novel", "library", "bookmark", "progress", "notes", "author"]
 
     private static var bridgeBaseURL: String {
         UserDefaults.standard.string(forKey: "ryanhub_server_url")

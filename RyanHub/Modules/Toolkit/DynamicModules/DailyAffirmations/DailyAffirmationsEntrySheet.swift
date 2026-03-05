@@ -4,13 +4,15 @@ struct DailyAffirmationsEntrySheet: View {
     @Environment(\.colorScheme) private var colorScheme
     let viewModel: DailyAffirmationsViewModel
     var onSave: (() -> Void)?
-    @State private var inputAffirmationtext: String = ""
+    @State private var inputAffirmation: String = ""
     @State private var selectedCategory: AffirmationCategory = .selfWorth
     @State private var inputMoodbefore: Double = 5
     @State private var inputMoodafter: Double = 5
-    @State private var inputPracticeminutes: Int = 1
+    @State private var inputResonance: Double = 5
+    @State private var selectedPracticetime: PracticeTime = .morning
+    @State private var inputRepetitions: Int = 1
     @State private var inputIsfavorite: Bool = false
-    @State private var inputReflectionnote: String = ""
+    @State private var inputReflection: String = ""
 
     var body: some View {
         QuickEntrySheet(
@@ -18,14 +20,14 @@ struct DailyAffirmationsEntrySheet: View {
             icon: "plus.circle.fill",
             canSave: true,
             onSave: {
-                let entry = DailyAffirmationsEntry(affirmationText: inputAffirmationtext, category: selectedCategory, moodBefore: Int(inputMoodbefore), moodAfter: Int(inputMoodafter), practiceMinutes: inputPracticeminutes, isFavorite: inputIsfavorite, reflectionNote: inputReflectionnote)
+                let entry = DailyAffirmationsEntry(affirmation: inputAffirmation, category: selectedCategory, moodBefore: Int(inputMoodbefore), moodAfter: Int(inputMoodafter), resonance: Int(inputResonance), practiceTime: selectedPracticetime, repetitions: inputRepetitions, isFavorite: inputIsfavorite, reflection: inputReflection)
                 Task { await viewModel.addEntry(entry) }
                 onSave?()
             }
         ) {
 
                 EntryFormSection(title: "Affirmation") {
-                    HubTextField(placeholder: "Affirmation", text: $inputAffirmationtext)
+                    HubTextField(placeholder: "Affirmation", text: $inputAffirmation)
                 }
 
                 EntryFormSection(title: "Category") {
@@ -37,7 +39,7 @@ struct DailyAffirmationsEntrySheet: View {
                     .pickerStyle(.menu)
                 }
 
-                EntryFormSection(title: "Mood Before Practice") {
+                EntryFormSection(title: "Mood Before (1-5)") {
                     VStack {
                         HStack {
                             Text("\(Int(inputMoodbefore))")
@@ -50,7 +52,7 @@ struct DailyAffirmationsEntrySheet: View {
                     }
                 }
 
-                EntryFormSection(title: "Mood After Practice") {
+                EntryFormSection(title: "Mood After (1-5)") {
                     VStack {
                         HStack {
                             Text("\(Int(inputMoodafter))")
@@ -63,8 +65,30 @@ struct DailyAffirmationsEntrySheet: View {
                     }
                 }
 
-                EntryFormSection(title: "Practice Duration (min)") {
-                    Stepper("\(inputPracticeminutes) practice duration (min)", value: $inputPracticeminutes, in: 0...9999)
+                EntryFormSection(title: "Resonance (1-5)") {
+                    VStack {
+                        HStack {
+                            Text("\(Int(inputResonance))")
+                                .font(.system(size: 24, weight: .bold, design: .rounded))
+                                .foregroundStyle(Color.hubPrimary)
+                            Spacer()
+                        }
+                        Slider(value: $inputResonance, in: 1...10, step: 1)
+                            .tint(Color.hubPrimary)
+                    }
+                }
+
+                EntryFormSection(title: "Practice Time") {
+                    Picker("Practice Time", selection: $selectedPracticetime) {
+                        ForEach(PracticeTime.allCases) { item in
+                            Label(item.displayName, systemImage: item.icon).tag(item)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                }
+
+                EntryFormSection(title: "Repetitions") {
+                    Stepper("\(inputRepetitions) repetitions", value: $inputRepetitions, in: 0...9999)
                 }
 
                 EntryFormSection(title: "Favorite") {
@@ -72,8 +96,8 @@ struct DailyAffirmationsEntrySheet: View {
                         .tint(Color.hubPrimary)
                 }
 
-                EntryFormSection(title: "Reflection") {
-                    HubTextField(placeholder: "Reflection", text: $inputReflectionnote)
+                EntryFormSection(title: "Reflection Note") {
+                    HubTextField(placeholder: "Reflection Note", text: $inputReflection)
                 }
         }
     }

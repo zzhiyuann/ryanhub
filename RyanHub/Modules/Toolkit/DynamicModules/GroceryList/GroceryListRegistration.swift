@@ -8,7 +8,7 @@ extension DynamicModuleRegistry {
             id: "groceryList",
             toolkitId: "groceryList",
             displayName: "Grocery List",
-            shortName: "Grocery",
+            shortName: "Groceries",
             subtitle: "Smart shopping with budget tracking",
             icon: "cart.fill",
             iconColorName: "hubAccentGreen",

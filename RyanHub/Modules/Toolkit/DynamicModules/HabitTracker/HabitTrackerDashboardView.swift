@@ -32,7 +32,7 @@ struct HabitTrackerDashboardView: View {
                     StatCard(
                         title: "Today",
                         value: "\(viewModel.todayEntries.count)",
-                        icon: "checkmark.circle.badge.clock",
+                        icon: "checkmark.seal.fill",
                         color: .hubPrimary
                     )
                     StatCard(

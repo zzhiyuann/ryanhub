@@ -32,7 +32,7 @@ struct ScreenTimeTrackerDashboardView: View {
                     StatCard(
                         title: "Today",
                         value: "\(viewModel.todayEntries.count)",
-                        icon: "hourglass",
+                        icon: "hourglass.bottomhalf.filled",
                         color: .hubPrimary
                     )
                     StatCard(

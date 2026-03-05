@@ -5,18 +5,18 @@
   "shortName": "People",
   "subtitle": "Remember everyone you meet",
   "icon": "person.text.rectangle",
-  "iconColor": "hubPrimary",
+  "iconColor": "hubPrimaryLight",
   "relevanceKeywords": [
     "people",
     "contacts",
-    "networking",
     "meetings",
     "relationships",
+    "networking",
     "notes",
-    "crm",
     "follow-up",
+    "crm",
     "connections",
-    "remember"
+    "social"
   ],
   "dataFields": [
     {
@@ -32,51 +32,51 @@
       "control": "picker"
     },
     {
-      "name": "meetingType",
-      "type": "MeetingType",
-      "label": "Meeting Type",
+      "name": "meetingContext",
+      "type": "MeetingContext",
+      "label": "How You Connected",
       "control": "picker"
     },
     {
       "name": "location",
       "type": "String",
-      "label": "Where / Context",
+      "label": "Location",
       "control": "text"
     },
     {
       "name": "topics",
       "type": "String",
-      "label": "What You Discussed",
+      "label": "Topics Discussed",
       "control": "text"
     },
     {
-      "name": "interactionQuality",
-      "type": "Int",
-      "label": "Interaction Quality",
-      "control": "slider"
-    },
-    {
-      "name": "energyLevel",
-      "type": "EnergyLevel",
-      "label": "Their Energy",
-      "control": "picker"
-    },
-    {
-      "name": "followUpNeeded",
-      "type": "Bool",
-      "label": "Follow-up Needed",
-      "control": "toggle"
-    },
-    {
-      "name": "followUpNote",
+      "name": "followUp",
       "type": "String",
       "label": "Follow-up Action",
       "control": "text"
     },
     {
+      "name": "followUpDone",
+      "type": "Bool",
+      "label": "Follow-up Complete",
+      "control": "toggle"
+    },
+    {
+      "name": "connectionRating",
+      "type": "Int",
+      "label": "Connection Quality",
+      "control": "slider"
+    },
+    {
+      "name": "interactionMood",
+      "type": "InteractionMood",
+      "label": "Interaction Vibe",
+      "control": "picker"
+    },
+    {
       "name": "notes",
       "type": "String",
-      "label": "Private Notes",
+      "label": "Notes",
       "control": "text"
     }
   ],
@@ -87,122 +87,107 @@
         {
           "name": "colleague",
           "displayName": "Colleague",
-          "icon": "briefcase.fill"
+          "icon": "briefcase"
         },
         {
           "name": "friend",
           "displayName": "Friend",
-          "icon": "heart.fill"
-        },
-        {
-          "name": "acquaintance",
-          "displayName": "Acquaintance",
-          "icon": "hand.wave.fill"
-        },
-        {
-          "name": "mentor",
-          "displayName": "Mentor",
-          "icon": "graduationcap.fill"
-        },
-        {
-          "name": "client",
-          "displayName": "Client",
-          "icon": "building.2.fill"
-        },
-        {
-          "name": "classmate",
-          "displayName": "Classmate",
-          "icon": "book.fill"
-        },
-        {
-          "name": "neighbor",
-          "displayName": "Neighbor",
-          "icon": "house.fill"
+          "icon": "heart"
         },
         {
           "name": "family",
           "displayName": "Family",
-          "icon": "figure.2.and.child.holdinghands"
+          "icon": "house"
+        },
+        {
+          "name": "acquaintance",
+          "displayName": "Acquaintance",
+          "icon": "person.wave.2"
+        },
+        {
+          "name": "client",
+          "displayName": "Client",
+          "icon": "building.2"
+        },
+        {
+          "name": "mentor",
+          "displayName": "Mentor",
+          "icon": "graduationcap"
         },
         {
           "name": "other",
           "displayName": "Other",
-          "icon": "person.fill"
+          "icon": "person"
         }
       ]
     },
     {
-      "name": "MeetingType",
+      "name": "MeetingContext",
       "cases": [
+        {
+          "name": "inPerson",
+          "displayName": "In Person",
+          "icon": "person.2"
+        },
         {
           "name": "coffee",
           "displayName": "Coffee / Meal",
-          "icon": "cup.and.saucer.fill"
+          "icon": "cup.and.saucer"
         },
         {
           "name": "meeting",
           "displayName": "Meeting",
-          "icon": "person.2.fill"
+          "icon": "person.3"
         },
         {
           "name": "call",
-          "displayName": "Call / Video",
-          "icon": "phone.fill"
+          "displayName": "Phone / Video Call",
+          "icon": "phone"
         },
         {
           "name": "event",
           "displayName": "Event / Party",
-          "icon": "party.popper.fill"
-        },
-        {
-          "name": "casual",
-          "displayName": "Casual Run-in",
-          "icon": "figure.walk"
-        },
-        {
-          "name": "introduced",
-          "displayName": "First Introduction",
-          "icon": "hand.raised.fill"
-        },
-        {
-          "name": "class",
-          "displayName": "Class / Workshop",
-          "icon": "studentdesk"
+          "icon": "party.popper"
         },
         {
           "name": "online",
-          "displayName": "Online / DM",
-          "icon": "message.fill"
+          "displayName": "Online / Chat",
+          "icon": "message"
+        },
+        {
+          "name": "casual",
+          "displayName": "Casual Encounter",
+          "icon": "figure.walk"
         }
       ]
     },
     {
-      "name": "EnergyLevel",
+      "name": "InteractionMood",
       "cases": [
         {
-          "name": "inspiring",
-          "displayName": "Inspiring",
-          "icon": "sparkles"
+          "name": "great",
+          "displayName": "Great",
+          "icon": "face.smiling"
         },
         {
-          "name": "warm",
-          "displayName": "Warm & Friendly",
-          "icon": "sun.max.fill"
+          "name": "good",
+          "displayName": "Good",
+          "icon": "hand.thumbsup"
         },
         {
           "name": "neutral",
           "displayName": "Neutral",
-          "icon": "minus.circle.fill"
+          "icon": "minus.circle"
         },
         {
-          "name": "draining",
-          "displayName": "Draining",
-          "icon": "battery.25percent"
+          "name": "awkward",
+          "displayName": "Awkward",
+          "icon": "questionmark.circle"
         },
         {
           "name": "tense",
           "displayName": "Tense",
-          "icon": "bolt.fill"
+          "icon": "exclamationmark.triangle"
         }
       ]
     }
@@ -210,18 +195,18 @@
   "views": [
     {
       "name": "DashboardView",
-      "purpose": "Overview of recent interactions, pending follow-ups, top contacts, and network growth at a glance",
+      "purpose": "Main hub showing today's interactions, top contacts wheel, pending follow-ups banner, network size stat, and streak counter with quick-add FAB",
       "components": [
         "StatGrid",
         "ProgressRingView",
         "QuickEntryFAB",
         "RecentInteractionsList",
-        "FollowUpBanner"
+        "PendingFollowUpsBanner"
       ]
     },
     {
       "name": "EntrySheet",
-      "purpose": "Quick capture of a person encounter \u2014 name, context, discussion topics, follow-up items",
+      "purpose": "Quick-capture modal for logging a new interaction \u2014 person name with autocomplete from history, relationship picker, context picker, star-style connection rating, and optional follow-up field",
       "components": [
         "QuickEntrySheet",
         "EntryFormSection",
@@ -230,21 +215,23 @@
     },
     {
       "name": "HistoryView",
-      "purpose": "Chronological feed of all interactions, filterable by person, relationship type, or meeting type, with search",
+      "purpose": "Searchable timeline of all interactions, grouped by person or by date, with filter chips for relationship type and meeting context",
       "components": [
-        "CalendarHeatmap",
-        "FilterBar",
-        "GroupedEntryList"
+        "SearchableList",
+        "FilterChips",
+        "GroupedTimeline",
+        "CalendarHeatmap"
       ]
     },
     {
       "name": "AnalyticsView",
-      "purpose": "Network analytics \u2014 relationship distribution, interaction frequency trends, quality heatmap, top contacts leaderboard, follow-up completion rate",
+      "purpose": "Network growth line chart, relationship-type pie chart, meeting-context breakdown, connection quality trend, follow-up completion rate, neglected contacts list, and AI-generated insights",
       "components": [
         "ModuleChartView",
+        "CategoryBreakdownChart",
+        "TrendLineChart",
         "InsightsList",
-        "RelationshipPieChart",
-        "TopContactsRanking"
+        "NeglectedContactsList"
       ]
     }
   ],
@@ -252,89 +239,100 @@
     {
       "name": "todayInteractionCount",
       "type": "Int",
-      "description": "Number of people interactions logged today"
+      "description": "Number of interactions logged today"
     },
     {
       "name": "weeklyInteractionCount",
       "type": "Int",
-      "description": "Total interactions logged in the current calendar week"
-    },
-    {
-      "name": "uniquePeopleMet",
-      "type": "Int",
-      "description": "Count of distinct person names across all entries"
-    },
-    {
-      "name": "newPeopleThisWeek",
-      "type": "Int",
-      "description": "People whose name appears for the first time this week (first introduction detection)"
+      "description": "Total interactions logged this calendar week (Monday through Sunday)"
     },
     {
       "name": "currentStreak",
       "type": "Int",
-      "description": "Consecutive days with at least one interaction logged"
+      "description": "Consecutive calendar days with at least one interaction logged, counting back from today"
+    },
+    {
+      "name": "totalUniqueContacts",
+      "type": "Int",
+      "description": "Count of distinct personName values (case-insensitive) across all entries ever"
+    },
+    {
+      "name": "topContacts",
+      "type": "[(String, Int)]",
+      "description": "Top 5 most frequently logged people with their total interaction count, sorted descending"
     },
     {
       "name": "pendingFollowUps",
       "type": "[Entry]",
-      "description": "All entries where followUpNeeded is true, sorted by date descending"
+      "description": "Entries where followUp is non-empty and followUpDone is false, sorted oldest-first so urgent ones surface first"
     },
     {
-      "name": "topContacts",
-      "type": "[(name: String, count: Int)]",
-      "description": "Top 5 most frequently mentioned people, ranked by total interaction count"
+      "name": "pendingFollowUpCount",
+      "type": "Int",
+      "description": "Count of entries with pending (incomplete) follow-up actions"
     },
     {
-      "name": "relationshipDistribution",
-      "type": "[RelationshipType: Int]",
-      "description": "Breakdown of all interactions by relationship type for pie chart"
+      "name": "networkGrowthThisMonth",
+      "type": "Int",
+      "description": "Number of unique personNames that appear for the first time in the current calendar month"
     },
     {
-      "name": "meetingTypeDistribution",
-      "type": "[MeetingType: Int]",
-      "description": "Breakdown by meeting type for bar chart visualization"
-    },
-    {
-      "name": "weeklyTrend",
+      "name": "averageConnectionRating",
       "type": "Double",
-      "description": "Percentage change in interaction count vs previous week (positive = more active)"
+      "description": "Mean connectionRating across all entries from the last 30 days, on a 1-5 scale"
     },
     {
-      "name": "averageInteractionQuality",
+      "name": "weeklyTrendDelta",
       "type": "Double",
-      "description": "Rolling 7-day average of interactionQuality slider values (1-10 scale)"
+      "description": "Percentage change in interaction count comparing current week to previous week: (thisWeek - lastWeek) / lastWeek"
     },
     {
-      "name": "networkGrowthChartData",
-      "type": "[(week: Date, newPeople: Int, totalPeople: Int)]",
-      "description": "Weekly cumulative network size for line chart \u2014 tracks how fast your network grows"
+      "name": "interactionsByRelationshipType",
+      "type": "[(String, Int)]",
+      "description": "Breakdown of all-time interactions grouped by RelationshipType for pie/bar chart rendering"
     },
     {
-      "name": "energyBalanceScore",
+      "name": "interactionsByMeetingContext",
+      "type": "[(String, Int)]",
+      "description": "Breakdown of all-time interactions grouped by MeetingContext showing how the user connects (in-person vs call vs online)"
+    },
+    {
+      "name": "neglectedContacts",
+      "type": "[(String, Int)]",
+      "description": "People not interacted with in 30+ days, as (name, daysSinceLastInteraction) tuples sorted by most neglected first"
+    },
+    {
+      "name": "monthlyChartData",
+      "type": "[(Date, Int)]",
+      "description": "Daily interaction counts for the last 30 days for rendering a line or bar chart"
+    },
+    {
+      "name": "goalProgress",
       "type": "Double",
-      "description": "Ratio of inspiring+warm interactions to draining+tense ones over past 30 days \u2014 measures social energy ROI"
+      "description": "Fraction of the weekly interaction goal achieved (weeklyInteractionCount / weeklyGoal), can exceed 1.0"
     },
     {
-      "name": "followUpCompletionRate",
-      "type": "Double",
-      "description": "Percentage of follow-up-needed entries that have a subsequent interaction with the same person within 14 days"
+      "name": "recentInsights",
+      "type": "[String]",
+      "description": "Array of generated insight strings like 'You met 3 new people this week \u2014 up from 1 last week' or 'Reconnect with Sarah \u2014 it has been 45 days'"
     }
   ],
   "domainLogic": {
     "dailyGoal": {
-      "description": "Target number of meaningful interactions to log per day \u2014 encourages intentional relationship building",
-      "defaultValue": "3"
+      "description": "Target number of interactions to log per week (weekly cadence makes more sense than daily for relationship tracking)",
+      "defaultValue": "5"
     },
-    "streakDefinition": "A day counts as active if at least one interaction is logged. Streak breaks if a full calendar day passes with zero entries.",
-    "trendAnalysis": "Compare this week's total interaction count and unique people count against last week. Track 4-week rolling average of interaction quality. Monitor ratio of new introductions vs repeat contacts to gauge network expansion vs deepening.",
+    "streakDefinition": "A day counts as active if at least one interaction entry is logged on that calendar day. The streak counts consecutive active days backward from today.",
+    "trendAnalysis": "Primary trend: weekly interaction count compared to 4-week rolling average. Secondary trends: new unique contacts per month (network growth rate), follow-up completion rate (completed / total follow-ups created per week), average connection quality rating over time (30-day rolling window). Flag weeks where interaction count drops below 50% of the 4-week average.",
     "insights": [
-      "Neglected contacts: people you've met 3+ times but haven't logged in over 30 days \u2014 relationship at risk of fading",
-      "Follow-up overdue: entries with followUpNeeded=true older than 7 days without a subsequent interaction with that person",
-      "Energy audit: if draining+tense interactions exceed 40% of total in past 2 weeks, surface a 'protect your energy' insight",
-      "Network diversity score: Shannon entropy across relationship types \u2014 higher is more diverse, flag if one category exceeds 60%",
-      "Introduction velocity: new unique people per week trend \u2014 are you expanding your circle or staying insular?",
-      "Strongest connections: people with 5+ interactions AND average quality \u2265 7 \u2014 your inner circle",
-      "Weekly social summary: auto-generated sentence like 'You met 12 people this week, 3 new. Most interactions were with colleagues over coffee.'"
+      "Network growth pulse: 'You met N new people this week' compared to last week's count",
+      "Follow-up nudges: flag any pending follow-up older than 7 days with person name and days elapsed",
+      "Neglected relationships: surface people not contacted in 30+ days, prioritized by previous interaction frequency",
+      "Network diversity score: percentage split across relationship types \u2014 flag if any single category exceeds 70%",
+      "Connection quality trend: is your average connectionRating trending up or down over the last 4 weeks",
+      "Most active networking day: which day of the week you log the most interactions",
+      "Preferred connection style: most common MeetingContext \u2014 'You connect most over coffee (42% of interactions)'",
+      "Monthly network size milestone: celebrate when totalUniqueContacts crosses 25, 50, 100, 250"
     ]
   }
 }

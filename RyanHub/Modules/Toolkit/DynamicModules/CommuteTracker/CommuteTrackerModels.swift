@@ -1,5 +1,64 @@
 import Foundation
 
+// MARK: - Enums
+
+enum CommuteDirection: String, CaseIterable, Codable, Identifiable {
+    case toWork
+    case fromWork
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .toWork: return "To Work"
+        case .fromWork: return "From Work"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .toWork: return "building.2"
+        case .fromWork: return "house.fill"
+        }
+    }
+}
+
+enum TransportMode: String, CaseIterable, Codable, Identifiable {
+    case driving
+    case publicTransit
+    case cycling
+    case walking
+    case carpool
+    case rideshare
+    case train
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .driving: return "Driving"
+        case .publicTransit: return "Public Transit"
+        case .cycling: return "Cycling"
+        case .walking: return "Walking"
+        case .carpool: return "Carpool"
+        case .rideshare: return "Rideshare"
+        case .train: return "Train"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .driving: return "car.fill"
+        case .publicTransit: return "bus.fill"
+        case .cycling: return "bicycle"
+        case .walking: return "figure.walk"
+        case .carpool: return "person.2.fill"
+        case .rideshare: return "car.side.fill"
+        case .train: return "tram.fill"
+        }
+    }
+}
+
 // MARK: - Entry
 
 struct CommuteTrackerEntry: Codable, Identifiable {
@@ -10,24 +69,98 @@ struct CommuteTrackerEntry: Codable, Identifiable {
         return f.string(from: Date())
     }()
 
-    var direction: CommuteDirection = .toWork
     var durationMinutes: Int = 30
-    var transportMode: TransportMode = .car
-    var routeLabel: RouteLabel = .primary
+    var direction: CommuteDirection = .toWork
+    var transportMode: TransportMode = .driving
+    var routeName: String = ""
     var departureTime: Date = Date()
-    var trafficCondition: TrafficCondition = .light
+    var trafficLevel: Int = 3
     var costCents: Int = 0
-    var stressLevel: Int = 3
-    var usedEcoMode: Bool = false
+    var delayMinutes: Int = 0
+    var experienceRating: Int = 3
     var notes: String = ""
 
-    // MARK: Computed
+    // MARK: - Computed: Formatted Date
 
     var formattedDate: String {
         let f = DateFormatter()
-        f.dateStyle = .medium
-        f.timeStyle = .none
-        return f.string(from: departureTime)
+        f.dateFormat = "yyyy-MM-dd HH:mm"
+        guard let d = f.date(from: date) else { return date }
+        let out = DateFormatter()
+        out.dateStyle = .medium
+        out.timeStyle = .short
+        return out.string(from: d)
+    }
+
+    var dateOnly: String {
+        String(date.prefix(10))
+    }
+
+    var parsedDate: Date? {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd HH:mm"
+        return f.date(from: date)
+    }
+
+    // MARK: - Computed: Display
+
+    var summaryLine: String {
+        let dir = direction.displayName
+        let mode = transportMode.displayName
+        let route = routeName.isEmpty ? "" : " via \(routeName)"
+        return "\(dir) · \(durationMinutes) min · \(mode)\(route)"
+    }
+
+    var formattedDuration: String {
+        if durationMinutes >= 60 {
+            let h = durationMinutes / 60
+            let m = durationMinutes % 60
+            return m == 0 ? "\(h)h" : "\(h)h \(m)m"
+        }
+        return "\(durationMinutes) min"
+    }
+
+    var formattedCost: String {
+        if costCents == 0 { return "Free" }
+        let dollars = Double(costCents) / 100.0
+        return String(format: "$%.2f", dollars)
+    }
+
+    var costDollars: Double {
+        Double(costCents) / 100.0
+    }
+
+    var trafficEmoji: String {
+        switch trafficLevel {
+        case 1: return "😊"
+        case 2: return "🙂"
+        case 3: return "😐"
+        case 4: return "😟"
+        case 5: return "😠"
+        default: return "😐"
+        }
+    }
+
+    var trafficLabel: String {
+        switch trafficLevel {
+        case 1: return "Clear"
+        case 2: return "Light"
+        case 3: return "Moderate"
+        case 4: return "Heavy"
+        case 5: return "Gridlock"
+        default: return "Moderate"
+        }
+    }
+
+    var experienceLabel: String {
+        switch experienceRating {
+        case 1: return "Terrible"
+        case 2: return "Poor"
+        case 3: return "Okay"
+        case 4: return "Good"
+        case 5: return "Great"
+        default: return "Okay"
+        }
     }
 
     var formattedDepartureTime: String {
@@ -36,265 +169,48 @@ struct CommuteTrackerEntry: Codable, Identifiable {
         return f.string(from: departureTime)
     }
 
-    var dayOfWeek: Int {
-        Calendar.current.component(.weekday, from: departureTime)
+    var departureHour: Double {
+        let cal = Calendar.current
+        let hour = cal.component(.hour, from: departureTime)
+        let minute = cal.component(.minute, from: departureTime)
+        return Double(hour) + Double(minute) / 60.0
     }
 
-    var dateKey: String {
+    var hasDelay: Bool { delayMinutes > 0 }
+
+    var effectiveDurationMinutes: Int { durationMinutes }
+
+    var weekdayName: String {
+        guard let d = parsedDate else { return "" }
         let f = DateFormatter()
-        f.dateFormat = "yyyy-MM-dd"
-        return f.string(from: departureTime)
+        f.dateFormat = "EEEE"
+        return f.string(from: d)
     }
 
-    var costInDollars: Double {
-        Double(costCents) / 100.0
-    }
-
-    var formattedCost: String {
-        costCents == 0 ? "Free" : String(format: "$%.2f", costInDollars)
-    }
-
-    var formattedDuration: String {
-        durationMinutes >= 60
-            ? String(format: "%dh %dm", durationMinutes / 60, durationMinutes % 60)
-            : "\(durationMinutes) min"
-    }
-
-    var isEcoFriendly: Bool {
-        switch transportMode {
-        case .bike, .walk, .scooter, .bus, .subway, .train: return true
-        default: return false
-        }
-    }
-
-    var summaryLine: String {
-        "\(direction.displayName) · \(formattedDuration) · \(transportMode.displayName) · \(trafficCondition.displayName)"
-    }
-
-    var stressLabel: String {
-        switch stressLevel {
-        case 1...2: return "Low"
-        case 3:     return "Moderate"
-        case 4...5: return "High"
-        default:    return "Unknown"
-        }
-    }
-
-    var durationCategory: DurationCategory {
-        switch durationMinutes {
-        case ..<20:  return .fast
-        case 20..<40: return .normal
-        case 40..<60: return .slow
-        default:     return .veryLow
-        }
+    var weekdayShort: String {
+        guard let d = parsedDate else { return "" }
+        let f = DateFormatter()
+        f.dateFormat = "EEE"
+        return f.string(from: d)
     }
 }
 
-// MARK: - DurationCategory
+// MARK: - Goal Configuration
 
-enum DurationCategory {
-    case fast, normal, slow, veryLow
+struct CommuteGoalConfig: Codable {
+    var dailyTargetMinutes: Int = 60
 
-    var label: String {
-        switch self {
-        case .fast:   return "Fast"
-        case .normal: return "Normal"
-        case .slow:   return "Slow"
-        case .veryLow: return "Very Slow"
-        }
+    var progressColor: String {
+        // Used by views to pick hubAccentGreen / hubAccentYellow / hubAccentRed
+        return "dynamic"
     }
 }
 
-// MARK: - CommuteDirection
+// MARK: - Route Summary (used by routeRankings)
 
-enum CommuteDirection: String, CaseIterable, Codable, Identifiable {
-    case toWork
-    case fromWork
-
-    var id: String { rawValue }
-
-    var displayName: String {
-        switch self {
-        case .toWork:   return "To Work"
-        case .fromWork: return "From Work"
-        }
-    }
-
-    var icon: String {
-        switch self {
-        case .toWork:   return "arrow.right.circle"
-        case .fromWork: return "arrow.left.circle"
-        }
-    }
-
-    var opposite: CommuteDirection {
-        self == .toWork ? .fromWork : .toWork
-    }
-}
-
-// MARK: - TransportMode
-
-enum TransportMode: String, CaseIterable, Codable, Identifiable {
-    case car
-    case bus
-    case subway
-    case train
-    case bike
-    case walk
-    case carpool
-    case rideshare
-    case scooter
-
-    var id: String { rawValue }
-
-    var displayName: String {
-        switch self {
-        case .car:      return "Car"
-        case .bus:      return "Bus"
-        case .subway:   return "Subway"
-        case .train:    return "Train"
-        case .bike:     return "Bike"
-        case .walk:     return "Walk"
-        case .carpool:  return "Carpool"
-        case .rideshare: return "Rideshare"
-        case .scooter:  return "Scooter"
-        }
-    }
-
-    var icon: String {
-        switch self {
-        case .car:      return "car.fill"
-        case .bus:      return "bus.fill"
-        case .subway:   return "tram.fill"
-        case .train:    return "train.side.front.car"
-        case .bike:     return "bicycle"
-        case .walk:     return "figure.walk"
-        case .carpool:  return "person.2.fill"
-        case .rideshare: return "car.2.fill"
-        case .scooter:  return "scooter"
-        }
-    }
-
-    var isEcoFriendly: Bool {
-        switch self {
-        case .bike, .walk, .scooter, .bus, .subway, .train: return true
-        default: return false
-        }
-    }
-
-    var typicalCostLevel: Int {
-        switch self {
-        case .walk, .bike:      return 0
-        case .bus, .subway, .train: return 1
-        case .scooter:          return 2
-        case .carpool:          return 3
-        case .rideshare:        return 4
-        case .car:              return 3
-        }
-    }
-}
-
-// MARK: - RouteLabel
-
-enum RouteLabel: String, CaseIterable, Codable, Identifiable {
-    case primary
-    case alternate1
-    case alternate2
-    case highway
-    case scenic
-    case shortcut
-
-    var id: String { rawValue }
-
-    var displayName: String {
-        switch self {
-        case .primary:   return "Primary Route"
-        case .alternate1: return "Alternate 1"
-        case .alternate2: return "Alternate 2"
-        case .highway:   return "Highway"
-        case .scenic:    return "Scenic Route"
-        case .shortcut:  return "Shortcut"
-        }
-    }
-
-    var icon: String {
-        switch self {
-        case .primary:   return "road.lanes"
-        case .alternate1: return "arrow.triangle.branch"
-        case .alternate2: return "arrow.triangle.swap"
-        case .highway:   return "road.lanes.curved.right"
-        case .scenic:    return "leaf.fill"
-        case .shortcut:  return "bolt.fill"
-        }
-    }
-}
-
-// MARK: - TrafficCondition
-
-enum TrafficCondition: String, CaseIterable, Codable, Identifiable {
-    case clear
-    case light
-    case moderate
-    case heavy
-    case standstill
-
-    var id: String { rawValue }
-
-    var displayName: String {
-        switch self {
-        case .clear:      return "Clear"
-        case .light:      return "Light"
-        case .moderate:   return "Moderate"
-        case .heavy:      return "Heavy"
-        case .standstill: return "Standstill"
-        }
-    }
-
-    var icon: String {
-        switch self {
-        case .clear:      return "checkmark.circle.fill"
-        case .light:      return "circle.fill"
-        case .moderate:   return "exclamationmark.circle"
-        case .heavy:      return "exclamationmark.triangle"
-        case .standstill: return "xmark.octagon.fill"
-        }
-    }
-
-    var severityScore: Int {
-        switch self {
-        case .clear:      return 0
-        case .light:      return 1
-        case .moderate:   return 2
-        case .heavy:      return 3
-        case .standstill: return 4
-        }
-    }
-
-    var colorName: String {
-        switch self {
-        case .clear:      return "hubAccentGreen"
-        case .light:      return "hubAccentGreen"
-        case .moderate:   return "hubAccentYellow"
-        case .heavy:      return "hubAccentRed"
-        case .standstill: return "hubAccentRed"
-        }
-    }
-}
-
-// MARK: - Goals & Settings
-
-struct CommuteTrackerSettings: Codable {
-    var dailyGoalMinutes: Int = 30
-    var homeLocation: String = ""
-    var workLocation: String = ""
-    var typicalWorkDays: [Int] = [2, 3, 4, 5, 6] // Mon–Fri (Calendar.weekday)
-}
-
-// MARK: - Route Stats (ViewModel helper)
-
-struct RouteStats: Identifiable {
-    var id: String { route.rawValue }
-    let route: RouteLabel
+struct CommuteRouteSummary: Identifiable {
+    var id: String { routeName }
+    let routeName: String
     let avgMinutes: Double
     let tripCount: Int
 
@@ -303,18 +219,12 @@ struct RouteStats: Identifiable {
     }
 }
 
-// MARK: - Heatmap Cell (HistoryView helper)
+// MARK: - Day-of-Week ordering helper
 
-struct CommuteHeatmapDay: Identifiable {
-    var id: String { dateKey }
-    let dateKey: String
-    let date: Date
-    let totalMinutes: Int
-    let tripCount: Int
+extension String {
+    static let orderedWeekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
 
-    var intensity: Double {
-        // Normalize against a 60-min reference: 0 = no data, 1.0 = 60+ min (red), low = green
-        guard tripCount > 0 else { return 0 }
-        return min(Double(totalMinutes) / 60.0, 1.0)
+    var weekdayOrder: Int {
+        String.orderedWeekdays.firstIndex(of: self) ?? 99
     }
 }

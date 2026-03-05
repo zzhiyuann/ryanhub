@@ -9,8 +9,8 @@ extension DynamicModuleRegistry {
             toolkitId: "learningTracker",
             displayName: "Learning Tracker",
             shortName: "Learning",
-            subtitle: "Track courses, skills & study progress",
-            icon: "brain.head.profile",
+            subtitle: "Track courses, skills & study sessions",
+            icon: "book.and.wreath",
             iconColorName: "hubPrimary",
             viewBuilder: { AnyView(LearningTrackerView()) },
             dataProviderType: LearningTrackerDataProvider.self

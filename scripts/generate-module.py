@@ -182,13 +182,25 @@ After loading data, cache for DataProvider:
 # Claude API
 # ─────────────────────────────────────────────────────────────────────
 
-def call_claude(prompt: str, model: str = "sonnet", max_tokens: int = 16000, timeout: int = 300) -> str:
-    """Call Claude CLI. Returns response text."""
+def call_claude(prompt: str, model: str = "sonnet", max_tokens: int = 16000,
+                timeout: int = 300, disable_tools: bool = False) -> str:
+    """Call Claude CLI. Returns response text.
+    Set disable_tools=True for pure code generation (prevents Claude from using
+    Write/Edit tools and forces it to output code as text)."""
     env = dict(CLEAN_ENV)
     env["CLAUDE_CODE_MAX_OUTPUT_TOKENS"] = str(max_tokens)
+    cmd = [CLAUDE_PATH, "--print", "--model", model]
+    if disable_tools:
+        cmd.extend(["--tools", ""])
+    # Write prompt to temp file to avoid shell arg length issues with large prompts
+    prompt_file = os.path.join(RYANHUB_ROOT, "scripts", "debug", ".prompt_tmp.txt")
+    os.makedirs(os.path.dirname(prompt_file), exist_ok=True)
+    with open(prompt_file, "w") as f:
+        f.write(prompt)
+    cmd.extend(["-p", prompt])
     try:
         result = subprocess.run(
-            [CLAUDE_PATH, "--print", "--model", model, "-p", prompt],
+            cmd,
             capture_output=True, text=True, timeout=timeout, env=env,
         )
     except subprocess.TimeoutExpired:
@@ -214,14 +226,33 @@ def extract_json(text: str) -> dict:
 
 
 def extract_swift(text: str) -> str:
-    """Extract Swift code from response, stripping markdown fences."""
+    """Extract Swift code from response, stripping markdown fences and preamble."""
     # Remove all markdown fences
     code = re.sub(r"```swift\s*\n?", "", text)
     code = re.sub(r"```\s*", "", code)
-    # Find the first import statement
-    idx = code.find("import ")
-    if idx >= 0:
-        code = code[idx:]
+    # Find the best starting point: prefer 'import SwiftUI' that's followed by a struct/class
+    # This handles cases where Claude prepends a ViewModel summary before the actual View code
+    best_idx = -1
+    search_from = 0
+    while True:
+        idx = code.find("import SwiftUI", search_from)
+        if idx < 0:
+            break
+        # Check if this import is followed by a struct...View or meaningful code
+        after = code[idx:idx + 500]
+        if "struct " in after and "View" in after:
+            best_idx = idx
+            break
+        if best_idx < 0:
+            best_idx = idx  # fallback to first import SwiftUI
+        search_from = idx + 1
+    if best_idx >= 0:
+        code = code[best_idx:]
+    else:
+        # Fall back to any import statement
+        idx = code.find("import ")
+        if idx >= 0:
+            code = code[idx:]
     return code.strip()
 
 
@@ -332,7 +363,7 @@ RULES:
 
 Return ONLY valid JSON. No markdown fences. No explanation.
 """
-    response = call_claude(prompt, model="opus", max_tokens=8000, timeout=300)
+    response = call_claude(prompt, model="opus", max_tokens=8000, timeout=300, disable_tools=True)
     spec = extract_json(response)
 
     # Validate minimum quality
@@ -441,7 +472,7 @@ Only define types specific to this module.
 
 Return ONLY Swift code. No markdown fences. Start with `import Foundation`.
 """
-    code = call_claude(prompt, max_tokens=8000)
+    code = call_claude(prompt, max_tokens=8000, disable_tools=True)
     code = extract_swift(code)
     if not code.strip().startswith("import"):
         return generate_models_fallback(spec)
@@ -550,7 +581,7 @@ For ModuleInsight: `ModuleInsight(type: .trend/.achievement/.suggestion/.warning
 
 Return ONLY Swift code. No markdown fences. Start with `import Foundation`.
 """
-    code = call_claude(prompt, max_tokens=16000, timeout=300)
+    code = call_claude(prompt, max_tokens=16000, timeout=300, disable_tools=True)
     code = extract_swift(code)
     if not code.strip().startswith("import"):
         return generate_viewmodel_fallback(spec)
@@ -696,9 +727,98 @@ final class {name}ViewModel {{
 '''
 
 
+def _generate_single_view(name: str, display_name: str, view_role: str, view_name: str,
+                           models_code: str, vm_code: str, spec: dict,
+                           extra_context: str = "") -> str:
+    """Generate a single view file via Claude. Returns Swift code or empty string on failure."""
+    vm_summary = summarize_swift_code(vm_code)
+
+    role_instructions = {
+        "dashboard": f"""Generate {name}{view_name}.swift — a rich Dashboard view.
+- StatGrid with 4 StatCards using REAL ViewModel computed properties (scan the ViewModel summary below!)
+- ProgressRingView if ViewModel has progress/goal properties
+- StreakCounter if ViewModel has streak properties (use ACTUAL property names from ViewModel!)
+- Recent entries section showing todayEntries (or equivalent) with summaryLine, date, and delete button
+- Make the layout feel unique to {display_name} — what would a premium {display_name} app show on its home screen?""",
+
+        "entry": f"""Generate {name}{view_name}.swift — a data entry sheet.
+- Use QuickEntrySheet(title: "Add {display_name}", icon: "plus.circle.fill", canSave: true, onSave: {{ }}) {{ content }}
+- Use EntryFormSection(title:) for each field group
+- Check the ViewModel's addEntry() method signature — does it take an Entry struct or individual params? Match it EXACTLY.
+- Use Stepper for Int counts, Slider for 1-10 ratings, Picker for enums, Toggle for bools, DatePicker for dates
+- NEVER use TextField for numbers, booleans, or enum categories
+- Include `var onSave: (() -> Void)?` property, call onSave?() after save""",
+
+        "history": f"""Generate {name}{view_name}.swift — a history/log view.
+- CalendarHeatmap(title: "Activity", data: viewModel.calendarData, color: .hubPrimary) at top if ViewModel has calendarData
+- Entries grouped by date sections, newest first, each in HubCard with delete button
+- Show entry.summaryLine and entry.date (or formattedDate)
+- Empty state when no entries: VStack with icon and "No entries yet" text""",
+
+        "analytics": f"""Generate {name}{view_name}.swift — an analytics view.
+- ModuleChartView with the ACTUAL chart data property from ViewModel (check the summary: chartData? weeklyChartData? weeklyData?)
+- If ViewModel has insights as [String], use ForEach with Text in HubCard
+- If ViewModel has insights as [ModuleInsight], use InsightsList(insights: viewModel.insights)
+- Domain-specific summary stats in HubCard — highlight what makes this {display_name} tracker unique
+- Show total count, current streak, best streak etc using ACTUAL ViewModel property names""",
+    }
+
+    instruction = role_instructions.get(view_role, role_instructions["dashboard"])
+
+    prompt = f"""Generate ONE SwiftUI view file for a RyanHub module.
+
+{instruction}
+
+VIEWMODEL PUBLIC API (only use these properties and methods):
+{vm_summary}
+
+MODELS (use these exact types):
+```swift
+{models_code}
+```
+
+{extra_context}
+
+DESIGN RULES:
+- @Environment(\\.colorScheme) private var colorScheme
+- `let viewModel: {name}ViewModel` (not @State, not @Bindable — it's passed from parent)
+- Use Color.hubPrimary, Color.hubAccentGreen, Color.hubAccentRed, Color.hubAccentYellow
+- Use AdaptiveColors.textPrimary(for: colorScheme), AdaptiveColors.textSecondary(for: colorScheme)
+- Use AdaptiveColors.background(for: colorScheme) for ScrollView background
+- Use .hubTitle, .hubHeading, .hubBody, .hubCaption for fonts
+- Use HubLayout.standardPadding, HubLayout.sectionSpacing, HubLayout.itemSpacing
+- Use HubCard {{ content }} for card containers
+- Do NOT import Charts (ModuleChartView handles it internally)
+- StatCard(title: String, value: String, icon: String, color: Color)
+- StatGrid {{ content }} wraps StatCards in a 2x2 grid
+- SectionHeader(title: String) for section labels
+
+IMPORTANT: Your entire output will be saved directly as a .swift file.
+Do NOT write any explanation, description, or commentary.
+Do NOT use markdown fences (```).
+Your very first line of output must be: import SwiftUI
+"""
+    for attempt in range(3):
+        if attempt > 0:
+            print(f"      Retry {attempt} for {view_role}...")
+        response = call_claude(prompt, model="sonnet", max_tokens=8000, timeout=300, disable_tools=True)
+        if not response:
+            print(f"      Claude returned empty for {view_role} (attempt {attempt+1})")
+            continue
+        code = extract_swift(response)
+        if code and code.strip().startswith("import"):
+            return code
+        print(f"      Claude returned {len(response)} chars but no Swift code (attempt {attempt+1})")
+        # Save debug
+        debug_dir = os.path.join(RYANHUB_ROOT, "scripts", "debug")
+        os.makedirs(debug_dir, exist_ok=True)
+        with open(os.path.join(debug_dir, f"{name}_{view_role}_fail_{attempt}.txt"), "w") as f:
+            f.write(response)
+    return ""
+
+
 def generate_all_views(spec: dict, prior_files: dict[str, str]) -> dict[str, str]:
-    """Generate all views using rich templates based on the Opus spec.
-    Uses shared components (ProgressRing, Charts, StatCards, etc.) for sophistication."""
+    """Generate all views via individual Claude calls with template fallback."""
     name = spec["moduleName"]
     display_name = spec["displayName"]
     icon = spec["icon"]
@@ -707,55 +827,134 @@ def generate_all_views(spec: dict, prior_files: dict[str, str]) -> dict[str, str
     enums = spec.get("enums", [])
     domain = spec.get("domainLogic", {})
 
-    result = {}
+    models_code = prior_files.get(f"{name}Models.swift", "")
+    vm_code = prior_files.get(f"{name}ViewModel.swift", "")
 
     # Classify views by role
-    tab_views = []
     sheet_view_name = None
     for v in views:
-        vname = v["name"]
-        if "Sheet" in vname or "Entry" in vname:
-            sheet_view_name = vname
+        if "Sheet" in v["name"] or "Entry" in v["name"]:
+            sheet_view_name = v["name"]
+    if not sheet_view_name:
+        sheet_view_name = "EntrySheet"
+
+    dashboard_name = next((v["name"] for v in views if "Dashboard" in v["name"]), "DashboardView")
+    history_name = next((v["name"] for v in views if "History" in v["name"] or "Log" in v["name"]), "HistoryView")
+    analytics_name = next((v["name"] for v in views if "Analytics" in v["name"] or "Stats" in v["name"]), "AnalyticsView")
+
+    # Shared components doc for extra context
+    extra_ctx = SHARED_COMPONENTS_DOC
+
+    result = {}
+    view_tasks = [
+        (dashboard_name, "dashboard", _gen_dashboard_view, (spec, fields, enums, domain)),
+        (sheet_view_name, "entry", _gen_entry_sheet, (spec, fields, enums)),
+        (history_name, "history", _gen_history_view, (spec, fields)),
+        (analytics_name, "analytics", _gen_analytics_view, (spec,)),
+    ]
+
+    for view_name, role, fallback_fn, fallback_args in view_tasks:
+        fname = f"{name}{view_name}.swift"
+        print(f"    Generating {fname} via Claude...")
+        code = _generate_single_view(name, display_name, role, view_name,
+                                     models_code, vm_code, spec, extra_ctx)
+        if code:
+            n_lines = code.count("\n") + 1
+            print(f"    OK: {fname} ({n_lines} lines, Claude-generated)")
+            result[fname] = code
         else:
-            tab_views.append(v)
+            print(f"    [FALLBACK] {fname} — using template")
+            result[fname] = fallback_fn(*fallback_args)
 
-    # Generate Dashboard View
-    dashboard_name = next((v["name"] for v in views if "Dashboard" in v["name"]), None)
-    if dashboard_name:
-        result[f"{name}{dashboard_name}.swift"] = _gen_dashboard_view(spec, fields, enums, domain)
-
-    # Generate Entry Sheet
-    if sheet_view_name:
-        result[f"{name}{sheet_view_name}.swift"] = _gen_entry_sheet(spec, fields, enums)
-    else:
-        sheet_view_name = "AddEntrySheet"
-        result[f"{name}{sheet_view_name}.swift"] = _gen_entry_sheet(spec, fields, enums)
-
-    # Generate History View
-    history_name = next((v["name"] for v in views if "History" in v["name"]), None)
-    if history_name:
-        result[f"{name}{history_name}.swift"] = _gen_history_view(spec, fields)
-
-    # Generate Analytics View
-    analytics_name = next((v["name"] for v in views if "Analytics" in v["name"] or "Stats" in v["name"]), None)
-    if analytics_name:
-        result[f"{name}{analytics_name}.swift"] = _gen_analytics_view(spec)
-
-    # Generate Root View — only include tabs for views we actually generated
-    generated_tab_names = []
-    if dashboard_name:
-        generated_tab_names.append(dashboard_name)
-    if history_name:
-        generated_tab_names.append(history_name)
-    if analytics_name:
-        generated_tab_names.append(analytics_name)
-    result[f"{name}View.swift"] = _gen_root_view(spec, generated_tab_names, sheet_view_name)
-
-    for fname in result:
-        lines = result[fname].count("\n") + 1
-        print(f"    Generated {fname} ({lines} lines)")
+    # Root view (always template — it's mechanical)
+    tab_labels = [dashboard_name, history_name, analytics_name]
+    result[f"{name}View.swift"] = _gen_root_view(spec, tab_labels, sheet_view_name)
+    print(f"    Generated {name}View.swift (root, template)")
 
     return result
+
+
+def _build_view_generation_prompt(spec, name, display_name, icon, models_code, vm_code,
+                                   views, dashboard_name, sheet_view_name,
+                                   history_name, analytics_name, tab_labels):
+    """Build the prompt for Claude to generate domain-specific views."""
+    view_specs_json = json.dumps(views, indent=2)
+    return f"""Generate ALL SwiftUI view files for a RyanHub module "{name}" ("{display_name}").
+
+ACTUAL MODELS (use these exact types):
+```swift
+{models_code}
+```
+
+ACTUAL VIEWMODEL (ONLY use properties/methods defined here — read carefully):
+```swift
+{vm_code}
+```
+
+VIEW SPEC:
+{view_specs_json}
+
+{SHARED_COMPONENTS_DOC}
+
+{DESIGN_SYSTEM_DOC}
+
+GENERATE 5 FILES — each UNIQUE to this domain, not cookie-cutter:
+
+1. {name}{dashboard_name}.swift — Dashboard
+   - StatGrid with 4 StatCards using REAL ViewModel computed properties
+   - ProgressRingView if ViewModel has progress/goal properties
+   - StreakCounter if ViewModel has streak properties (use ACTUAL property names!)
+   - Recent entries section with delete buttons
+   - Make the layout feel domain-specific — what would a premium {display_name} app show?
+
+2. {name}{sheet_view_name}.swift — Entry form
+   - QuickEntrySheet(title: "Add {display_name}", icon: "plus.circle.fill", canSave: true, onSave: {{ }}) {{ content }}
+   - EntryFormSection(title:) for each field group
+   - Match ViewModel.addEntry() signature EXACTLY — check if it takes Entry struct or individual params
+   - Stepper for Int counts, Slider for 1-10 ratings, Picker for enums, Toggle for bools, DatePicker for dates
+   - NEVER use TextField for numbers, booleans, or categories
+   - Include `var onSave: (() -> Void)?` property, call onSave?() after save
+
+3. {name}{history_name}.swift — History
+   - CalendarHeatmap(title: "Activity", data: [Date: Double], color: .hubPrimary) at top
+   - Entries grouped by date, newest first, each in HubCard with delete
+   - Empty state when no entries
+
+4. {name}{analytics_name}.swift — Analytics
+   - ModuleChartView with the ACTUAL chart data property from ViewModel
+   - Insights section: if [String] use ForEach with Text in HubCard; if [ModuleInsight] use InsightsList
+   - Domain-specific summary stats — highlight what makes this tracker unique
+
+5. {name}View.swift — Root view
+   - @State private var viewModel = {name}ViewModel()
+   - @State private var selectedTab = 0
+   - @State private var showAddSheet = false
+   - Header: Circle with icon + "{display_name}" text
+   - Picker tabs: {json.dumps(tab_labels)}
+   - ZStack with tab content views + QuickEntryFAB {{ showAddSheet = true }}
+   - .task {{ await viewModel.loadData() }}
+   - .sheet(isPresented: $showAddSheet) {{ {name}{sheet_view_name}(viewModel: viewModel) {{ showAddSheet = false }} }}
+
+ABSOLUTE RULES:
+- ONLY reference properties/methods that EXIST in the ViewModel code above. Scan it line by line.
+- If ViewModel has `chartData` not `weeklyChartData`, use `chartData`
+- If ViewModel has `careStreak` not `currentStreak`, use `careStreak`
+- Private ViewModel properties are NOT accessible — only use non-private var/func
+- Every view: @Environment(\.colorScheme) private var colorScheme
+- Sub-views: `let viewModel: {name}ViewModel` (not @State, not @Bindable)
+- ScrollView body: .background(AdaptiveColors.background(for: colorScheme))
+- Do NOT import Charts — ModuleChartView handles it internally
+
+OUTPUT FORMAT — separate each file with this exact pattern:
+--- FileName.swift ---
+import SwiftUI
+...complete compilable code...
+--- NextFile.swift ---
+import SwiftUI
+...
+
+No markdown fences around code. No explanation text. Just the separator lines and Swift code.
+"""
 
 
 def _gen_dashboard_view(spec: dict, fields: list, enums: list, domain: dict) -> str:
@@ -1483,11 +1682,17 @@ CRITICAL API RULES:
 - HubTextField(placeholder: "Label", text: $binding) — requires `placeholder:` label
 - HubButton("Label") {{ action }} — positional title
 - HubCard {{ content }} — trailing closure, no params
-- ViewModel.addEntry(_ entry: {spec['moduleName']}Entry) — takes whole entry
-- ViewModel.deleteEntry(_ entry: {spec['moduleName']}Entry) — takes whole entry
 - ChartDataPoint(label: String, value: Double) — two params
 - ModuleInsight(type: InsightType, title: String, message: String) — three params
 - StatTrend.from(change: Double, format: String, invertPositive: Bool) — static method
+
+CRITICAL — PROPERTY NAME MISMATCHES:
+- The ViewModel file above defines ALL available properties. Views must ONLY use those exact names.
+- If a view references `weeklyChartData` but ViewModel has `chartData`, change to `chartData`
+- If a view references `currentStreak` but ViewModel has `careStreak`, change to `careStreak`
+- If a view references `todayEntries` but it's private in ViewModel, find a public alternative
+- Check ViewModel.addEntry() signature — it may take individual params, not an Entry struct
+- If insights is [String] not [ModuleInsight], replace InsightsList() with ForEach+Text
 
 Return COMPLETE fixed file contents:
 --- FileName.swift ---
@@ -1497,7 +1702,7 @@ Return COMPLETE fixed file contents:
 
 Only include files that need changes. No markdown fences. No explanation.
 """
-    response = call_claude(prompt, max_tokens=16000, timeout=300)
+    response = call_claude(prompt, max_tokens=16000, timeout=300, disable_tools=True)
 
     file_pattern = r"---\s*(\w+\.swift)\s*---\n([\s\S]*?)(?=---\s*\w+\.swift\s*---|$)"
     matches = re.findall(file_pattern, response)
@@ -1667,6 +1872,18 @@ def generate_module(description: str, skip_build: bool = False) -> bool:
     return False
 
 
+def _parse_errors_by_module(errors: str) -> dict[str, str]:
+    """Group build errors by module directory name."""
+    module_errors: dict[str, list[str]] = {}
+    for line in errors.split("\n"):
+        if "error:" in line.lower():
+            match = re.search(r"DynamicModules/(\w+)/", line)
+            if match:
+                mod = match.group(1)
+                module_errors.setdefault(mod, []).append(line.strip())
+    return {k: "\n".join(v) for k, v in module_errors.items()}
+
+
 def batch_generate(scenarios_file: str, skip_build: bool = False):
     """Generate multiple modules, single build at end."""
     with open(scenarios_file) as f:
@@ -1683,14 +1900,29 @@ def batch_generate(scenarios_file: str, skip_build: bool = False):
         print(f"\n{'='*60}")
         print("Final build with all modules...")
         print(f"{'='*60}")
-        for attempt in range(3):
+        for attempt in range(5):
             success, errors = build_project()
             if success:
                 print(f"BUILD SUCCEEDED (attempt {attempt + 1})")
                 break
-            print(f"BUILD FAILED (attempt {attempt + 1}/3): {errors[:500]}")
+            print(f"BUILD FAILED (attempt {attempt + 1}/5)")
+            # Parse errors by module and fix each one
+            module_errors = _parse_errors_by_module(errors)
+            if module_errors:
+                for mod_name, mod_errs in module_errors.items():
+                    mod_dir = os.path.join(DYNAMIC_MODULES_DIR, mod_name)
+                    spec_path = os.path.join(mod_dir, "spec.json")
+                    if os.path.exists(spec_path):
+                        with open(spec_path) as f:
+                            mod_spec = json.load(f)
+                        print(f"  Auto-fixing {mod_name} ({mod_errs.count(chr(10))+1} errors)...")
+                        fix_compilation_errors(mod_spec, mod_dir, mod_errs)
+                    else:
+                        print(f"  [SKIP] No spec.json for {mod_name}")
+            else:
+                print(f"  Could not parse errors by module:\n{errors[:500]}")
         else:
-            print("[ERROR] Final build failed after 3 attempts")
+            print("[ERROR] Final build failed after 5 attempts")
 
     # Summary
     print(f"\n{'='*60}")

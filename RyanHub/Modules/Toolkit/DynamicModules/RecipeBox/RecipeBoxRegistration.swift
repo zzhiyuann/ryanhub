@@ -9,8 +9,8 @@ extension DynamicModuleRegistry {
             toolkitId: "recipeBox",
             displayName: "Recipe Box",
             shortName: "Recipes",
-            subtitle: "Your personal cookbook",
-            icon: "book.pages",
+            subtitle: "Your personal digital cookbook",
+            icon: "book.closed.fill",
             iconColorName: "hubAccentYellow",
             viewBuilder: { AnyView(RecipeBoxView()) },
             dataProviderType: RecipeBoxDataProvider.self

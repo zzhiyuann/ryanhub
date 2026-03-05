@@ -3,26 +3,26 @@
   "moduleName": "LearningTracker",
   "displayName": "Learning Tracker",
   "shortName": "Learning",
-  "subtitle": "Track courses, skills & study progress",
-  "icon": "brain.head.profile",
+  "subtitle": "Track courses, skills & study sessions",
+  "icon": "book.and.wreath",
   "iconColor": "hubPrimary",
   "relevanceKeywords": [
     "learning",
+    "study",
     "course",
     "skill",
-    "study",
-    "progress",
     "education",
-    "practice",
     "training",
+    "practice",
     "tutorial",
-    "mastery"
+    "mastery",
+    "progress"
   ],
   "dataFields": [
     {
-      "name": "skillName",
+      "name": "subject",
       "type": "String",
-      "label": "Skill / Course",
+      "label": "Subject / Skill",
       "control": "text"
     },
     {
@@ -32,39 +32,45 @@
       "control": "picker"
     },
     {
-      "name": "sessionType",
-      "type": "SessionType",
-      "label": "Session Type",
-      "control": "picker"
-    },
-    {
       "name": "durationMinutes",
       "type": "Int",
       "label": "Duration (min)",
       "control": "stepper"
     },
     {
-      "name": "progressPercent",
-      "type": "Int",
-      "label": "Overall Progress (%)",
-      "control": "slider"
+      "name": "resourceType",
+      "type": "ResourceType",
+      "label": "Resource Type",
+      "control": "picker"
     },
     {
-      "name": "confidenceRating",
-      "type": "Int",
-      "label": "Confidence (1\u20135)",
-      "control": "slider"
-    },
-    {
-      "name": "milestone",
+      "name": "resourceName",
       "type": "String",
-      "label": "Milestone Reached",
+      "label": "Resource Name",
       "control": "text"
+    },
+    {
+      "name": "confidenceLevel",
+      "type": "Int",
+      "label": "Confidence Level",
+      "control": "slider"
+    },
+    {
+      "name": "completionPercent",
+      "type": "Int",
+      "label": "Completion %",
+      "control": "slider"
+    },
+    {
+      "name": "sessionGoalMet",
+      "type": "Bool",
+      "label": "Session Goal Met",
+      "control": "toggle"
     },
     {
       "name": "notes",
       "type": "String",
-      "label": "Key Takeaways",
+      "label": "Notes",
       "control": "text"
     }
   ],
@@ -103,34 +109,54 @@
           "icon": "atom"
         },
         {
+          "name": "math",
+          "displayName": "Mathematics",
+          "icon": "function"
+        },
+        {
           "name": "writing",
           "displayName": "Writing",
           "icon": "pencil.line"
         },
         {
           "name": "fitness",
-          "displayName": "Fitness",
+          "displayName": "Fitness / Health",
           "icon": "figure.run"
+        },
+        {
+          "name": "cooking",
+          "displayName": "Cooking",
+          "icon": "frying.pan"
         },
         {
           "name": "other",
           "displayName": "Other",
-          "icon": "sparkles"
+          "icon": "ellipsis.circle"
         }
       ]
     },
     {
-      "name": "SessionType",
+      "name": "ResourceType",
       "cases": [
         {
-          "name": "videoLecture",
-          "displayName": "Video / Lecture",
+          "name": "onlineCourse",
+          "displayName": "Online Course",
           "icon": "play.rectangle"
         },
         {
-          "name": "reading",
-          "displayName": "Reading",
+          "name": "book",
+          "displayName": "Book",
           "icon": "book"
+        },
+        {
+          "name": "video",
+          "displayName": "Video / Tutorial",
+          "icon": "video"
+        },
+        {
+          "name": "podcast",
+          "displayName": "Podcast",
+          "icon": "headphones"
         },
         {
           "name": "practice",
@@ -138,24 +164,24 @@
           "icon": "hammer"
         },
         {
-          "name": "project",
-          "displayName": "Project Work",
-          "icon": "folder"
+          "name": "article",
+          "displayName": "Article / Blog",
+          "icon": "doc.text"
         },
         {
-          "name": "review",
-          "displayName": "Review / Flashcards",
-          "icon": "arrow.counterclockwise"
-        },
-        {
-          "name": "mentoring",
-          "displayName": "Mentoring / Class",
+          "name": "mentorship",
+          "displayName": "Mentorship / Class",
           "icon": "person.2"
         },
         {
-          "name": "exam",
-          "displayName": "Quiz / Exam",
-          "icon": "checkmark.seal"
+          "name": "flashcards",
+          "displayName": "Flashcards / Review",
+          "icon": "rectangle.on.rectangle.angled"
+        },
+        {
+          "name": "project",
+          "displayName": "Project Work",
+          "icon": "wrench.and.screwdriver"
         }
       ]
     }
@@ -163,17 +189,17 @@
   "views": [
     {
       "name": "DashboardView",
-      "purpose": "Main hub showing today's study time, active skills with progress rings, current streak, and weekly study bar chart at a glance",
+      "purpose": "Main hub showing today's study time, active subjects with mastery rings, current streak, and a quick-add FAB. Top section has a large animated progress ring toward daily goal, stat grid below shows streak/weekly hours/active subjects count.",
       "components": [
-        "StatGrid",
         "ProgressRingView",
-        "ModuleChartView",
-        "QuickEntryFAB"
+        "StatGrid",
+        "QuickEntryFAB",
+        "HubCard"
       ]
     },
     {
       "name": "EntrySheet",
-      "purpose": "Quick-log a study session \u2014 pick or type the skill name, choose category and session type, set duration and progress, optionally note milestones and takeaways",
+      "purpose": "Quick-log a study session: pick subject from recent subjects or type new, select category and resource type, set duration with stepper, rate confidence 1-5, optionally set completion %. Smart defaults pre-fill the last-used subject and category.",
       "components": [
         "QuickEntrySheet",
         "EntryFormSection"
@@ -181,134 +207,129 @@
     },
     {
       "name": "HistoryView",
-      "purpose": "Scrollable date-grouped list of all study sessions with filtering by skill name and category, plus a calendar heatmap showing study density",
+      "purpose": "Scrollable date-grouped list of all study sessions. Each row shows subject, category icon, duration, confidence dots, and resource type badge. Filter by category or subject. Swipe to delete.",
       "components": [
         "CalendarHeatmap",
-        "FilterChips"
+        "FilterChipBar"
       ]
     },
     {
       "name": "AnalyticsView",
-      "purpose": "Deep insights: time-per-category pie chart, weekly study trend line, per-skill progress timeline, session type breakdown, confidence growth curve, and AI-generated study pattern insights",
+      "purpose": "Multi-section analytics: (1) Weekly bar chart of daily study minutes with goal line overlay, (2) Category pie chart showing time distribution, (3) Confidence trend line per subject over time, (4) Insight cards with AI-style observations about learning patterns, plateaus, and improvement suggestions.",
       "components": [
         "ModuleChartView",
         "InsightsList",
-        "ProgressRingView"
+        "HubCard"
       ]
     }
   ],
   "viewModelComputedProperties": [
     {
-      "name": "todayStudyMinutes",
+      "name": "todayTotalMinutes",
       "type": "Int",
       "description": "Sum of durationMinutes for all entries dated today"
     },
     {
-      "name": "todaySessionCount",
-      "type": "Int",
-      "description": "Number of study sessions logged today"
+      "name": "dailyGoalProgress",
+      "type": "Double",
+      "description": "todayTotalMinutes / dailyGoalMinutes clamped to 0...1 for progress ring"
     },
     {
-      "name": "weeklyStudyMinutes",
+      "name": "weeklyTotalMinutes",
       "type": "Int",
-      "description": "Sum of durationMinutes for the current Mon\u2013Sun week"
+      "description": "Sum of durationMinutes for entries in the current ISO week (Mon-Sun)"
+    },
+    {
+      "name": "previousWeekMinutes",
+      "type": "Int",
+      "description": "Sum of durationMinutes for entries in the previous ISO week"
+    },
+    {
+      "name": "weekOverWeekChange",
+      "type": "Double",
+      "description": "Percentage change: (weeklyTotal - previousWeek) / previousWeek * 100. Positive = improving."
     },
     {
       "name": "currentStreak",
       "type": "Int",
-      "description": "Consecutive days with at least one study session ending today or yesterday"
+      "description": "Count of consecutive calendar days (ending today or yesterday) with at least one entry logged"
     },
     {
       "name": "longestStreak",
       "type": "Int",
-      "description": "All-time longest consecutive study day streak"
+      "description": "All-time longest consecutive day streak with at least one entry"
     },
     {
-      "name": "activeSkills",
+      "name": "activeSubjects",
       "type": "[String]",
-      "description": "Unique skillName values that have entries in the last 14 days, sorted by most recent"
+      "description": "Unique subject names from entries in the last 30 days, sorted by total time descending"
     },
     {
-      "name": "skillProgressMap",
-      "type": "[String: Int]",
-      "description": "Dictionary mapping each unique skillName to its most recent progressPercent value"
-    },
-    {
-      "name": "totalHoursInvested",
-      "type": "Double",
-      "description": "All-time sum of durationMinutes divided by 60, rounded to one decimal"
-    },
-    {
-      "name": "averageSessionMinutes",
+      "name": "activeSubjectCount",
       "type": "Int",
-      "description": "Mean durationMinutes across all entries"
+      "description": "Count of unique subjects studied in last 30 days"
     },
     {
-      "name": "weeklyTrendPercent",
+      "name": "averageDailyMinutes",
       "type": "Double",
-      "description": "Percentage change in total study minutes this week vs. previous week \u2014 positive means improvement"
-    },
-    {
-      "name": "categoryDistribution",
-      "type": "[(String, Double)]",
-      "description": "Each LearningCategory with its share of total study minutes as a fraction (for pie chart)"
-    },
-    {
-      "name": "dailyStudyData",
-      "type": "[(Date, Int)]",
-      "description": "Last 30 days of (date, totalMinutes) pairs for bar chart visualization"
-    },
-    {
-      "name": "sessionTypeBreakdown",
-      "type": "[(String, Int)]",
-      "description": "Count of sessions per SessionType for understanding study method balance"
+      "description": "Average daily study minutes over the last 30 days (total minutes / 30)"
     },
     {
       "name": "averageConfidence",
       "type": "Double",
-      "description": "Mean confidenceRating across all entries, rounded to one decimal"
+      "description": "Mean confidence level across all entries in the last 30 days"
     },
     {
-      "name": "topSkillByTime",
-      "type": "String?",
-      "description": "The skillName with the highest total durationMinutes across all entries"
+      "name": "categoryDistribution",
+      "type": "[(category: String, minutes: Int, percentage: Double)]",
+      "description": "Each LearningCategory with total minutes and percentage of overall time for pie chart"
+    },
+    {
+      "name": "weeklyChartData",
+      "type": "[(day: String, minutes: Int)]",
+      "description": "Array of 7 elements for current week, each with day label and total minutes for bar chart"
     },
     {
       "name": "confidenceTrend",
-      "type": "[(Date, Double)]",
-      "description": "Weekly average confidence rating over time for trend line visualization"
+      "type": "[(subject: String, dataPoints: [(date: Date, confidence: Int)])]",
+      "description": "Per-subject confidence ratings over time for line chart, limited to top 5 subjects"
     },
     {
-      "name": "weeklyGoalProgress",
-      "type": "Double",
-      "description": "weeklyStudyMinutes divided by weekly goal target as a 0.0\u20131.0 fraction"
+      "name": "topSubjectByTime",
+      "type": "String?",
+      "description": "Subject with the most total study minutes in last 30 days"
+    },
+    {
+      "name": "mostImprovedSubject",
+      "type": "String?",
+      "description": "Subject with the largest positive confidence delta (latest vs earliest rating in last 30 days)"
     },
     {
       "name": "insights",
       "type": "[String]",
-      "description": "Generated insight strings: e.g. 'You study 40% more on weekends', 'Your confidence in Swift grew from 2.1 to 4.3', 'Practice sessions correlate with fastest progress gains'"
+      "description": "Array of 3-5 dynamically generated insight strings: streak status, consistency patterns, subject suggestions, confidence plateau warnings, goal adherence trends"
+    },
+    {
+      "name": "recentSubjects",
+      "type": "[String]",
+      "description": "Last 5 unique subjects for quick-pick in entry sheet, ordered by most recently used"
     }
   ],
   "domainLogic": {
     "dailyGoal": {
-      "description": "Target study minutes per day \u2014 user can adjust; used to fill the dashboard progress ring",
-      "defaultValue": "60"
+      "description": "Target minutes of study per day. Drives progress ring on dashboard and goal line on weekly chart.",
+      "defaultValue": "30"
     },
-    "weeklyGoal": {
-      "description": "Target total study minutes per week \u2014 drives the weekly goal progress ring on analytics",
-      "defaultValue": "300"
-    },
-    "streakDefinition": "A day counts as active if at least one study session with durationMinutes >= 5 was logged. Streak breaks if a calendar day passes with zero qualifying sessions.",
-    "trendAnalysis": "Compare current week total study minutes to previous week. Track per-skill progress velocity (change in progressPercent per week). Monitor confidence rating trajectory per skill over rolling 4-week windows. Identify most productive day-of-week and time-of-day patterns from entry timestamps.",
+    "streakDefinition": "A day counts toward the streak if the user has logged at least one entry with durationMinutes >= 5 on that calendar day. Streak breaks if a full calendar day passes with zero qualifying entries. Today always extends the streak if it qualifies; if today has no entry yet, streak is calculated through yesterday.",
+    "trendAnalysis": "Primary trend: compare current week total minutes vs previous week total minutes to show week-over-week growth percentage. Secondary trend: 4-week rolling average of daily study minutes to detect acceleration or deceleration. Per-subject: track confidence level trajectory \u2014 flag subjects where confidence has plateaued (< 0.5 point change over 2+ weeks) or declined.",
     "insights": [
-      "Study consistency score: ratio of active days to total days in last 30 days (e.g. '22/30 days \u2014 Excellent consistency')",
-      "Time allocation balance: flag if one category dominates >70% of total time ('90% of study time on Programming \u2014 consider diversifying')",
-      "Practice vs passive ratio: compare hands-on (practice + project) minutes to passive (video + reading) \u2014 research shows 60%+ active learning is optimal",
-      "Fastest-growing skill: the skill with the largest progressPercent increase over the last 2 weeks",
-      "Stale skill alert: any skill with >50% progress but no sessions in 7+ days ('Swift hasn't been touched in 12 days \u2014 knowledge may decay')",
-      "Session length optimization: flag if average session >90 min ('Consider breaking into 45-min focused blocks for better retention')",
-      "Confidence-progress correlation: identify skills where confidence lags behind progress (may need review) or exceeds progress (Dunning-Kruger alert)",
-      "Weekly momentum: 'You studied 3.2 more hours this week vs last week \u2014 great momentum!' or 'Study time dropped 40% \u2014 get back on track'"
+      "Streak celebration \u2014 congratulate milestones at 7, 14, 30, 60, 100 days",
+      "Consistency check \u2014 if user studies 5+ days/week, praise consistency; if < 3 days, suggest scheduling regular sessions",
+      "Subject balance \u2014 if one subject dominates > 60% of time, suggest diversifying or confirm intentional deep-dive",
+      "Confidence plateau \u2014 if a subject's confidence hasn't changed in 2+ weeks despite study time, suggest changing resource type or approach",
+      "Goal adherence \u2014 percentage of days in last 2 weeks where daily goal was met, with trend direction",
+      "Peak performance time \u2014 if entries cluster around certain times of day, note the user's most productive learning window",
+      "Resource effectiveness \u2014 compare confidence gain rate across resource types to suggest which formats work best for the user"
     ]
   }
 }

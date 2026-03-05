@@ -5,7 +5,7 @@ import Foundation
 enum LearningTrackerDataProvider: ToolkitDataProvider {
     static let toolkitId = "learningTracker"
     static let displayName = "Learning Tracker"
-    static let relevanceKeywords: [String] = ["learning", "course", "skill", "study", "progress", "education", "practice", "training", "tutorial", "mastery"]
+    static let relevanceKeywords: [String] = ["learning", "study", "course", "skill", "education", "training", "practice", "tutorial", "mastery", "progress"]
 
     private static var bridgeBaseURL: String {
         UserDefaults.standard.string(forKey: "ryanhub_server_url")

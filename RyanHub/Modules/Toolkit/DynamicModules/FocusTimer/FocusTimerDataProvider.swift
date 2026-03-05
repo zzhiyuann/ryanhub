@@ -5,7 +5,7 @@ import Foundation
 enum FocusTimerDataProvider: ToolkitDataProvider {
     static let toolkitId = "focusTimer"
     static let displayName = "Focus Timer"
-    static let relevanceKeywords: [String] = ["pomodoro", "focus", "timer", "productivity", "deep work", "concentration", "task", "session", "work"]
+    static let relevanceKeywords: [String] = ["pomodoro", "focus", "timer", "productivity", "deep work", "session", "concentration", "task", "distraction", "time management"]
 
     private static var bridgeBaseURL: String {
         UserDefaults.standard.string(forKey: "ryanhub_server_url")

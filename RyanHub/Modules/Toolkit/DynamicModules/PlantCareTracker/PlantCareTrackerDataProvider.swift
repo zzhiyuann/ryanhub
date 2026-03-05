@@ -5,7 +5,7 @@ import Foundation
 enum PlantCareTrackerDataProvider: ToolkitDataProvider {
     static let toolkitId = "plantCareTracker"
     static let displayName = "Plant Care Tracker"
-    static let relevanceKeywords: [String] = ["plant", "water", "watering", "houseplant", "garden", "fertilize", "mist", "care", "succulent", "indoor"]
+    static let relevanceKeywords: [String] = ["plant", "water", "watering", "houseplant", "garden", "fertilize", "green", "care", "botanical", "succulent"]
 
     private static var bridgeBaseURL: String {
         UserDefaults.standard.string(forKey: "ryanhub_server_url")

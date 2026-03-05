@@ -11,7 +11,7 @@ struct GratitudeJournalAnalyticsView: View {
                 ModuleChartView(
                     title: "This Week",
                     subtitle: "Daily entries",
-                    dataPoints: viewModel.chartData,
+                    dataPoints: viewModel.weeklyChartData,
                     style: .bar,
                     color: .hubPrimary
                 )
@@ -20,13 +20,7 @@ struct GratitudeJournalAnalyticsView: View {
                 if !viewModel.insights.isEmpty {
                     VStack(alignment: .leading, spacing: HubLayout.itemSpacing) {
                         SectionHeader(title: "Insights")
-                        ForEach(viewModel.insights) { insight in
-                            HubCard {
-                                Text(insight.message)
-                                    .font(.hubBody)
-                                    .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
-                            }
-                        }
+                        InsightsList(insights: viewModel.insights)
                     }
                 }
 

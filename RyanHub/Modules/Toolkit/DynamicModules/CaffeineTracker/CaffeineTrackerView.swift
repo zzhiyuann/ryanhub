@@ -1,8 +1,8 @@
 import SwiftUI
 
-struct CoffeeTrackerView: View {
+struct CaffeineTrackerView: View {
     @Environment(\.colorScheme) private var colorScheme
-    @State private var viewModel = CoffeeTrackerViewModel()
+    @State private var viewModel = CaffeineTrackerViewModel()
     @State private var selectedTab = 0
     @State private var showAddSheet = false
 
@@ -18,7 +18,7 @@ struct CoffeeTrackerView: View {
                         .font(.system(size: 18, weight: .medium))
                         .foregroundStyle(Color.hubPrimary)
                 }
-                Text("Coffee Tracker")
+                Text("Caffeine Tracker")
                     .font(.hubHeading)
                     .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
                 Spacer()
@@ -39,13 +39,13 @@ struct CoffeeTrackerView: View {
             // Content
             ZStack(alignment: .bottomTrailing) {
                     if selectedTab == 0 {
-                        CoffeeTrackerDashboardView(viewModel: viewModel)
+                        CaffeineTrackerDashboardView(viewModel: viewModel)
                     }
                     if selectedTab == 1 {
-                        CoffeeTrackerHistoryView(viewModel: viewModel)
+                        CaffeineTrackerHistoryView(viewModel: viewModel)
                     }
                     if selectedTab == 2 {
-                        CoffeeTrackerAnalyticsView(viewModel: viewModel)
+                        CaffeineTrackerAnalyticsView(viewModel: viewModel)
                     }
 
                 // FAB
@@ -58,7 +58,7 @@ struct CoffeeTrackerView: View {
         .background(AdaptiveColors.background(for: colorScheme))
         .task { await viewModel.loadData() }
         .sheet(isPresented: $showAddSheet) {
-            CoffeeTrackerEntrySheet(viewModel: viewModel) {
+            CaffeineTrackerEntrySheet(viewModel: viewModel) {
                 showAddSheet = false
             }
         }

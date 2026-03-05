@@ -5,7 +5,7 @@ import Foundation
 enum MoodJournalDataProvider: ToolkitDataProvider {
     static let toolkitId = "moodJournal"
     static let displayName = "Mood Journal"
-    static let relevanceKeywords: [String] = ["mood", "journal", "emotion", "feeling", "mental health", "wellbeing", "diary", "happiness", "anxiety", "stress"]
+    static let relevanceKeywords: [String] = ["mood", "emotion", "feeling", "journal", "mental health", "wellbeing", "anxiety", "energy", "happiness", "diary"]
 
     private static var bridgeBaseURL: String {
         UserDefaults.standard.string(forKey: "ryanhub_server_url")

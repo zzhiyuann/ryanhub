@@ -5,7 +5,7 @@ import Foundation
 enum GratitudeJournalDataProvider: ToolkitDataProvider {
     static let toolkitId = "gratitudeJournal"
     static let displayName = "Gratitude Journal"
-    static let relevanceKeywords: [String] = ["gratitude", "grateful", "thankful", "journal", "wellbeing", "mindfulness", "positivity", "reflection", "daily", "appreciation"]
+    static let relevanceKeywords: [String] = ["gratitude", "journal", "thankful", "grateful", "mindfulness", "wellbeing", "reflection", "mood", "happiness", "positivity"]
 
     private static var bridgeBaseURL: String {
         UserDefaults.standard.string(forKey: "ryanhub_server_url")

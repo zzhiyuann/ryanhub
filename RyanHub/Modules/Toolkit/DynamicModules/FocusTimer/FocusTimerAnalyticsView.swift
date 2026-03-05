@@ -11,7 +11,7 @@ struct FocusTimerAnalyticsView: View {
                 ModuleChartView(
                     title: "This Week",
                     subtitle: "Daily entries",
-                    dataPoints: viewModel.chartData.suffix(7).map { ChartDataPoint(label: $0.date.formatted(.dateTime.weekday(.abbreviated)), value: Double($0.totalMinutes)) },
+                    dataPoints: viewModel.weeklyChartData,
                     style: .bar,
                     color: .hubPrimary
                 )
@@ -20,13 +20,7 @@ struct FocusTimerAnalyticsView: View {
                 if !viewModel.insights.isEmpty {
                     VStack(alignment: .leading, spacing: HubLayout.itemSpacing) {
                         SectionHeader(title: "Insights")
-                        ForEach(viewModel.insights, id: \.self) { insight in
-                            HubCard {
-                                Text(insight)
-                                    .font(.hubBody)
-                                    .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
-                            }
-                        }
+                        InsightsList(insights: viewModel.insights)
                     }
                 }
 
@@ -60,7 +54,7 @@ struct FocusTimerAnalyticsView: View {
                                 Text("Best Streak")
                                     .font(.hubCaption)
                                     .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
-                                Text("\(viewModel.currentStreak) days")
+                                Text("\(viewModel.longestStreak) days")
                                     .font(.system(size: 20, weight: .bold, design: .rounded))
                                     .foregroundStyle(Color.hubAccentGreen)
                             }

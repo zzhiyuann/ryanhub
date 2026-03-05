@@ -5,7 +5,7 @@ import Foundation
 enum SubscriptionTrackerDataProvider: ToolkitDataProvider {
     static let toolkitId = "subscriptionTracker"
     static let displayName = "Subscription Tracker"
-    static let relevanceKeywords: [String] = ["subscription", "recurring", "monthly", "cost", "billing", "renewal", "netflix", "spending", "budget", "cancel"]
+    static let relevanceKeywords: [String] = ["subscription", "recurring", "monthly", "billing", "renewal", "cost", "streaming", "membership", "budget", "spending"]
 
     private static var bridgeBaseURL: String {
         UserDefaults.standard.string(forKey: "ryanhub_server_url")

@@ -4,14 +4,13 @@ struct FocusTimerEntrySheet: View {
     @Environment(\.colorScheme) private var colorScheme
     let viewModel: FocusTimerViewModel
     var onSave: (() -> Void)?
-    @State private var inputDurationminutes: Int = 1
-    @State private var inputTask: String = ""
-    @State private var selectedCategory: FocusCategory = .coding
-    @State private var selectedSessiontype: SessionType = .pomodoro
-    @State private var inputFocusquality: Double = 5
-    @State private var inputDistractioncount: Int = 1
+    @State private var inputTaskname: String = ""
+    @State private var selectedCategory: FocusCategory = .work
+    @State private var inputDuration: Int = 1
     @State private var inputCompleted: Bool = false
-    @State private var inputStarttime: Date = Date()
+    @State private var inputQuality: Double = 5
+    @State private var inputDistractioncount: Int = 1
+    @State private var inputBreakduration: Int = 1
     @State private var inputNotes: String = ""
 
     var body: some View {
@@ -20,18 +19,14 @@ struct FocusTimerEntrySheet: View {
             icon: "plus.circle.fill",
             canSave: true,
             onSave: {
-                let entry = FocusTimerEntry(durationMinutes: inputDurationminutes, task: inputTask, category: selectedCategory, sessionType: selectedSessiontype, focusQuality: Int(inputFocusquality), distractionCount: inputDistractioncount, completed: inputCompleted, startTime: inputStarttime, notes: inputNotes)
+                let entry = FocusTimerEntry(taskName: inputTaskname, category: selectedCategory, duration: inputDuration, completed: inputCompleted, quality: Int(inputQuality), distractionCount: inputDistractioncount, breakDuration: inputBreakduration, notes: inputNotes)
                 Task { await viewModel.addEntry(entry) }
                 onSave?()
             }
         ) {
 
-                EntryFormSection(title: "Duration (min)") {
-                    Stepper("\(inputDurationminutes) duration (min)", value: $inputDurationminutes, in: 0...9999)
-                }
-
                 EntryFormSection(title: "Task") {
-                    HubTextField(placeholder: "Task", text: $inputTask)
+                    HubTextField(placeholder: "Task", text: $inputTaskname)
                 }
 
                 EntryFormSection(title: "Category") {
@@ -43,24 +38,24 @@ struct FocusTimerEntrySheet: View {
                     .pickerStyle(.menu)
                 }
 
-                EntryFormSection(title: "Session Type") {
-                    Picker("Session Type", selection: $selectedSessiontype) {
-                        ForEach(SessionType.allCases) { item in
-                            Label(item.displayName, systemImage: item.icon).tag(item)
-                        }
-                    }
-                    .pickerStyle(.menu)
+                EntryFormSection(title: "Duration (min)") {
+                    Stepper("\(inputDuration) duration (min)", value: $inputDuration, in: 0...9999)
                 }
 
-                EntryFormSection(title: "Focus Quality (1–5)") {
+                EntryFormSection(title: "Completed Full Session") {
+                    Toggle("Completed Full Session", isOn: $inputCompleted)
+                        .tint(Color.hubPrimary)
+                }
+
+                EntryFormSection(title: "Focus Quality (1-5)") {
                     VStack {
                         HStack {
-                            Text("\(Int(inputFocusquality))")
+                            Text("\(Int(inputQuality))")
                                 .font(.system(size: 24, weight: .bold, design: .rounded))
                                 .foregroundStyle(Color.hubPrimary)
                             Spacer()
                         }
-                        Slider(value: $inputFocusquality, in: 1...10, step: 1)
+                        Slider(value: $inputQuality, in: 1...10, step: 1)
                             .tint(Color.hubPrimary)
                     }
                 }
@@ -69,13 +64,8 @@ struct FocusTimerEntrySheet: View {
                     Stepper("\(inputDistractioncount) distractions", value: $inputDistractioncount, in: 0...9999)
                 }
 
-                EntryFormSection(title: "Completed Full Session") {
-                    Toggle("Completed Full Session", isOn: $inputCompleted)
-                        .tint(Color.hubPrimary)
-                }
-
-                EntryFormSection(title: "Start Time") {
-                    DatePicker("Start Time", selection: $inputStarttime, displayedComponents: .hourAndMinute)
+                EntryFormSection(title: "Break After (min)") {
+                    Stepper("\(inputBreakduration) break after (min)", value: $inputBreakduration, in: 0...9999)
                 }
 
                 EntryFormSection(title: "Notes") {

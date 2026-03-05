@@ -5,7 +5,7 @@ import Foundation
 enum CommuteTrackerDataProvider: ToolkitDataProvider {
     static let toolkitId = "commuteTracker"
     static let displayName = "Commute Tracker"
-    static let relevanceKeywords: [String] = ["commute", "travel", "route", "traffic", "drive", "transit", "transport", "journey", "work", "time"]
+    static let relevanceKeywords: [String] = ["commute", "travel", "driving", "transit", "route", "traffic", "transportation", "work", "journey", "travel time"]
 
     private static var bridgeBaseURL: String {
         UserDefaults.standard.string(forKey: "ryanhub_server_url")

@@ -37,13 +37,13 @@ struct SpendingTrackerDashboardView: View {
                     )
                     StatCard(
                         title: "Streak",
-                        value: "\(viewModel.currentStreak)d",
+                        value: "\(viewModel.underBudgetStreak)d",
                         icon: "flame.fill",
                         color: .hubAccentYellow
                     )
                     StatCard(
                         title: "Best",
-                        value: "\(viewModel.longestStreak)d",
+                        value: "\(viewModel.underBudgetStreak)d",
                         icon: "trophy.fill",
                         color: .hubAccentGreen
                     )
@@ -58,8 +58,8 @@ struct SpendingTrackerDashboardView: View {
 
                 // Streak
                 StreakCounter(
-                    currentStreak: viewModel.currentStreak,
-                    longestStreak: viewModel.longestStreak,
+                    currentStreak: viewModel.underBudgetStreak,
+                    longestStreak: viewModel.underBudgetStreak,
                     isActiveToday: !viewModel.todayEntries.isEmpty
                 )
 

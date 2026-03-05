@@ -2,78 +2,127 @@ import SwiftUI
 
 struct GroceryListEntrySheet: View {
     @Environment(\.colorScheme) private var colorScheme
+
     let viewModel: GroceryListViewModel
     var onSave: (() -> Void)?
-    @State private var inputItemname: String = ""
-    @State private var selectedCategory: GroceryCategory = .produce
-    @State private var inputQuantity: Int = 1
-    @State private var selectedUnit: ItemUnit = .pieces
-    @State private var inputEstimatedprice: Double = 0
-    @State private var selectedPriority: ItemPriority = .essential
-    @State private var inputIschecked: Bool = false
-    @State private var inputNotes: String = ""
+
+    @State private var itemName: String = ""
+    @State private var category: GroceryCategory = .other
+    @State private var quantity: Int = 1
+    @State private var unit: GroceryUnit = .piece
+    @State private var estimatedPrice: Double = 0.0
+    @State private var priority: GroceryPriority = .needed
+    @State private var notes: String = ""
+
+    private var canSave: Bool {
+        !itemName.trimmingCharacters(in: .whitespaces).isEmpty
+    }
 
     var body: some View {
         QuickEntrySheet(
             title: "Add Grocery List",
             icon: "plus.circle.fill",
-            canSave: true,
+            canSave: canSave,
             onSave: {
-                let entry = GroceryListEntry(itemName: inputItemname, category: selectedCategory, quantity: inputQuantity, unit: selectedUnit, estimatedPrice: inputEstimatedprice, priority: selectedPriority, isChecked: inputIschecked, notes: inputNotes)
+                var entry = GroceryListEntry()
+                entry.itemName = itemName.trimmingCharacters(in: .whitespaces)
+                entry.category = category
+                entry.quantity = quantity
+                entry.unit = unit
+                entry.estimatedPrice = estimatedPrice
+                entry.isPurchased = false
+                entry.priority = priority
+                entry.notes = notes
                 Task { await viewModel.addEntry(entry) }
                 onSave?()
             }
         ) {
+            EntryFormSection(title: "Item") {
+                TextField("Item name (e.g. Whole Milk)", text: $itemName)
+                    .font(.hubBody)
+                    .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+            }
 
-                EntryFormSection(title: "Item Name") {
-                    HubTextField(placeholder: "Item Name", text: $inputItemname)
-                }
-
-                EntryFormSection(title: "Category") {
-                    Picker("Category", selection: $selectedCategory) {
-                        ForEach(GroceryCategory.allCases) { item in
-                            Label(item.displayName, systemImage: item.icon).tag(item)
-                        }
+            EntryFormSection(title: "Category") {
+                Picker("Category", selection: $category) {
+                    ForEach(GroceryCategory.allCases) { cat in
+                        Label(cat.displayName, systemImage: cat.icon).tag(cat)
                     }
-                    .pickerStyle(.menu)
                 }
+                .pickerStyle(.menu)
+                .font(.hubBody)
+                .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+            }
 
-                EntryFormSection(title: "Quantity") {
-                    Stepper("\(inputQuantity) quantity", value: $inputQuantity, in: 0...9999)
-                }
-
-                EntryFormSection(title: "Unit") {
-                    Picker("Unit", selection: $selectedUnit) {
-                        ForEach(ItemUnit.allCases) { item in
-                            Label(item.displayName, systemImage: item.icon).tag(item)
-                        }
+            EntryFormSection(title: "Quantity & Unit") {
+                Stepper(
+                    value: $quantity,
+                    in: 1...999
+                ) {
+                    HStack {
+                        Text("Quantity")
+                            .font(.hubBody)
+                            .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                        Spacer()
+                        Text("\(quantity)")
+                            .font(.hubBody)
+                            .foregroundStyle(Color.hubPrimary)
                     }
-                    .pickerStyle(.menu)
                 }
 
-                EntryFormSection(title: "Est. Price ($)") {
-                    TextField("Est. price", value: $inputEstimatedprice, format: .currency(code: "USD"))
-                        .keyboardType(.decimalPad)
-                        .textFieldStyle(.roundedBorder)
-                }
-
-                EntryFormSection(title: "Priority") {
-                    Picker("Priority", selection: $selectedPriority) {
-                        ForEach(ItemPriority.allCases) { item in
-                            Label(item.displayName, systemImage: item.icon).tag(item)
-                        }
+                Picker("Unit", selection: $unit) {
+                    ForEach(GroceryUnit.allCases) { u in
+                        Label(u.displayName, systemImage: u.icon).tag(u)
                     }
-                    .pickerStyle(.menu)
                 }
+                .pickerStyle(.menu)
+                .font(.hubBody)
+                .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+            }
 
-                EntryFormSection(title: "Purchased") {
-                    Toggle("Purchased", isOn: $inputIschecked)
-                        .tint(Color.hubPrimary)
+            EntryFormSection(title: "Estimated Price") {
+                HStack {
+                    Text("Per unit")
+                        .font(.hubBody)
+                        .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                    Spacer()
+                    Text(estimatedPrice == 0 ? "Free / Unknown" : "$\(String(format: "%.2f", estimatedPrice))")
+                        .font(.hubBody)
+                        .foregroundStyle(estimatedPrice == 0
+                            ? AdaptiveColors.textSecondary(for: colorScheme)
+                            : AdaptiveColors.textPrimary(for: colorScheme))
                 }
+                Slider(value: $estimatedPrice, in: 0...100, step: 0.25)
+                    .tint(Color.hubPrimary)
 
-                EntryFormSection(title: "Notes") {
-                    HubTextField(placeholder: "Notes", text: $inputNotes)
+                if quantity > 1 && estimatedPrice > 0 {
+                    HStack {
+                        Text("Line total")
+                            .font(.hubCaption)
+                            .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                        Spacer()
+                        Text("$\(String(format: "%.2f", Double(quantity) * estimatedPrice))")
+                            .font(.hubCaption)
+                            .foregroundStyle(Color.hubAccentGreen)
+                    }
                 }
+            }
+
+            EntryFormSection(title: "Priority") {
+                Picker("Priority", selection: $priority) {
+                    ForEach(GroceryPriority.allCases) { p in
+                        Text(p.displayName).tag(p)
+                    }
+                }
+                .pickerStyle(.segmented)
+            }
+
+            EntryFormSection(title: "Notes") {
+                TextField("Optional notes...", text: $notes, axis: .vertical)
+                    .font(.hubBody)
+                    .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                    .lineLimit(2...4)
+            }
         }
     }
 }

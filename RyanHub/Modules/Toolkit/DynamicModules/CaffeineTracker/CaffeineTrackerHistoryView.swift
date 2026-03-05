@@ -1,8 +1,8 @@
 import SwiftUI
 
-struct CoffeeTrackerHistoryView: View {
+struct CaffeineTrackerHistoryView: View {
     @Environment(\.colorScheme) private var colorScheme
-    let viewModel: CoffeeTrackerViewModel
+    let viewModel: CaffeineTrackerViewModel
 
     private var heatmapData: [Date: Double] {
         let calendar = Calendar.current
@@ -18,7 +18,7 @@ struct CoffeeTrackerHistoryView: View {
         return result
     }
 
-    private var groupedEntries: [(String, [CoffeeTrackerEntry])] {
+    private var groupedEntries: [(String, [CaffeineTrackerEntry])] {
         let df = DateFormatter()
         df.dateFormat = "yyyy-MM-dd"
         let grouped = Dictionary(grouping: viewModel.entries) { String($0.date.prefix(10)) }

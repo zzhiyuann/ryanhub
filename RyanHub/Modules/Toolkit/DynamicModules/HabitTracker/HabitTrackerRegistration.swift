@@ -10,7 +10,7 @@ extension DynamicModuleRegistry {
             displayName: "Habit Tracker",
             shortName: "Habits",
             subtitle: "Build streaks, build yourself",
-            icon: "checkmark.circle.badge.clock",
+            icon: "checkmark.seal.fill",
             iconColorName: "hubAccentGreen",
             viewBuilder: { AnyView(HabitTrackerView()) },
             dataProviderType: HabitTrackerDataProvider.self

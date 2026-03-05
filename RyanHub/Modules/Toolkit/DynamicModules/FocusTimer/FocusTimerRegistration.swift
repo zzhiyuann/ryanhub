@@ -9,8 +9,8 @@ extension DynamicModuleRegistry {
             toolkitId: "focusTimer",
             displayName: "Focus Timer",
             shortName: "Focus",
-            subtitle: "Pomodoro sessions & deep work tracking",
-            icon: "timer",
+            subtitle: "Track pomodoro sessions & deep work",
+            icon: "brain.head.profile",
             iconColorName: "hubPrimary",
             viewBuilder: { AnyView(FocusTimerView()) },
             dataProviderType: FocusTimerDataProvider.self

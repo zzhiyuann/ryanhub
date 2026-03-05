@@ -9,7 +9,7 @@ extension DynamicModuleRegistry {
             toolkitId: "subscriptionTracker",
             displayName: "Subscription Tracker",
             shortName: "Subscriptions",
-            subtitle: "Track recurring costs & save money",
+            subtitle: "Know where every dollar goes, every month",
             icon: "creditcard.and.123",
             iconColorName: "hubPrimary",
             viewBuilder: { AnyView(SubscriptionTrackerView()) },

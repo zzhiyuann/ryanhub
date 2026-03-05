@@ -11,7 +11,7 @@ struct RecipeBoxAnalyticsView: View {
                 ModuleChartView(
                     title: "This Week",
                     subtitle: "Daily entries",
-                    dataPoints: viewModel.weeklyTrendChartData,
+                    dataPoints: viewModel.weeklyChartData,
                     style: .bar,
                     color: .hubPrimary
                 )
@@ -45,16 +45,16 @@ struct RecipeBoxAnalyticsView: View {
                                 Text("Current Streak")
                                     .font(.hubCaption)
                                     .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
-                                Text("\(viewModel.cookingStreak) days")
+                                Text("\(viewModel.currentStreak) days")
                                     .font(.system(size: 20, weight: .bold, design: .rounded))
                                     .foregroundStyle(Color.hubAccentYellow)
                             }
                             Spacer()
                             VStack(alignment: .leading, spacing: 4) {
-                                Text("Total Cooked")
+                                Text("Best Streak")
                                     .font(.hubCaption)
                                     .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
-                                Text("\(viewModel.totalTimesCooked) times")
+                                Text("\(viewModel.longestStreak) days")
                                     .font(.system(size: 20, weight: .bold, design: .rounded))
                                     .foregroundStyle(Color.hubAccentGreen)
                             }

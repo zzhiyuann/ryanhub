@@ -1,8 +1,8 @@
 import SwiftUI
 
-struct CoffeeTrackerDashboardView: View {
+struct CaffeineTrackerDashboardView: View {
     @Environment(\.colorScheme) private var colorScheme
-    let viewModel: CoffeeTrackerViewModel
+    let viewModel: CaffeineTrackerViewModel
 
     var body: some View {
         ScrollView {

@@ -11,7 +11,7 @@ extension DynamicModuleRegistry {
             shortName: "People",
             subtitle: "Remember everyone you meet",
             icon: "person.text.rectangle",
-            iconColorName: "hubPrimary",
+            iconColorName: "hubPrimaryLight",
             viewBuilder: { AnyView(PeopleNotesView()) },
             dataProviderType: PeopleNotesDataProvider.self
         ))

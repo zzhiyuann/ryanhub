@@ -6,13 +6,13 @@ struct PeopleNotesEntrySheet: View {
     var onSave: (() -> Void)?
     @State private var inputPersonname: String = ""
     @State private var selectedRelationship: RelationshipType = .colleague
-    @State private var selectedMeetingtype: MeetingType = .coffee
+    @State private var selectedMeetingcontext: MeetingContext = .inPerson
     @State private var inputLocation: String = ""
     @State private var inputTopics: String = ""
-    @State private var inputInteractionquality: Double = 5
-    @State private var selectedEnergylevel: EnergyLevel = .inspiring
-    @State private var inputFollowupneeded: Bool = false
-    @State private var inputFollowupnote: String = ""
+    @State private var inputFollowup: String = ""
+    @State private var inputFollowupdone: Bool = false
+    @State private var inputConnectionrating: Double = 5
+    @State private var selectedInteractionmood: InteractionMood = .great
     @State private var inputNotes: String = ""
 
     var body: some View {
@@ -21,7 +21,7 @@ struct PeopleNotesEntrySheet: View {
             icon: "plus.circle.fill",
             canSave: true,
             onSave: {
-                let entry = PeopleNotesEntry(personName: inputPersonname, relationship: selectedRelationship, meetingType: selectedMeetingtype, location: inputLocation, topics: inputTopics, interactionQuality: Int(inputInteractionquality), energyLevel: selectedEnergylevel, followUpNeeded: inputFollowupneeded, followUpNote: inputFollowupnote, notes: inputNotes)
+                let entry = PeopleNotesEntry(personName: inputPersonname, relationship: selectedRelationship, meetingContext: selectedMeetingcontext, location: inputLocation, topics: inputTopics, followUp: inputFollowup, followUpDone: inputFollowupdone, connectionRating: Int(inputConnectionrating), interactionMood: selectedInteractionmood, notes: inputNotes)
                 Task { await viewModel.addEntry(entry) }
                 onSave?()
             }
@@ -40,56 +40,56 @@ struct PeopleNotesEntrySheet: View {
                     .pickerStyle(.menu)
                 }
 
-                EntryFormSection(title: "Meeting Type") {
-                    Picker("Meeting Type", selection: $selectedMeetingtype) {
-                        ForEach(MeetingType.allCases) { item in
+                EntryFormSection(title: "How You Connected") {
+                    Picker("How You Connected", selection: $selectedMeetingcontext) {
+                        ForEach(MeetingContext.allCases) { item in
                             Label(item.displayName, systemImage: item.icon).tag(item)
                         }
                     }
                     .pickerStyle(.menu)
                 }
 
-                EntryFormSection(title: "Where / Context") {
-                    HubTextField(placeholder: "Where / Context", text: $inputLocation)
+                EntryFormSection(title: "Location") {
+                    HubTextField(placeholder: "Location", text: $inputLocation)
                 }
 
-                EntryFormSection(title: "What You Discussed") {
-                    HubTextField(placeholder: "What You Discussed", text: $inputTopics)
+                EntryFormSection(title: "Topics Discussed") {
+                    HubTextField(placeholder: "Topics Discussed", text: $inputTopics)
                 }
 
-                EntryFormSection(title: "Interaction Quality") {
+                EntryFormSection(title: "Follow-up Action") {
+                    HubTextField(placeholder: "Follow-up Action", text: $inputFollowup)
+                }
+
+                EntryFormSection(title: "Follow-up Complete") {
+                    Toggle("Follow-up Complete", isOn: $inputFollowupdone)
+                        .tint(Color.hubPrimary)
+                }
+
+                EntryFormSection(title: "Connection Quality") {
                     VStack {
                         HStack {
-                            Text("\(Int(inputInteractionquality))")
+                            Text("\(Int(inputConnectionrating))")
                                 .font(.system(size: 24, weight: .bold, design: .rounded))
                                 .foregroundStyle(Color.hubPrimary)
                             Spacer()
                         }
-                        Slider(value: $inputInteractionquality, in: 1...10, step: 1)
+                        Slider(value: $inputConnectionrating, in: 1...10, step: 1)
                             .tint(Color.hubPrimary)
                     }
                 }
 
-                EntryFormSection(title: "Their Energy") {
-                    Picker("Their Energy", selection: $selectedEnergylevel) {
-                        ForEach(EnergyLevel.allCases) { item in
+                EntryFormSection(title: "Interaction Vibe") {
+                    Picker("Interaction Vibe", selection: $selectedInteractionmood) {
+                        ForEach(InteractionMood.allCases) { item in
                             Label(item.displayName, systemImage: item.icon).tag(item)
                         }
                     }
                     .pickerStyle(.menu)
                 }
 
-                EntryFormSection(title: "Follow-up Needed") {
-                    Toggle("Follow-up Needed", isOn: $inputFollowupneeded)
-                        .tint(Color.hubPrimary)
-                }
-
-                EntryFormSection(title: "Follow-up Action") {
-                    HubTextField(placeholder: "Follow-up Action", text: $inputFollowupnote)
-                }
-
-                EntryFormSection(title: "Private Notes") {
-                    HubTextField(placeholder: "Private Notes", text: $inputNotes)
+                EntryFormSection(title: "Notes") {
+                    HubTextField(placeholder: "Notes", text: $inputNotes)
                 }
         }
     }

@@ -3,39 +3,33 @@
   "moduleName": "SubscriptionTracker",
   "displayName": "Subscription Tracker",
   "shortName": "Subscriptions",
-  "subtitle": "Track recurring costs & save money",
+  "subtitle": "Know where every dollar goes, every month",
   "icon": "creditcard.and.123",
   "iconColor": "hubPrimary",
   "relevanceKeywords": [
     "subscription",
     "recurring",
     "monthly",
-    "cost",
     "billing",
     "renewal",
-    "netflix",
-    "spending",
+    "cost",
+    "streaming",
+    "membership",
     "budget",
-    "cancel"
+    "spending"
   ],
   "dataFields": [
     {
-      "name": "name",
+      "name": "serviceName",
       "type": "String",
-      "label": "Subscription Name",
+      "label": "Service Name",
       "control": "text"
     },
     {
       "name": "amount",
       "type": "Double",
-      "label": "Amount",
+      "label": "Amount per Cycle",
       "control": "stepper"
-    },
-    {
-      "name": "category",
-      "type": "SubscriptionCategory",
-      "label": "Category",
-      "control": "picker"
     },
     {
       "name": "billingCycle",
@@ -44,15 +38,27 @@
       "control": "picker"
     },
     {
-      "name": "renewalDay",
+      "name": "category",
+      "type": "SubscriptionCategory",
+      "label": "Category",
+      "control": "picker"
+    },
+    {
+      "name": "nextRenewalDate",
+      "type": "Date",
+      "label": "Next Renewal Date",
+      "control": "datePicker"
+    },
+    {
+      "name": "usageRating",
       "type": "Int",
-      "label": "Renewal Day of Month",
-      "control": "stepper"
+      "label": "How Much You Use It",
+      "control": "slider"
     },
     {
       "name": "isActive",
       "type": "Bool",
-      "label": "Active",
+      "label": "Currently Active",
       "control": "toggle"
     },
     {
@@ -63,66 +69,6 @@
     }
   ],
   "enums": [
-    {
-      "name": "SubscriptionCategory",
-      "cases": [
-        {
-          "name": "entertainment",
-          "displayName": "Entertainment",
-          "icon": "tv"
-        },
-        {
-          "name": "music",
-          "displayName": "Music",
-          "icon": "music.note"
-        },
-        {
-          "name": "productivity",
-          "displayName": "Productivity",
-          "icon": "hammer"
-        },
-        {
-          "name": "cloud",
-          "displayName": "Cloud & Storage",
-          "icon": "cloud"
-        },
-        {
-          "name": "health",
-          "displayName": "Health & Fitness",
-          "icon": "heart"
-        },
-        {
-          "name": "news",
-          "displayName": "News & Reading",
-          "icon": "newspaper"
-        },
-        {
-          "name": "gaming",
-          "displayName": "Gaming",
-          "icon": "gamecontroller"
-        },
-        {
-          "name": "education",
-          "displayName": "Education",
-          "icon": "graduationcap"
-        },
-        {
-          "name": "finance",
-          "displayName": "Finance",
-          "icon": "dollarsign.circle"
-        },
-        {
-          "name": "utilities",
-          "displayName": "Utilities",
-          "icon": "wrench.and.screwdriver"
-        },
-        {
-          "name": "other",
-          "displayName": "Other",
-          "icon": "ellipsis.circle"
-        }
-      ]
-    },
     {
       "name": "BillingCycle",
       "cases": [
@@ -142,9 +88,79 @@
           "icon": "calendar.badge.3"
         },
         {
+          "name": "semiAnnual",
+          "displayName": "Every 6 Months",
+          "icon": "calendar.badge.6"
+        },
+        {
           "name": "yearly",
           "displayName": "Yearly",
-          "icon": "calendar.circle"
+          "icon": "calendar.badge.12"
+        }
+      ]
+    },
+    {
+      "name": "SubscriptionCategory",
+      "cases": [
+        {
+          "name": "entertainment",
+          "displayName": "Entertainment",
+          "icon": "tv"
+        },
+        {
+          "name": "music",
+          "displayName": "Music",
+          "icon": "music.note"
+        },
+        {
+          "name": "productivity",
+          "displayName": "Productivity",
+          "icon": "laptopcomputer"
+        },
+        {
+          "name": "cloudStorage",
+          "displayName": "Cloud Storage",
+          "icon": "icloud"
+        },
+        {
+          "name": "fitness",
+          "displayName": "Fitness & Health",
+          "icon": "figure.run"
+        },
+        {
+          "name": "news",
+          "displayName": "News & Reading",
+          "icon": "newspaper"
+        },
+        {
+          "name": "food",
+          "displayName": "Food & Delivery",
+          "icon": "fork.knife"
+        },
+        {
+          "name": "gaming",
+          "displayName": "Gaming",
+          "icon": "gamecontroller"
+        },
+        {
+          "name": "education",
+          "displayName": "Education",
+          "icon": "graduationcap"
+        },
+        {
+          "name": "utilities",
+          "displayName": "Utilities & Tools",
+          "icon": "wrench.and.screwdriver"
+        },
+        {
+          "name": "finance",
+          "displayName": "Finance",
+          "icon": "banknote"
+        },
+        {
+          "name": "other",
+          "displayName": "Other",
+          "icon": "ellipsis.circle"
         }
       ]
     }
@@ -152,16 +168,17 @@
   "views": [
     {
       "name": "DashboardView",
-      "purpose": "Main overview showing total monthly/yearly spend in a stat grid, budget progress ring, category donut chart preview, upcoming renewals list, and floating quick-add button",
+      "purpose": "Command center showing total monthly burn rate in a large hero number, a donut chart of spending by category, upcoming renewals within 7 days as an alert list, and a quick-add FAB. Tapping the hero number toggles between monthly and yearly view.",
       "components": [
         "StatGrid",
         "ProgressRingView",
-        "QuickEntryFAB"
+        "QuickEntryFAB",
+        "InsightsList"
       ]
     },
     {
       "name": "EntrySheet",
-      "purpose": "Add or edit a subscription with name, amount, category, billing cycle, renewal day, and active toggle",
+      "purpose": "Add or edit a subscription with service name, amount, billing cycle picker, category picker, next renewal date, usage rating slider (1-5 stars with emoji labels from 'Never' to 'Daily'), active toggle, and optional notes. Smart defaults: monthly cycle, today+30 for renewal, active=true.",
       "components": [
         "QuickEntrySheet",
         "EntryFormSection"
@@ -169,17 +186,19 @@
     },
     {
       "name": "HistoryView",
-      "purpose": "Scrollable list of all subscriptions grouped by category with active/inactive filter, search, and sort by cost or name",
+      "purpose": "Full subscription list grouped by category with active/cancelled segment filter. Each row shows service name, normalized monthly cost, next renewal date, usage rating dots, and billing cycle badge. Swipe to cancel (sets isActive=false and records cancellation). Sort by cost, name, or renewal date.",
       "components": [
-        "CalendarHeatmap"
+        "CalendarHeatmap",
+        "FilterChipBar"
       ]
     },
     {
       "name": "AnalyticsView",
-      "purpose": "Category spending donut chart, monthly cost trend line chart over 6 months, cost-per-day callout, and ranked smart insights",
+      "purpose": "Multi-section analytics: (1) Monthly spending trend line chart over past 12 months, (2) Category breakdown horizontal bar chart ranked by spend, (3) Cost vs Usage scatter insight highlighting wasteful subscriptions (high cost + low usage), (4) Savings summary from cancelled subscriptions, (5) AI-style insights like 'You spend more on Entertainment than 3 other categories combined'",
       "components": [
         "ModuleChartView",
-        "InsightsList"
+        "InsightsList",
+        "StatGrid"
       ]
     }
   ],
@@ -187,92 +206,100 @@
     {
       "name": "totalMonthlyCost",
       "type": "Double",
-      "description": "Sum of all active subscriptions normalized to monthly cost (weekly\u00d74.33, quarterly\u00f73, yearly\u00f712)"
+      "description": "Sum of all active subscriptions normalized to monthly cost. Weekly\u00d74.33, quarterly\u00f73, semiAnnual\u00f76, yearly\u00f712."
     },
     {
       "name": "totalYearlyCost",
       "type": "Double",
-      "description": "totalMonthlyCost \u00d7 12 for annual perspective"
+      "description": "totalMonthlyCost \u00d7 12 \u2014 the annualized burn rate for all active subscriptions."
     },
     {
-      "name": "activeCount",
-      "type": "Int",
-      "description": "Number of currently active subscriptions"
-    },
-    {
-      "name": "costPerDay",
+      "name": "dailyCostRate",
       "type": "Double",
-      "description": "totalMonthlyCost \u00f7 30.0 for daily burn rate"
+      "description": "totalMonthlyCost / 30.0 \u2014 how much subscriptions cost per day, shown as 'You spend $X.XX/day on subscriptions'."
     },
     {
-      "name": "categoryBreakdown",
-      "type": "[(category: String, amount: Double, percentage: Double)]",
-      "description": "Monthly cost grouped by SubscriptionCategory with percentage of total, sorted descending by amount"
+      "name": "activeSubscriptionCount",
+      "type": "Int",
+      "description": "Count of entries where isActive == true."
+    },
+    {
+      "name": "cancelledSubscriptionCount",
+      "type": "Int",
+      "description": "Count of entries where isActive == false."
     },
     {
       "name": "upcomingRenewals",
       "type": "[SubscriptionTrackerEntry]",
-      "description": "Active subscriptions renewing within the next 7 days based on renewalDay vs current day of month, sorted by renewal date"
+      "description": "Active subscriptions with nextRenewalDate within the next 7 days, sorted by date ascending. Powers the dashboard alert list."
+    },
+    {
+      "name": "categoryBreakdown",
+      "type": "[(category: SubscriptionCategory, monthlyTotal: Double, percentage: Double)]",
+      "description": "Active subscriptions grouped by category with normalized monthly totals and percentage of total spend. Sorted descending by monthlyTotal. Powers the donut chart and bar chart."
+    },
+    {
+      "name": "mostExpensiveCategory",
+      "type": "SubscriptionCategory?",
+      "description": "The category with the highest normalized monthly spend across all active subscriptions."
     },
     {
       "name": "mostExpensiveSubscription",
       "type": "SubscriptionTrackerEntry?",
-      "description": "The single highest monthly-normalized cost among active subscriptions"
+      "description": "The single active subscription with the highest normalized monthly cost."
     },
     {
-      "name": "averageMonthlyCost",
+      "name": "lowUsageHighCost",
+      "type": "[SubscriptionTrackerEntry]",
+      "description": "Active subscriptions where usageRating <= 2 AND normalized monthly cost is above average. These are 'waste candidates' \u2014 subscriptions costing more than average that the user barely uses. Powers the key insight card."
+    },
+    {
+      "name": "monthlySpendingHistory",
+      "type": "[(month: Date, total: Double)]",
+      "description": "For the past 12 months, reconstructs what the monthly total would have been based on subscription start dates and cancellation dates. Powers the trend line chart."
+    },
+    {
+      "name": "savingsFromCancelled",
       "type": "Double",
-      "description": "totalMonthlyCost \u00f7 activeCount, or 0 if no active subscriptions"
+      "description": "Sum of normalized monthly costs of all cancelled (isActive=false) subscriptions \u2014 represents monthly savings achieved by cancelling."
+    },
+    {
+      "name": "averageCostPerSubscription",
+      "type": "Double",
+      "description": "totalMonthlyCost / activeSubscriptionCount \u2014 the average monthly cost per active subscription."
+    },
+    {
+      "name": "currentStreak",
+      "type": "Int",
+      "description": "Consecutive months the user has stayed at or under their monthly budget goal. Resets to 0 if any month exceeds the budget."
     },
     {
       "name": "budgetProgress",
       "type": "Double",
-      "description": "totalMonthlyCost \u00f7 monthlyBudgetGoal as 0.0\u20131.0+ ratio for the progress ring"
+      "description": "totalMonthlyCost / monthlyBudgetGoal \u2014 progress toward budget ceiling. Values > 1.0 mean over budget. Powers the progress ring (inverted: lower is better)."
     },
     {
-      "name": "monthlyTrendData",
-      "type": "[(month: String, cost: Double)]",
-      "description": "Total monthly cost snapshot for each of the last 6 months, computed from entry creation dates and isActive status"
-    },
-    {
-      "name": "categoryChartData",
-      "type": "[(label: String, value: Double, color: String)]",
-      "description": "Formatted category breakdown for donut chart with assigned color per category"
-    },
-    {
-      "name": "topInsights",
+      "name": "insights",
       "type": "[String]",
-      "description": "Up to 5 smart insight strings: highest category, subs above average cost, budget status, spending creep detection, potential savings from inactive subs"
-    },
-    {
-      "name": "savingsStreak",
-      "type": "Int",
-      "description": "Consecutive months where totalMonthlyCost stayed at or below the budget goal"
-    },
-    {
-      "name": "inactiveSubscriptionsCost",
-      "type": "Double",
-      "description": "Sum of monthly-normalized cost of all inactive subscriptions, representing potential savings if fully cancelled"
+      "description": "Dynamic array of human-readable insight strings generated from data analysis. Examples: 'Entertainment costs more than Productivity, Fitness, and Education combined', 'You could save $14.99/mo by cancelling low-usage subscriptions', 'Your subscription costs increased 23% in the last 3 months', '3 subscriptions renew this week totaling $45.97'."
     }
   ],
   "domainLogic": {
     "dailyGoal": {
-      "description": "Monthly subscription budget cap \u2014 the user's target maximum spend on all recurring subscriptions per month",
+      "description": "Monthly subscription budget ceiling. The goal is to stay UNDER this amount. Progress ring fills as spending approaches the limit \u2014 green when under 70%, yellow 70-90%, red above 90%.",
       "defaultValue": "50.0"
     },
-    "streakDefinition": "A month counts toward the savings streak if total active subscription cost (monthly-normalized) is at or below the monthly budget goal at month-end",
-    "trendAnalysis": "Track total monthly cost over 6-month rolling window by snapshotting active subscriptions at each month boundary. Compare current month to 3-month rolling average to detect spending creep. Flag if month-over-month increase exceeds 10%.",
+    "streakDefinition": "A streak month is counted when the total normalized monthly subscription cost stays at or below the user's monthly budget goal for the entire calendar month. The streak resets when any month exceeds the budget. This encourages regular subscription auditing and cancellation of unused services.",
+    "trendAnalysis": "Track month-over-month change in total subscription cost. Compare current month total vs 3-month rolling average to detect subscription creep (gradual increase from free trials converting, price increases, or forgotten signups). Flag when monthly cost increases by more than 10% compared to 3-month average.",
     "insights": [
-      "Total monthly burn rate with daily and yearly equivalents for perspective",
-      "Most expensive category by percentage of total spend",
-      "Individual subscriptions costing more than the average \u2014 review candidates",
-      "Upcoming renewals in next 7 days with renewal amounts",
-      "Budget utilization percentage with over/under indicator and color coding",
-      "Month-over-month cost delta highlighting newly added or removed subscriptions",
-      "Potential monthly savings from cancelling all currently inactive subscriptions",
-      "Cost-per-day framing to make abstract monthly totals tangible",
-      "Savings streak length with encouragement messaging",
-      "Spending creep alert when 3-month trend shows consistent increases"
+      "Waste detection: Flag active subscriptions with usageRating \u2264 2 and above-average cost as cancellation candidates with exact monthly savings",
+      "Category dominance: Identify when a single category exceeds 40% of total spend and compare against others",
+      "Subscription creep alert: Detect when total monthly cost has increased more than 15% over the past 3 months",
+      "Renewal clustering: Warn when 3+ subscriptions renew within the same 7-day window (cash flow impact)",
+      "Annual vs monthly savings: For monthly-billed subscriptions, calculate potential savings if switched to yearly billing (assume 16% discount)",
+      "Price per day: Show cost-per-day for each subscription to reframe perceived value (e.g., 'Netflix costs you $0.50/day')",
+      "Milestone celebration: Acknowledge when user cancels a subscription ('You just saved $X/year!') or when savings from cancelled subs exceed a threshold",
+      "Budget proximity: Alert when within 90% of monthly budget ceiling with specific amount remaining"
     ]
   }
 }

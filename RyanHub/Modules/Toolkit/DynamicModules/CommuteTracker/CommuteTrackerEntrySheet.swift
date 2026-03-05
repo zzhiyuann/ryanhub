@@ -4,16 +4,9 @@ struct CommuteTrackerEntrySheet: View {
     @Environment(\.colorScheme) private var colorScheme
     let viewModel: CommuteTrackerViewModel
     var onSave: (() -> Void)?
-    @State private var selectedDirection: CommuteDirection = .toWork
-    @State private var inputDurationminutes: Int = 1
-    @State private var selectedTransportmode: TransportMode = .car
-    @State private var selectedRoutelabel: RouteLabel = .primary
-    @State private var inputDeparturetime: Date = Date()
-    @State private var selectedTrafficcondition: TrafficCondition = .clear
-    @State private var inputCostcents: Int = 1
-    @State private var inputStresslevel: Double = 5
-    @State private var inputUsedecomode: Bool = false
-    @State private var inputNotes: String = ""
+
+    @State private var entry = CommuteTrackerEntry()
+    @State private var costDollars: Double = 0.0
 
     var body: some View {
         QuickEntrySheet(
@@ -21,81 +14,138 @@ struct CommuteTrackerEntrySheet: View {
             icon: "plus.circle.fill",
             canSave: true,
             onSave: {
-                let entry = CommuteTrackerEntry(direction: selectedDirection, durationMinutes: inputDurationminutes, transportMode: selectedTransportmode, routeLabel: selectedRoutelabel, departureTime: inputDeparturetime, trafficCondition: selectedTrafficcondition, costCents: inputCostcents, stressLevel: Int(inputStresslevel), usedEcoMode: inputUsedecomode, notes: inputNotes)
+                entry.costCents = Int((costDollars * 100).rounded())
                 Task { await viewModel.addEntry(entry) }
                 onSave?()
             }
         ) {
+            EntryFormSection(title: "Trip Details") {
+                VStack(alignment: .leading, spacing: HubLayout.itemSpacing) {
+                    Text("Direction")
+                        .font(.hubCaption)
+                        .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                    Picker("Direction", selection: $entry.direction) {
+                        ForEach(CommuteDirection.allCases) { dir in
+                            Label(dir.displayName, systemImage: dir.icon).tag(dir)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                }
 
-                EntryFormSection(title: "Direction") {
-                    Picker("Direction", selection: $selectedDirection) {
-                        ForEach(CommuteDirection.allCases) { item in
-                            Label(item.displayName, systemImage: item.icon).tag(item)
+                VStack(alignment: .leading, spacing: HubLayout.itemSpacing) {
+                    Text("Transport Mode")
+                        .font(.hubCaption)
+                        .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                    Picker("Transport Mode", selection: $entry.transportMode) {
+                        ForEach(TransportMode.allCases) { mode in
+                            Label(mode.displayName, systemImage: mode.icon).tag(mode)
                         }
                     }
                     .pickerStyle(.menu)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
 
-                EntryFormSection(title: "Duration (min)") {
-                    Stepper("\(inputDurationminutes) duration (min)", value: $inputDurationminutes, in: 0...9999)
-                }
+                TextField("Route name (optional)", text: $entry.routeName)
+                    .font(.hubBody)
+                    .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+            }
 
-                EntryFormSection(title: "Transport Mode") {
-                    Picker("Transport Mode", selection: $selectedTransportmode) {
-                        ForEach(TransportMode.allCases) { item in
-                            Label(item.displayName, systemImage: item.icon).tag(item)
-                        }
+            EntryFormSection(title: "Duration & Timing") {
+                Stepper(
+                    "Duration: \(entry.formattedDuration)",
+                    value: $entry.durationMinutes,
+                    in: 1...300,
+                    step: 5
+                )
+                .font(.hubBody)
+                .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+
+                DatePicker(
+                    "Departure Time",
+                    selection: $entry.departureTime,
+                    displayedComponents: .hourAndMinute
+                )
+                .font(.hubBody)
+                .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+
+                Stepper(
+                    "Delay: \(entry.delayMinutes) min",
+                    value: $entry.delayMinutes,
+                    in: 0...120,
+                    step: 5
+                )
+                .font(.hubBody)
+                .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+            }
+
+            EntryFormSection(title: "Traffic & Experience") {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text("Traffic Level")
+                            .font(.hubBody)
+                            .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                        Spacer()
+                        Text("\(entry.trafficEmoji) \(entry.trafficLabel)")
+                            .font(.hubCaption)
+                            .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
                     }
-                    .pickerStyle(.menu)
+                    Slider(
+                        value: Binding(
+                            get: { Double(entry.trafficLevel) },
+                            set: { entry.trafficLevel = Int($0.rounded()) }
+                        ),
+                        in: 1...5,
+                        step: 1
+                    )
+                    .tint(Color.hubAccentYellow)
                 }
 
-                EntryFormSection(title: "Route") {
-                    Picker("Route", selection: $selectedRoutelabel) {
-                        ForEach(RouteLabel.allCases) { item in
-                            Label(item.displayName, systemImage: item.icon).tag(item)
-                        }
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text("Experience")
+                            .font(.hubBody)
+                            .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                        Spacer()
+                        Text(entry.experienceLabel)
+                            .font(.hubCaption)
+                            .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
                     }
-                    .pickerStyle(.menu)
+                    Slider(
+                        value: Binding(
+                            get: { Double(entry.experienceRating) },
+                            set: { entry.experienceRating = Int($0.rounded()) }
+                        ),
+                        in: 1...5,
+                        step: 1
+                    )
+                    .tint(Color.hubAccentGreen)
                 }
+            }
 
-                EntryFormSection(title: "Departure Time") {
-                    DatePicker("Departure Time", selection: $inputDeparturetime, displayedComponents: .hourAndMinute)
-                }
-
-                EntryFormSection(title: "Traffic") {
-                    Picker("Traffic", selection: $selectedTrafficcondition) {
-                        ForEach(TrafficCondition.allCases) { item in
-                            Label(item.displayName, systemImage: item.icon).tag(item)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                }
-
-                EntryFormSection(title: "Cost ($)") {
-                    Stepper("\(inputCostcents) cost ($)", value: $inputCostcents, in: 0...9999)
-                }
-
-                EntryFormSection(title: "Stress Level") {
-                    VStack {
-                        HStack {
-                            Text("\(Int(inputStresslevel))")
-                                .font(.system(size: 24, weight: .bold, design: .rounded))
-                                .foregroundStyle(Color.hubPrimary)
-                            Spacer()
-                        }
-                        Slider(value: $inputStresslevel, in: 1...10, step: 1)
-                            .tint(Color.hubPrimary)
+            EntryFormSection(title: "Cost") {
+                Stepper(
+                    value: $costDollars,
+                    in: 0...200,
+                    step: 0.25
+                ) {
+                    HStack {
+                        Text("Cost")
+                            .font(.hubBody)
+                            .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                        Spacer()
+                        Text(costDollars == 0 ? "Free" : String(format: "$%.2f", costDollars))
+                            .font(.hubBody)
+                            .foregroundStyle(costDollars == 0 ? AdaptiveColors.textSecondary(for: colorScheme) : Color.hubPrimary)
                     }
                 }
+            }
 
-                EntryFormSection(title: "Eco-Friendly") {
-                    Toggle("Eco-Friendly", isOn: $inputUsedecomode)
-                        .tint(Color.hubPrimary)
-                }
-
-                EntryFormSection(title: "Notes") {
-                    HubTextField(placeholder: "Notes", text: $inputNotes)
-                }
+            EntryFormSection(title: "Notes") {
+                TextField("Add notes...", text: $entry.notes, axis: .vertical)
+                    .font(.hubBody)
+                    .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                    .lineLimit(3...6)
+            }
         }
     }
 }

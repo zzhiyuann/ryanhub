@@ -4,32 +4,32 @@
   "displayName": "Commute Tracker",
   "shortName": "Commute",
   "subtitle": "Optimize your daily journey",
-  "icon": "car.rear.road.lane",
+  "icon": "car.front.waves.up",
   "iconColor": "hubPrimary",
   "relevanceKeywords": [
     "commute",
     "travel",
+    "driving",
+    "transit",
     "route",
     "traffic",
-    "drive",
-    "transit",
-    "transport",
-    "journey",
+    "transportation",
     "work",
-    "time"
+    "journey",
+    "travel time"
   ],
   "dataFields": [
-    {
-      "name": "direction",
-      "type": "CommuteDirection",
-      "label": "Direction",
-      "control": "picker"
-    },
     {
       "name": "durationMinutes",
       "type": "Int",
       "label": "Duration (min)",
       "control": "stepper"
+    },
+    {
+      "name": "direction",
+      "type": "CommuteDirection",
+      "label": "Direction",
+      "control": "picker"
     },
     {
       "name": "transportMode",
@@ -38,10 +38,10 @@
       "control": "picker"
     },
     {
-      "name": "routeLabel",
-      "type": "RouteLabel",
-      "label": "Route",
-      "control": "picker"
+      "name": "routeName",
+      "type": "String",
+      "label": "Route Name",
+      "control": "text"
     },
     {
       "name": "departureTime",
@@ -50,28 +50,28 @@
       "control": "datePicker"
     },
     {
-      "name": "trafficCondition",
-      "type": "TrafficCondition",
-      "label": "Traffic",
-      "control": "picker"
+      "name": "trafficLevel",
+      "type": "Int",
+      "label": "Traffic Level (1\u20135)",
+      "control": "slider"
     },
     {
       "name": "costCents",
       "type": "Int",
-      "label": "Cost ($)",
+      "label": "Trip Cost (\u00a2)",
       "control": "stepper"
     },
     {
-      "name": "stressLevel",
+      "name": "delayMinutes",
       "type": "Int",
-      "label": "Stress Level",
-      "control": "slider"
+      "label": "Extra Delay (min)",
+      "control": "stepper"
     },
     {
-      "name": "usedEcoMode",
-      "type": "Bool",
-      "label": "Eco-Friendly",
-      "control": "toggle"
+      "name": "experienceRating",
+      "type": "Int",
+      "label": "Experience (1\u20135)",
+      "control": "slider"
     },
     {
       "name": "notes",
@@ -87,12 +87,12 @@
         {
           "name": "toWork",
           "displayName": "To Work",
-          "icon": "arrow.right.circle"
+          "icon": "building.2"
         },
         {
           "name": "fromWork",
           "displayName": "From Work",
-          "icon": "arrow.left.circle"
+          "icon": "house.fill"
         }
       ]
     },
@@ -100,33 +100,23 @@
       "name": "TransportMode",
       "cases": [
         {
-          "name": "car",
-          "displayName": "Car",
+          "name": "driving",
+          "displayName": "Driving",
           "icon": "car.fill"
         },
         {
-          "name": "bus",
-          "displayName": "Bus",
+          "name": "publicTransit",
+          "displayName": "Public Transit",
           "icon": "bus.fill"
         },
         {
-          "name": "subway",
-          "displayName": "Subway",
-          "icon": "tram.fill"
-        },
-        {
-          "name": "train",
-          "displayName": "Train",
-          "icon": "train.side.front.car"
-        },
-        {
-          "name": "bike",
-          "displayName": "Bike",
+          "name": "cycling",
+          "displayName": "Cycling",
           "icon": "bicycle"
         },
         {
-          "name": "walk",
-          "displayName": "Walk",
+          "name": "walking",
+          "displayName": "Walking",
           "icon": "figure.walk"
         },
         {
@@ -137,77 +127,12 @@
         {
           "name": "rideshare",
           "displayName": "Rideshare",
-          "icon": "car.2.fill"
+          "icon": "car.side.fill"
         },
         {
-          "name": "scooter",
-          "displayName": "Scooter",
-          "icon": "scooter"
-        }
-      ]
-    },
-    {
-      "name": "RouteLabel",
-      "cases": [
-        {
-          "name": "primary",
-          "displayName": "Primary Route",
-          "icon": "road.lanes"
-        },
-        {
-          "name": "alternate1",
-          "displayName": "Alternate 1",
-          "icon": "arrow.triangle.branch"
-        },
-        {
-          "name": "alternate2",
-          "displayName": "Alternate 2",
-          "icon": "arrow.triangle.swap"
-        },
-        {
-          "name": "highway",
-          "displayName": "Highway",
-          "icon": "road.lanes.curved.right"
-        },
-        {
-          "name": "scenic",
-          "displayName": "Scenic Route",
-          "icon": "leaf.fill"
-        },
-        {
-          "name": "shortcut",
-          "displayName": "Shortcut",
-          "icon": "bolt.fill"
-        }
-      ]
-    },
-    {
-      "name": "TrafficCondition",
-      "cases": [
-        {
-          "name": "clear",
-          "displayName": "Clear",
-          "icon": "checkmark.circle.fill"
-        },
-        {
-          "name": "light",
-          "displayName": "Light",
-          "icon": "circle.fill"
-        },
-        {
-          "name": "moderate",
-          "displayName": "Moderate",
-          "icon": "exclamationmark.circle"
-        },
-        {
-          "name": "heavy",
-          "displayName": "Heavy",
-          "icon": "exclamationmark.triangle"
-        },
-        {
-          "name": "standstill",
-          "displayName": "Standstill",
-          "icon": "xmark.octagon.fill"
+          "name": "train",
+          "displayName": "Train",
+          "icon": "tram.fill"
         }
       ]
     }
@@ -215,35 +140,40 @@
   "views": [
     {
       "name": "DashboardView",
-      "purpose": "Main hub showing today's commute summary, average times, streak counter, route comparison sparkline, and quick-add FAB. Hero stat is today's total commute time vs personal average.",
+      "purpose": "Main hub showing today's commute summary, weekly average duration ring, streak, cost meter, and quick-add FAB. Top card shows last commute with direction badge and duration. Below: stat grid (avg time, weekly cost, streak, best day). Progress ring compares today's total commute time against personal target.",
       "components": [
         "StatGrid",
         "ProgressRingView",
         "QuickEntryFAB",
-        "ModuleChartView"
+        "RecentEntryCard"
       ]
     },
     {
       "name": "EntrySheet",
-      "purpose": "Quick-log modal optimized for speed: direction toggle at top, big duration stepper, transport mode icon grid, route picker, traffic condition, optional cost and stress slider. Pre-fills departure time to now.",
+      "purpose": "Quick-log modal. Direction toggle (to/from) at top, large stepper for duration, transport mode horizontal picker with icons, route name text field with recent-route suggestions, departure time picker, traffic slider (1-5 with emoji faces), cost stepper, delay stepper, experience rating stars, optional notes.",
       "components": [
         "QuickEntrySheet",
-        "EntryFormSection"
+        "EntryFormSection",
+        "HorizontalEnumPicker"
       ]
     },
     {
       "name": "HistoryView",
-      "purpose": "Calendar heatmap colored by commute duration (green=fast, red=slow), with date-grouped list below showing each commute with direction badge, duration, route, and transport icon. Filter by direction, mode, route.",
+      "purpose": "Chronological list of all commutes grouped by date. Each row shows direction icon, duration, route, transport mode badge, and traffic color dot. Filter chips for direction and transport mode. Calendar heatmap colored by total daily commute time (green=short, red=long).",
       "components": [
-        "CalendarHeatmap"
+        "CalendarHeatmap",
+        "FilterChipBar",
+        "GroupedEntryList"
       ]
     },
     {
       "name": "AnalyticsView",
-      "purpose": "Multi-chart analytics: bar chart of average duration by day-of-week, line chart of weekly trend, pie chart of transport mode distribution, route comparison table ranking routes by avg time, cost summary, and AI-generated insights about optimal departure times and fastest routes.",
+      "purpose": "Multi-section analytics: (1) Line chart of daily average commute time over 30 days with trend line. (2) Bar chart comparing average duration by day of week. (3) Pie chart of transport mode distribution. (4) Route efficiency table ranking routes by average time. (5) Departure time scatter plot vs duration. (6) Monthly cost trend bar chart. (7) AI-style insights list with icons.",
       "components": [
         "ModuleChartView",
-        "InsightsList"
+        "InsightsList",
+        "RouteRankingTable",
+        "DayOfWeekBarChart"
       ]
     }
   ],
@@ -256,105 +186,127 @@
     {
       "name": "todayTotalMinutes",
       "type": "Int",
-      "description": "Sum of all commute durations today (both directions)"
+      "description": "Sum of durationMinutes for all today's entries"
     },
     {
-      "name": "averageCommuteMinutes",
+      "name": "todayRoundTripComplete",
+      "type": "Bool",
+      "description": "True if today has both a toWork and fromWork entry"
+    },
+    {
+      "name": "weeklyAverageMinutes",
       "type": "Double",
-      "description": "Rolling 30-day average commute duration in minutes"
+      "description": "Average daily total commute minutes over the current Mon\u2013Fri week"
+    },
+    {
+      "name": "previousWeekAverageMinutes",
+      "type": "Double",
+      "description": "Same metric for the prior week, used for trend comparison"
+    },
+    {
+      "name": "trendPercentageVsLastWeek",
+      "type": "Double",
+      "description": "Percentage change: (thisWeek - lastWeek) / lastWeek * 100. Negative = improvement"
     },
     {
       "name": "currentStreak",
       "type": "Int",
-      "description": "Consecutive days with at least one commute logged"
+      "description": "Consecutive weekdays (Mon\u2013Fri) with at least one commute logged, ending today or yesterday"
     },
     {
-      "name": "weeklyTotalMinutes",
+      "name": "longestStreak",
       "type": "Int",
-      "description": "Total commute minutes for the current calendar week"
+      "description": "All-time longest consecutive weekday logging streak"
     },
     {
-      "name": "monthlyTotalMinutes",
-      "type": "Int",
-      "description": "Total commute minutes for the current calendar month"
+      "name": "averageDurationByDirection",
+      "type": "[CommuteDirection: Double]",
+      "description": "Average duration split by toWork vs fromWork across all entries"
     },
     {
-      "name": "fastestRouteStats",
-      "type": "(route: RouteLabel, avgMinutes: Double)",
-      "description": "Route with the lowest average duration across all entries, with its average time"
+      "name": "bestDayOfWeek",
+      "type": "String",
+      "description": "Day of week (Mon\u2013Fri) with the lowest average total commute time, e.g. 'Wednesday'"
     },
     {
-      "name": "bestDepartureWindow",
-      "type": "(start: Int, end: Int)",
-      "description": "Hour range (e.g. 7-8) that historically yields the shortest commute times"
+      "name": "worstDayOfWeek",
+      "type": "String",
+      "description": "Day of week with the highest average total commute time"
     },
     {
-      "name": "weekOverWeekTrend",
-      "type": "Double",
-      "description": "Percentage change in average commute time vs previous week. Negative means improvement."
+      "name": "routeRankings",
+      "type": "[(routeName: String, avgMinutes: Double, tripCount: Int)]",
+      "description": "All unique routes ranked by average duration ascending, with trip count for confidence"
     },
     {
-      "name": "timeSavedThisWeek",
-      "type": "Int",
-      "description": "Minutes saved this week compared to personal all-time average multiplied by trip count"
-    },
-    {
-      "name": "averageDurationByDayOfWeek",
-      "type": "[Int: Double]",
-      "description": "Map of weekday (1=Sun..7=Sat) to average commute duration, for bar chart rendering"
-    },
-    {
-      "name": "transportModeDistribution",
+      "name": "transportModeBreakdown",
       "type": "[(mode: TransportMode, percentage: Double)]",
-      "description": "Breakdown of transport modes used as percentages for pie chart"
+      "description": "Percentage distribution of entries across transport modes for pie chart"
     },
     {
-      "name": "routeComparison",
-      "type": "[(route: RouteLabel, avgMinutes: Double, tripCount: Int)]",
-      "description": "All used routes ranked by average duration with trip counts"
-    },
-    {
-      "name": "monthlyCostTotal",
+      "name": "monthlyTotalCostDollars",
       "type": "Double",
-      "description": "Sum of commute costs for the current month in dollars"
+      "description": "Sum of costCents / 100 for the current calendar month"
+    },
+    {
+      "name": "monthlyTotalHours",
+      "type": "Double",
+      "description": "Sum of all durationMinutes this month converted to hours"
+    },
+    {
+      "name": "yearlyTotalHours",
+      "type": "Double",
+      "description": "Total commute hours logged this calendar year \u2014 the 'time cost of commuting' stat"
+    },
+    {
+      "name": "dailyChartData",
+      "type": "[(date: Date, avgMinutes: Double)]",
+      "description": "Last 30 days of average daily commute time for the line chart"
+    },
+    {
+      "name": "dayOfWeekChartData",
+      "type": "[(day: String, avgMinutes: Double)]",
+      "description": "Average commute by weekday (Mon\u2013Fri) for bar chart"
+    },
+    {
+      "name": "departureTimeScatterData",
+      "type": "[(departureHour: Double, durationMinutes: Int)]",
+      "description": "Departure time (decimal hour) vs duration for scatter plot \u2014 reveals optimal departure window"
+    },
+    {
+      "name": "averageTrafficLevel",
+      "type": "Double",
+      "description": "Mean traffic rating across all entries, 1.0\u20135.0"
     },
     {
       "name": "goalProgress",
       "type": "Double",
-      "description": "Progress toward daily target commute time (0.0 to 1.0+), based on today's best one-way trip vs goal"
+      "description": "Fraction 0\u20131 of today's total commute time vs the daily target (lower is better, capped at 1.0)"
     },
     {
-      "name": "activeInsights",
-      "type": "[String]",
-      "description": "Dynamically generated insight strings: optimal route suggestions, departure time tips, cost trends, streak milestones"
-    },
-    {
-      "name": "ecoTripPercentage",
-      "type": "Double",
-      "description": "Percentage of commutes this month using eco-friendly modes (bike, walk, scooter, bus, subway, train)"
-    },
-    {
-      "name": "chartData",
-      "type": "[(date: Date, value: Double)]",
-      "description": "Last 30 days of average daily commute duration for trend line chart"
+      "name": "insightCards",
+      "type": "[InsightItem]",
+      "description": "Dynamically generated list of actionable insights: fastest route, best departure time, cost trends, streak milestones, day-of-week tips, traffic pattern alerts"
     }
   ],
   "domainLogic": {
     "dailyGoal": {
-      "description": "Target one-way commute time in minutes. Progress ring fills based on today's best single trip vs this target (at or under = 100%).",
-      "defaultValue": "30"
+      "description": "Target maximum round-trip commute time per day in minutes. Progress ring fills as actual time approaches target \u2014 staying under is the goal. Green when under 80%, yellow 80-100%, red over target.",
+      "defaultValue": 60
     },
-    "streakDefinition": "A day counts as active if at least one commute entry (any direction) is logged. Weekends are excluded from streak-breaking unless the user has weekend entries.",
-    "trendAnalysis": "Compare this week's average commute duration against last week's average. Also track 4-week rolling average vs 4-week-prior rolling average for monthly trend. Flag if commute times are trending >10% worse.",
+    "streakDefinition": "A streak day is any weekday (Monday\u2013Friday) where at least one commute entry is logged. Weekends do not break streaks but do not count toward them. A streak resets if a weekday passes with zero entries.",
+    "trendAnalysis": "Primary trend: compare this week's average daily round-trip time vs last week's. Secondary trends: monthly cost trajectory (rolling 4-week comparison), traffic level trend (are commutes getting worse?), transport mode shift over time. Departure time optimization: identify the departure window with statistically shortest commutes.",
     "insights": [
-      "Route optimization: 'Your Primary Route averages 34 min vs Alternate 1 at 28 min \u2014 consider switching'",
-      "Departure timing: 'Leaving before 7:30 AM saves you ~8 minutes on average'",
-      "Day-of-week patterns: 'Fridays are your fastest commute day (avg 22 min)'",
-      "Cost efficiency: 'Carpooling saves you $45/month compared to driving alone'",
-      "Eco impact: '62% of your commutes this month were eco-friendly \u2014 up from 48% last month'",
-      "Streak milestone: 'You've logged your commute 30 days in a row!'",
-      "Time reclaimed: 'By optimizing routes, you saved 47 minutes this week'",
-      "Stress correlation: 'Heavy traffic days correlate with 2x higher stress ratings \u2014 try the Scenic Route on Tuesdays'"
+      "Fastest route recommendation: 'Your [Route A] averages X min vs [Route B] at Y min \u2014 saving Z min per trip'",
+      "Optimal departure window: 'Leaving between 7:15\u20137:30 AM cuts your commute by ~8 min on average'",
+      "Day-of-week insight: 'Wednesdays are your fastest commute day (avg X min). Mondays are slowest (avg Y min)'",
+      "Weekly comparison: 'Your commute averaged X min/day this week \u2014 Y% faster than last week'",
+      "Monthly cost summary: 'You spent $X on commuting this month. At this rate, ~$Y/year'",
+      "Time cost awareness: 'You've spent X hours commuting this year \u2014 equivalent to Y full days'",
+      "Traffic correlation: 'When traffic is rated 4-5, your commute averages X min longer'",
+      "Transport mode insight: 'Public transit trips average X min vs driving at Y min on this route'",
+      "Streak milestone: 'You've logged commutes for X consecutive weekdays \u2014 personal best!'",
+      "Direction asymmetry: 'Your return commute averages X min longer than your morning commute'"
     ]
   }
 }

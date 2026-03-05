@@ -12,7 +12,7 @@ struct CommuteTrackerDashboardView: View {
                 HubCard {
                     HStack {
                         VStack(alignment: .leading, spacing: 4) {
-                            Text("\(viewModel.todayEntries.count)")
+                            Text("\(viewModel.todayCommutes.count)")
                                 .font(.system(size: 32, weight: .bold, design: .rounded))
                                 .foregroundStyle(Color.hubPrimary)
                             Text("Today's entries")
@@ -31,8 +31,8 @@ struct CommuteTrackerDashboardView: View {
                 StatGrid {
                     StatCard(
                         title: "Today",
-                        value: "\(viewModel.todayEntries.count)",
-                        icon: "car.rear.road.lane",
+                        value: "\(viewModel.todayCommutes.count)",
+                        icon: "car.front.waves.up",
                         color: .hubPrimary
                     )
                     StatCard(
@@ -60,14 +60,14 @@ struct CommuteTrackerDashboardView: View {
                 StreakCounter(
                     currentStreak: viewModel.currentStreak,
                     longestStreak: viewModel.longestStreak,
-                    isActiveToday: !viewModel.todayEntries.isEmpty
+                    isActiveToday: !viewModel.todayCommutes.isEmpty
                 )
 
                 // Recent Entries
-                if !viewModel.todayEntries.isEmpty {
+                if !viewModel.todayCommutes.isEmpty {
                     VStack(alignment: .leading, spacing: HubLayout.itemSpacing) {
                         SectionHeader(title: "Today")
-                        ForEach(viewModel.todayEntries.reversed()) { entry in
+                        ForEach(viewModel.todayCommutes.reversed()) { entry in
                             HubCard {
                                 HStack {
                                     VStack(alignment: .leading, spacing: 4) {

@@ -78,6 +78,52 @@ final class MedicationTrackerViewModel {
         return result
     }
 
+    var isActiveToday: Bool { !todayEntries.isEmpty }
+
+    var totalDoses: Int { entries.count }
+
+    var takenCount: Int { entries.filter { $0.status.isTaken }.count }
+
+    var missedCount: Int { entries.filter { $0.status == .missed }.count }
+
+    var skippedCount: Int { entries.filter { $0.status == .skipped }.count }
+
+    var uniqueMedicationCount: Int {
+        Set(entries.map { $0.medicationName.lowercased() }).count
+    }
+
+    var overallAdherence: Double {
+        guard !entries.isEmpty else { return 0 }
+        return Double(takenCount) / Double(entries.count)
+    }
+
+    var adherenceSummaries: [MedicationAdherenceSummary] {
+        let grouped = Dictionary(grouping: entries, by: { $0.medicationName })
+        return grouped.map { name, entries in
+            let taken = entries.filter { $0.status.isTaken }.count
+            return MedicationAdherenceSummary(
+                medicationName: name,
+                takenCount: taken,
+                totalCount: entries.count
+            )
+        }.sorted { $0.adherenceRate < $1.adherenceRate }
+    }
+
+    var calendarData: [Date: Double] {
+        let df = DateFormatter()
+        df.dateFormat = "yyyy-MM-dd"
+        var map: [Date: Double] = [:]
+        for entry in entries {
+            if let d = df.date(from: String(entry.date.prefix(10))) {
+                let day = Calendar.current.startOfDay(for: d)
+                map[day, default: 0] += 1
+            }
+        }
+        return map
+    }
+
+    var heatmapData: [Date: Double] { calendarData }
+
     var insights: [ModuleInsight] {
         var result: [ModuleInsight] = []
         if currentStreak >= 3 {

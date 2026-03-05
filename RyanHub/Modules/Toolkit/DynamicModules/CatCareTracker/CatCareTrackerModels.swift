@@ -2,12 +2,12 @@ import Foundation
 
 // MARK: - Enums
 
-enum CareEventType: String, CaseIterable, Codable, Identifiable {
+enum EventType: String, CaseIterable, Codable, Identifiable {
     case feeding
     case vetVisit
-    case medication
     case weightCheck
-    case grooming
+    case medication
+    case symptom
 
     var id: String { rawValue }
 
@@ -15,9 +15,9 @@ enum CareEventType: String, CaseIterable, Codable, Identifiable {
         switch self {
         case .feeding: return "Feeding"
         case .vetVisit: return "Vet Visit"
-        case .medication: return "Medication"
         case .weightCheck: return "Weight Check"
-        case .grooming: return "Grooming"
+        case .medication: return "Medication"
+        case .symptom: return "Symptom"
         }
     }
 
@@ -25,9 +25,9 @@ enum CareEventType: String, CaseIterable, Codable, Identifiable {
         switch self {
         case .feeding: return "fork.knife"
         case .vetVisit: return "cross.case.fill"
-        case .medication: return "pills.fill"
         case .weightCheck: return "scalemass.fill"
-        case .grooming: return "scissors"
+        case .medication: return "pills.fill"
+        case .symptom: return "exclamationmark.triangle.fill"
         }
     }
 }
@@ -51,127 +51,138 @@ enum FeedType: String, CaseIterable, Codable, Identifiable {
 
     var icon: String {
         switch self {
-        case .wetFood: return "takeoutbag.and.cup.and.straw.fill"
-        case .dryFood: return "cup.and.saucer.fill"
+        case .wetFood: return "cup.and.saucer.fill"
+        case .dryFood: return "bag.fill"
         case .treat: return "star.fill"
         case .water: return "drop.fill"
         }
     }
-
-    /// Returns true if this feed type counts toward the daily meal goal.
-    var countsMeal: Bool {
-        switch self {
-        case .wetFood, .dryFood: return true
-        case .treat, .water: return false
-        }
-    }
 }
 
-enum VetVisitType: String, CaseIterable, Codable, Identifiable {
-    case checkup
+enum VetReason: String, CaseIterable, Codable, Identifiable {
+    case routine
     case vaccination
+    case illness
     case dental
     case emergency
-    case surgery
-    case labWork
-
-    var id: String { rawValue }
-
-    var displayName: String {
-        switch self {
-        case .checkup: return "Checkup"
-        case .vaccination: return "Vaccination"
-        case .dental: return "Dental"
-        case .emergency: return "Emergency"
-        case .surgery: return "Surgery"
-        case .labWork: return "Lab Work"
-        }
-    }
-
-    var icon: String {
-        switch self {
-        case .checkup: return "stethoscope"
-        case .vaccination: return "syringe.fill"
-        case .dental: return "mouth.fill"
-        case .emergency: return "exclamationmark.triangle.fill"
-        case .surgery: return "bandage.fill"
-        case .labWork: return "testtube.2"
-        }
-    }
-}
-
-enum MedicationType: String, CaseIterable, Codable, Identifiable {
-    case fleaTick
-    case deworming
-    case antibiotic
-    case supplement
     case other
 
     var id: String { rawValue }
 
     var displayName: String {
         switch self {
-        case .fleaTick: return "Flea & Tick"
-        case .deworming: return "Deworming"
-        case .antibiotic: return "Antibiotic"
-        case .supplement: return "Supplement"
+        case .routine: return "Routine Checkup"
+        case .vaccination: return "Vaccination"
+        case .illness: return "Illness"
+        case .dental: return "Dental"
+        case .emergency: return "Emergency"
         case .other: return "Other"
         }
     }
 
     var icon: String {
         switch self {
-        case .fleaTick: return "ladybug.fill"
-        case .deworming: return "pill.fill"
-        case .antibiotic: return "cross.vial.fill"
-        case .supplement: return "leaf.fill"
+        case .routine: return "checkmark.shield.fill"
+        case .vaccination: return "syringe.fill"
+        case .illness: return "stethoscope"
+        case .dental: return "mouth.fill"
+        case .emergency: return "light.beacon.max.fill"
         case .other: return "ellipsis.circle.fill"
+        }
+    }
+}
+
+enum SymptomType: String, CaseIterable, Codable, Identifiable {
+    case vomiting
+    case diarrhea
+    case lethargy
+    case lossOfAppetite
+    case sneezing
+    case skinIssue
+    case other
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .vomiting: return "Vomiting"
+        case .diarrhea: return "Digestive Issue"
+        case .lethargy: return "Lethargy"
+        case .lossOfAppetite: return "Loss of Appetite"
+        case .sneezing: return "Sneezing / Coughing"
+        case .skinIssue: return "Skin / Fur Issue"
+        case .other: return "Other"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .vomiting: return "exclamationmark.triangle.fill"
+        case .diarrhea: return "exclamationmark.circle.fill"
+        case .lethargy: return "zzz"
+        case .lossOfAppetite: return "fork.knife.circle"
+        case .sneezing: return "wind"
+        case .skinIssue: return "bandage.fill"
+        case .other: return "questionmark.circle.fill"
         }
     }
 }
 
 enum CatMood: String, CaseIterable, Codable, Identifiable {
     case playful
-    case content
-    case sleepy
+    case calm
+    case affectionate
     case lethargic
     case anxious
-    case hiding
+    case aggressive
 
     var id: String { rawValue }
 
     var displayName: String {
         switch self {
         case .playful: return "Playful"
-        case .content: return "Content"
-        case .sleepy: return "Sleepy"
+        case .calm: return "Calm"
+        case .affectionate: return "Affectionate"
         case .lethargic: return "Lethargic"
         case .anxious: return "Anxious"
-        case .hiding: return "Hiding"
+        case .aggressive: return "Aggressive"
         }
     }
 
     var icon: String {
         switch self {
         case .playful: return "figure.play"
-        case .content: return "face.smiling.inverse"
-        case .sleepy: return "moon.zzz.fill"
-        case .lethargic: return "tortoise.fill"
-        case .anxious: return "exclamationmark.circle.fill"
-        case .hiding: return "eye.slash.fill"
+        case .calm: return "moon.fill"
+        case .affectionate: return "heart.fill"
+        case .lethargic: return "zzz"
+        case .anxious: return "bolt.heart.fill"
+        case .aggressive: return "exclamationmark.triangle.fill"
         }
     }
 
-    /// Indicates moods that may signal a health concern worth noting.
-    var isConcerning: Bool {
+    var isPositive: Bool {
         switch self {
-        case .lethargic, .anxious, .hiding: return true
-        case .playful, .content, .sleepy: return false
+        case .playful, .calm, .affectionate: return true
+        case .lethargic, .anxious, .aggressive: return false
         }
     }
 }
 
-// MARK: - Entry Model
+// MARK: - Helper Types
+
+struct DailyCount: Identifiable {
+    let id: String
+    let date: Date
+    let count: Int
+
+    init(date: Date, count: Int) {
+        self.id = date.formatted(.dateTime.month().day())
+        self.date = date
+        self.count = count
+    }
+}
+
+// MARK: - Main Entry
 
 struct CatCareTrackerEntry: Codable, Identifiable {
     var id: String = UUID().uuidString
@@ -181,44 +192,25 @@ struct CatCareTrackerEntry: Codable, Identifiable {
         return f.string(from: Date())
     }()
 
-    // Event classification
-    var eventType: CareEventType = .feeding
-
-    // Feeding fields
+    // Data fields
+    var eventType: EventType = .feeding
     var feedType: FeedType = .wetFood
-    var portionCount: Int = 1
-    var wasEaten: Bool = true
-
-    // Vet visit fields
-    var vetVisitType: VetVisitType = .checkup
-    var costCents: Int = 0
-
-    // Medication fields
-    var medicationType: MedicationType = .fleaTick
-
-    // Weight check fields
-    var weightGrams: Int = 4000
-
-    // Always-visible fields
-    var mood: CatMood = .content
-    var eventTime: Date = Date()
+    var portionSize: Double = 0.0
+    var catWeight: Double = 0.0
+    var vetReason: VetReason = .routine
+    var symptomType: SymptomType = .vomiting
+    var catMood: CatMood = .calm
+    var cost: Double = 0.0
+    var medicationName: String = ""
     var notes: String = ""
 
-    // MARK: - Computed: Date Parsing
+    // MARK: - Computed: Dates
 
     var parsedDate: Date {
         let f = DateFormatter()
         f.dateFormat = "yyyy-MM-dd HH:mm"
         return f.date(from: date) ?? Date()
     }
-
-    var calendarDay: String {
-        let f = DateFormatter()
-        f.dateFormat = "yyyy-MM-dd"
-        return f.string(from: parsedDate)
-    }
-
-    // MARK: - Computed: Formatted Display
 
     var formattedDate: String {
         let f = DateFormatter()
@@ -227,75 +219,73 @@ struct CatCareTrackerEntry: Codable, Identifiable {
         return f.string(from: parsedDate)
     }
 
-    var formattedTime: String {
+    var dateOnly: String {
         let f = DateFormatter()
-        f.timeStyle = .short
-        return f.string(from: eventTime)
+        f.dateFormat = "yyyy-MM-dd"
+        return f.string(from: parsedDate)
     }
 
-    var formattedCost: String {
-        guard costCents > 0 else { return "" }
-        let dollars = Double(costCents) / 100.0
-        return String(format: "$%.2f", dollars)
+    var hourOfDay: Int {
+        Calendar.current.component(.hour, from: parsedDate)
     }
 
-    var formattedWeight: String {
-        if weightGrams >= 1000 {
-            return String(format: "%.2f kg", Double(weightGrams) / 1000.0)
-        }
-        return "\(weightGrams) g"
+    var isToday: Bool {
+        Calendar.current.isDateInToday(parsedDate)
     }
 
-    // MARK: - Computed: Summary Line
+    // MARK: - Computed: Summary
 
     var summaryLine: String {
         switch eventType {
         case .feeding:
-            let portions = portionCount == 1 ? "1 portion" : "\(portionCount) portions"
-            let eaten = wasEaten ? "" : " (not finished)"
-            return "\(portions) \(feedType.displayName)\(eaten)"
-
+            let portion = portionSize > 0 ? " (\(Int(portionSize))g)" : ""
+            return "\(feedType.displayName)\(portion)"
         case .vetVisit:
-            let cost = costCents > 0 ? " — \(formattedCost)" : ""
-            return "\(vetVisitType.displayName)\(cost)"
-
-        case .medication:
-            return medicationType.displayName
-
+            let costStr = cost > 0 ? " — $\(String(format: "%.0f", cost))" : ""
+            return "\(vetReason.displayName)\(costStr)"
         case .weightCheck:
-            return formattedWeight
-
-        case .grooming:
-            return notes.isEmpty ? "Grooming session" : notes
+            return catWeight > 0 ? "\(String(format: "%.1f", catWeight)) lbs" : "Weight Check"
+        case .medication:
+            return medicationName.isEmpty ? "Medication" : medicationName
+        case .symptom:
+            return symptomType.displayName
         }
     }
 
     var detailLine: String {
-        var parts: [String] = [formattedTime]
-        if !notes.isEmpty { parts.append(notes) }
+        var parts: [String] = []
+        if catMood != .calm || eventType == .symptom {
+            parts.append(catMood.displayName)
+        }
+        if !notes.isEmpty {
+            parts.append(notes)
+        }
         return parts.joined(separator: " · ")
     }
 
-    // MARK: - Computed: Domain Helpers
+    // MARK: - Computed: Display helpers
 
-    /// True if this entry contributes to the daily feeding streak (wet or dry food only).
-    var countsForStreak: Bool {
-        eventType == .feeding && feedType.countsMeal
+    var formattedWeight: String {
+        catWeight > 0 ? "\(String(format: "%.1f", catWeight)) lbs" : "—"
     }
 
-    /// True if this is a flea & tick medication entry.
-    var isFleaTickMedication: Bool {
-        eventType == .medication && medicationType == .fleaTick
+    var formattedCost: String {
+        cost > 0 ? "$\(String(format: "%.2f", cost))" : "—"
     }
 
-    /// True if this is a standard wellness checkup (not emergency/surgery).
-    var isWellnessVetVisit: Bool {
-        eventType == .vetVisit && (vetVisitType == .checkup || vetVisitType == .vaccination)
+    var formattedPortion: String {
+        portionSize > 0 ? "\(Int(portionSize))g" : "—"
     }
-}
 
-// MARK: - Daily Feeding Goal
+    // MARK: - Computed: Relevance flags
 
-extension CatCareTrackerEntry {
-    static let dailyFeedingGoal: Int = 3
+    var isFeedingEvent: Bool { eventType == .feeding }
+    var isVetEvent: Bool { eventType == .vetVisit }
+    var isWeightEvent: Bool { eventType == .weightCheck }
+    var isMedicationEvent: Bool { eventType == .medication }
+    var isSymptomEvent: Bool { eventType == .symptom }
+
+    var hasCost: Bool { cost > 0 }
+    var hasNotes: Bool { !notes.isEmpty }
+    var hasMedication: Bool { !medicationName.isEmpty }
 }

@@ -4,85 +4,143 @@ struct MedicationTrackerEntrySheet: View {
     @Environment(\.colorScheme) private var colorScheme
     let viewModel: MedicationTrackerViewModel
     var onSave: (() -> Void)?
-    @State private var inputMedicationname: String = ""
-    @State private var inputDosageamount: Double = 1.0
-    @State private var selectedDosageunit: DosageUnit = .mg
-    @State private var selectedMedicationform: MedicationForm = .pill
-    @State private var inputQuantity: Int = 1
-    @State private var inputScheduledtime: Date = Date()
-    @State private var selectedAdherencestatus: AdherenceStatus = .onTime
-    @State private var inputWithfood: Bool = false
-    @State private var inputSideeffectnoted: Bool = false
-    @State private var inputNotes: String = ""
+
+    @State private var medicationName: String = ""
+    @State private var dosageAmount: Double = 1.0
+    @State private var dosageUnit: DosageUnit = .mg
+    @State private var medicationForm: MedicationForm = .pill
+    @State private var timeOfDay: MedicationTimeOfDay = .morning
+    @State private var scheduledTime: Date = Date()
+    @State private var status: DoseStatus = .taken
+    @State private var withFood: Bool = false
+    @State private var sideEffects: String = ""
+    @State private var notes: String = ""
+
+    private var canSave: Bool {
+        !medicationName.trimmingCharacters(in: .whitespaces).isEmpty
+    }
+
+    private var dosageDisplayString: String {
+        let amount = dosageAmount.truncatingRemainder(dividingBy: 1) == 0
+            ? String(Int(dosageAmount))
+            : String(format: "%.1f", dosageAmount)
+        return "\(amount) \(dosageUnit.displayName)"
+    }
 
     var body: some View {
         QuickEntrySheet(
             title: "Add Medication Tracker",
             icon: "plus.circle.fill",
-            canSave: true,
+            canSave: canSave,
             onSave: {
-                let entry = MedicationTrackerEntry(medicationName: inputMedicationname, dosageAmount: inputDosageamount, dosageUnit: selectedDosageunit, medicationForm: selectedMedicationform, quantity: inputQuantity, scheduledTime: inputScheduledtime, adherenceStatus: selectedAdherencestatus, withFood: inputWithfood, sideEffectNoted: inputSideeffectnoted, notes: inputNotes)
-                Task { await viewModel.addEntry(entry) }
-                onSave?()
+                saveEntry()
             }
         ) {
+            EntryFormSection(title: "Medication") {
+                VStack(spacing: HubLayout.itemSpacing) {
+                    TextField("Medication name", text: $medicationName)
+                        .textFieldStyle(.roundedBorder)
 
-                EntryFormSection(title: "Medication Name") {
-                    HubTextField(placeholder: "Medication Name", text: $inputMedicationname)
-                }
-
-                EntryFormSection(title: "Dosage Amount") {
-                    Stepper(String(format: "%.1f dosage", inputDosageamount), value: $inputDosageamount, in: 0...1000, step: 0.5)
-                }
-
-                EntryFormSection(title: "Dosage Unit") {
-                    Picker("Dosage Unit", selection: $selectedDosageunit) {
-                        ForEach(DosageUnit.allCases) { item in
-                            Label(item.displayName, systemImage: item.icon).tag(item)
+                    Picker("Form", selection: $medicationForm) {
+                        ForEach(MedicationForm.allCases) { form in
+                            Label(form.displayName, systemImage: form.icon)
+                                .tag(form)
                         }
                     }
                     .pickerStyle(.menu)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
+            }
 
-                EntryFormSection(title: "Form") {
-                    Picker("Form", selection: $selectedMedicationform) {
-                        ForEach(MedicationForm.allCases) { item in
-                            Label(item.displayName, systemImage: item.icon).tag(item)
-                        }
+            EntryFormSection(title: "Dosage") {
+                VStack(alignment: .leading, spacing: HubLayout.itemSpacing) {
+                    HStack {
+                        Text("Amount")
+                            .font(.hubBody)
+                            .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                        Spacer()
+                        Text(dosageDisplayString)
+                            .font(.hubBody)
+                            .foregroundStyle(Color.hubPrimary)
+                            .fontWeight(.semibold)
                     }
-                    .pickerStyle(.menu)
-                }
 
-                EntryFormSection(title: "Quantity Taken") {
-                    Stepper("\(inputQuantity) quantity taken", value: $inputQuantity, in: 0...9999)
-                }
-
-                EntryFormSection(title: "Scheduled Time") {
-                    DatePicker("Scheduled Time", selection: $inputScheduledtime, displayedComponents: .hourAndMinute)
-                }
-
-                EntryFormSection(title: "Status") {
-                    Picker("Status", selection: $selectedAdherencestatus) {
-                        ForEach(AdherenceStatus.allCases) { item in
-                            Label(item.displayName, systemImage: item.icon).tag(item)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                }
-
-                EntryFormSection(title: "Taken with Food") {
-                    Toggle("Taken with Food", isOn: $inputWithfood)
+                    Slider(value: $dosageAmount, in: 0.5...50.0, step: 0.5)
                         .tint(Color.hubPrimary)
-                }
 
-                EntryFormSection(title: "Side Effect Noted") {
-                    Toggle("Side Effect Noted", isOn: $inputSideeffectnoted)
-                        .tint(Color.hubPrimary)
+                    Picker("Unit", selection: $dosageUnit) {
+                        ForEach(DosageUnit.allCases) { unit in
+                            Label(unit.displayName, systemImage: unit.icon)
+                                .tag(unit)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
+            }
 
-                EntryFormSection(title: "Notes") {
-                    HubTextField(placeholder: "Notes", text: $inputNotes)
+            EntryFormSection(title: "Schedule") {
+                VStack(spacing: HubLayout.itemSpacing) {
+                    Picker("Time of Day", selection: $timeOfDay) {
+                        ForEach(MedicationTimeOfDay.allCases) { time in
+                            Label(time.displayName, systemImage: time.icon)
+                                .tag(time)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                    DatePicker(
+                        "Scheduled Time",
+                        selection: $scheduledTime,
+                        displayedComponents: .hourAndMinute
+                    )
+                    .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
                 }
+            }
+
+            EntryFormSection(title: "Dose Status") {
+                Picker("Status", selection: $status) {
+                    ForEach(DoseStatus.allCases) { s in
+                        Label(s.displayName, systemImage: s.icon)
+                            .tag(s)
+                    }
+                }
+                .pickerStyle(.menu)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            EntryFormSection(title: "Details") {
+                Toggle("Taken with Food", isOn: $withFood)
+                    .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                    .tint(Color.hubAccentGreen)
+            }
+
+            EntryFormSection(title: "Side Effects & Notes") {
+                VStack(spacing: HubLayout.itemSpacing) {
+                    TextField("Side effects (optional)", text: $sideEffects)
+                        .textFieldStyle(.roundedBorder)
+
+                    TextField("Notes (optional)", text: $notes)
+                        .textFieldStyle(.roundedBorder)
+                }
+            }
         }
+    }
+
+    private func saveEntry() {
+        var entry = MedicationTrackerEntry()
+        entry.medicationName = medicationName
+        entry.dosageAmount = dosageAmount
+        entry.dosageUnit = dosageUnit
+        entry.medicationForm = medicationForm
+        entry.timeOfDay = timeOfDay
+        entry.scheduledTime = scheduledTime
+        entry.status = status
+        entry.withFood = withFood
+        entry.sideEffects = sideEffects
+        entry.notes = notes
+        Task { await viewModel.addEntry(entry) }
+        onSave?()
     }
 }

@@ -32,7 +32,7 @@ struct GratitudeJournalDashboardView: View {
                     StatCard(
                         title: "Today",
                         value: "\(viewModel.todayEntries.count)",
-                        icon: "heart.text.clipboard",
+                        icon: "sparkles",
                         color: .hubPrimary
                     )
                     StatCard(

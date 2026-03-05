@@ -5,7 +5,7 @@ import Foundation
 enum SleepTrackerDataProvider: ToolkitDataProvider {
     static let toolkitId = "sleepTracker"
     static let displayName = "Sleep Tracker"
-    static let relevanceKeywords: [String] = ["sleep", "rest", "bedtime", "wake", "mood", "quality", "insomnia", "nap", "dream", "circadian"]
+    static let relevanceKeywords: [String] = ["sleep", "bedtime", "wake", "rest", "insomnia", "nap", "dream", "quality", "mood", "night"]
 
     private static var bridgeBaseURL: String {
         UserDefaults.standard.string(forKey: "ryanhub_server_url")

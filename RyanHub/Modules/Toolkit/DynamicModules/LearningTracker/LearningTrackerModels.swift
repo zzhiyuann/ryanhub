@@ -9,8 +9,10 @@ enum LearningCategory: String, Codable, CaseIterable, Identifiable {
     case design
     case business
     case science
+    case math
     case writing
     case fitness
+    case cooking
     case other
     var id: String { rawValue }
     var displayName: String {
@@ -21,8 +23,10 @@ enum LearningCategory: String, Codable, CaseIterable, Identifiable {
         case .design: return "Design"
         case .business: return "Business"
         case .science: return "Science"
+        case .math: return "Mathematics"
         case .writing: return "Writing"
-        case .fitness: return "Fitness"
+        case .fitness: return "Fitness / Health"
+        case .cooking: return "Cooking"
         case .other: return "Other"
         }
     }
@@ -34,42 +38,50 @@ enum LearningCategory: String, Codable, CaseIterable, Identifiable {
         case .design: return "paintpalette"
         case .business: return "briefcase"
         case .science: return "atom"
+        case .math: return "function"
         case .writing: return "pencil.line"
         case .fitness: return "figure.run"
-        case .other: return "sparkles"
+        case .cooking: return "frying.pan"
+        case .other: return "ellipsis.circle"
         }
     }
 }
 
-enum LearningSessionType: String, Codable, CaseIterable, Identifiable {
-    case videoLecture
-    case reading
+enum ResourceType: String, Codable, CaseIterable, Identifiable {
+    case onlineCourse
+    case book
+    case video
+    case podcast
     case practice
+    case article
+    case mentorship
+    case flashcards
     case project
-    case review
-    case mentoring
-    case exam
     var id: String { rawValue }
     var displayName: String {
         switch self {
-        case .videoLecture: return "Video / Lecture"
-        case .reading: return "Reading"
+        case .onlineCourse: return "Online Course"
+        case .book: return "Book"
+        case .video: return "Video / Tutorial"
+        case .podcast: return "Podcast"
         case .practice: return "Hands-on Practice"
+        case .article: return "Article / Blog"
+        case .mentorship: return "Mentorship / Class"
+        case .flashcards: return "Flashcards / Review"
         case .project: return "Project Work"
-        case .review: return "Review / Flashcards"
-        case .mentoring: return "Mentoring / Class"
-        case .exam: return "Quiz / Exam"
         }
     }
     var icon: String {
         switch self {
-        case .videoLecture: return "play.rectangle"
-        case .reading: return "book"
+        case .onlineCourse: return "play.rectangle"
+        case .book: return "book"
+        case .video: return "video"
+        case .podcast: return "headphones"
         case .practice: return "hammer"
-        case .project: return "folder"
-        case .review: return "arrow.counterclockwise"
-        case .mentoring: return "person.2"
-        case .exam: return "checkmark.seal"
+        case .article: return "doc.text"
+        case .mentorship: return "person.2"
+        case .flashcards: return "rectangle.on.rectangle.angled"
+        case .project: return "wrench.and.screwdriver"
         }
     }
 }
@@ -81,24 +93,26 @@ struct LearningTrackerEntry: Codable, Identifiable {
         f.dateFormat = "yyyy-MM-dd HH:mm"
         return f.string(from: Date())
     }()
-    var skillName: String
+    var subject: String
     var category: LearningCategory
-    var sessionType: LearningSessionType
     var durationMinutes: Int
-    var progressPercent: Int
-    var confidenceRating: Int
-    var milestone: String
+    var resourceType: ResourceType
+    var resourceName: String
+    var confidenceLevel: Int
+    var completionPercent: Int
+    var sessionGoalMet: Bool
     var notes: String
 
     var summaryLine: String {
         var parts: [String] = [date]
-        parts.append("\(skillName)")
+        parts.append("\(subject)")
         parts.append("\(category)")
-        parts.append("\(sessionType)")
         parts.append("\(durationMinutes)")
-        parts.append("\(progressPercent)")
-        parts.append("\(confidenceRating)")
-        parts.append("\(milestone)")
+        parts.append("\(resourceType)")
+        parts.append("\(resourceName)")
+        parts.append("\(confidenceLevel)")
+        parts.append("\(completionPercent)")
+        parts.append("\(sessionGoalMet)")
         parts.append("\(notes)")
         return parts.joined(separator: " | ")
     }
