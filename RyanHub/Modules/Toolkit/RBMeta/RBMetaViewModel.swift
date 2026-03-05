@@ -68,6 +68,12 @@ final class RBMetaViewModel {
     // iPhone camera
     private var cameraManager: RBMetaCameraManager?
 
+    // BOBO integration — auto-capture snapshots to timeline
+    private var lastSnapshotTime: Date = .distantPast
+    private var photoDataListenerToken: AnyListenerToken?
+    /// Interval between automatic snapshots saved to BOBO timeline (seconds).
+    private static let snapshotInterval: TimeInterval = 30
+
     // MARK: - Lifecycle
 
     func setupDAT(wearables: WearablesInterface) {
@@ -330,6 +336,7 @@ final class RBMetaViewModel {
                     self.hasReceivedFirstFrame = true
                 }
                 self.sendVideoFrameIfThrottled(image: image)
+                self.autoSnapshotIfNeeded(image: image)
             }
         }
         camera.start()
@@ -392,7 +399,15 @@ final class RBMetaViewModel {
                         self.hasReceivedFirstFrame = true
                     }
                     self.sendVideoFrameIfThrottled(image: image)
+                    self.autoSnapshotIfNeeded(image: image)
                 }
+            }
+        }
+
+        photoDataListenerToken = streamSession.photoDataPublisher.listen { [weak self] photoData in
+            Task { @MainActor [weak self] in
+                guard let self, let image = UIImage(data: photoData.data) else { return }
+                self.saveFrameToBoboTimeline(image: image, source: "rb_meta_glasses_capture")
             }
         }
 
@@ -428,6 +443,87 @@ final class RBMetaViewModel {
             return "Glasses hinges are closed. Please open them."
         @unknown default:
             return "An unknown streaming error occurred."
+        }
+    }
+
+    // MARK: - BOBO Timeline Integration
+
+    /// Called for every video frame — saves a snapshot to BOBO timeline at a fixed interval.
+    private func autoSnapshotIfNeeded(image: UIImage) {
+        guard isStreaming else { return }
+        let now = Date()
+        guard now.timeIntervalSince(lastSnapshotTime) >= Self.snapshotInterval else { return }
+        lastSnapshotTime = now
+        saveFrameToBoboTimeline(image: image, source: streamingMode == .glasses ? "rb_meta_glasses" : "rb_meta_iphone")
+    }
+
+    /// Save a photo from glasses capturePhoto to BOBO timeline.
+    func captureGlassesPhoto() {
+        streamSession?.capturePhoto(format: .jpeg)
+    }
+
+    /// Save an image frame to the BOBO timeline and upload to iMac.
+    private func saveFrameToBoboTimeline(image: UIImage, source: String) {
+        guard let jpegData = image.jpegData(compressionQuality: 0.7) else { return }
+
+        let event = SensingEvent(
+            modality: .photo,
+            payload: [:]
+        )
+
+        // Save to BOBO photos directory
+        let photosDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("bobo/photos", isDirectory: true)
+        try? FileManager.default.createDirectory(at: photosDir, withIntermediateDirectories: true)
+        let fileURL = photosDir.appendingPathComponent("\(event.id.uuidString).jpg")
+        try? jpegData.write(to: fileURL)
+
+        var mutableEvent = event
+        mutableEvent.payload["imageFileId"] = event.id.uuidString
+        mutableEvent.payload["source"] = source
+
+        // Record in BOBO timeline
+        SensingEngine.shared.recordEvent(mutableEvent)
+
+        // Upload to iMac in background
+        Task.detached(priority: .utility) {
+            await Self.uploadPhotoToServer(jpegData: jpegData, eventId: event.id.uuidString, source: source)
+        }
+    }
+
+    /// Upload photo JPEG to bridge server for iMac storage.
+    private static func uploadPhotoToServer(jpegData: Data, eventId: String, source: String) async {
+        let baseURL = UserDefaults.standard.string(forKey: "ryanhub_server_url")
+            .flatMap { URL(string: $0)?.host }
+            .map { "http://\($0):18790" }
+            ?? AppState.defaultFoodAnalysisURL
+        guard let url = URL(string: "\(baseURL)/bobo/photos/upload") else { return }
+
+        let boundary = UUID().uuidString
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 30
+
+        var body = Data()
+        // Event ID field
+        body.append("--\(boundary)\r\nContent-Disposition: form-data; name=\"event_id\"\r\n\r\n\(eventId)\r\n".data(using: .utf8)!)
+        // Source field
+        body.append("--\(boundary)\r\nContent-Disposition: form-data; name=\"source\"\r\n\r\n\(source)\r\n".data(using: .utf8)!)
+        // JPEG file
+        body.append("--\(boundary)\r\nContent-Disposition: form-data; name=\"photo\"; filename=\"\(eventId).jpg\"\r\nContent-Type: image/jpeg\r\n\r\n".data(using: .utf8)!)
+        body.append(jpegData)
+        body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
+
+        request.httpBody = body
+
+        do {
+            let (_, response) = try await URLSession.shared.data(for: request)
+            if let httpResponse = response as? HTTPURLResponse, (200..<300).contains(httpResponse.statusCode) {
+                print("[RBMeta] Photo \(eventId) uploaded to iMac")
+            }
+        } catch {
+            print("[RBMeta] Photo upload failed: \(error.localizedDescription)")
         }
     }
 }

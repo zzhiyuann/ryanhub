@@ -186,6 +186,13 @@ struct RBMetaView: View {
                         }
                     }
 
+                    // Photo capture (glasses mode only)
+                    if viewModel.streamingMode == .glasses {
+                        controlButton(icon: "camera.fill", color: Color.hubPrimary) {
+                            viewModel.captureGlassesPhoto()
+                        }
+                    }
+
                     Spacer()
 
                     // Speaking indicator

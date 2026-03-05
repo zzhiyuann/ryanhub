@@ -36,6 +36,7 @@ Endpoints:
   GET/POST /popo/daily-summary — Daily behavior summaries
   POST     /popo/audio — Upload audio file (binary)
   GET      /popo/audio/<filename> — Retrieve audio file
+  POST     /popo/photos/upload — Upload photo from RB Meta glasses/camera (multipart)
   POST     /popo/narrations/analyze — Transcribe (via diarization server) + affective analysis (local emotion model)
   POST     /popo/analyze — Behavioral analysis: generate proactive nudges from sensing data (LLM or rule-based)
   POST     /popo/location/enrich — Reverse geocode + semantic place enrichment
@@ -105,6 +106,8 @@ POPO_TIMELINE_FILE = os.path.join(BRIDGE_DATA_DIR, "popo_timeline.json")
 # POPO audio storage directory
 POPO_AUDIO_DIR = os.path.join(BRIDGE_DATA_DIR, "popo_audio")
 os.makedirs(POPO_AUDIO_DIR, exist_ok=True)
+POPO_PHOTOS_DIR = os.path.join(BRIDGE_DATA_DIR, "popo_photos")
+os.makedirs(POPO_PHOTOS_DIR, exist_ok=True)
 
 # ---------------------------------------------------------------------------
 # Whisper transcription via diarization server (port 18793)
@@ -1284,6 +1287,11 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
             self._handle_audio_upload()
             return
 
+        # POPO photo upload (from RB Meta glasses / iPhone camera)
+        if path == "/popo/photos/upload":
+            self._handle_photo_upload()
+            return
+
         # POPO narration analysis (transcription + affect)
         if path == "/popo/narrations/analyze":
             self._handle_narration_analysis()
@@ -1777,6 +1785,80 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
                 ]
 
         self._send_json(200, data)
+
+    def _handle_photo_upload(self):
+        """Accept a multipart/form-data photo upload from RB Meta and save to iMac.
+        Fields: event_id, source, photo (JPEG file)."""
+        import re
+        try:
+            content_type = self.headers.get("Content-Type", "")
+            content_length = int(self.headers.get("Content-Length", 0))
+            if content_length == 0:
+                self._send_json(400, {"error": "Empty request body"})
+                return
+
+            body = self.rfile.read(content_length)
+
+            # Parse multipart boundary
+            boundary_match = re.search(r"boundary=(.+)", content_type)
+            if not boundary_match:
+                self._send_json(400, {"error": "Missing multipart boundary"})
+                return
+            boundary = boundary_match.group(1).encode()
+
+            # Simple multipart parser
+            parts = body.split(b"--" + boundary)
+            event_id = None
+            source = None
+            photo_data = None
+
+            for part in parts:
+                if b"Content-Disposition" not in part:
+                    continue
+                header_end = part.find(b"\r\n\r\n")
+                if header_end < 0:
+                    continue
+                header = part[:header_end].decode("utf-8", errors="replace")
+                data = part[header_end + 4:]
+                # Strip trailing \r\n
+                if data.endswith(b"\r\n"):
+                    data = data[:-2]
+
+                if 'name="event_id"' in header:
+                    event_id = data.decode().strip()
+                elif 'name="source"' in header:
+                    source = data.decode().strip()
+                elif 'name="photo"' in header:
+                    photo_data = data
+
+            if not event_id or photo_data is None:
+                self._send_json(400, {"error": "Missing event_id or photo data"})
+                return
+
+            # Save organized by date
+            from datetime import datetime
+            date_dir = datetime.now().strftime("%Y-%m-%d")
+            save_dir = os.path.join(POPO_PHOTOS_DIR, date_dir)
+            os.makedirs(save_dir, exist_ok=True)
+
+            filename = "%s.jpg" % event_id
+            filepath = os.path.join(save_dir, filename)
+            with open(filepath, "wb") as f:
+                f.write(photo_data)
+
+            print("[Photos] Saved %s from %s (%d bytes) → %s" % (
+                event_id, source or "unknown", len(photo_data), filepath))
+
+            self._send_json(200, {
+                "ok": True,
+                "event_id": event_id,
+                "source": source,
+                "size": len(photo_data),
+                "path": filepath,
+            })
+        except Exception as e:
+            print("[Photos] Upload error: %s" % e)
+            self._send_json(500, {"error": "Photo upload failed: %s" % e})
 
     def _handle_audio_upload(self):
         """Accept a binary audio file upload and save to POPO audio directory.
