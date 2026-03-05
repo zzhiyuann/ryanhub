@@ -1,11 +1,11 @@
 import Foundation
 
-// MARK: - MoodJournal Data Provider
+// MARK: - HydrationTracker Data Provider
 
-enum MoodJournalDataProvider: ToolkitDataProvider {
-    static let toolkitId = "moodJournal"
-    static let displayName = "Mood Journal"
-    static let relevanceKeywords: [String] = ["mood", "emotion", "journal", "feeling", "mental health", "reflection", "anxiety", "happiness", "wellbeing", "diary"]
+enum HydrationTrackerDataProvider: ToolkitDataProvider {
+    static let toolkitId = "hydrationTracker"
+    static let displayName = "Hydration Tracker"
+    static let relevanceKeywords: [String] = ["water", "hydration", "drink", "glasses", "fluid", "intake", "dehydration", "daily goal", "health", "wellness"]
 
     private static var bridgeBaseURL: String {
         UserDefaults.standard.string(forKey: "ryanhub_server_url")
@@ -15,8 +15,8 @@ enum MoodJournalDataProvider: ToolkitDataProvider {
     }
 
     static func buildContextSummary() -> String? {
-        guard let data = UserDefaults.standard.data(forKey: "dynamic_module_moodJournal_cache"),
-              let entries = try? JSONDecoder().decode([MoodJournalEntry].self, from: data),
+        guard let data = UserDefaults.standard.data(forKey: "dynamic_module_hydrationTracker_cache"),
+              let entries = try? JSONDecoder().decode([HydrationTrackerEntry].self, from: data),
               !entries.isEmpty else {
             return nil
         }
@@ -28,8 +28,8 @@ enum MoodJournalDataProvider: ToolkitDataProvider {
             lines.append("  - \(entry.summaryLine)")
         }
         lines.append("Actions:")
-        lines.append("  - Add: POST http://localhost:18790/modules/moodJournal/data/add")
-        lines.append("  - View: GET http://localhost:18790/modules/moodJournal/data")
+        lines.append("  - Add: POST http://localhost:18790/modules/hydrationTracker/data/add")
+        lines.append("  - View: GET http://localhost:18790/modules/hydrationTracker/data")
         lines.append("[End \(displayName)]")
         return lines.joined(separator: "\n")
     }

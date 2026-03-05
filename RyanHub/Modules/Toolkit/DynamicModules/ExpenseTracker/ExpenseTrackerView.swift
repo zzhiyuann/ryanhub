@@ -1,8 +1,8 @@
 import SwiftUI
 
-struct MoodJournalView: View {
+struct ExpenseTrackerView: View {
     @Environment(\.colorScheme) private var colorScheme
-    @State private var viewModel = MoodJournalViewModel()
+    @State private var viewModel = ExpenseTrackerViewModel()
     @State private var selectedTab = 0
     @State private var showAddSheet = false
 
@@ -14,11 +14,11 @@ struct MoodJournalView: View {
                     Circle()
                         .fill(Color.hubPrimary.opacity(0.12))
                         .frame(width: 40, height: 40)
-                    Image(systemName: "brain.head.profile")
+                    Image(systemName: "creditcard.and.123")
                         .font(.system(size: 18, weight: .medium))
                         .foregroundStyle(Color.hubPrimary)
                 }
-                Text("Mood Journal")
+                Text("Expense Tracker")
                     .font(.hubHeading)
                     .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
                 Spacer()
@@ -39,13 +39,13 @@ struct MoodJournalView: View {
             // Content
             ZStack(alignment: .bottomTrailing) {
                     if selectedTab == 0 {
-                        MoodJournalDashboardView(viewModel: viewModel)
+                        ExpenseTrackerDashboardView(viewModel: viewModel)
                     }
                     if selectedTab == 1 {
-                        MoodJournalHistoryView(viewModel: viewModel)
+                        ExpenseTrackerHistoryView(viewModel: viewModel)
                     }
                     if selectedTab == 2 {
-                        MoodJournalAnalyticsView(viewModel: viewModel)
+                        ExpenseTrackerAnalyticsView(viewModel: viewModel)
                     }
                 // FAB
                 QuickEntryFAB {
@@ -57,7 +57,7 @@ struct MoodJournalView: View {
         .background(AdaptiveColors.background(for: colorScheme))
         .task { await viewModel.loadData() }
         .sheet(isPresented: $showAddSheet) {
-            MoodJournalEntrySheet(viewModel: viewModel) {
+            ExpenseTrackerEntrySheet(viewModel: viewModel) {
                 showAddSheet = false
             }
         }

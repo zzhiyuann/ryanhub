@@ -1,12 +1,12 @@
 import Foundation
 import SwiftUI
 
-// MARK: - MoodJournal View Model
+// MARK: - ExpenseTracker View Model
 
 @Observable
 @MainActor
-final class MoodJournalViewModel {
-    var entries: [MoodJournalEntry] = []
+final class ExpenseTrackerViewModel {
+    var entries: [ExpenseTrackerEntry] = []
     var isLoading = false
     var errorMessage: String?
 
@@ -21,7 +21,7 @@ final class MoodJournalViewModel {
 
     // MARK: - Computed Properties
 
-    var todayEntries: [MoodJournalEntry] {
+    var todayEntries: [ExpenseTrackerEntry] {
         let today = DateFormatter()
         today.dateFormat = "yyyy-MM-dd"
         let todayStr = today.string(from: Date())
@@ -62,6 +62,37 @@ final class MoodJournalViewModel {
         return longest
     }
 
+    var todayTotal: Double {
+        todayEntries.reduce(0) { $0 + $1.amount }
+    }
+
+    var weeklyTotal: Double {
+        let calendar = Calendar.current
+        let df = DateFormatter()
+        df.dateFormat = "yyyy-MM-dd"
+        return (0..<7).reduce(0.0) { total, dayOffset in
+            let day = calendar.date(byAdding: .day, value: -dayOffset, to: Date())!
+            let dayStr = df.string(from: day)
+            return total + entries.filter { $0.date.hasPrefix(dayStr) }.reduce(0) { $0 + $1.amount }
+        }
+    }
+
+    var monthlyTotal: Double {
+        let calendar = Calendar.current
+        let df = DateFormatter()
+        df.dateFormat = "yyyy-MM"
+        let monthStr = df.string(from: Date())
+        return entries.filter { $0.date.hasPrefix(monthStr) }.reduce(0) { $0 + $1.amount }
+    }
+
+    var categoryBreakdown: [(category: ExpenseCategory, total: Double)] {
+        var totals: [ExpenseCategory: Double] = [:]
+        for entry in entries {
+            totals[entry.category, default: 0] += entry.amount
+        }
+        return totals.map { ($0.key, $0.value) }.sorted { $0.total > $1.total }
+    }
+
     var weeklyChartData: [ChartDataPoint] {
         let calendar = Calendar.current
         let df = DateFormatter()
@@ -72,8 +103,8 @@ final class MoodJournalViewModel {
         for dayOffset in (0..<7).reversed() {
             let day = calendar.date(byAdding: .day, value: -dayOffset, to: Date())!
             let dayStr = df.string(from: day)
-            let count = entries.filter { $0.date.hasPrefix(dayStr) }.count
-            result.append(ChartDataPoint(label: displayFmt.string(from: day), value: Double(count)))
+            let dayTotal = entries.filter { $0.date.hasPrefix(dayStr) }.reduce(0.0) { $0 + $1.amount }
+            result.append(ChartDataPoint(label: displayFmt.string(from: day), value: dayTotal))
         }
         return result
     }
@@ -81,10 +112,14 @@ final class MoodJournalViewModel {
     var insights: [ModuleInsight] {
         var result: [ModuleInsight] = []
         if currentStreak >= 3 {
-            result.append(ModuleInsight(type: .achievement, title: "\(currentStreak)-Day Streak!", message: "You've been consistent for \(currentStreak) days. Keep it up!"))
+            result.append(ModuleInsight(type: .achievement, title: "\(currentStreak)-Day Streak!", message: "You've been logging expenses for \(currentStreak) days straight."))
         }
         if todayEntries.isEmpty {
-            result.append(ModuleInsight(type: .suggestion, title: "No entries today", message: "Don't forget to log your data for today."))
+            result.append(ModuleInsight(type: .suggestion, title: "No expenses today", message: "Log your spending to keep track of your budget."))
+        }
+        if let top = categoryBreakdown.first, monthlyTotal > 0 {
+            let pct = Int(top.total / monthlyTotal * 100)
+            result.append(ModuleInsight(type: .trend, title: "Top Category", message: "\(top.category.displayName) is \(pct)% of this month's spending."))
         }
         return result
     }
@@ -95,18 +130,18 @@ final class MoodJournalViewModel {
         isLoading = true
         defer { isLoading = false }
         do {
-            let url = URL(string: "\(bridgeBaseURL)/modules/moodJournal/data")!
+            let url = URL(string: "\(bridgeBaseURL)/modules/expenseTracker/data")!
             let (data, _) = try await URLSession.shared.data(from: url)
-            entries = try JSONDecoder().decode([MoodJournalEntry].self, from: data)
-            UserDefaults.standard.set(data, forKey: "dynamic_module_moodJournal_cache")
+            entries = try JSONDecoder().decode([ExpenseTrackerEntry].self, from: data)
+            UserDefaults.standard.set(data, forKey: "dynamic_module_expenseTracker_cache")
         } catch {
             entries = []
         }
     }
 
-    func addEntry(_ entry: MoodJournalEntry) async {
+    func addEntry(_ entry: ExpenseTrackerEntry) async {
         do {
-            let url = URL(string: "\(bridgeBaseURL)/modules/moodJournal/data/add")!
+            let url = URL(string: "\(bridgeBaseURL)/modules/expenseTracker/data/add")!
             var request = URLRequest(url: url)
             request.httpMethod = "POST"
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -118,9 +153,9 @@ final class MoodJournalViewModel {
         }
     }
 
-    func deleteEntry(_ entry: MoodJournalEntry) async {
+    func deleteEntry(_ entry: ExpenseTrackerEntry) async {
         do {
-            let url = URL(string: "\(bridgeBaseURL)/modules/moodJournal/data?id=\(entry.id)")!
+            let url = URL(string: "\(bridgeBaseURL)/modules/expenseTracker/data?id=\(entry.id)")!
             var request = URLRequest(url: url)
             request.httpMethod = "DELETE"
             _ = try await URLSession.shared.data(for: request)

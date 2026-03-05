@@ -1,8 +1,8 @@
 import SwiftUI
 
-struct MoodJournalView: View {
+struct HydrationTrackerView: View {
     @Environment(\.colorScheme) private var colorScheme
-    @State private var viewModel = MoodJournalViewModel()
+    @State private var viewModel = HydrationTrackerViewModel()
     @State private var selectedTab = 0
     @State private var showAddSheet = false
 
@@ -14,11 +14,11 @@ struct MoodJournalView: View {
                     Circle()
                         .fill(Color.hubPrimary.opacity(0.12))
                         .frame(width: 40, height: 40)
-                    Image(systemName: "brain.head.profile")
+                    Image(systemName: "drop.fill")
                         .font(.system(size: 18, weight: .medium))
                         .foregroundStyle(Color.hubPrimary)
                 }
-                Text("Mood Journal")
+                Text("Hydration Tracker")
                     .font(.hubHeading)
                     .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
                 Spacer()
@@ -39,14 +39,15 @@ struct MoodJournalView: View {
             // Content
             ZStack(alignment: .bottomTrailing) {
                     if selectedTab == 0 {
-                        MoodJournalDashboardView(viewModel: viewModel)
+                        HydrationTrackerDashboardView(viewModel: viewModel)
                     }
                     if selectedTab == 1 {
-                        MoodJournalHistoryView(viewModel: viewModel)
+                        HydrationTrackerHistoryView(viewModel: viewModel)
                     }
                     if selectedTab == 2 {
-                        MoodJournalAnalyticsView(viewModel: viewModel)
+                        HydrationTrackerAnalyticsView(viewModel: viewModel)
                     }
+
                 // FAB
                 QuickEntryFAB {
                     showAddSheet = true
@@ -57,7 +58,7 @@ struct MoodJournalView: View {
         .background(AdaptiveColors.background(for: colorScheme))
         .task { await viewModel.loadData() }
         .sheet(isPresented: $showAddSheet) {
-            MoodJournalEntrySheet(viewModel: viewModel) {
+            HydrationTrackerEntrySheet(viewModel: viewModel) {
                 showAddSheet = false
             }
         }

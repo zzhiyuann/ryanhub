@@ -1,0 +1,307 @@
+{
+  "moduleId": "expenseTracker",
+  "moduleName": "ExpenseTracker",
+  "displayName": "Expense Tracker",
+  "shortName": "Expenses",
+  "subtitle": "Track spending, set budgets, gain insights",
+  "icon": "creditcard.and.123",
+  "iconColor": "hubAccentGreen",
+  "relevanceKeywords": [
+    "expense",
+    "spending",
+    "budget",
+    "money",
+    "finance",
+    "cost",
+    "purchase",
+    "category",
+    "savings",
+    "tracker"
+  ],
+  "dataFields": [
+    {
+      "name": "amount",
+      "type": "Double",
+      "label": "Amount",
+      "control": "stepper"
+    },
+    {
+      "name": "category",
+      "type": "ExpenseCategory",
+      "label": "Category",
+      "control": "picker"
+    },
+    {
+      "name": "paymentMethod",
+      "type": "PaymentMethod",
+      "label": "Payment Method",
+      "control": "picker"
+    },
+    {
+      "name": "merchant",
+      "type": "String",
+      "label": "Merchant",
+      "control": "text"
+    },
+    {
+      "name": "note",
+      "type": "String",
+      "label": "Note",
+      "control": "text"
+    },
+    {
+      "name": "isRecurring",
+      "type": "Bool",
+      "label": "Recurring Expense",
+      "control": "toggle"
+    }
+  ],
+  "enums": [
+    {
+      "name": "ExpenseCategory",
+      "cases": [
+        {
+          "name": "food",
+          "displayName": "Food & Dining",
+          "icon": "fork.knife"
+        },
+        {
+          "name": "transport",
+          "displayName": "Transport",
+          "icon": "car.fill"
+        },
+        {
+          "name": "housing",
+          "displayName": "Housing",
+          "icon": "house.fill"
+        },
+        {
+          "name": "utilities",
+          "displayName": "Utilities",
+          "icon": "bolt.fill"
+        },
+        {
+          "name": "entertainment",
+          "displayName": "Entertainment",
+          "icon": "film.fill"
+        },
+        {
+          "name": "shopping",
+          "displayName": "Shopping",
+          "icon": "bag.fill"
+        },
+        {
+          "name": "health",
+          "displayName": "Health",
+          "icon": "heart.fill"
+        },
+        {
+          "name": "education",
+          "displayName": "Education",
+          "icon": "book.fill"
+        },
+        {
+          "name": "subscriptions",
+          "displayName": "Subscriptions",
+          "icon": "arrow.triangle.2.circlepath"
+        },
+        {
+          "name": "personal",
+          "displayName": "Personal Care",
+          "icon": "sparkles"
+        },
+        {
+          "name": "gifts",
+          "displayName": "Gifts & Donations",
+          "icon": "gift.fill"
+        },
+        {
+          "name": "other",
+          "displayName": "Other",
+          "icon": "ellipsis.circle.fill"
+        }
+      ]
+    },
+    {
+      "name": "PaymentMethod",
+      "cases": [
+        {
+          "name": "cash",
+          "displayName": "Cash",
+          "icon": "banknote.fill"
+        },
+        {
+          "name": "creditCard",
+          "displayName": "Credit Card",
+          "icon": "creditcard.fill"
+        },
+        {
+          "name": "debitCard",
+          "displayName": "Debit Card",
+          "icon": "creditcard"
+        },
+        {
+          "name": "digitalWallet",
+          "displayName": "Digital Wallet",
+          "icon": "iphone.gen3"
+        },
+        {
+          "name": "bankTransfer",
+          "displayName": "Bank Transfer",
+          "icon": "building.columns.fill"
+        }
+      ]
+    }
+  ],
+  "views": [
+    {
+      "name": "DashboardView",
+      "purpose": "Main hub showing today's total, monthly budget progress rings per category, top spending category, and a quick-add floating button. Displays a compact daily spending bar chart for the current week.",
+      "components": [
+        "StatGrid",
+        "ProgressRingView",
+        "QuickEntryFAB",
+        "ModuleChartView"
+      ]
+    },
+    {
+      "name": "EntrySheet",
+      "purpose": "Quick-entry modal with large numpad-style amount input, horizontally scrollable category chips with icons, payment method selector, optional merchant name and note. Optimized for one-handed entry in under 5 seconds.",
+      "components": [
+        "QuickEntrySheet",
+        "EntryFormSection"
+      ]
+    },
+    {
+      "name": "HistoryView",
+      "purpose": "Chronological expense list grouped by date with running daily totals. Filterable by category and payment method. Each row shows amount, category icon, merchant, and time. Swipe to delete. Calendar heatmap at top showing spending intensity per day.",
+      "components": [
+        "CalendarHeatmap",
+        "EntryFormSection"
+      ]
+    },
+    {
+      "name": "AnalyticsView",
+      "purpose": "Deep spending analytics: category breakdown donut chart, weekly spending trend line chart, month-over-month comparison bar chart, spending velocity projection, and AI-style insight cards highlighting patterns like 'Food spending up 23% vs last week' or 'On track to save $120 this month'.",
+      "components": [
+        "ModuleChartView",
+        "InsightsList",
+        "StatGrid"
+      ]
+    },
+    {
+      "name": "BudgetView",
+      "purpose": "Set monthly budgets per category with visual progress bars. Shows remaining budget, days left in month, safe daily spend rate. Highlights categories that are over budget or approaching limit. Overall monthly budget summary at top.",
+      "components": [
+        "ProgressRingView",
+        "StatGrid"
+      ]
+    }
+  ],
+  "viewModelComputedProperties": [
+    {
+      "name": "todayTotal",
+      "type": "Double",
+      "description": "Sum of all expense amounts logged today"
+    },
+    {
+      "name": "weekTotal",
+      "type": "Double",
+      "description": "Sum of all expenses in the current Monday-Sunday week"
+    },
+    {
+      "name": "monthTotal",
+      "type": "Double",
+      "description": "Sum of all expenses in the current calendar month"
+    },
+    {
+      "name": "dailyAverageThisMonth",
+      "type": "Double",
+      "description": "Month total divided by number of elapsed days this month"
+    },
+    {
+      "name": "projectedMonthTotal",
+      "type": "Double",
+      "description": "Daily average extrapolated to end of month \u2014 spending velocity projection"
+    },
+    {
+      "name": "categoryBreakdown",
+      "type": "[(category: ExpenseCategory, total: Double, percentage: Double)]",
+      "description": "Each category's total spending and percentage of overall spend for current month, sorted descending"
+    },
+    {
+      "name": "topCategory",
+      "type": "ExpenseCategory?",
+      "description": "The category with highest total spend this month"
+    },
+    {
+      "name": "weekOverWeekChange",
+      "type": "Double",
+      "description": "Percentage change in spending this week vs last week. Positive means spending more."
+    },
+    {
+      "name": "monthOverMonthChange",
+      "type": "Double",
+      "description": "Percentage change in spending this month vs same point last month"
+    },
+    {
+      "name": "underBudgetStreak",
+      "type": "Int",
+      "description": "Consecutive days where total daily spend was at or below the daily budget target (monthlyBudget / daysInMonth)"
+    },
+    {
+      "name": "budgetProgress",
+      "type": "[(category: ExpenseCategory, spent: Double, budget: Double, percentage: Double)]",
+      "description": "Per-category budget utilization for the current month"
+    },
+    {
+      "name": "overallBudgetPercentage",
+      "type": "Double",
+      "description": "Total month spending divided by total monthly budget across all categories"
+    },
+    {
+      "name": "safeDailySpend",
+      "type": "Double",
+      "description": "Remaining monthly budget divided by remaining days in the month \u2014 how much is safe to spend per day"
+    },
+    {
+      "name": "dailyTrendData",
+      "type": "[(date: Date, total: Double)]",
+      "description": "Daily spending totals for the last 30 days, used for trend line chart"
+    },
+    {
+      "name": "weeklyTrendData",
+      "type": "[(weekLabel: String, total: Double)]",
+      "description": "Weekly spending totals for the last 8 weeks for bar chart comparison"
+    },
+    {
+      "name": "recurringExpenseTotal",
+      "type": "Double",
+      "description": "Sum of all expenses marked as recurring this month \u2014 fixed cost baseline"
+    },
+    {
+      "name": "recentInsights",
+      "type": "[InsightItem]",
+      "description": "Computed insight cards: spending velocity warning, category spikes, budget alerts, streak celebrations, and savings projections"
+    }
+  ],
+  "domainLogic": {
+    "dailyGoal": {
+      "description": "Monthly budget divided by days in month gives daily spending target. User sets overall monthly budget and optional per-category budgets.",
+      "defaultValue": "100.0"
+    },
+    "streakDefinition": "A day counts toward the streak if total spending that day is at or below safeDailySpend (remaining budget / remaining days). Days with zero entries also count. Streak resets when daily spend exceeds the safe target.",
+    "trendAnalysis": "Track three trend windows: (1) daily totals over 30 days for granular trend line, (2) weekly totals over 8 weeks for medium-term comparison, (3) month-over-month same-period comparison. Compute spending velocity as dailyAverageThisMonth * daysInMonth to project month-end total. Flag if projected total exceeds monthly budget by more than 10%.",
+    "insights": [
+      "Budget pace alert: 'At this rate, you'll spend $X by month end' when projected total exceeds budget",
+      "Category spike: 'Food spending is up 35% vs your 4-week average' when any category deviates >20% from its rolling average",
+      "Under-budget streak celebration: 'You've stayed under budget for 7 days straight!' at 3, 7, 14, 30 day milestones",
+      "Safe daily spend reminder: 'You have $X/day left for the rest of the month' shown on dashboard",
+      "Recurring expense awareness: '$X of your monthly spend is recurring subscriptions/bills' to highlight fixed vs discretionary",
+      "Category comparison: 'Shopping is now your #1 expense, overtaking Food' when top category changes",
+      "Savings projection: 'If you keep this pace, you'll save $X vs budget this month' when under-spending",
+      "Weekend vs weekday pattern: 'You spend 2.3x more on weekends \u2014 your average Saturday is $85 vs $37 on weekdays'",
+      "Payment method insight: 'Credit card accounts for 73% of spending \u2014 consider using cash for discretionary purchases'"
+    ]
+  }
+}

@@ -215,14 +215,43 @@ def extract_json(text: str) -> dict:
 
 def extract_swift(text: str) -> str:
     """Extract Swift code from response, stripping markdown fences."""
-    code = re.sub(r"^```swift\s*\n?", "", text)
-    code = re.sub(r"\n?```\s*$", "", code)
-    if not code.strip().startswith("import"):
-        # Try to find import statement
-        idx = code.find("import ")
-        if idx >= 0:
-            code = code[idx:]
-    return code
+    # Remove all markdown fences
+    code = re.sub(r"```swift\s*\n?", "", text)
+    code = re.sub(r"```\s*", "", code)
+    # Find the first import statement
+    idx = code.find("import ")
+    if idx >= 0:
+        code = code[idx:]
+    return code.strip()
+
+
+def summarize_swift_code(code: str) -> str:
+    """Extract struct/class/enum signatures + computed property signatures from Swift code.
+    Returns a condensed version suitable for prompt context."""
+    lines = code.split("\n")
+    result = []
+    in_body = False
+    brace_depth = 0
+    for line in lines:
+        stripped = line.strip()
+        # Always include struct/class/enum/protocol declarations
+        if re.match(r"(struct|class|enum|protocol)\s+\w+", stripped):
+            result.append(line)
+            in_body = True
+            brace_depth = 0
+        # Include property/method signatures at top level of type
+        elif in_body and brace_depth <= 1:
+            if re.match(r"(var|let|func|case|static)\s+", stripped):
+                # For computed properties, just show signature
+                if "{" in stripped and "}" not in stripped:
+                    result.append(line.split("{")[0].rstrip() + " { ... }")
+                else:
+                    result.append(line)
+        # Track brace depth
+        brace_depth += stripped.count("{") - stripped.count("}")
+        if brace_depth <= 0:
+            in_body = False
+    return "\n".join(result)
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -342,43 +371,35 @@ Return ONLY valid JSON. No markdown fences. No explanation.
 # ─────────────────────────────────────────────────────────────────────
 
 def phase2_generate_code(spec: dict) -> dict[str, str]:
-    """Generate all module files sequentially, each seeing prior code."""
+    """Generate all module files: Models + ViewModel via agent, then ALL views in one call."""
     name = spec["moduleName"]
     module_id = spec["moduleId"]
     print(f"\n[Phase 2] Generating code for {name}...")
 
     generated_files: dict[str, str] = {}
 
-    # 2a. Models (template-generated, but rich)
+    # 2a. Models
     print("  [2a] Generating Models...")
     models_code = generate_models_v2(spec)
     generated_files[f"{name}Models.swift"] = models_code
 
-    # 2b. ViewModel (agent-generated for richness)
+    # 2b. ViewModel
     print("  [2b] Generating ViewModel...")
     vm_code = generate_viewmodel_v2(spec, generated_files)
     generated_files[f"{name}ViewModel.swift"] = vm_code
 
-    # 2c. Views (agent-generated, each seeing prior code)
-    views = spec.get("views", [])
-    for i, view_spec in enumerate(views):
-        view_name = view_spec["name"]
-        print(f"  [2c.{i+1}] Generating {view_name}...")
-        view_code = generate_view_v2(spec, view_spec, generated_files)
-        generated_files[f"{name}{view_name}.swift"] = view_code
+    # 2c. ALL views + root view in ONE call (avoids per-view timeout)
+    print("  [2c] Generating all views (single call)...")
+    view_files = generate_all_views(spec, generated_files)
+    generated_files.update(view_files)
 
-    # 2d. Root View (ties all views together)
-    print("  [2d] Generating Root View...")
-    root_code = generate_root_view(spec, generated_files)
-    generated_files[f"{name}View.swift"] = root_code
-
-    # 2e. DataProvider (template)
-    print("  [2e] Generating DataProvider...")
+    # 2d. DataProvider (template)
+    print("  [2d] Generating DataProvider...")
     dp_code = generate_data_provider(spec)
     generated_files[f"{name}DataProvider.swift"] = dp_code
 
-    # 2f. Registration (template)
-    print("  [2f] Generating Registration...")
+    # 2e. Registration (template)
+    print("  [2e] Generating Registration...")
     reg_code = generate_registration(spec)
     generated_files[f"{name}Registration.swift"] = reg_code
 
@@ -411,6 +432,10 @@ REQUIREMENTS:
    - Each enum from the spec
 
 3. Add any helper computed properties that views/ViewModel will need.
+
+IMPORTANT: Do NOT define `InsightItem`, `ModuleInsight`, `ChartDataPoint`, `StatTrend`, or any type
+that already exists in the shared components. These are provided by the app's design system.
+Only define types specific to this module.
 
 {DESIGN_SYSTEM_DOC}
 
@@ -671,133 +696,585 @@ final class {name}ViewModel {{
 '''
 
 
-def generate_view_v2(spec: dict, view_spec: dict, prior_files: dict[str, str]) -> str:
-    """Generate a single view file, with full context of all prior generated code."""
+def generate_all_views(spec: dict, prior_files: dict[str, str]) -> dict[str, str]:
+    """Generate all views using rich templates based on the Opus spec.
+    Uses shared components (ProgressRing, Charts, StatCards, etc.) for sophistication."""
     name = spec["moduleName"]
-    view_name = view_spec["name"]
-    purpose = view_spec["purpose"]
-    components = view_spec.get("components", [])
+    display_name = spec["displayName"]
+    icon = spec["icon"]
+    views = spec.get("views", [])
+    fields = [f for f in spec.get("dataFields", []) if f["name"] not in ("id", "date")]
+    enums = spec.get("enums", [])
+    domain = spec.get("domainLogic", {})
 
-    # Build prior code context (summarize to avoid token overflow)
-    prior_context = ""
-    for fname, code in prior_files.items():
-        prior_context += f"\n// === {fname} ===\n{code}\n"
+    result = {}
 
-    prompt = f"""Generate a SwiftUI view called `{name}{view_name}` for a module called "{spec['displayName']}".
+    # Classify views by role
+    tab_views = []
+    sheet_view_name = None
+    for v in views:
+        vname = v["name"]
+        if "Sheet" in vname or "Entry" in vname:
+            sheet_view_name = vname
+        else:
+            tab_views.append(v)
 
-VIEW PURPOSE: {purpose}
-SHARED COMPONENTS TO USE: {', '.join(components)}
+    # Generate Dashboard View
+    dashboard_name = next((v["name"] for v in views if "Dashboard" in v["name"]), None)
+    if dashboard_name:
+        result[f"{name}{dashboard_name}.swift"] = _gen_dashboard_view(spec, fields, enums, domain)
 
-PREVIOUSLY GENERATED CODE (use these exact types and APIs):
-{prior_context}
+    # Generate Entry Sheet
+    if sheet_view_name:
+        result[f"{name}{sheet_view_name}.swift"] = _gen_entry_sheet(spec, fields, enums)
+    else:
+        sheet_view_name = "AddEntrySheet"
+        result[f"{name}{sheet_view_name}.swift"] = _gen_entry_sheet(spec, fields, enums)
 
-{SHARED_COMPONENTS_DOC}
+    # Generate History View
+    history_name = next((v["name"] for v in views if "History" in v["name"]), None)
+    if history_name:
+        result[f"{name}{history_name}.swift"] = _gen_history_view(spec, fields)
 
-{DESIGN_SYSTEM_DOC}
+    # Generate Analytics View
+    analytics_name = next((v["name"] for v in views if "Analytics" in v["name"] or "Stats" in v["name"]), None)
+    if analytics_name:
+        result[f"{name}{analytics_name}.swift"] = _gen_analytics_view(spec)
 
-CRITICAL RULES:
-1. The struct MUST be named `{name}{view_name}` (e.g., `WaterIntakeDashboardView`)
-2. Use `@Environment(\\.colorScheme) private var colorScheme`
-3. Take `viewModel: {name}ViewModel` as a binding or use @State — but since the root view owns it, accept it as a parameter: `let viewModel: {name}ViewModel`
-4. Use the EXACT shared component APIs from the docs above — do NOT invent parameters
-5. Use proper input controls: Stepper for counts, Slider for ratings, Picker for enums, Toggle for bools, DatePicker for times
-6. NEVER use TextField for numbers, booleans, dates, or categories
-7. Background: `.background(AdaptiveColors.background(for: colorScheme))`
-8. Make it visually rich — this should look like a premium app, not a CRUD form
+    # Generate Root View — only include tabs for views we actually generated
+    generated_tab_names = []
+    if dashboard_name:
+        generated_tab_names.append(dashboard_name)
+    if history_name:
+        generated_tab_names.append(history_name)
+    if analytics_name:
+        generated_tab_names.append(analytics_name)
+    result[f"{name}View.swift"] = _gen_root_view(spec, generated_tab_names, sheet_view_name)
 
-Return ONLY Swift code. No markdown fences. Start with `import SwiftUI`.
-"""
-    code = call_claude(prompt, max_tokens=12000, timeout=240)
-    code = extract_swift(code)
-    if not code.strip().startswith("import"):
-        # Minimal fallback
-        return f"""import SwiftUI
+    for fname in result:
+        lines = result[fname].count("\n") + 1
+        print(f"    Generated {fname} ({lines} lines)")
 
-struct {name}{view_name}: View {{
+    return result
+
+
+def _gen_dashboard_view(spec: dict, fields: list, enums: list, domain: dict) -> str:
+    """Generate a rich dashboard with ProgressRing, StatCards, StreakCounter, recent entries."""
+    name = spec["moduleName"]
+    display_name = spec["displayName"]
+    icon = spec["icon"]
+
+    # Determine the primary numeric field for the progress ring
+    numeric_fields = [f for f in fields if f["type"] in ("Int", "Double") and f["name"] != "note"]
+    primary_field = numeric_fields[0] if numeric_fields else None
+
+    # Build progress ring / summary section
+    progress_section = f'''
+                // Summary Card
+                HubCard {{
+                    HStack {{
+                        VStack(alignment: .leading, spacing: 4) {{
+                            Text("\\(viewModel.todayEntries.count)")
+                                .font(.system(size: 32, weight: .bold, design: .rounded))
+                                .foregroundStyle(Color.hubPrimary)
+                            Text("Today's entries")
+                                .font(.hubCaption)
+                                .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                        }}
+                        Spacer()
+                        Text("\\(viewModel.entries.count) total")
+                            .font(.hubCaption)
+                            .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                    }}
+                }}
+'''
+
+    # Build stat cards — use safe computed properties from fallback VM
+    stat_cards = f'''
+                // Stats
+                StatGrid {{
+                    StatCard(
+                        title: "Today",
+                        value: "\\(viewModel.todayEntries.count)",
+                        icon: "{icon}",
+                        color: .hubPrimary
+                    )
+                    StatCard(
+                        title: "Streak",
+                        value: "\\(viewModel.currentStreak)d",
+                        icon: "flame.fill",
+                        color: .hubAccentYellow
+                    )
+                    StatCard(
+                        title: "Best",
+                        value: "\\(viewModel.longestStreak)d",
+                        icon: "trophy.fill",
+                        color: .hubAccentGreen
+                    )
+                    StatCard(
+                        title: "Total",
+                        value: "\\(viewModel.entries.count)",
+                        icon: "chart.bar.fill",
+                        color: .hubPrimaryLight
+                    )
+                }}
+'''
+
+    # Build recent entries section
+    first_display_field = next((f for f in fields if f["name"] != "note" and not f["type"].endswith("?")), None)
+    entry_display = 'Text(entry.summaryLine).font(.hubBody).foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))'
+
+    return f'''import SwiftUI
+
+struct {name}DashboardView: View {{
     @Environment(\\.colorScheme) private var colorScheme
     let viewModel: {name}ViewModel
 
     var body: some View {{
         ScrollView {{
             VStack(spacing: HubLayout.sectionSpacing) {{
-                Text("{view_name}")
-                    .font(.hubHeading)
-                    .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+{progress_section}
+{stat_cards}
+
+                // Streak
+                StreakCounter(
+                    currentStreak: viewModel.currentStreak,
+                    longestStreak: viewModel.longestStreak,
+                    isActiveToday: !viewModel.todayEntries.isEmpty
+                )
+
+                // Recent Entries
+                if !viewModel.todayEntries.isEmpty {{
+                    VStack(alignment: .leading, spacing: HubLayout.itemSpacing) {{
+                        SectionHeader(title: "Today")
+                        ForEach(viewModel.todayEntries.reversed()) {{ entry in
+                            HubCard {{
+                                HStack {{
+                                    VStack(alignment: .leading, spacing: 4) {{
+                                        {entry_display}
+                                        Text(entry.date)
+                                            .font(.hubCaption)
+                                            .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                                    }}
+                                    Spacer()
+                                    Button {{
+                                        Task {{ await viewModel.deleteEntry(entry) }}
+                                    }} label: {{
+                                        Image(systemName: "trash")
+                                            .font(.system(size: 14))
+                                            .foregroundStyle(Color.hubAccentRed)
+                                    }}
+                                }}
+                            }}
+                        }}
+                    }}
+                }}
             }}
             .padding(HubLayout.standardPadding)
         }}
         .background(AdaptiveColors.background(for: colorScheme))
     }}
 }}
-"""
-    return code
+'''
 
 
-def generate_root_view(spec: dict, prior_files: dict[str, str]) -> str:
-    """Generate the root view that ties all sub-views together."""
+def _gen_entry_sheet(spec: dict, fields: list, enums: list) -> str:
+    """Generate a QuickEntrySheet with domain-appropriate controls."""
+    name = spec["moduleName"]
+    display_name = spec["displayName"]
+
+    # Build @State declarations and input controls
+    state_vars = []
+    form_controls = []
+    entry_init_args = []
+
+    enum_names = {e["name"] for e in enums}
+
+    for f in fields:
+        fname = f["name"]
+        ftype = f["type"]
+        label = f["label"]
+        control = f.get("control", "text")
+        is_optional = ftype.endswith("?")
+        base_type = ftype.rstrip("?")
+
+        if base_type in enum_names:
+            # Enum picker
+            state_vars.append(f"    @State private var selected{fname.capitalize()}: {base_type} = .{enums[next(i for i, e in enumerate(enums) if e['name'] == base_type)]['cases'][0]['name']}")
+            form_controls.append(f'''
+                EntryFormSection(title: "{label}") {{
+                    Picker("{label}", selection: $selected{fname.capitalize()}) {{
+                        ForEach({base_type}.allCases) {{ item in
+                            Label(item.displayName, systemImage: item.icon).tag(item)
+                        }}
+                    }}
+                    .pickerStyle(.menu)
+                }}''')
+            entry_init_args.append(f"{fname}: selected{fname.capitalize()}")
+
+        elif control == "stepper" or (base_type == "Int" and control != "slider"):
+            default = "0" if is_optional else "1"
+            state_vars.append(f"    @State private var input{fname.capitalize()}: Int = {default}")
+            form_controls.append(f'''
+                EntryFormSection(title: "{label}") {{
+                    Stepper("\\(input{fname.capitalize()}) {label.lower()}", value: $input{fname.capitalize()}, in: 0...9999)
+                }}''')
+            entry_init_args.append(f"{fname}: input{fname.capitalize()}")
+
+        elif control == "slider" or (base_type in ("Int", "Double") and "rating" in fname.lower()):
+            state_vars.append(f"    @State private var input{fname.capitalize()}: Double = 5")
+            form_controls.append(f'''
+                EntryFormSection(title: "{label}") {{
+                    VStack {{
+                        HStack {{
+                            Text("\\(Int(input{fname.capitalize()}))")
+                                .font(.system(size: 24, weight: .bold, design: .rounded))
+                                .foregroundStyle(Color.hubPrimary)
+                            Spacer()
+                        }}
+                        Slider(value: $input{fname.capitalize()}, in: 1...10, step: 1)
+                            .tint(Color.hubPrimary)
+                    }}
+                }}''')
+            if base_type == "Int":
+                entry_init_args.append(f"{fname}: Int(input{fname.capitalize()})")
+            else:
+                entry_init_args.append(f"{fname}: input{fname.capitalize()}")
+
+        elif control == "toggle" or base_type == "Bool":
+            state_vars.append(f"    @State private var input{fname.capitalize()}: Bool = false")
+            form_controls.append(f'''
+                EntryFormSection(title: "{label}") {{
+                    Toggle("{label}", isOn: $input{fname.capitalize()})
+                        .tint(Color.hubPrimary)
+                }}''')
+            entry_init_args.append(f"{fname}: input{fname.capitalize()}")
+
+        elif control == "datePicker":
+            state_vars.append(f"    @State private var input{fname.capitalize()}: Date = Date()")
+            form_controls.append(f'''
+                EntryFormSection(title: "{label}") {{
+                    DatePicker("{label}", selection: $input{fname.capitalize()}, displayedComponents: .hourAndMinute)
+                }}''')
+            # Pass Date directly if field type is Date, otherwise format to String
+            if base_type == "Date":
+                entry_init_args.append(f"{fname}: input{fname.capitalize()}")
+            else:
+                entry_init_args.append(f'{fname}: {{ let f = DateFormatter(); f.dateFormat = "HH:mm"; return f.string(from: input{fname.capitalize()}) }}()')
+
+        elif base_type == "Double":
+            state_vars.append(f'    @State private var input{fname.capitalize()}: String = ""')
+            form_controls.append(f'''
+                EntryFormSection(title: "{label}") {{
+                    HubTextField(placeholder: "{label}", text: $input{fname.capitalize()})
+                        .keyboardType(.decimalPad)
+                }}''')
+            if is_optional:
+                entry_init_args.append(f"{fname}: Double(input{fname.capitalize()})")
+            else:
+                entry_init_args.append(f"{fname}: Double(input{fname.capitalize()}) ?? 0")
+
+        else:
+            # Text field (for actual text: notes, descriptions, names)
+            state_vars.append(f'    @State private var input{fname.capitalize()}: String = ""')
+            form_controls.append(f'''
+                EntryFormSection(title: "{label}") {{
+                    HubTextField(placeholder: "{label}", text: $input{fname.capitalize()})
+                }}''')
+            if is_optional:
+                entry_init_args.append(f"{fname}: input{fname.capitalize()}.isEmpty ? nil : input{fname.capitalize()}")
+            else:
+                entry_init_args.append(f"{fname}: input{fname.capitalize()}")
+
+    state_vars_str = "\n".join(state_vars)
+    form_controls_str = "\n".join(form_controls)
+    entry_args_str = ", ".join(entry_init_args)
+
+    # Determine the sheet view name from spec
+    sheet_name = "AddEntrySheet"
+    for v in spec.get("views", []):
+        if "Sheet" in v["name"] or "Entry" in v["name"]:
+            sheet_name = v["name"]
+            break
+
+    return f'''import SwiftUI
+
+struct {name}{sheet_name}: View {{
+    @Environment(\\.colorScheme) private var colorScheme
+    let viewModel: {name}ViewModel
+    var onSave: (() -> Void)?
+{state_vars_str}
+
+    var body: some View {{
+        QuickEntrySheet(
+            title: "Add {display_name}",
+            icon: "plus.circle.fill",
+            canSave: true,
+            onSave: {{
+                let entry = {name}Entry({entry_args_str})
+                Task {{ await viewModel.addEntry(entry) }}
+                onSave?()
+            }}
+        ) {{
+{form_controls_str}
+        }}
+    }}
+}}
+'''
+
+
+def _gen_history_view(spec: dict, fields: list) -> str:
+    """Generate a history view with CalendarHeatmap and grouped entries."""
+    name = spec["moduleName"]
+
+    # Find the history view name from spec
+    history_name = "HistoryView"
+    for v in spec.get("views", []):
+        if "History" in v["name"]:
+            history_name = v["name"]
+            break
+
+    return f'''import SwiftUI
+
+struct {name}{history_name}: View {{
+    @Environment(\\.colorScheme) private var colorScheme
+    let viewModel: {name}ViewModel
+
+    private var heatmapData: [Date: Double] {{
+        let calendar = Calendar.current
+        let df = DateFormatter()
+        df.dateFormat = "yyyy-MM-dd"
+        var result: [Date: Double] = [:]
+        for entry in viewModel.entries {{
+            if let date = df.date(from: String(entry.date.prefix(10))) {{
+                let day = calendar.startOfDay(for: date)
+                result[day, default: 0] += 1
+            }}
+        }}
+        return result
+    }}
+
+    private var groupedEntries: [(String, [{name}Entry])] {{
+        let df = DateFormatter()
+        df.dateFormat = "yyyy-MM-dd"
+        let grouped = Dictionary(grouping: viewModel.entries) {{ String($0.date.prefix(10)) }}
+        return grouped.sorted {{ $0.key > $1.key }}
+    }}
+
+    var body: some View {{
+        ScrollView {{
+            VStack(spacing: HubLayout.sectionSpacing) {{
+                // Calendar Heatmap
+                CalendarHeatmap(
+                    title: "Activity",
+                    data: heatmapData,
+                    color: .hubPrimary
+                )
+
+                // Grouped entries by date
+                ForEach(groupedEntries, id: \\.0) {{ dateStr, entries in
+                    VStack(alignment: .leading, spacing: HubLayout.itemSpacing) {{
+                        SectionHeader(title: dateStr)
+                        ForEach(entries) {{ entry in
+                            HubCard {{
+                                HStack {{
+                                    VStack(alignment: .leading, spacing: 4) {{
+                                        Text(entry.summaryLine)
+                                            .font(.hubBody)
+                                            .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                                        Text(entry.date)
+                                            .font(.hubCaption)
+                                            .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                                    }}
+                                    Spacer()
+                                    Button {{
+                                        Task {{ await viewModel.deleteEntry(entry) }}
+                                    }} label: {{
+                                        Image(systemName: "trash")
+                                            .font(.system(size: 14))
+                                            .foregroundStyle(Color.hubAccentRed.opacity(0.7))
+                                    }}
+                                }}
+                            }}
+                        }}
+                    }}
+                }}
+
+                if viewModel.entries.isEmpty {{
+                    VStack(spacing: 12) {{
+                        Image(systemName: "tray")
+                            .font(.system(size: 40))
+                            .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                        Text("No entries yet")
+                            .font(.hubBody)
+                            .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                    }}
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 40)
+                }}
+            }}
+            .padding(HubLayout.standardPadding)
+        }}
+        .background(AdaptiveColors.background(for: colorScheme))
+    }}
+}}
+'''
+
+
+def _gen_analytics_view(spec: dict) -> str:
+    """Generate an analytics view with charts and insights."""
+    name = spec["moduleName"]
+
+    analytics_name = "AnalyticsView"
+    for v in spec.get("views", []):
+        if "Analytics" in v["name"] or "Stats" in v["name"]:
+            analytics_name = v["name"]
+            break
+
+    return f'''import SwiftUI
+
+struct {name}{analytics_name}: View {{
+    @Environment(\\.colorScheme) private var colorScheme
+    let viewModel: {name}ViewModel
+
+    var body: some View {{
+        ScrollView {{
+            VStack(spacing: HubLayout.sectionSpacing) {{
+                // Weekly Chart
+                ModuleChartView(
+                    title: "This Week",
+                    subtitle: "Daily entries",
+                    dataPoints: viewModel.weeklyChartData,
+                    style: .bar,
+                    color: .hubPrimary
+                )
+
+                // Insights
+                if !viewModel.insights.isEmpty {{
+                    VStack(alignment: .leading, spacing: HubLayout.itemSpacing) {{
+                        SectionHeader(title: "Insights")
+                        InsightsList(insights: viewModel.insights)
+                    }}
+                }}
+
+                // Stats summary
+                HubCard {{
+                    VStack(alignment: .leading, spacing: 12) {{
+                        Text("Summary")
+                            .font(.hubHeading)
+                            .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+
+                        HStack {{
+                            VStack(alignment: .leading, spacing: 4) {{
+                                Text("Total Entries")
+                                    .font(.hubCaption)
+                                    .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                                Text("\\(viewModel.entries.count)")
+                                    .font(.system(size: 20, weight: .bold, design: .rounded))
+                                    .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                            }}
+                            Spacer()
+                            VStack(alignment: .leading, spacing: 4) {{
+                                Text("Current Streak")
+                                    .font(.hubCaption)
+                                    .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                                Text("\\(viewModel.currentStreak) days")
+                                    .font(.system(size: 20, weight: .bold, design: .rounded))
+                                    .foregroundStyle(Color.hubAccentYellow)
+                            }}
+                            Spacer()
+                            VStack(alignment: .leading, spacing: 4) {{
+                                Text("Best Streak")
+                                    .font(.hubCaption)
+                                    .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                                Text("\\(viewModel.longestStreak) days")
+                                    .font(.system(size: 20, weight: .bold, design: .rounded))
+                                    .foregroundStyle(Color.hubAccentGreen)
+                            }}
+                        }}
+                    }}
+                }}
+            }}
+            .padding(HubLayout.standardPadding)
+        }}
+        .background(AdaptiveColors.background(for: colorScheme))
+    }}
+}}
+'''
+
+
+def _gen_root_view(spec: dict, tab_view_names: list[str], sheet_view_name: str) -> str:
+    """Generate the root view with tab switching and entry sheet."""
     name = spec["moduleName"]
     display_name = spec["displayName"]
     icon = spec["icon"]
-    views = spec.get("views", [])
 
-    # Build view names
-    view_structs = [f"{name}{v['name']}" for v in views]
-    view_labels = [v["name"].replace("View", "").replace("Sheet", "") for v in views]
+    # Build tab cases and views
+    tab_labels = [vn.replace("View", "").replace("Dashboard", "Home") for vn in tab_view_names]
+    tab_picker_items = ""
+    tab_switch_cases = ""
+    for i, (vn, label) in enumerate(zip(tab_view_names, tab_labels)):
+        tab_picker_items += f'                    Text("{label}").tag({i})\n'
+        tab_switch_cases += f'''                    if selectedTab == {i} {{
+                        {name}{vn}(viewModel: viewModel)
+                    }}
+'''
 
-    # Include prior code context (just the struct names and key APIs)
-    prior_summary = ""
-    for fname, code in prior_files.items():
-        # Extract struct/class declarations only for context
-        structs = re.findall(r"(struct|class|enum)\s+\w+", code)
-        prior_summary += f"\n// {fname}: {', '.join(structs)}"
+    return f'''import SwiftUI
 
-    prompt = f"""Generate the ROOT SwiftUI view for a module called "{display_name}".
+struct {name}View: View {{
+    @Environment(\\.colorScheme) private var colorScheme
+    @State private var viewModel = {name}ViewModel()
+    @State private var selectedTab = 0
+    @State private var showAddSheet = false
 
-MODULE NAME: {name}
-ICON: {icon}
-SUB-VIEWS: {json.dumps([{"struct": s, "label": l, "purpose": v["purpose"]} for s, l, v in zip(view_structs, view_labels, views)], indent=2)}
+    var body: some View {{
+        VStack(spacing: 0) {{
+            // Header
+            HStack(spacing: 12) {{
+                ZStack {{
+                    Circle()
+                        .fill(Color.hubPrimary.opacity(0.12))
+                        .frame(width: 40, height: 40)
+                    Image(systemName: "{icon}")
+                        .font(.system(size: 18, weight: .medium))
+                        .foregroundStyle(Color.hubPrimary)
+                }}
+                Text("{display_name}")
+                    .font(.hubHeading)
+                    .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                Spacer()
+            }}
+            .padding(.horizontal, HubLayout.standardPadding)
+            .padding(.bottom, 8)
 
-AVAILABLE TYPES (from prior generated files):
-{prior_summary}
+            // Tab picker
+            Picker("", selection: $selectedTab) {{
+{tab_picker_items}            }}
+            .pickerStyle(.segmented)
+            .padding(.horizontal, HubLayout.standardPadding)
+            .padding(.bottom, HubLayout.itemSpacing)
 
-The root view MUST:
-1. Be named `{name}View` (this is what gets registered in the module system)
-2. Own the ViewModel: `@State private var viewModel = {name}ViewModel()`
-3. Use a tab/segment control or NavigationStack to switch between sub-views
-4. Pass `viewModel` to each sub-view
-5. Include `.task {{ await viewModel.loadData() }}`
-6. Have an "Add" FAB (floating action button) or toolbar button that presents entry sheet
-7. If there's an entry sheet view, present it via `.sheet(isPresented:)`
-
-PATTERN — use a segmented picker for 2-4 tabs:
-```
-@State private var selectedTab = 0
-Picker("", selection: $selectedTab) {{
-    Text("Dashboard").tag(0)
-    Text("History").tag(1)
-    Text("Analytics").tag(2)
+            // Content
+            ZStack(alignment: .bottomTrailing) {{
+{tab_switch_cases}
+                // FAB
+                QuickEntryFAB {{
+                    showAddSheet = true
+                }}
+                .padding(HubLayout.standardPadding)
+            }}
+        }}
+        .background(AdaptiveColors.background(for: colorScheme))
+        .task {{ await viewModel.loadData() }}
+        .sheet(isPresented: $showAddSheet) {{
+            {name}{sheet_view_name}(viewModel: viewModel) {{
+                showAddSheet = false
+            }}
+        }}
+    }}
 }}
-.pickerStyle(.segmented)
-```
-
-Then switch on selectedTab to show the right sub-view.
-
-{DESIGN_SYSTEM_DOC}
-
-CRITICAL:
-- SectionHeader(title: "Label") — requires title: label
-- HubCard {{ content }} — trailing closure
-- QuickEntryFAB(action: {{ }}) for the add button
-- All sub-views take `viewModel` as `let viewModel: {name}ViewModel`
-- Do NOT duplicate logic from sub-views — just compose them
-
-Return ONLY Swift code. No markdown fences. Start with `import SwiftUI`.
-"""
-    code = call_claude(prompt, max_tokens=8000, timeout=240)
-    code = extract_swift(code)
-    if not code.strip().startswith("import"):
-        return generate_root_view_fallback(spec, view_structs)
-    return code
+'''
 
 
 def generate_root_view_fallback(spec: dict, view_structs: list[str]) -> str:
