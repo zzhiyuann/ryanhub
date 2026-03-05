@@ -1,27 +1,27 @@
 import SwiftUI
 
-struct PeopleNotesEntrySheet: View {
+struct PeopleJournalEntrySheet: View {
     @Environment(\.colorScheme) private var colorScheme
-    let viewModel: PeopleNotesViewModel
+    let viewModel: PeopleJournalViewModel
     var onSave: (() -> Void)?
     @State private var inputPersonname: String = ""
     @State private var selectedRelationship: RelationshipType = .colleague
-    @State private var selectedMeetingcontext: MeetingContext = .inPerson
+    @State private var selectedMeetingcontext: MeetingContext = .coffee
     @State private var inputLocation: String = ""
     @State private var inputTopics: String = ""
-    @State private var inputFollowup: String = ""
-    @State private var inputFollowupdone: Bool = false
-    @State private var inputConnectionrating: Double = 5
+    @State private var inputConnectionstrength: Double = 5
     @State private var selectedInteractionmood: InteractionMood = .great
+    @State private var inputFollowupneeded: Bool = false
+    @State private var inputFollowupnote: String = ""
     @State private var inputNotes: String = ""
 
     var body: some View {
         QuickEntrySheet(
-            title: "Add People Notes",
+            title: "Add People Journal",
             icon: "plus.circle.fill",
             canSave: true,
             onSave: {
-                let entry = PeopleNotesEntry(personName: inputPersonname, relationship: selectedRelationship, meetingContext: selectedMeetingcontext, location: inputLocation, topics: inputTopics, followUp: inputFollowup, followUpDone: inputFollowupdone, connectionRating: Int(inputConnectionrating), interactionMood: selectedInteractionmood, notes: inputNotes)
+                let entry = PeopleJournalEntry(personName: inputPersonname, relationship: selectedRelationship, meetingContext: selectedMeetingcontext, location: inputLocation, topics: inputTopics, connectionStrength: Int(inputConnectionstrength), interactionMood: selectedInteractionmood, followUpNeeded: inputFollowupneeded, followUpNote: inputFollowupnote, notes: inputNotes)
                 Task { await viewModel.addEntry(entry) }
                 onSave?()
             }
@@ -40,8 +40,8 @@ struct PeopleNotesEntrySheet: View {
                     .pickerStyle(.menu)
                 }
 
-                EntryFormSection(title: "How You Connected") {
-                    Picker("How You Connected", selection: $selectedMeetingcontext) {
+                EntryFormSection(title: "How You Met / Context") {
+                    Picker("How You Met / Context", selection: $selectedMeetingcontext) {
                         ForEach(MeetingContext.allCases) { item in
                             Label(item.displayName, systemImage: item.icon).tag(item)
                         }
@@ -57,24 +57,15 @@ struct PeopleNotesEntrySheet: View {
                     HubTextField(placeholder: "Topics Discussed", text: $inputTopics)
                 }
 
-                EntryFormSection(title: "Follow-up Action") {
-                    HubTextField(placeholder: "Follow-up Action", text: $inputFollowup)
-                }
-
-                EntryFormSection(title: "Follow-up Complete") {
-                    Toggle("Follow-up Complete", isOn: $inputFollowupdone)
-                        .tint(Color.hubPrimary)
-                }
-
-                EntryFormSection(title: "Connection Quality") {
+                EntryFormSection(title: "Connection Strength") {
                     VStack {
                         HStack {
-                            Text("\(Int(inputConnectionrating))")
+                            Text("\(Int(inputConnectionstrength))")
                                 .font(.system(size: 24, weight: .bold, design: .rounded))
                                 .foregroundStyle(Color.hubPrimary)
                             Spacer()
                         }
-                        Slider(value: $inputConnectionrating, in: 1...10, step: 1)
+                        Slider(value: $inputConnectionstrength, in: 1...10, step: 1)
                             .tint(Color.hubPrimary)
                     }
                 }
@@ -88,8 +79,17 @@ struct PeopleNotesEntrySheet: View {
                     .pickerStyle(.menu)
                 }
 
-                EntryFormSection(title: "Notes") {
-                    HubTextField(placeholder: "Notes", text: $inputNotes)
+                EntryFormSection(title: "Follow-up Needed") {
+                    Toggle("Follow-up Needed", isOn: $inputFollowupneeded)
+                        .tint(Color.hubPrimary)
+                }
+
+                EntryFormSection(title: "Follow-up Note") {
+                    HubTextField(placeholder: "Follow-up Note", text: $inputFollowupnote)
+                }
+
+                EntryFormSection(title: "Quick Notes") {
+                    HubTextField(placeholder: "Quick Notes", text: $inputNotes)
                 }
         }
     }

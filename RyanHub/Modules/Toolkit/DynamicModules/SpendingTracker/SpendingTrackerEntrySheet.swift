@@ -1,110 +1,62 @@
 import SwiftUI
 
 struct SpendingTrackerEntrySheet: View {
+    @Environment(\.colorScheme) private var colorScheme
     let viewModel: SpendingTrackerViewModel
     var onSave: (() -> Void)?
-
-    @Environment(\.colorScheme) private var colorScheme
-
-    @State private var amountText: String = ""
-    @State private var category: SpendingCategory = .other
-    @State private var paymentMethod: PaymentMethod = .cash
-    @State private var isRecurring: Bool = false
-    @State private var note: String = ""
-    @State private var entryDate: Date = Date()
-
-    private var amount: Double {
-        Double(amountText) ?? 0.0
-    }
-
-    private var canSave: Bool {
-        amount > 0
-    }
+    @State private var inputAmount: Double = 0.0
+    @State private var selectedCategory: SpendingCategory = .food
+    @State private var selectedPaymentmethod: SpendingPaymentMethod = .cash
+    @State private var inputMerchant: String = ""
+    @State private var inputIsrecurring: Bool = false
+    @State private var inputNote: String = ""
 
     var body: some View {
         QuickEntrySheet(
             title: "Add Spending Tracker",
             icon: "plus.circle.fill",
-            canSave: canSave,
-            onSave: saveEntry
+            canSave: true,
+            onSave: {
+                let entry = SpendingTrackerEntry(amount: inputAmount, category: selectedCategory, paymentMethod: selectedPaymentmethod, merchant: inputMerchant, isRecurring: inputIsrecurring, note: inputNote)
+                Task { await viewModel.addEntry(entry) }
+                onSave?()
+            }
         ) {
-            EntryFormSection(title: "Amount") {
-                HStack(spacing: 4) {
-                    Text("$")
-                        .font(.hubHeading)
-                        .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
-                    TextField("0.00", text: $amountText)
-                        .keyboardType(.decimalPad)
-                        .font(.hubHeading)
-                        .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
-                }
-                .padding(.vertical, 4)
-            }
 
-            EntryFormSection(title: "Category") {
-                Picker("Category", selection: $category) {
-                    ForEach(SpendingCategory.allCases) { cat in
-                        Label(cat.displayName, systemImage: cat.icon)
-                            .tag(cat)
+                EntryFormSection(title: "Amount ($)") {
+                    Stepper("\(inputAmount) amount ($)", value: $inputAmount, in: 0...9999)
+                }
+
+                EntryFormSection(title: "Category") {
+                    Picker("Category", selection: $selectedCategory) {
+                        ForEach(SpendingCategory.allCases) { item in
+                            Label(item.displayName, systemImage: item.icon).tag(item)
+                        }
                     }
+                    .pickerStyle(.menu)
                 }
-                .pickerStyle(.menu)
-                .tint(Color.hubPrimary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
 
-            EntryFormSection(title: "Payment Method") {
-                Picker("Payment Method", selection: $paymentMethod) {
-                    ForEach(PaymentMethod.allCases) { method in
-                        Label(method.displayName, systemImage: method.icon)
-                            .tag(method)
+                EntryFormSection(title: "Payment Method") {
+                    Picker("Payment Method", selection: $selectedPaymentmethod) {
+                        ForEach(SpendingPaymentMethod.allCases) { item in
+                            Label(item.displayName, systemImage: item.icon).tag(item)
+                        }
                     }
+                    .pickerStyle(.menu)
                 }
-                .pickerStyle(.menu)
-                .tint(Color.hubPrimary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
 
-            EntryFormSection(title: "Date") {
-                DatePicker(
-                    "",
-                    selection: $entryDate,
-                    displayedComponents: [.date, .hourAndMinute]
-                )
-                .labelsHidden()
-                .tint(Color.hubPrimary)
-            }
+                EntryFormSection(title: "Merchant / Description") {
+                    HubTextField(placeholder: "Merchant / Description", text: $inputMerchant)
+                }
 
-            EntryFormSection(title: "Options") {
-                Toggle("Recurring expense", isOn: $isRecurring)
-                    .font(.hubBody)
-                    .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
-                    .tint(Color.hubPrimary)
-            }
+                EntryFormSection(title: "Recurring Expense") {
+                    Toggle("Recurring Expense", isOn: $inputIsrecurring)
+                        .tint(Color.hubPrimary)
+                }
 
-            EntryFormSection(title: "Note") {
-                TextField("Optional note…", text: $note)
-                    .font(.hubBody)
-                    .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
-            }
+                EntryFormSection(title: "Note") {
+                    HubTextField(placeholder: "Note", text: $inputNote)
+                }
         }
-    }
-
-    private func saveEntry() {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd HH:mm"
-
-        let entry = SpendingTrackerEntry(
-            id: UUID().uuidString,
-            date: formatter.string(from: entryDate),
-            amount: amount,
-            category: category,
-            paymentMethod: paymentMethod,
-            isRecurring: isRecurring,
-            note: note
-        )
-
-        Task { await viewModel.addEntry(entry) }
-        onSave?()
     }
 }

@@ -1,76 +1,91 @@
 import Foundation
 
-// MARK: - PeopleNotes Models
+// MARK: - PeopleJournal Models
 
 enum RelationshipType: String, Codable, CaseIterable, Identifiable {
     case colleague
     case friend
-    case family
     case acquaintance
     case client
     case mentor
+    case family
+    case neighbor
+    case classmate
     case other
     var id: String { rawValue }
     var displayName: String {
         switch self {
         case .colleague: return "Colleague"
         case .friend: return "Friend"
-        case .family: return "Family"
         case .acquaintance: return "Acquaintance"
         case .client: return "Client"
         case .mentor: return "Mentor"
+        case .family: return "Family"
+        case .neighbor: return "Neighbor"
+        case .classmate: return "Classmate"
         case .other: return "Other"
         }
     }
     var icon: String {
         switch self {
-        case .colleague: return "briefcase"
-        case .friend: return "heart"
-        case .family: return "house"
-        case .acquaintance: return "person.wave.2"
-        case .client: return "building.2"
-        case .mentor: return "graduationcap"
-        case .other: return "person"
+        case .colleague: return "briefcase.fill"
+        case .friend: return "face.smiling"
+        case .acquaintance: return "person.fill"
+        case .client: return "building.2.fill"
+        case .mentor: return "graduationcap.fill"
+        case .family: return "house.fill"
+        case .neighbor: return "door.left.hand.open"
+        case .classmate: return "book.fill"
+        case .other: return "person.crop.circle.badge.questionmark"
         }
     }
 }
 
 enum MeetingContext: String, Codable, CaseIterable, Identifiable {
-    case inPerson
     case coffee
-    case meeting
-    case call
+    case work
     case event
     case online
-    case casual
+    case phone
+    case random
+    case introduction
+    case classroom
+    case gym
+    case other
     var id: String { rawValue }
     var displayName: String {
         switch self {
-        case .inPerson: return "In Person"
         case .coffee: return "Coffee / Meal"
-        case .meeting: return "Meeting"
-        case .call: return "Phone / Video Call"
+        case .work: return "Work Meeting"
         case .event: return "Event / Party"
-        case .online: return "Online / Chat"
-        case .casual: return "Casual Encounter"
+        case .online: return "Online / Video"
+        case .phone: return "Phone Call"
+        case .random: return "Random Encounter"
+        case .introduction: return "Introduction"
+        case .classroom: return "Class / Workshop"
+        case .gym: return "Gym / Sports"
+        case .other: return "Other"
         }
     }
     var icon: String {
         switch self {
-        case .inPerson: return "person.2"
-        case .coffee: return "cup.and.saucer"
-        case .meeting: return "person.3"
-        case .call: return "phone"
+        case .coffee: return "cup.and.saucer.fill"
+        case .work: return "desktopcomputer"
         case .event: return "party.popper"
-        case .online: return "message"
-        case .casual: return "figure.walk"
+        case .online: return "video.fill"
+        case .phone: return "phone.fill"
+        case .random: return "figure.walk"
+        case .introduction: return "hand.wave.fill"
+        case .classroom: return "studentdesk"
+        case .gym: return "figure.run"
+        case .other: return "ellipsis.circle"
         }
     }
 }
 
 enum InteractionMood: String, Codable, CaseIterable, Identifiable {
     case great
-    case good
+    case positive
     case neutral
     case awkward
     case tense
@@ -78,7 +93,7 @@ enum InteractionMood: String, Codable, CaseIterable, Identifiable {
     var displayName: String {
         switch self {
         case .great: return "Great"
-        case .good: return "Good"
+        case .positive: return "Positive"
         case .neutral: return "Neutral"
         case .awkward: return "Awkward"
         case .tense: return "Tense"
@@ -86,16 +101,16 @@ enum InteractionMood: String, Codable, CaseIterable, Identifiable {
     }
     var icon: String {
         switch self {
-        case .great: return "face.smiling"
-        case .good: return "hand.thumbsup"
+        case .great: return "star.fill"
+        case .positive: return "hand.thumbsup.fill"
         case .neutral: return "minus.circle"
-        case .awkward: return "questionmark.circle"
+        case .awkward: return "face.dashed"
         case .tense: return "exclamationmark.triangle"
         }
     }
 }
 
-struct PeopleNotesEntry: Codable, Identifiable {
+struct PeopleJournalEntry: Codable, Identifiable {
     var id: String = UUID().uuidString
     var date: String = {
         let f = DateFormatter()
@@ -107,10 +122,10 @@ struct PeopleNotesEntry: Codable, Identifiable {
     var meetingContext: MeetingContext
     var location: String
     var topics: String
-    var followUp: String
-    var followUpDone: Bool
-    var connectionRating: Int
+    var connectionStrength: Int
     var interactionMood: InteractionMood
+    var followUpNeeded: Bool
+    var followUpNote: String
     var notes: String
 
     var summaryLine: String {
@@ -120,10 +135,10 @@ struct PeopleNotesEntry: Codable, Identifiable {
         parts.append("\(meetingContext)")
         parts.append("\(location)")
         parts.append("\(topics)")
-        parts.append("\(followUp)")
-        parts.append("\(followUpDone)")
-        parts.append("\(connectionRating)")
+        parts.append("\(connectionStrength)")
         parts.append("\(interactionMood)")
+        parts.append("\(followUpNeeded)")
+        parts.append("\(followUpNote)")
         parts.append("\(notes)")
         return parts.joined(separator: " | ")
     }

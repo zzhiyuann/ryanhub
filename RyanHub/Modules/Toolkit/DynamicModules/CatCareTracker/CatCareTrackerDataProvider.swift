@@ -5,7 +5,7 @@ import Foundation
 enum CatCareTrackerDataProvider: ToolkitDataProvider {
     static let toolkitId = "catCareTracker"
     static let displayName = "Cat Care Tracker"
-    static let relevanceKeywords: [String] = ["cat", "pet", "feeding", "vet", "veterinary", "weight", "medication", "health", "animal", "kitten"]
+    static let relevanceKeywords: [String] = ["cat", "pet", "feeding", "vet", "veterinary", "weight", "medication", "health", "kitten", "feline"]
 
     private static var bridgeBaseURL: String {
         UserDefaults.standard.string(forKey: "ryanhub_server_url")

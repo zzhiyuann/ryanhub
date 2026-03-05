@@ -5,7 +5,7 @@ import Foundation
 enum ScreenTimeTrackerDataProvider: ToolkitDataProvider {
     static let toolkitId = "screenTimeTracker"
     static let displayName = "Screen Time Tracker"
-    static let relevanceKeywords: [String] = ["screen time", "digital wellness", "phone usage", "screen goal", "device", "apps", "mindful", "digital detox", "hours", "productivity"]
+    static let relevanceKeywords: [String] = ["screen time", "phone usage", "digital wellness", "app usage", "device time", "screen goal", "phone addiction", "digital detox", "usage limit", "screen hours"]
 
     private static var bridgeBaseURL: String {
         UserDefaults.standard.string(forKey: "ryanhub_server_url")

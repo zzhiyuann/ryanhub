@@ -1,8 +1,8 @@
 import SwiftUI
 
-struct FocusTimerView: View {
+struct FocusSessionView: View {
     @Environment(\.colorScheme) private var colorScheme
-    @State private var viewModel = FocusTimerViewModel()
+    @State private var viewModel = FocusSessionViewModel()
     @State private var selectedTab = 0
     @State private var showAddSheet = false
 
@@ -18,7 +18,7 @@ struct FocusTimerView: View {
                         .font(.system(size: 18, weight: .medium))
                         .foregroundStyle(Color.hubPrimary)
                 }
-                Text("Focus Timer")
+                Text("Focus Sessions")
                     .font(.hubHeading)
                     .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
                 Spacer()
@@ -39,13 +39,13 @@ struct FocusTimerView: View {
             // Content
             ZStack(alignment: .bottomTrailing) {
                     if selectedTab == 0 {
-                        FocusTimerDashboardView(viewModel: viewModel)
+                        FocusSessionDashboardView(viewModel: viewModel)
                     }
                     if selectedTab == 1 {
-                        FocusTimerHistoryView(viewModel: viewModel)
+                        FocusSessionHistoryView(viewModel: viewModel)
                     }
                     if selectedTab == 2 {
-                        FocusTimerAnalyticsView(viewModel: viewModel)
+                        FocusSessionAnalyticsView(viewModel: viewModel)
                     }
 
                 // FAB
@@ -58,7 +58,7 @@ struct FocusTimerView: View {
         .background(AdaptiveColors.background(for: colorScheme))
         .task { await viewModel.loadData() }
         .sheet(isPresented: $showAddSheet) {
-            FocusTimerEntrySheet(viewModel: viewModel) {
+            FocusSessionEntrySheet(viewModel: viewModel) {
                 showAddSheet = false
             }
         }

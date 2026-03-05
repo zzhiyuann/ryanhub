@@ -1,8 +1,8 @@
 import SwiftUI
 
-struct PeopleNotesView: View {
+struct PeopleJournalView: View {
     @Environment(\.colorScheme) private var colorScheme
-    @State private var viewModel = PeopleNotesViewModel()
+    @State private var viewModel = PeopleJournalViewModel()
     @State private var selectedTab = 0
     @State private var showAddSheet = false
 
@@ -18,7 +18,7 @@ struct PeopleNotesView: View {
                         .font(.system(size: 18, weight: .medium))
                         .foregroundStyle(Color.hubPrimary)
                 }
-                Text("People Notes")
+                Text("People Journal")
                     .font(.hubHeading)
                     .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
                 Spacer()
@@ -39,13 +39,13 @@ struct PeopleNotesView: View {
             // Content
             ZStack(alignment: .bottomTrailing) {
                     if selectedTab == 0 {
-                        PeopleNotesDashboardView(viewModel: viewModel)
+                        PeopleJournalDashboardView(viewModel: viewModel)
                     }
                     if selectedTab == 1 {
-                        PeopleNotesHistoryView(viewModel: viewModel)
+                        PeopleJournalHistoryView(viewModel: viewModel)
                     }
                     if selectedTab == 2 {
-                        PeopleNotesAnalyticsView(viewModel: viewModel)
+                        PeopleJournalAnalyticsView(viewModel: viewModel)
                     }
 
                 // FAB
@@ -58,7 +58,7 @@ struct PeopleNotesView: View {
         .background(AdaptiveColors.background(for: colorScheme))
         .task { await viewModel.loadData() }
         .sheet(isPresented: $showAddSheet) {
-            PeopleNotesEntrySheet(viewModel: viewModel) {
+            PeopleJournalEntrySheet(viewModel: viewModel) {
                 showAddSheet = false
             }
         }

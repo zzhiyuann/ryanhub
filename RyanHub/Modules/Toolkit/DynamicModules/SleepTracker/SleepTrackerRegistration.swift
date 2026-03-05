@@ -9,7 +9,7 @@ extension DynamicModuleRegistry {
             toolkitId: "sleepTracker",
             displayName: "Sleep Tracker",
             shortName: "Sleep",
-            subtitle: "Track sleep patterns & wake refreshed",
+            subtitle: "Track sleep, quality & wake-up mood",
             icon: "moon.zzz.fill",
             iconColorName: "hubPrimary",
             viewBuilder: { AnyView(SleepTrackerView()) },

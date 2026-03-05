@@ -9,7 +9,7 @@ extension DynamicModuleRegistry {
             toolkitId: "caffeineTracker",
             displayName: "Caffeine Tracker",
             shortName: "Caffeine",
-            subtitle: "Track cups, caffeine & energy patterns",
+            subtitle: "Track cups, caffeine & timing",
             icon: "cup.and.saucer.fill",
             iconColorName: "hubAccentYellow",
             viewBuilder: { AnyView(CaffeineTrackerView()) },

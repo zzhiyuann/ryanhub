@@ -5,7 +5,7 @@ import Foundation
 enum HabitTrackerDataProvider: ToolkitDataProvider {
     static let toolkitId = "habitTracker"
     static let displayName = "Habit Tracker"
-    static let relevanceKeywords: [String] = ["habit", "streak", "routine", "meditation", "journaling", "daily", "consistency", "discipline", "morning routine", "self-improvement"]
+    static let relevanceKeywords: [String] = ["habit", "streak", "routine", "daily", "meditation", "journaling", "consistency", "discipline", "goal", "tracking"]
 
     private static var bridgeBaseURL: String {
         UserDefaults.standard.string(forKey: "ryanhub_server_url")

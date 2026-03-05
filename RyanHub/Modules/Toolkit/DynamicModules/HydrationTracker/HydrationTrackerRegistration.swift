@@ -9,7 +9,7 @@ extension DynamicModuleRegistry {
             toolkitId: "hydrationTracker",
             displayName: "Hydration Tracker",
             shortName: "Hydration",
-            subtitle: "Stay hydrated, stay sharp",
+            subtitle: "Stay hydrated, stay healthy",
             icon: "drop.fill",
             iconColorName: "hubPrimary",
             viewBuilder: { AnyView(HydrationTrackerView()) },

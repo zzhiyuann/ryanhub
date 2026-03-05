@@ -4,121 +4,81 @@ struct GroceryListHistoryView: View {
     @Environment(\.colorScheme) private var colorScheme
     let viewModel: GroceryListViewModel
 
-    private var entriesByDate: [(key: String, value: [GroceryListEntry])] {
-        let grouped = Dictionary(grouping: viewModel.entries) { $0.dateOnly }
-        return grouped
-            .sorted { $0.key > $1.key }
-            .map { (key: $0.key, value: $0.value.sorted { $0.date > $1.date }) }
+    private var heatmapData: [Date: Double] {
+        let calendar = Calendar.current
+        let df = DateFormatter()
+        df.dateFormat = "yyyy-MM-dd"
+        var result: [Date: Double] = [:]
+        for entry in viewModel.entries {
+            if let date = df.date(from: String(entry.date.prefix(10))) {
+                let day = calendar.startOfDay(for: date)
+                result[day, default: 0] += 1
+            }
+        }
+        return result
     }
 
-    private func sectionHeader(for dateString: String) -> String {
-        let f = DateFormatter()
-        f.dateFormat = "yyyy-MM-dd"
-        guard let d = f.date(from: dateString) else { return dateString }
-        if Calendar.current.isDateInToday(d) { return "Today" }
-        if Calendar.current.isDateInYesterday(d) { return "Yesterday" }
-        let out = DateFormatter()
-        out.dateStyle = .medium
-        return out.string(from: d)
+    private var groupedEntries: [(String, [GroceryListEntry])] {
+        let df = DateFormatter()
+        df.dateFormat = "yyyy-MM-dd"
+        let grouped = Dictionary(grouping: viewModel.entries) { String($0.date.prefix(10)) }
+        return grouped.sorted { $0.key > $1.key }
     }
 
     var body: some View {
         ScrollView {
-            LazyVStack(spacing: HubLayout.sectionSpacing, pinnedViews: []) {
-                if viewModel.entries.isEmpty {
-                    emptyStateView
-                } else {
-                    ForEach(entriesByDate, id: \.key) { section in
-                        VStack(alignment: .leading, spacing: HubLayout.itemSpacing) {
-                            SectionHeader(title: sectionHeader(for: section.key))
-                                .padding(.horizontal, HubLayout.standardPadding)
+            VStack(spacing: HubLayout.sectionSpacing) {
+                // Calendar Heatmap
+                CalendarHeatmap(
+                    title: "Activity",
+                    data: heatmapData,
+                    color: .hubPrimary
+                )
 
-                            ForEach(section.value) { entry in
-                                entryCard(entry)
-                                    .padding(.horizontal, HubLayout.standardPadding)
+                // Grouped entries by date
+                ForEach(groupedEntries, id: \.0) { dateStr, entries in
+                    VStack(alignment: .leading, spacing: HubLayout.itemSpacing) {
+                        SectionHeader(title: dateStr)
+                        ForEach(entries) { entry in
+                            HubCard {
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(entry.summaryLine)
+                                            .font(.hubBody)
+                                            .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                                        Text(entry.date)
+                                            .font(.hubCaption)
+                                            .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                                    }
+                                    Spacer()
+                                    Button {
+                                        Task { await viewModel.deleteEntry(entry) }
+                                    } label: {
+                                        Image(systemName: "trash")
+                                            .font(.system(size: 14))
+                                            .foregroundStyle(Color.hubAccentRed.opacity(0.7))
+                                    }
+                                }
                             }
                         }
                     }
                 }
-            }
-            .padding(.vertical, HubLayout.standardPadding)
-        }
-        .background(AdaptiveColors.background(for: colorScheme))
-    }
 
-    private func entryCard(_ entry: GroceryListEntry) -> some View {
-        HubCard {
-            HStack(spacing: HubLayout.itemSpacing) {
-                Image(systemName: entry.category.icon)
-                    .font(.system(size: 20))
-                    .foregroundStyle(entry.isPurchased ? Color.hubAccentGreen : Color.hubPrimary)
-                    .frame(width: 36, height: 36)
-                    .background(
-                        (entry.isPurchased ? Color.hubAccentGreen : Color.hubPrimary).opacity(0.12)
-                    )
-                    .clipShape(Circle())
-
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(entry.summaryLine)
-                        .font(.hubBody)
-                        .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
-                        .lineLimit(2)
-
-                    HStack(spacing: 6) {
-                        Text(entry.formattedDate)
-                            .font(.hubCaption)
+                if viewModel.entries.isEmpty {
+                    VStack(spacing: 12) {
+                        Image(systemName: "tray")
+                            .font(.system(size: 40))
                             .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
-
-                        if entry.isPurchased {
-                            Label("Purchased", systemImage: "checkmark.circle.fill")
-                                .font(.hubCaption)
-                                .foregroundStyle(Color.hubAccentGreen)
-                                .labelStyle(.iconOnly)
-                        }
-
-                        if entry.isHighPriority {
-                            Image(systemName: "exclamationmark.circle.fill")
-                                .font(.hubCaption)
-                                .foregroundStyle(Color.hubAccentRed)
-                        }
+                        Text("No entries yet")
+                            .font(.hubBody)
+                            .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
                     }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 40)
                 }
-
-                Spacer()
-
-                Button {
-                    Task { await viewModel.deleteEntry(entry) }
-                } label: {
-                    Image(systemName: "trash")
-                        .font(.system(size: 14))
-                        .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
-                        .padding(8)
-                        .background(AdaptiveColors.textSecondary(for: colorScheme).opacity(0.08))
-                        .clipShape(Circle())
-                }
-                .buttonStyle(.plain)
             }
             .padding(HubLayout.standardPadding)
         }
-    }
-
-    private var emptyStateView: some View {
-        VStack(spacing: HubLayout.itemSpacing) {
-            Image(systemName: "cart.badge.plus")
-                .font(.system(size: 48))
-                .foregroundStyle(Color.hubPrimary.opacity(0.5))
-
-            Text("No entries yet")
-                .font(.hubHeading)
-                .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
-
-            Text("Add items to your grocery list to see them here.")
-                .font(.hubBody)
-                .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
-                .multilineTextAlignment(.center)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.top, 80)
-        .padding(.horizontal, HubLayout.standardPadding)
+        .background(AdaptiveColors.background(for: colorScheme))
     }
 }

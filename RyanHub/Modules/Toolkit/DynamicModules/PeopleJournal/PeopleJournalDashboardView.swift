@@ -1,8 +1,8 @@
 import SwiftUI
 
-struct FocusTimerDashboardView: View {
+struct PeopleJournalDashboardView: View {
     @Environment(\.colorScheme) private var colorScheme
-    let viewModel: FocusTimerViewModel
+    let viewModel: PeopleJournalViewModel
 
     var body: some View {
         ScrollView {
@@ -32,7 +32,7 @@ struct FocusTimerDashboardView: View {
                     StatCard(
                         title: "Today",
                         value: "\(viewModel.todayEntries.count)",
-                        icon: "brain.head.profile",
+                        icon: "person.text.rectangle",
                         color: .hubPrimary
                     )
                     StatCard(

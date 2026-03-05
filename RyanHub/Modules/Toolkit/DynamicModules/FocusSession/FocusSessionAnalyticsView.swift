@@ -1,8 +1,8 @@
 import SwiftUI
 
-struct FocusTimerAnalyticsView: View {
+struct FocusSessionAnalyticsView: View {
     @Environment(\.colorScheme) private var colorScheme
-    let viewModel: FocusTimerViewModel
+    let viewModel: FocusSessionViewModel
 
     var body: some View {
         ScrollView {

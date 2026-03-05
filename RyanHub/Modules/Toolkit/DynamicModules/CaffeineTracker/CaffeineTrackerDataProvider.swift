@@ -5,7 +5,7 @@ import Foundation
 enum CaffeineTrackerDataProvider: ToolkitDataProvider {
     static let toolkitId = "caffeineTracker"
     static let displayName = "Caffeine Tracker"
-    static let relevanceKeywords: [String] = ["coffee", "caffeine", "espresso", "latte", "energy", "cups", "drinks", "milligrams", "sleep", "productivity"]
+    static let relevanceKeywords: [String] = ["coffee", "caffeine", "espresso", "latte", "tea", "energy", "cups", "brew", "decaf", "milligrams"]
 
     private static var bridgeBaseURL: String {
         UserDefaults.standard.string(forKey: "ryanhub_server_url")

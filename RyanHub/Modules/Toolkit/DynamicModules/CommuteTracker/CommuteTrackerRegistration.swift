@@ -9,8 +9,8 @@ extension DynamicModuleRegistry {
             toolkitId: "commuteTracker",
             displayName: "Commute Tracker",
             shortName: "Commute",
-            subtitle: "Optimize your daily journey",
-            icon: "car.front.waves.up",
+            subtitle: "Track routes, time & commute patterns",
+            icon: "car.circle.fill",
             iconColorName: "hubPrimary",
             viewBuilder: { AnyView(CommuteTrackerView()) },
             dataProviderType: CommuteTrackerDataProvider.self

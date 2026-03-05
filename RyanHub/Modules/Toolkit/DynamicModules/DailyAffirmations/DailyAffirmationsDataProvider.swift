@@ -5,7 +5,7 @@ import Foundation
 enum DailyAffirmationsDataProvider: ToolkitDataProvider {
     static let toolkitId = "dailyAffirmations"
     static let displayName = "Daily Affirmations"
-    static let relevanceKeywords: [String] = ["affirmation", "positive", "mindset", "self-care", "mantra", "intention", "wellbeing", "motivation", "gratitude", "mental health"]
+    static let relevanceKeywords: [String] = ["affirmation", "positive", "mindset", "self-care", "motivation", "mantra", "intention", "gratitude", "confidence", "wellness"]
 
     private static var bridgeBaseURL: String {
         UserDefaults.standard.string(forKey: "ryanhub_server_url")

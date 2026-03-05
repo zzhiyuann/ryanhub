@@ -32,7 +32,7 @@ struct RecipeBoxDashboardView: View {
                     StatCard(
                         title: "Today",
                         value: "\(viewModel.todayEntries.count)",
-                        icon: "book.closed.fill",
+                        icon: "menucard",
                         color: .hubPrimary
                     )
                     StatCard(

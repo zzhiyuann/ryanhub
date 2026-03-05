@@ -1,12 +1,12 @@
 import Foundation
 import SwiftUI
 
-// MARK: - FocusTimer View Model
+// MARK: - FocusSession View Model
 
 @Observable
 @MainActor
-final class FocusTimerViewModel {
-    var entries: [FocusTimerEntry] = []
+final class FocusSessionViewModel {
+    var entries: [FocusSessionEntry] = []
     var isLoading = false
     var errorMessage: String?
 
@@ -21,7 +21,7 @@ final class FocusTimerViewModel {
 
     // MARK: - Computed Properties
 
-    var todayEntries: [FocusTimerEntry] {
+    var todayEntries: [FocusSessionEntry] {
         let today = DateFormatter()
         today.dateFormat = "yyyy-MM-dd"
         let todayStr = today.string(from: Date())
@@ -95,18 +95,18 @@ final class FocusTimerViewModel {
         isLoading = true
         defer { isLoading = false }
         do {
-            let url = URL(string: "\(bridgeBaseURL)/modules/focusTimer/data")!
+            let url = URL(string: "\(bridgeBaseURL)/modules/focusSession/data")!
             let (data, _) = try await URLSession.shared.data(from: url)
-            entries = try JSONDecoder().decode([FocusTimerEntry].self, from: data)
-            UserDefaults.standard.set(data, forKey: "dynamic_module_focusTimer_cache")
+            entries = try JSONDecoder().decode([FocusSessionEntry].self, from: data)
+            UserDefaults.standard.set(data, forKey: "dynamic_module_focusSession_cache")
         } catch {
             entries = []
         }
     }
 
-    func addEntry(_ entry: FocusTimerEntry) async {
+    func addEntry(_ entry: FocusSessionEntry) async {
         do {
-            let url = URL(string: "\(bridgeBaseURL)/modules/focusTimer/data/add")!
+            let url = URL(string: "\(bridgeBaseURL)/modules/focusSession/data/add")!
             var request = URLRequest(url: url)
             request.httpMethod = "POST"
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -118,9 +118,9 @@ final class FocusTimerViewModel {
         }
     }
 
-    func deleteEntry(_ entry: FocusTimerEntry) async {
+    func deleteEntry(_ entry: FocusSessionEntry) async {
         do {
-            let url = URL(string: "\(bridgeBaseURL)/modules/focusTimer/data?id=\(entry.id)")!
+            let url = URL(string: "\(bridgeBaseURL)/modules/focusSession/data?id=\(entry.id)")!
             var request = URLRequest(url: url)
             request.httpMethod = "DELETE"
             _ = try await URLSession.shared.data(for: request)

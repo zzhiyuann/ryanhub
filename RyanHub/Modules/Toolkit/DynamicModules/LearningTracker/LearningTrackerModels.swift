@@ -3,85 +3,79 @@ import Foundation
 // MARK: - LearningTracker Models
 
 enum LearningCategory: String, Codable, CaseIterable, Identifiable {
-    case programming
+    case technology
     case language
     case music
-    case design
+    case art
     case business
     case science
+    case health
     case math
     case writing
-    case fitness
-    case cooking
     case other
     var id: String { rawValue }
     var displayName: String {
         switch self {
-        case .programming: return "Programming"
+        case .technology: return "Technology"
         case .language: return "Language"
         case .music: return "Music"
-        case .design: return "Design"
+        case .art: return "Art & Design"
         case .business: return "Business"
         case .science: return "Science"
+        case .health: return "Health & Fitness"
         case .math: return "Mathematics"
         case .writing: return "Writing"
-        case .fitness: return "Fitness / Health"
-        case .cooking: return "Cooking"
         case .other: return "Other"
         }
     }
     var icon: String {
         switch self {
-        case .programming: return "chevron.left.forwardslash.chevron.right"
+        case .technology: return "desktopcomputer"
         case .language: return "character.book.closed"
         case .music: return "music.note"
-        case .design: return "paintpalette"
+        case .art: return "paintpalette"
         case .business: return "briefcase"
         case .science: return "atom"
+        case .health: return "heart.circle"
         case .math: return "function"
         case .writing: return "pencil.line"
-        case .fitness: return "figure.run"
-        case .cooking: return "frying.pan"
-        case .other: return "ellipsis.circle"
+        case .other: return "square.grid.2x2"
         }
     }
 }
 
-enum ResourceType: String, Codable, CaseIterable, Identifiable {
-    case onlineCourse
-    case book
-    case video
-    case podcast
+enum LearningSessionType: String, Codable, CaseIterable, Identifiable {
+    case lecture
+    case reading
     case practice
-    case article
-    case mentorship
-    case flashcards
     case project
+    case review
+    case quiz
+    case tutorial
+    case workshop
     var id: String { rawValue }
     var displayName: String {
         switch self {
-        case .onlineCourse: return "Online Course"
-        case .book: return "Book"
-        case .video: return "Video / Tutorial"
-        case .podcast: return "Podcast"
+        case .lecture: return "Lecture / Video"
+        case .reading: return "Reading"
         case .practice: return "Hands-on Practice"
-        case .article: return "Article / Blog"
-        case .mentorship: return "Mentorship / Class"
-        case .flashcards: return "Flashcards / Review"
         case .project: return "Project Work"
+        case .review: return "Review / Revision"
+        case .quiz: return "Quiz / Test"
+        case .tutorial: return "Tutorial"
+        case .workshop: return "Workshop / Lab"
         }
     }
     var icon: String {
         switch self {
-        case .onlineCourse: return "play.rectangle"
-        case .book: return "book"
-        case .video: return "video"
-        case .podcast: return "headphones"
+        case .lecture: return "play.rectangle"
+        case .reading: return "book"
         case .practice: return "hammer"
-        case .article: return "doc.text"
-        case .mentorship: return "person.2"
-        case .flashcards: return "rectangle.on.rectangle.angled"
-        case .project: return "wrench.and.screwdriver"
+        case .project: return "folder"
+        case .review: return "arrow.counterclockwise"
+        case .quiz: return "checkmark.circle"
+        case .tutorial: return "graduationcap"
+        case .workshop: return "wrench.and.screwdriver"
         }
     }
 }
@@ -93,27 +87,23 @@ struct LearningTrackerEntry: Codable, Identifiable {
         f.dateFormat = "yyyy-MM-dd HH:mm"
         return f.string(from: Date())
     }()
-    var subject: String
+    var subjectName: String
     var category: LearningCategory
+    var sessionType: LearningSessionType
     var durationMinutes: Int
-    var resourceType: ResourceType
-    var resourceName: String
-    var confidenceLevel: Int
-    var completionPercent: Int
-    var sessionGoalMet: Bool
-    var notes: String
+    var focusRating: Int
+    var progressPercent: Int
+    var keyTakeaway: String
 
     var summaryLine: String {
         var parts: [String] = [date]
-        parts.append("\(subject)")
+        parts.append("\(subjectName)")
         parts.append("\(category)")
+        parts.append("\(sessionType)")
         parts.append("\(durationMinutes)")
-        parts.append("\(resourceType)")
-        parts.append("\(resourceName)")
-        parts.append("\(confidenceLevel)")
-        parts.append("\(completionPercent)")
-        parts.append("\(sessionGoalMet)")
-        parts.append("\(notes)")
+        parts.append("\(focusRating)")
+        parts.append("\(progressPercent)")
+        parts.append("\(keyTakeaway)")
         return parts.joined(separator: " | ")
     }
 }

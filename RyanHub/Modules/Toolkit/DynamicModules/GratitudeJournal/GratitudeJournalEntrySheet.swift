@@ -4,14 +4,10 @@ struct GratitudeJournalEntrySheet: View {
     @Environment(\.colorScheme) private var colorScheme
     let viewModel: GratitudeJournalViewModel
     var onSave: (() -> Void)?
-    @State private var inputGratitudeone: String = ""
-    @State private var selectedThemeone: GratitudeTheme = .people
-    @State private var inputGratitudetwo: String = ""
-    @State private var selectedThemetwo: GratitudeTheme = .people
-    @State private var inputGratitudethree: String = ""
-    @State private var selectedThemethree: GratitudeTheme = .people
-    @State private var inputMoodafter: Double = 5
-    @State private var inputReflection: String = ""
+    @State private var inputGratitudetext: String = ""
+    @State private var selectedCategory: GratitudeCategory = .people
+    @State private var inputDepth: Double = 5
+    @State private var selectedMood: EntryMood = .joyful
 
     var body: some View {
         QuickEntrySheet(
@@ -19,66 +15,45 @@ struct GratitudeJournalEntrySheet: View {
             icon: "plus.circle.fill",
             canSave: true,
             onSave: {
-                let entry = GratitudeJournalEntry(gratitudeOne: inputGratitudeone, themeOne: selectedThemeone, gratitudeTwo: inputGratitudetwo, themeTwo: selectedThemetwo, gratitudeThree: inputGratitudethree, themeThree: selectedThemethree, moodAfter: Int(inputMoodafter), reflection: inputReflection)
+                let entry = GratitudeJournalEntry(gratitudeText: inputGratitudetext, category: selectedCategory, depth: Int(inputDepth), mood: selectedMood)
                 Task { await viewModel.addEntry(entry) }
                 onSave?()
             }
         ) {
 
                 EntryFormSection(title: "I'm grateful for…") {
-                    HubTextField(placeholder: "I'm grateful for…", text: $inputGratitudeone)
+                    HubTextField(placeholder: "I'm grateful for…", text: $inputGratitudetext)
                 }
 
-                EntryFormSection(title: "Theme") {
-                    Picker("Theme", selection: $selectedThemeone) {
-                        ForEach(GratitudeTheme.allCases) { item in
+                EntryFormSection(title: "Life Area") {
+                    Picker("Life Area", selection: $selectedCategory) {
+                        ForEach(GratitudeCategory.allCases) { item in
                             Label(item.displayName, systemImage: item.icon).tag(item)
                         }
                     }
                     .pickerStyle(.menu)
                 }
 
-                EntryFormSection(title: "I'm also grateful for…") {
-                    HubTextField(placeholder: "I'm also grateful for…", text: $inputGratitudetwo)
-                }
-
-                EntryFormSection(title: "Theme") {
-                    Picker("Theme", selection: $selectedThemetwo) {
-                        ForEach(GratitudeTheme.allCases) { item in
-                            Label(item.displayName, systemImage: item.icon).tag(item)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                }
-
-                EntryFormSection(title: "And I appreciate…") {
-                    HubTextField(placeholder: "And I appreciate…", text: $inputGratitudethree)
-                }
-
-                EntryFormSection(title: "Theme") {
-                    Picker("Theme", selection: $selectedThemethree) {
-                        ForEach(GratitudeTheme.allCases) { item in
-                            Label(item.displayName, systemImage: item.icon).tag(item)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                }
-
-                EntryFormSection(title: "How I Feel Now") {
+                EntryFormSection(title: "How deeply felt") {
                     VStack {
                         HStack {
-                            Text("\(Int(inputMoodafter))")
+                            Text("\(Int(inputDepth))")
                                 .font(.system(size: 24, weight: .bold, design: .rounded))
                                 .foregroundStyle(Color.hubPrimary)
                             Spacer()
                         }
-                        Slider(value: $inputMoodafter, in: 1...10, step: 1)
+                        Slider(value: $inputDepth, in: 1...10, step: 1)
                             .tint(Color.hubPrimary)
                     }
                 }
 
-                EntryFormSection(title: "Deeper Reflection (optional)") {
-                    HubTextField(placeholder: "Deeper Reflection (optional)", text: $inputReflection)
+                EntryFormSection(title: "Current Mood") {
+                    Picker("Current Mood", selection: $selectedMood) {
+                        ForEach(EntryMood.allCases) { item in
+                            Label(item.displayName, systemImage: item.icon).tag(item)
+                        }
+                    }
+                    .pickerStyle(.menu)
                 }
         }
     }

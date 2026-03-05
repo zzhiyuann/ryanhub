@@ -5,7 +5,7 @@ import Foundation
 enum RecipeBoxDataProvider: ToolkitDataProvider {
     static let toolkitId = "recipeBox"
     static let displayName = "Recipe Box"
-    static let relevanceKeywords: [String] = ["recipe", "cooking", "ingredients", "meal", "food", "cuisine", "cookbook", "kitchen", "prep", "dinner"]
+    static let relevanceKeywords: [String] = ["recipe", "cooking", "ingredients", "meal", "cuisine", "kitchen", "food", "cookbook", "prep", "dinner"]
 
     private static var bridgeBaseURL: String {
         UserDefaults.standard.string(forKey: "ryanhub_server_url")

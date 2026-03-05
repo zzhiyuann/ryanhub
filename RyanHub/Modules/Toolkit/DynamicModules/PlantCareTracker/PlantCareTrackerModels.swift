@@ -1,128 +1,93 @@
 import Foundation
 
-// MARK: - Enums
+// MARK: - PlantCareTracker Models
 
-enum CareType: String, CaseIterable, Codable, Identifiable {
-    case water
-    case fertilize
-    case mist
-    case prune
-    case repot
-    case rotate
-
+enum CareType: String, Codable, CaseIterable, Identifiable {
+    case watering
+    case misting
+    case fertilizing
+    case pruning
+    case repotting
     var id: String { rawValue }
-
     var displayName: String {
         switch self {
-        case .water: return "Water"
-        case .fertilize: return "Fertilize"
-        case .mist: return "Mist"
-        case .prune: return "Prune"
-        case .repot: return "Repot"
-        case .rotate: return "Rotate"
+        case .watering: return "Watering"
+        case .misting: return "Misting"
+        case .fertilizing: return "Fertilizing"
+        case .pruning: return "Pruning"
+        case .repotting: return "Repotting"
         }
     }
-
     var icon: String {
         switch self {
-        case .water: return "drop.fill"
-        case .fertilize: return "leaf.arrow.circlepath"
-        case .mist: return "humidity.fill"
-        case .prune: return "scissors"
-        case .repot: return "arrow.3.trianglepath"
-        case .rotate: return "arrow.triangle.2.circlepath"
+        case .watering: return "drop.fill"
+        case .misting: return "humidity.fill"
+        case .fertilizing: return "leaf.arrow.circlepath"
+        case .pruning: return "scissors"
+        case .repotting: return "arrow.up.bin.fill"
         }
     }
 }
 
-enum WaterAmount: String, CaseIterable, Codable, Identifiable {
+enum WaterAmount: String, Codable, CaseIterable, Identifiable {
     case light
     case moderate
     case thorough
-
+    case soaking
     var id: String { rawValue }
-
     var displayName: String {
         switch self {
         case .light: return "Light Splash"
         case .moderate: return "Moderate"
-        case .thorough: return "Thorough Soak"
+        case .thorough: return "Thorough"
+        case .soaking: return "Deep Soak"
         }
     }
-
     var icon: String {
         switch self {
         case .light: return "drop"
-        case .moderate: return "drop.fill"
-        case .thorough: return "drop.circle.fill"
+        case .moderate: return "drop.halffull"
+        case .thorough: return "drop.fill"
+        case .soaking: return "water.waves"
         }
     }
 }
 
-enum SoilMoisture: String, CaseIterable, Codable, Identifiable {
-    case dry
-    case slightlyMoist
-    case moist
-    case wet
-
-    var id: String { rawValue }
-
-    var displayName: String {
-        switch self {
-        case .dry: return "Bone Dry"
-        case .slightlyMoist: return "Slightly Moist"
-        case .moist: return "Moist"
-        case .wet: return "Soggy / Wet"
-        }
-    }
-
-    var icon: String {
-        switch self {
-        case .dry: return "sun.max.fill"
-        case .slightlyMoist: return "drop"
-        case .moist: return "drop.fill"
-        case .wet: return "water.waves"
-        }
-    }
-}
-
-enum PlantLocation: String, CaseIterable, Codable, Identifiable {
-    case windowsill
-    case balcony
+enum PlantLocation: String, Codable, CaseIterable, Identifiable {
     case livingRoom
     case bedroom
-    case bathroom
     case kitchen
+    case bathroom
     case office
-
+    case balcony
+    case garden
+    case other
     var id: String { rawValue }
-
     var displayName: String {
         switch self {
-        case .windowsill: return "Windowsill"
-        case .balcony: return "Balcony"
         case .livingRoom: return "Living Room"
         case .bedroom: return "Bedroom"
-        case .bathroom: return "Bathroom"
         case .kitchen: return "Kitchen"
+        case .bathroom: return "Bathroom"
         case .office: return "Office"
+        case .balcony: return "Balcony"
+        case .garden: return "Garden"
+        case .other: return "Other"
         }
     }
-
     var icon: String {
         switch self {
-        case .windowsill: return "sun.max"
-        case .balcony: return "tree.fill"
         case .livingRoom: return "sofa.fill"
         case .bedroom: return "bed.double.fill"
-        case .bathroom: return "bathtub.fill"
         case .kitchen: return "fork.knife"
+        case .bathroom: return "shower.fill"
         case .office: return "desktopcomputer"
+        case .balcony: return "sun.max.fill"
+        case .garden: return "tree.fill"
+        case .other: return "mappin"
         }
     }
 }
-
-// MARK: - Entry
 
 struct PlantCareTrackerEntry: Codable, Identifiable {
     var id: String = UUID().uuidString
@@ -131,115 +96,23 @@ struct PlantCareTrackerEntry: Codable, Identifiable {
         f.dateFormat = "yyyy-MM-dd HH:mm"
         return f.string(from: Date())
     }()
-    var plantName: String = ""
-    var careType: CareType = .water
-    var waterAmount: WaterAmount = .moderate
-    var healthScore: Int = 3
-    var soilMoisture: SoilMoisture = .moist
-    var location: PlantLocation = .livingRoom
-    var notes: String = ""
-
-    // MARK: Computed — Date
-
-    var parsedDate: Date {
-        let f = DateFormatter()
-        f.dateFormat = "yyyy-MM-dd HH:mm"
-        return f.date(from: date) ?? Date()
-    }
-
-    var dateOnly: String {
-        String(date.prefix(10))
-    }
-
-    var formattedDate: String {
-        let f = DateFormatter()
-        f.dateFormat = "yyyy-MM-dd HH:mm"
-        guard let d = f.date(from: date) else { return date }
-        let out = DateFormatter()
-        out.dateStyle = .medium
-        out.timeStyle = .short
-        return out.string(from: d)
-    }
-
-    var formattedDateShort: String {
-        let f = DateFormatter()
-        f.dateFormat = "yyyy-MM-dd HH:mm"
-        guard let d = f.date(from: date) else { return date }
-        let out = DateFormatter()
-        out.dateStyle = .short
-        out.timeStyle = .none
-        return out.string(from: d)
-    }
-
-    // MARK: Computed — Display
+    var plantName: String
+    var careType: CareType
+    var waterAmount: WaterAmount
+    var healthRating: Int
+    var location: PlantLocation
+    var usedFertilizer: Bool
+    var notes: String
 
     var summaryLine: String {
-        var parts: [String] = [careType.displayName]
-        if !plantName.isEmpty { parts.insert(plantName, at: 0) }
-        return parts.joined(separator: " — ")
-    }
-
-    var healthScoreLabel: String {
-        switch healthScore {
-        case 1: return "Poor"
-        case 2: return "Fair"
-        case 3: return "Good"
-        case 4: return "Great"
-        case 5: return "Excellent"
-        default: return "\(healthScore)"
-        }
-    }
-
-    var healthScoreIcon: String {
-        switch healthScore {
-        case 1, 2: return "heart.slash.fill"
-        case 3: return "heart.fill"
-        case 4, 5: return "heart.circle.fill"
-        default: return "heart"
-        }
-    }
-
-    var isWaterEvent: Bool {
-        careType == .water
-    }
-
-    var waterAmountDescription: String {
-        isWaterEvent ? waterAmount.displayName : "N/A"
-    }
-
-    var displayPlantName: String {
-        plantName.isEmpty ? "Unknown Plant" : plantName
-    }
-}
-
-// MARK: - Sample Data
-
-extension PlantCareTrackerEntry {
-    static func sample(plantName: String = "Monstera", careType: CareType = .water, daysAgo: Int = 0) -> PlantCareTrackerEntry {
-        let f = DateFormatter()
-        f.dateFormat = "yyyy-MM-dd HH:mm"
-        let d = Calendar.current.date(byAdding: .day, value: -daysAgo, to: Date()) ?? Date()
-        return PlantCareTrackerEntry(
-            id: UUID().uuidString,
-            date: f.string(from: d),
-            plantName: plantName,
-            careType: careType,
-            waterAmount: .moderate,
-            healthScore: Int.random(in: 3...5),
-            soilMoisture: .moist,
-            location: .livingRoom,
-            notes: ""
-        )
-    }
-
-    static var samples: [PlantCareTrackerEntry] {
-        [
-            .sample(plantName: "Monstera", careType: .water, daysAgo: 0),
-            .sample(plantName: "Pothos", careType: .mist, daysAgo: 0),
-            .sample(plantName: "Snake Plant", careType: .water, daysAgo: 1),
-            .sample(plantName: "Fiddle Leaf Fig", careType: .fertilize, daysAgo: 2),
-            .sample(plantName: "ZZ Plant", careType: .rotate, daysAgo: 3),
-            .sample(plantName: "Monstera", careType: .water, daysAgo: 8)
-        ]
+        var parts: [String] = [date]
+        parts.append("\(plantName)")
+        parts.append("\(careType)")
+        parts.append("\(waterAmount)")
+        parts.append("\(healthRating)")
+        parts.append("\(location)")
+        parts.append("\(usedFertilizer)")
+        parts.append("\(notes)")
+        return parts.joined(separator: " | ")
     }
 }

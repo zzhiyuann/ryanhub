@@ -3,7 +3,7 @@
   "moduleName": "CatCareTracker",
   "displayName": "Cat Care Tracker",
   "shortName": "Cat Care",
-  "subtitle": "Feeding, health & vet care for your cat",
+  "subtitle": "Feeding, health & vet care for your feline",
   "icon": "cat.fill",
   "iconColor": "hubAccentYellow",
   "relevanceKeywords": [
@@ -15,51 +15,51 @@
     "weight",
     "medication",
     "health",
-    "animal",
-    "kitten"
+    "kitten",
+    "feline"
   ],
   "dataFields": [
     {
-      "name": "eventType",
-      "type": "EventType",
-      "label": "Event Type",
+      "name": "entryType",
+      "type": "EntryType",
+      "label": "Entry Type",
       "control": "picker"
     },
     {
-      "name": "feedType",
-      "type": "FeedType",
+      "name": "mealType",
+      "type": "MealType",
+      "label": "Meal",
+      "control": "picker"
+    },
+    {
+      "name": "foodType",
+      "type": "FoodType",
       "label": "Food Type",
       "control": "picker"
     },
     {
       "name": "portionSize",
-      "type": "Double",
-      "label": "Portion (g)",
+      "type": "Int",
+      "label": "Portions",
       "control": "stepper"
     },
     {
-      "name": "catWeight",
-      "type": "Double",
-      "label": "Weight (lbs)",
+      "name": "appetiteLevel",
+      "type": "Int",
+      "label": "Appetite (1-5)",
       "control": "slider"
     },
     {
-      "name": "vetReason",
-      "type": "VetReason",
-      "label": "Visit Reason",
+      "name": "visitType",
+      "type": "VisitType",
+      "label": "Visit Type",
       "control": "picker"
     },
     {
-      "name": "symptomType",
-      "type": "SymptomType",
-      "label": "Symptom",
-      "control": "picker"
-    },
-    {
-      "name": "catMood",
-      "type": "CatMood",
-      "label": "Mood",
-      "control": "picker"
+      "name": "vetClinic",
+      "type": "String",
+      "label": "Clinic Name",
+      "control": "text"
     },
     {
       "name": "cost",
@@ -68,10 +68,16 @@
       "control": "stepper"
     },
     {
-      "name": "medicationName",
-      "type": "String",
-      "label": "Medication",
-      "control": "text"
+      "name": "weightKg",
+      "type": "Double",
+      "label": "Weight (kg)",
+      "control": "slider"
+    },
+    {
+      "name": "medicationGiven",
+      "type": "Bool",
+      "label": "Medication Given",
+      "control": "toggle"
     },
     {
       "name": "notes",
@@ -82,7 +88,7 @@
   ],
   "enums": [
     {
-      "name": "EventType",
+      "name": "EntryType",
       "cases": [
         {
           "name": "feeding",
@@ -102,47 +108,72 @@
         {
           "name": "medication",
           "displayName": "Medication",
-          "icon": "pills.fill"
-        },
-        {
-          "name": "symptom",
-          "displayName": "Symptom",
-          "icon": "exclamationmark.triangle.fill"
+          "icon": "pill.fill"
         }
       ]
     },
     {
-      "name": "FeedType",
+      "name": "MealType",
+      "cases": [
+        {
+          "name": "breakfast",
+          "displayName": "Breakfast",
+          "icon": "sunrise.fill"
+        },
+        {
+          "name": "lunch",
+          "displayName": "Lunch",
+          "icon": "sun.max.fill"
+        },
+        {
+          "name": "dinner",
+          "displayName": "Dinner",
+          "icon": "sunset.fill"
+        },
+        {
+          "name": "snack",
+          "displayName": "Snack/Treat",
+          "icon": "star.fill"
+        }
+      ]
+    },
+    {
+      "name": "FoodType",
       "cases": [
         {
           "name": "wetFood",
           "displayName": "Wet Food",
-          "icon": "cup.and.saucer.fill"
+          "icon": "drop.fill"
         },
         {
           "name": "dryFood",
           "displayName": "Dry Food",
-          "icon": "bag.fill"
+          "icon": "circle.grid.3x3.fill"
         },
         {
-          "name": "treat",
-          "displayName": "Treat",
-          "icon": "star.fill"
+          "name": "rawFood",
+          "displayName": "Raw Food",
+          "icon": "leaf.fill"
         },
         {
-          "name": "water",
-          "displayName": "Water",
-          "icon": "drop.fill"
+          "name": "treats",
+          "displayName": "Treats",
+          "icon": "heart.fill"
+        },
+        {
+          "name": "mixed",
+          "displayName": "Mixed",
+          "icon": "square.grid.2x2.fill"
         }
       ]
     },
     {
-      "name": "VetReason",
+      "name": "VisitType",
       "cases": [
         {
-          "name": "routine",
+          "name": "checkup",
           "displayName": "Routine Checkup",
-          "icon": "checkmark.shield.fill"
+          "icon": "stethoscope"
         },
         {
           "name": "vaccination",
@@ -151,8 +182,8 @@
         },
         {
           "name": "illness",
-          "displayName": "Illness",
-          "icon": "stethoscope"
+          "displayName": "Illness/Injury",
+          "icon": "bandage.fill"
         },
         {
           "name": "dental",
@@ -162,87 +193,12 @@
         {
           "name": "emergency",
           "displayName": "Emergency",
-          "icon": "light.beacon.max.fill"
-        },
-        {
-          "name": "other",
-          "displayName": "Other",
-          "icon": "ellipsis.circle.fill"
-        }
-      ]
-    },
-    {
-      "name": "SymptomType",
-      "cases": [
-        {
-          "name": "vomiting",
-          "displayName": "Vomiting",
           "icon": "exclamationmark.triangle.fill"
         },
         {
-          "name": "diarrhea",
-          "displayName": "Digestive Issue",
-          "icon": "exclamationmark.circle.fill"
-        },
-        {
-          "name": "lethargy",
-          "displayName": "Lethargy",
-          "icon": "zzz"
-        },
-        {
-          "name": "lossOfAppetite",
-          "displayName": "Loss of Appetite",
-          "icon": "fork.knife.circle"
-        },
-        {
-          "name": "sneezing",
-          "displayName": "Sneezing / Coughing",
-          "icon": "wind"
-        },
-        {
-          "name": "skinIssue",
-          "displayName": "Skin / Fur Issue",
-          "icon": "bandage.fill"
-        },
-        {
-          "name": "other",
-          "displayName": "Other",
-          "icon": "questionmark.circle.fill"
-        }
-      ]
-    },
-    {
-      "name": "CatMood",
-      "cases": [
-        {
-          "name": "playful",
-          "displayName": "Playful",
-          "icon": "figure.play"
-        },
-        {
-          "name": "calm",
-          "displayName": "Calm",
-          "icon": "moon.fill"
-        },
-        {
-          "name": "affectionate",
-          "displayName": "Affectionate",
-          "icon": "heart.fill"
-        },
-        {
-          "name": "lethargic",
-          "displayName": "Lethargic",
-          "icon": "zzz"
-        },
-        {
-          "name": "anxious",
-          "displayName": "Anxious",
-          "icon": "bolt.heart.fill"
-        },
-        {
-          "name": "aggressive",
-          "displayName": "Aggressive",
-          "icon": "exclamationmark.triangle.fill"
+          "name": "surgery",
+          "displayName": "Surgery",
+          "icon": "scissors"
         }
       ]
     }
@@ -250,40 +206,40 @@
   "views": [
     {
       "name": "DashboardView",
-      "purpose": "Main hub showing today's feeding count with progress ring toward daily goal, time since last feeding with urgency coloring, latest weight with mini sparkline trend, days since last vet visit with reminder badge, and current care streak",
+      "purpose": "Main hub showing today's feeding timeline, weight trend card, next vet visit countdown, feeding streak ring, and quick-add FAB",
       "components": [
         "StatGrid",
         "ProgressRingView",
         "QuickEntryFAB",
-        "MiniLineChart"
+        "TimelineView"
       ]
     },
     {
       "name": "EntrySheet",
-      "purpose": "Context-adaptive entry form: selecting event type reveals only relevant fields (feeding \u2192 food type + portion, vet \u2192 reason + cost, weight \u2192 slider, medication \u2192 name + notes, symptom \u2192 type + mood). Quick-tap presets for common meals at top.",
+      "purpose": "Context-switching entry form that dynamically shows feeding fields, vet visit fields, weight fields, or medication fields based on selected entry type segment",
       "components": [
         "QuickEntrySheet",
         "EntryFormSection",
-        "ConditionalFieldGroup"
+        "SegmentedControl"
       ]
     },
     {
       "name": "HistoryView",
-      "purpose": "Vertical timeline of all care events with color-coded type icons, filterable by event type via chip bar. Grouped by date with daily feeding summary counts. Swipe to delete.",
+      "purpose": "Chronological log of all care events grouped by date with color-coded type icons, filterable by entry type via chip toggles",
       "components": [
         "CalendarHeatmap",
         "FilterChips",
-        "TimelineList"
+        "EntryRow"
       ]
     },
     {
       "name": "AnalyticsView",
-      "purpose": "Multi-section analytics: feeding frequency bar chart (7-day), weight trend line chart (all-time), food type distribution donut, symptom frequency radar, mood distribution over time, vet cost breakdown by year, and generated health insights with actionable recommendations",
+      "purpose": "Feeding consistency bar chart, weight trend line chart, vet cost pie breakdown, appetite rolling average, and contextual care insights",
       "components": [
         "ModuleChartView",
         "InsightsList",
-        "PieChart",
-        "TrendLine"
+        "WeightTrendChart",
+        "CostBreakdownChart"
       ]
     }
   ],
@@ -291,104 +247,100 @@
     {
       "name": "todayFeedingCount",
       "type": "Int",
-      "description": "Number of feeding events logged today, drives the progress ring"
+      "description": "Number of feeding entries logged today"
     },
     {
-      "name": "lastFeedingTime",
-      "type": "Date?",
-      "description": "Timestamp of the most recent feeding entry across all days"
+      "name": "todayFeedings",
+      "type": "[Entry]",
+      "description": "All feeding entries for today sorted chronologically for timeline display"
     },
     {
-      "name": "timeSinceLastFeeding",
-      "type": "String",
-      "description": "Human-readable elapsed time since last feeding (e.g. '2h 30m ago'), turns red if > 8 hours"
-    },
-    {
-      "name": "feedingStreak",
+      "name": "feedingStreakDays",
       "type": "Int",
-      "description": "Consecutive days with at least one feeding logged, resets if a day is missed"
+      "description": "Consecutive days with at least dailyGoal feedings logged per day"
     },
     {
       "name": "averageDailyFeedings",
       "type": "Double",
-      "description": "Mean feedings per day over the past 7 days, compared to previous 7 days for trend arrow"
-    },
-    {
-      "name": "latestWeight",
-      "type": "Double?",
-      "description": "Most recent weight check value in lbs"
-    },
-    {
-      "name": "weightTrend",
-      "type": "Double?",
-      "description": "Difference between latest weight and the one before it; positive = gained, negative = lost"
-    },
-    {
-      "name": "weightHistory",
-      "type": "[(Date, Double)]",
-      "description": "All weight check entries as date-value pairs for line chart rendering"
-    },
-    {
-      "name": "daysSinceLastVetVisit",
-      "type": "Int?",
-      "description": "Calendar days since last vet visit; nil if no visits logged"
-    },
-    {
-      "name": "totalVetCostsThisYear",
-      "type": "Double",
-      "description": "Sum of cost field for all vet visit entries in the current calendar year"
-    },
-    {
-      "name": "weeklyFeedingData",
-      "type": "[DailyCount]",
-      "description": "Array of 7 structs with date and feeding count for bar chart"
-    },
-    {
-      "name": "feedTypeDistribution",
-      "type": "[FeedType: Int]",
-      "description": "Count of each food type over past 30 days for donut chart"
-    },
-    {
-      "name": "symptomFrequency",
-      "type": "[SymptomType: Int]",
-      "description": "Occurrence count per symptom type over past 30 days, sorted descending"
-    },
-    {
-      "name": "moodDistribution",
-      "type": "[CatMood: Int]",
-      "description": "Distribution of logged moods over past 30 days for horizontal bar chart"
+      "description": "Mean number of feedings per day over the last 7 days"
     },
     {
       "name": "feedingConsistencyScore",
       "type": "Double",
-      "description": "0\u2013100 score: compute std deviation of feeding times over 7 days, map to score (low variance = high score)"
+      "description": "0-100 score measuring how regular feeding times are across days; low standard deviation of meal times yields high score"
     },
     {
-      "name": "goalProgress",
+      "name": "latestWeight",
+      "type": "Double?",
+      "description": "Most recent weight check entry value in kg, nil if no weight entries exist"
+    },
+    {
+      "name": "weightTrend",
+      "type": "String",
+      "description": "Trend from last 5+ weight entries using slope: 'Gaining' if >2% increase, 'Losing' if >2% decrease, 'Stable' otherwise"
+    },
+    {
+      "name": "weightChartData",
+      "type": "[(Date, Double)]",
+      "description": "All weight check entries as date-value pairs for rendering a line chart"
+    },
+    {
+      "name": "daysSinceLastVetVisit",
+      "type": "Int?",
+      "description": "Calendar days since the most recent vet visit entry, nil if no vet visits logged"
+    },
+    {
+      "name": "nextVetVisitDue",
+      "type": "String",
+      "description": "Estimated next vet visit assuming 6-month checkup interval; returns 'Overdue by X days' or 'Due in X days'"
+    },
+    {
+      "name": "totalVetCostsThisYear",
       "type": "Double",
-      "description": "todayFeedingCount / dailyGoal clamped to 0.0\u20131.0 for progress ring"
+      "description": "Sum of cost field across all vet visit entries in the current calendar year"
     },
     {
-      "name": "healthInsights",
+      "name": "weeklyFeedingChartData",
+      "type": "[(String, Int)]",
+      "description": "Last 7 days as day-label and feeding-count pairs for a bar chart"
+    },
+    {
+      "name": "feedingTimeDistribution",
+      "type": "[String: Int]",
+      "description": "Feeding count bucketed by time of day: Morning 5-11, Afternoon 11-17, Evening 17-22, Night 22-5"
+    },
+    {
+      "name": "averageAppetiteThisWeek",
+      "type": "Double",
+      "description": "Mean appetite level (1-5 scale) from this week's feeding entries"
+    },
+    {
+      "name": "appetiteTrendVsPreviousWeek",
+      "type": "Double",
+      "description": "Percentage change in average appetite this week compared to previous week"
+    },
+    {
+      "name": "insights",
       "type": "[String]",
-      "description": "Array of plain-text insights generated from pattern analysis: feeding gaps, weight alerts, vet reminders, symptom clusters, mood shifts"
+      "description": "Array of contextual care insight strings generated from feeding regularity, weight changes, vet reminders, and appetite patterns"
     }
   ],
   "domainLogic": {
     "dailyGoal": {
-      "description": "Target number of feedings per day (typical adult cat: 2-3 meals)",
+      "description": "Target number of feedings per day to maintain streak and show progress ring",
       "defaultValue": "3"
     },
-    "streakDefinition": "A day counts as active if at least one feeding event was logged. Streak resets at midnight if the previous calendar day had zero feeding entries.",
-    "trendAnalysis": "Weekly feeding average compared to prior week (\u2191\u2193\u2192). Weight trend: linear regression over last 5 weight checks to determine gaining/losing/stable (threshold: \u00b10.2 lbs). Symptom trend: compare 7-day symptom count to previous 7 days. Feeding consistency: standard deviation of feeding hour-of-day over 7 days, lower = more consistent.",
+    "streakDefinition": "A day counts toward the streak if at least [dailyGoal] feeding entries are logged. Streak breaks on any day with fewer than the target feedings.",
+    "trendAnalysis": "Weight: linear regression slope over last 30 days of weight entries, flag if absolute change exceeds 5% in any 14-day window. Appetite: rolling 7-day mean compared to prior 7-day mean, flag if decline exceeds 15%. Feeding consistency: compute standard deviation of feeding-time-of-day across the past 14 days, convert to 0-100 score where \u03c3<30min=100, \u03c3>3hr=0.",
     "insights": [
-      "Feeding gap alert: flag when time since last feeding exceeds 10 hours during daytime (6am-10pm)",
-      "Weight change alert: notify if weight changes more than 0.5 lbs between consecutive checks, or if 3+ consecutive checks show same direction trend",
-      "Vet reminder: suggest routine checkup if daysSinceLastVetVisit exceeds 180 days; urgent if > 365",
-      "Symptom cluster warning: alert if 3+ symptom entries logged within any 7-day window, recommend vet visit",
-      "Mood shift detection: flag if rolling 7-day dominant mood shifts from positive (playful/calm/affectionate) to negative (lethargic/anxious/aggressive)",
-      "Feeding consistency praise: congratulate if feedingConsistencyScore > 80 for 7+ consecutive days",
-      "Annual vet cost summary: monthly and yearly spending with per-visit average and year-over-year comparison"
+      "Feeding regularity \u2014 'Feeding times are very consistent this week (\u00b1Xmin)' or 'Feeding times varied by \u00b1X hours \u2014 try to keep a regular schedule'",
+      "Weight alert \u2014 'Weight changed X% over the last month' when absolute change exceeds 3%, with direction indicator",
+      "Vet reminder \u2014 'It has been X months since last checkup \u2014 schedule a visit soon' when >5 months since last checkup-type vet visit",
+      "Appetite change \u2014 'Appetite dropped X% this week compared to last week \u2014 monitor closely' when weekly decline exceeds 15%",
+      "Streak milestone \u2014 'X-day care streak! Excellent consistency' at day 7, 14, 30, 60, 90, 180, 365",
+      "Annual cost summary \u2014 'You have spent $X on vet care this year across Y visits'",
+      "Meal variety \u2014 'This week: X% wet food, Y% dry food \u2014 variety supports balanced nutrition'",
+      "Medication adherence \u2014 'Medication logged X of last 7 days' when medication entries exist"
     ]
   }
 }

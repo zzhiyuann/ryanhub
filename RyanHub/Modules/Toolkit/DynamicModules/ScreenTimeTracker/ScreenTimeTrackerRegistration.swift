@@ -9,9 +9,9 @@ extension DynamicModuleRegistry {
             toolkitId: "screenTimeTracker",
             displayName: "Screen Time Tracker",
             shortName: "Screen Time",
-            subtitle: "Set goals and reclaim your hours",
-            icon: "hourglass.bottomhalf.filled",
-            iconColorName: "hubAccentYellow",
+            subtitle: "Set goals and reclaim your time",
+            icon: "iphone.badge.timer",
+            iconColorName: "hubPrimaryLight",
             viewBuilder: { AnyView(ScreenTimeTrackerView()) },
             dataProviderType: ScreenTimeTrackerDataProvider.self
         ))

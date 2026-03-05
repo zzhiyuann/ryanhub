@@ -4,21 +4,13 @@ struct MoodJournalEntrySheet: View {
     @Environment(\.colorScheme) private var colorScheme
     let viewModel: MoodJournalViewModel
     var onSave: (() -> Void)?
-
-    @State private var entry = MoodJournalEntry()
-    @State private var selectedDate = Date()
-
-    private var moodBinding: Binding<Double> {
-        Binding(get: { Double(entry.moodRating) }, set: { entry.moodRating = Int($0.rounded()) })
-    }
-
-    private var energyBinding: Binding<Double> {
-        Binding(get: { Double(entry.energyLevel) }, set: { entry.energyLevel = Int($0.rounded()) })
-    }
-
-    private var anxietyBinding: Binding<Double> {
-        Binding(get: { Double(entry.anxietyLevel) }, set: { entry.anxietyLevel = Int($0.rounded()) })
-    }
+    @State private var inputMoodrating: Double = 5
+    @State private var selectedPrimaryemotion: PrimaryEmotion = .happy
+    @State private var inputEnergylevel: Double = 5
+    @State private var selectedContext: MoodContext = .work
+    @State private var inputSleepquality: Double = 5
+    @State private var inputGratitudenote: String = ""
+    @State private var inputNotes: String = ""
 
     var body: some View {
         QuickEntrySheet(
@@ -26,107 +18,76 @@ struct MoodJournalEntrySheet: View {
             icon: "plus.circle.fill",
             canSave: true,
             onSave: {
-                let f = DateFormatter()
-                f.dateFormat = "yyyy-MM-dd HH:mm"
-                entry.date = f.string(from: selectedDate)
+                let entry = MoodJournalEntry(moodRating: Int(inputMoodrating), primaryEmotion: selectedPrimaryemotion, energyLevel: Int(inputEnergylevel), context: selectedContext, sleepQuality: Int(inputSleepquality), gratitudeNote: inputGratitudenote, notes: inputNotes)
                 Task { await viewModel.addEntry(entry) }
                 onSave?()
             }
         ) {
-            EntryFormSection(title: "Date & Time") {
-                DatePicker(
-                    "Date & Time",
-                    selection: $selectedDate,
-                    displayedComponents: [.date, .hourAndMinute]
-                )
-                .font(.hubBody)
-                .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
-            }
 
-            EntryFormSection(title: "Mood") {
-                VStack(spacing: HubLayout.itemSpacing) {
-                    HStack {
-                        Text("Mood")
-                            .font(.hubBody)
-                            .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
-                        Spacer()
-                        Text("\(entry.moodRating)/10  \(entry.moodEmoji)  \(entry.moodLabel)")
-                            .font(.hubCaption)
-                            .foregroundStyle(Color.hubPrimary)
-                    }
-                    Slider(value: moodBinding, in: 1...10, step: 1)
-                        .tint(Color.hubPrimary)
-                }
-            }
-
-            EntryFormSection(title: "Energy") {
-                VStack(spacing: HubLayout.itemSpacing) {
-                    HStack {
-                        Text("Energy Level")
-                            .font(.hubBody)
-                            .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
-                        Spacer()
-                        Text("\(entry.energyLevel)/10  \(entry.energyLabel)")
-                            .font(.hubCaption)
-                            .foregroundStyle(Color.hubAccentGreen)
-                    }
-                    Slider(value: energyBinding, in: 1...10, step: 1)
-                        .tint(Color.hubAccentGreen)
-                }
-            }
-
-            EntryFormSection(title: "Anxiety") {
-                VStack(spacing: HubLayout.itemSpacing) {
-                    HStack {
-                        Text("Anxiety Level")
-                            .font(.hubBody)
-                            .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
-                        Spacer()
-                        Text("\(entry.anxietyLevel)/10  \(entry.anxietyLabel)")
-                            .font(.hubCaption)
-                            .foregroundStyle(Color.hubAccentRed)
-                    }
-                    Slider(value: anxietyBinding, in: 1...10, step: 1)
-                        .tint(Color.hubAccentRed)
-                }
-            }
-
-            EntryFormSection(title: "Activity") {
-                Picker("Activity", selection: $entry.activity) {
-                    ForEach(MoodActivity.allCases) { activity in
-                        Label(activity.displayName, systemImage: activity.icon)
-                            .tag(activity)
+                EntryFormSection(title: "Mood Rating (1-10)") {
+                    VStack {
+                        HStack {
+                            Text("\(Int(inputMoodrating))")
+                                .font(.system(size: 24, weight: .bold, design: .rounded))
+                                .foregroundStyle(Color.hubPrimary)
+                            Spacer()
+                        }
+                        Slider(value: $inputMoodrating, in: 1...10, step: 1)
+                            .tint(Color.hubPrimary)
                     }
                 }
-                .pickerStyle(.menu)
-                .font(.hubBody)
-                .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
 
-            EntryFormSection(title: "Social Context") {
-                Picker("Social Context", selection: $entry.socialContext) {
-                    ForEach(SocialContext.allCases) { context in
-                        Label(context.displayName, systemImage: context.icon)
-                            .tag(context)
+                EntryFormSection(title: "Primary Emotion") {
+                    Picker("Primary Emotion", selection: $selectedPrimaryemotion) {
+                        ForEach(PrimaryEmotion.allCases) { item in
+                            Label(item.displayName, systemImage: item.icon).tag(item)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                }
+
+                EntryFormSection(title: "Energy Level (1-5)") {
+                    VStack {
+                        HStack {
+                            Text("\(Int(inputEnergylevel))")
+                                .font(.system(size: 24, weight: .bold, design: .rounded))
+                                .foregroundStyle(Color.hubPrimary)
+                            Spacer()
+                        }
+                        Slider(value: $inputEnergylevel, in: 1...10, step: 1)
+                            .tint(Color.hubPrimary)
                     }
                 }
-                .pickerStyle(.menu)
-                .font(.hubBody)
-                .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
 
-            EntryFormSection(title: "Notes") {
-                TextField(
-                    "How are you feeling? (optional)",
-                    text: $entry.notes,
-                    axis: .vertical
-                )
-                .font(.hubBody)
-                .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
-                .lineLimit(3...6)
-            }
+                EntryFormSection(title: "What Were You Doing") {
+                    Picker("What Were You Doing", selection: $selectedContext) {
+                        ForEach(MoodContext.allCases) { item in
+                            Label(item.displayName, systemImage: item.icon).tag(item)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                }
+
+                EntryFormSection(title: "Last Night's Sleep (1-5)") {
+                    VStack {
+                        HStack {
+                            Text("\(Int(inputSleepquality))")
+                                .font(.system(size: 24, weight: .bold, design: .rounded))
+                                .foregroundStyle(Color.hubPrimary)
+                            Spacer()
+                        }
+                        Slider(value: $inputSleepquality, in: 1...10, step: 1)
+                            .tint(Color.hubPrimary)
+                    }
+                }
+
+                EntryFormSection(title: "Something You're Grateful For") {
+                    HubTextField(placeholder: "Something You're Grateful For", text: $inputGratitudenote)
+                }
+
+                EntryFormSection(title: "Journal Notes") {
+                    HubTextField(placeholder: "Journal Notes", text: $inputNotes)
+                }
         }
     }
 }

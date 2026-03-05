@@ -8,15 +8,15 @@
   "iconColor": "hubAccentGreen",
   "relevanceKeywords": [
     "plant",
-    "water",
     "watering",
-    "houseplant",
     "garden",
+    "houseplant",
     "fertilize",
-    "green",
-    "care",
+    "greenery",
     "botanical",
-    "succulent"
+    "succulent",
+    "herb",
+    "care"
   ],
   "dataFields": [
     {
@@ -38,16 +38,10 @@
       "control": "picker"
     },
     {
-      "name": "healthScore",
+      "name": "healthRating",
       "type": "Int",
-      "label": "Health Score (1\u20135)",
+      "label": "Health Rating (1-5)",
       "control": "slider"
-    },
-    {
-      "name": "soilMoisture",
-      "type": "SoilMoisture",
-      "label": "Soil Moisture",
-      "control": "picker"
     },
     {
       "name": "location",
@@ -56,9 +50,15 @@
       "control": "picker"
     },
     {
+      "name": "usedFertilizer",
+      "type": "Bool",
+      "label": "Added Fertilizer",
+      "control": "toggle"
+    },
+    {
       "name": "notes",
       "type": "String",
-      "label": "Notes",
+      "label": "Observations",
       "control": "text"
     }
   ],
@@ -67,34 +67,29 @@
       "name": "CareType",
       "cases": [
         {
-          "name": "water",
-          "displayName": "Water",
+          "name": "watering",
+          "displayName": "Watering",
           "icon": "drop.fill"
         },
         {
-          "name": "fertilize",
-          "displayName": "Fertilize",
-          "icon": "leaf.arrow.circlepath"
-        },
-        {
-          "name": "mist",
-          "displayName": "Mist",
+          "name": "misting",
+          "displayName": "Misting",
           "icon": "humidity.fill"
         },
         {
-          "name": "prune",
-          "displayName": "Prune",
+          "name": "fertilizing",
+          "displayName": "Fertilizing",
+          "icon": "leaf.arrow.circlepath"
+        },
+        {
+          "name": "pruning",
+          "displayName": "Pruning",
           "icon": "scissors"
         },
         {
-          "name": "repot",
-          "displayName": "Repot",
-          "icon": "arrow.3.trianglepath"
-        },
-        {
-          "name": "rotate",
-          "displayName": "Rotate",
-          "icon": "arrow.triangle.2.circlepath"
+          "name": "repotting",
+          "displayName": "Repotting",
+          "icon": "arrow.up.bin.fill"
         }
       ]
     },
@@ -109,36 +104,16 @@
         {
           "name": "moderate",
           "displayName": "Moderate",
-          "icon": "drop.fill"
+          "icon": "drop.halffull"
         },
         {
           "name": "thorough",
-          "displayName": "Thorough Soak",
-          "icon": "drop.circle.fill"
-        }
-      ]
-    },
-    {
-      "name": "SoilMoisture",
-      "cases": [
-        {
-          "name": "dry",
-          "displayName": "Bone Dry",
-          "icon": "sun.max.fill"
-        },
-        {
-          "name": "slightlyMoist",
-          "displayName": "Slightly Moist",
-          "icon": "drop"
-        },
-        {
-          "name": "moist",
-          "displayName": "Moist",
+          "displayName": "Thorough",
           "icon": "drop.fill"
         },
         {
-          "name": "wet",
-          "displayName": "Soggy / Wet",
+          "name": "soaking",
+          "displayName": "Deep Soak",
           "icon": "water.waves"
         }
       ]
@@ -146,16 +121,6 @@
     {
       "name": "PlantLocation",
       "cases": [
-        {
-          "name": "windowsill",
-          "displayName": "Windowsill",
-          "icon": "sun.max"
-        },
-        {
-          "name": "balcony",
-          "displayName": "Balcony",
-          "icon": "tree.fill"
-        },
         {
           "name": "livingRoom",
           "displayName": "Living Room",
@@ -167,19 +132,34 @@
           "icon": "bed.double.fill"
         },
         {
-          "name": "bathroom",
-          "displayName": "Bathroom",
-          "icon": "bathtub.fill"
-        },
-        {
           "name": "kitchen",
           "displayName": "Kitchen",
           "icon": "fork.knife"
         },
         {
+          "name": "bathroom",
+          "displayName": "Bathroom",
+          "icon": "shower.fill"
+        },
+        {
           "name": "office",
           "displayName": "Office",
           "icon": "desktopcomputer"
+        },
+        {
+          "name": "balcony",
+          "displayName": "Balcony",
+          "icon": "sun.max.fill"
+        },
+        {
+          "name": "garden",
+          "displayName": "Garden",
+          "icon": "tree.fill"
+        },
+        {
+          "name": "other",
+          "displayName": "Other",
+          "icon": "mappin"
         }
       ]
     }
@@ -187,135 +167,131 @@
   "views": [
     {
       "name": "DashboardView",
-      "purpose": "Main hub showing today's care summary, number of unique plants tended, green-thumb streak counter, plants overdue for watering, and a prominent quick-add FAB for logging care events",
+      "purpose": "Main dashboard showing today's watering summary, plants needing attention, health overview ring, and quick-add button",
       "components": [
         "StatGrid",
         "ProgressRingView",
+        "NeglectedPlantsAlert",
         "QuickEntryFAB"
       ]
     },
     {
       "name": "EntrySheet",
-      "purpose": "Quick care logging sheet with plant name autocomplete from previous entries, care type selector with icons, conditional water amount picker, health score slider, soil moisture check, location tag, and optional notes",
+      "purpose": "Quick entry modal to log a watering or care event for a specific plant with smart defaults based on recent history",
       "components": [
-        "QuickEntrySheet",
-        "EntryFormSection"
+        "PlantNameAutocomplete",
+        "CareTypePicker",
+        "WaterAmountSelector",
+        "HealthSlider",
+        "LocationPicker"
       ]
     },
     {
       "name": "HistoryView",
-      "purpose": "Chronological care log grouped by date with plant name badges, care type icons, and health score indicators; filterable by individual plant or care type",
+      "purpose": "Date-grouped care log filterable by plant name, care type, and location with color-coded care type badges",
       "components": [
-        "CalendarHeatmap"
+        "CalendarHeatmap",
+        "FilterableEntryList",
+        "PlantGroupedView"
       ]
     },
     {
       "name": "AnalyticsView",
-      "purpose": "Weekly care frequency bar chart, monthly health score trend line per plant, care type distribution pie breakdown, location-based health comparison, and contextual insight cards",
+      "purpose": "Charts showing watering frequency trends, health ratings over time per plant, care type distribution, and location breakdown with actionable insights",
       "components": [
         "ModuleChartView",
+        "HealthTrendChart",
+        "CareDistributionPie",
         "InsightsList"
       ]
     }
   ],
   "viewModelComputedProperties": [
     {
-      "name": "todaysCareCount",
+      "name": "todayWateringCount",
       "type": "Int",
-      "description": "Total number of care events logged today across all plants"
+      "description": "Number of plants watered today across all care types"
     },
     {
-      "name": "uniquePlantsToday",
-      "type": "Int",
-      "description": "Count of distinct plant names cared for today"
+      "name": "plantsWateredToday",
+      "type": "[String]",
+      "description": "Unique plant names that received care today"
     },
     {
-      "name": "totalUniquePlants",
+      "name": "weeklyWateringCount",
       "type": "Int",
-      "description": "Total number of distinct plant names across all historical entries"
+      "description": "Total care events logged in the current week (Mon-Sun)"
     },
     {
       "name": "currentStreak",
       "type": "Int",
-      "description": "Consecutive days with at least one care event logged, ending today or yesterday"
+      "description": "Consecutive days with at least one watering event logged"
     },
     {
-      "name": "weeklyCareSessions",
+      "name": "uniquePlantCount",
       "type": "Int",
-      "description": "Total care events logged during the current Mon\u2013Sun week"
+      "description": "Total number of unique plants being tracked across all entries"
     },
     {
-      "name": "weeklyTrendPercent",
-      "type": "Double",
-      "description": "Percentage change in weekly care events vs the previous week; positive means more activity"
+      "name": "neglectedPlants",
+      "type": "[String]",
+      "description": "Plant names whose last watering was more than 7 days ago, sorted by urgency"
     },
     {
-      "name": "averageHealthScore",
+      "name": "averageHealthRating",
       "type": "Double",
-      "description": "Mean health score across all entries from the last 30 days, scale 1.0\u20135.0"
+      "description": "Mean health rating across the most recent entry for each unique plant"
     },
     {
       "name": "healthTrend",
-      "type": "Double",
-      "description": "Difference between this month's average health score and last month's; positive means improving"
+      "type": "String",
+      "description": "Compares average health rating this week vs last week: improving, declining, or stable"
+    },
+    {
+      "name": "mostCaredPlant",
+      "type": "String",
+      "description": "Plant name with the highest number of care entries in the last 30 days"
     },
     {
       "name": "careTypeBreakdown",
       "type": "[(String, Int)]",
-      "description": "Frequency distribution of each care type in the last 30 days, sorted descending"
+      "description": "Distribution of care types (watering, misting, etc.) as label-count pairs for pie chart"
     },
     {
-      "name": "mostActivePlant",
-      "type": "String?",
-      "description": "Name of the plant with the most care events in the last 30 days"
-    },
-    {
-      "name": "plantsDueForWater",
-      "type": "[String]",
-      "description": "Names of plants whose most recent watering event was 7+ days ago"
+      "name": "weeklyChartData",
+      "type": "[(Date, Int)]",
+      "description": "Daily watering counts for the past 7 days as date-value pairs for bar chart"
     },
     {
       "name": "goalProgress",
       "type": "Double",
-      "description": "Fraction of daily care goal achieved today (0.0 to 1.0, capped at 1.0)"
+      "description": "Fraction of daily watering goal completed (todayWateringCount / dailyGoal), clamped 0-1"
     },
     {
-      "name": "weeklyChartData",
+      "name": "plantHealthMap",
       "type": "[(String, Int)]",
-      "description": "Array of (dayLabel, careCount) tuples for each day of the current week for bar chart rendering"
+      "description": "Each unique plant paired with its most recent health rating for health overview grid"
     },
     {
-      "name": "monthlyHealthChartData",
-      "type": "[(String, Double)]",
-      "description": "Array of (weekLabel, avgHealthScore) tuples for each week of the current month for line chart"
-    },
-    {
-      "name": "locationDistribution",
-      "type": "[(String, Int)]",
-      "description": "Number of unique plants per location, useful for pie or bar chart"
-    },
-    {
-      "name": "todayInsights",
+      "name": "insights",
       "type": "[String]",
-      "description": "Array of contextual insight strings computed from care patterns, overdue plants, health trends, and streaks"
+      "description": "Generated insight strings: neglected plant alerts, streak celebrations, health warnings, fertilizer reminders"
     }
   ],
   "domainLogic": {
     "dailyGoal": {
-      "description": "Target number of plant care events per day; encourages daily check-ins with all plants. Adjustable by user.",
+      "description": "Target number of plants to check and water per day, encourages consistent daily plant rounds",
       "defaultValue": "3"
     },
-    "streakDefinition": "A day counts as active if at least 1 care event of any type is logged. The streak increments for each consecutive active day and resets to 0 when a day passes with zero events.",
-    "trendAnalysis": "Compare current week total care sessions vs previous week for activity trend. Track rolling 30-day average health score vs prior 30 days. Flag individual plants whose last 3 health scores form a declining sequence. Compute per-location average health to identify problem areas.",
+    "streakDefinition": "A day counts as active if at least one watering-type care event (watering or misting) is logged. Fertilizing, pruning, and repotting do not count toward the streak since they are infrequent tasks.",
+    "trendAnalysis": "Track weekly average watering count vs previous week (volume trend), average health rating this week vs last week (health trend), and per-plant watering frequency to detect neglected plants (any plant with no watering entry in 7+ days triggers an alert).",
     "insights": [
-      "Thirsty plants: list plants not watered in 7+ days with their last watering date and location",
-      "Health declining: flag plants whose last 3 recorded health scores show a consistent downward trend (e.g. 4\u21923\u21922)",
-      "Fertilize reminder: highlight plants that haven't received fertilizer in 30+ days",
-      "Streak milestone: celebration messages at 7, 14, 30, 60, and 90 consecutive active care days",
-      "Seasonal tip: suggest reducing watering frequency Nov\u2013Feb and increasing Jun\u2013Aug based on calendar month",
-      "Location health: compare average health scores across locations to identify spots that may need better light or humidity",
-      "Neglect alert: identify plants with fewer than 2 care events in the past 30 days compared to the user's average",
-      "Green thumb score: weekly composite score (0\u2013100) based on streak, overdue count, average health, and care consistency"
+      "Neglected plant alert: '{plantName} hasn't been watered in {days} days' when last watering exceeds 7 days",
+      "Streak celebration: 'Amazing! {streak}-day green thumb streak!' at 7, 14, 30, 60, 90 day milestones",
+      "Health warning: '{plantName} health declining \u2014 rated {rating}/5, down from {previous}' when latest health rating drops 2+ points from 30-day average",
+      "Fertilizer reminder: 'Consider fertilizing {plantName} \u2014 last fertilized {days} days ago' when no fertilize entry in 30+ days",
+      "Consistency insight: 'You watered {percent}% more plants this week vs last week' comparing weekly totals",
+      "Top performer: '{plantName} is thriving at {rating}/5 health!' for plant with highest recent health rating"
     ]
   }
 }

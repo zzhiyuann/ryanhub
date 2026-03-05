@@ -4,12 +4,12 @@ struct ScreenTimeTrackerEntrySheet: View {
     @Environment(\.colorScheme) private var colorScheme
     let viewModel: ScreenTimeTrackerViewModel
     var onSave: (() -> Void)?
-    @State private var inputDuration: Double = 0.5
+    @State private var inputDurationminutes: Int = 1
     @State private var selectedCategory: ScreenCategory = .socialMedia
-    @State private var selectedIntentionality: UsageIntent = .intentional
-    @State private var selectedDevice: DeviceType = .phone
     @State private var inputAppname: String = ""
-    @State private var inputNote: String = ""
+    @State private var inputWasintentional: Bool = false
+    @State private var selectedDevicetype: DeviceType = .phone
+    @State private var inputNotes: String = ""
 
     var body: some View {
         QuickEntrySheet(
@@ -17,14 +17,14 @@ struct ScreenTimeTrackerEntrySheet: View {
             icon: "plus.circle.fill",
             canSave: true,
             onSave: {
-                let entry = ScreenTimeTrackerEntry(duration: inputDuration, category: selectedCategory, intentionality: selectedIntentionality, device: selectedDevice, appName: inputAppname, note: inputNote)
+                let entry = ScreenTimeTrackerEntry(durationMinutes: inputDurationminutes, category: selectedCategory, appName: inputAppname, wasIntentional: inputWasintentional, deviceType: selectedDevicetype, notes: inputNotes)
                 Task { await viewModel.addEntry(entry) }
                 onSave?()
             }
         ) {
 
-                EntryFormSection(title: "Duration (hours)") {
-                    Stepper(String(format: "%.1f hours", inputDuration), value: $inputDuration, in: 0...24, step: 0.5)
+                EntryFormSection(title: "Duration (minutes)") {
+                    Stepper("\(inputDurationminutes) duration (minutes)", value: $inputDurationminutes, in: 0...9999)
                 }
 
                 EntryFormSection(title: "Category") {
@@ -36,17 +36,17 @@ struct ScreenTimeTrackerEntrySheet: View {
                     .pickerStyle(.menu)
                 }
 
-                EntryFormSection(title: "Usage Type") {
-                    Picker("Usage Type", selection: $selectedIntentionality) {
-                        ForEach(UsageIntent.allCases) { item in
-                            Label(item.displayName, systemImage: item.icon).tag(item)
-                        }
-                    }
-                    .pickerStyle(.menu)
+                EntryFormSection(title: "App or Activity") {
+                    HubTextField(placeholder: "App or Activity", text: $inputAppname)
+                }
+
+                EntryFormSection(title: "Intentional Use") {
+                    Toggle("Intentional Use", isOn: $inputWasintentional)
+                        .tint(Color.hubPrimary)
                 }
 
                 EntryFormSection(title: "Device") {
-                    Picker("Device", selection: $selectedDevice) {
+                    Picker("Device", selection: $selectedDevicetype) {
                         ForEach(DeviceType.allCases) { item in
                             Label(item.displayName, systemImage: item.icon).tag(item)
                         }
@@ -54,12 +54,8 @@ struct ScreenTimeTrackerEntrySheet: View {
                     .pickerStyle(.menu)
                 }
 
-                EntryFormSection(title: "App or Activity") {
-                    HubTextField(placeholder: "App or Activity", text: $inputAppname)
-                }
-
-                EntryFormSection(title: "Note") {
-                    HubTextField(placeholder: "Note", text: $inputNote)
+                EntryFormSection(title: "Notes") {
+                    HubTextField(placeholder: "Notes", text: $inputNotes)
                 }
         }
     }

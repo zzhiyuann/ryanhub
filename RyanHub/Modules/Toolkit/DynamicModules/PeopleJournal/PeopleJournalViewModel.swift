@@ -1,12 +1,12 @@
 import Foundation
 import SwiftUI
 
-// MARK: - PeopleNotes View Model
+// MARK: - PeopleJournal View Model
 
 @Observable
 @MainActor
-final class PeopleNotesViewModel {
-    var entries: [PeopleNotesEntry] = []
+final class PeopleJournalViewModel {
+    var entries: [PeopleJournalEntry] = []
     var isLoading = false
     var errorMessage: String?
 
@@ -21,7 +21,7 @@ final class PeopleNotesViewModel {
 
     // MARK: - Computed Properties
 
-    var todayEntries: [PeopleNotesEntry] {
+    var todayEntries: [PeopleJournalEntry] {
         let today = DateFormatter()
         today.dateFormat = "yyyy-MM-dd"
         let todayStr = today.string(from: Date())
@@ -95,18 +95,18 @@ final class PeopleNotesViewModel {
         isLoading = true
         defer { isLoading = false }
         do {
-            let url = URL(string: "\(bridgeBaseURL)/modules/peopleNotes/data")!
+            let url = URL(string: "\(bridgeBaseURL)/modules/peopleJournal/data")!
             let (data, _) = try await URLSession.shared.data(from: url)
-            entries = try JSONDecoder().decode([PeopleNotesEntry].self, from: data)
-            UserDefaults.standard.set(data, forKey: "dynamic_module_peopleNotes_cache")
+            entries = try JSONDecoder().decode([PeopleJournalEntry].self, from: data)
+            UserDefaults.standard.set(data, forKey: "dynamic_module_peopleJournal_cache")
         } catch {
             entries = []
         }
     }
 
-    func addEntry(_ entry: PeopleNotesEntry) async {
+    func addEntry(_ entry: PeopleJournalEntry) async {
         do {
-            let url = URL(string: "\(bridgeBaseURL)/modules/peopleNotes/data/add")!
+            let url = URL(string: "\(bridgeBaseURL)/modules/peopleJournal/data/add")!
             var request = URLRequest(url: url)
             request.httpMethod = "POST"
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -118,9 +118,9 @@ final class PeopleNotesViewModel {
         }
     }
 
-    func deleteEntry(_ entry: PeopleNotesEntry) async {
+    func deleteEntry(_ entry: PeopleJournalEntry) async {
         do {
-            let url = URL(string: "\(bridgeBaseURL)/modules/peopleNotes/data?id=\(entry.id)")!
+            let url = URL(string: "\(bridgeBaseURL)/modules/peopleJournal/data?id=\(entry.id)")!
             var request = URLRequest(url: url)
             request.httpMethod = "DELETE"
             _ = try await URLSession.shared.data(for: request)

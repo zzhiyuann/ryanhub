@@ -2,31 +2,29 @@ import Foundation
 
 // MARK: - GratitudeJournal Models
 
-enum GratitudeTheme: String, Codable, CaseIterable, Identifiable {
+enum GratitudeCategory: String, Codable, CaseIterable, Identifiable {
     case people
     case health
-    case nature
     case work
+    case nature
     case experiences
+    case growth
     case home
-    case food
-    case learning
     case creativity
-    case pets
+    case simple
     case other
     var id: String { rawValue }
     var displayName: String {
         switch self {
         case .people: return "People"
         case .health: return "Health"
+        case .work: return "Work & Career"
         case .nature: return "Nature"
-        case .work: return "Career"
         case .experiences: return "Experiences"
+        case .growth: return "Personal Growth"
         case .home: return "Home & Comfort"
-        case .food: return "Food & Drink"
-        case .learning: return "Growth"
         case .creativity: return "Creativity"
-        case .pets: return "Pets & Animals"
+        case .simple: return "Simple Pleasures"
         case .other: return "Other"
         }
     }
@@ -34,15 +32,44 @@ enum GratitudeTheme: String, Codable, CaseIterable, Identifiable {
         switch self {
         case .people: return "person.2.fill"
         case .health: return "heart.fill"
-        case .nature: return "leaf.fill"
         case .work: return "briefcase.fill"
-        case .experiences: return "star.fill"
+        case .nature: return "leaf.fill"
+        case .experiences: return "sparkles"
+        case .growth: return "arrow.up.heart.fill"
         case .home: return "house.fill"
-        case .food: return "fork.knife"
-        case .learning: return "brain.head.profile"
-        case .creativity: return "paintbrush.fill"
-        case .pets: return "pawprint.fill"
+        case .creativity: return "paintpalette.fill"
+        case .simple: return "cup.and.saucer.fill"
         case .other: return "ellipsis.circle.fill"
+        }
+    }
+}
+
+enum EntryMood: String, Codable, CaseIterable, Identifiable {
+    case joyful
+    case content
+    case peaceful
+    case hopeful
+    case reflective
+    case neutral
+    var id: String { rawValue }
+    var displayName: String {
+        switch self {
+        case .joyful: return "Joyful"
+        case .content: return "Content"
+        case .peaceful: return "Peaceful"
+        case .hopeful: return "Hopeful"
+        case .reflective: return "Reflective"
+        case .neutral: return "Neutral"
+        }
+    }
+    var icon: String {
+        switch self {
+        case .joyful: return "sun.max.fill"
+        case .content: return "face.smiling"
+        case .peaceful: return "moon.stars.fill"
+        case .hopeful: return "sunrise.fill"
+        case .reflective: return "bubble.left.and.text.bubble.right"
+        case .neutral: return "circle.fill"
         }
     }
 }
@@ -54,25 +81,17 @@ struct GratitudeJournalEntry: Codable, Identifiable {
         f.dateFormat = "yyyy-MM-dd HH:mm"
         return f.string(from: Date())
     }()
-    var gratitudeOne: String
-    var themeOne: GratitudeTheme
-    var gratitudeTwo: String
-    var themeTwo: GratitudeTheme
-    var gratitudeThree: String
-    var themeThree: GratitudeTheme
-    var moodAfter: Int
-    var reflection: String
+    var gratitudeText: String
+    var category: GratitudeCategory
+    var depth: Int
+    var mood: EntryMood
 
     var summaryLine: String {
         var parts: [String] = [date]
-        parts.append("\(gratitudeOne)")
-        parts.append("\(themeOne)")
-        parts.append("\(gratitudeTwo)")
-        parts.append("\(themeTwo)")
-        parts.append("\(gratitudeThree)")
-        parts.append("\(themeThree)")
-        parts.append("\(moodAfter)")
-        parts.append("\(reflection)")
+        parts.append("\(gratitudeText)")
+        parts.append("\(category)")
+        parts.append("\(depth)")
+        parts.append("\(mood)")
         return parts.joined(separator: " | ")
     }
 }

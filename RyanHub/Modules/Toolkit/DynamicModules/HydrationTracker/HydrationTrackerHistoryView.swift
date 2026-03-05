@@ -1,151 +1,84 @@
 import SwiftUI
 
 struct HydrationTrackerHistoryView: View {
-    let viewModel: HydrationTrackerViewModel
     @Environment(\.colorScheme) private var colorScheme
+    let viewModel: HydrationTrackerViewModel
 
-    private var groupedEntries: [(String, [HydrationTrackerEntry])] {
-        let groups = Dictionary(grouping: viewModel.entries) { $0.dayKey }
-        return groups
-            .sorted { $0.key > $1.key }
-            .map { (key, entries) in (key, entries.sorted { $0.date > $1.date }) }
+    private var heatmapData: [Date: Double] {
+        let calendar = Calendar.current
+        let df = DateFormatter()
+        df.dateFormat = "yyyy-MM-dd"
+        var result: [Date: Double] = [:]
+        for entry in viewModel.entries {
+            if let date = df.date(from: String(entry.date.prefix(10))) {
+                let day = calendar.startOfDay(for: date)
+                result[day, default: 0] += 1
+            }
+        }
+        return result
     }
 
-    private func formattedDayKey(_ dayKey: String) -> String {
-        let f = DateFormatter()
-        f.dateFormat = "yyyy-MM-dd"
-        guard let d = f.date(from: dayKey) else { return dayKey }
-        let out = DateFormatter()
-        out.dateStyle = .medium
-        return out.string(from: d)
+    private var groupedEntries: [(String, [HydrationTrackerEntry])] {
+        let df = DateFormatter()
+        df.dateFormat = "yyyy-MM-dd"
+        let grouped = Dictionary(grouping: viewModel.entries) { String($0.date.prefix(10)) }
+        return grouped.sorted { $0.key > $1.key }
     }
 
     var body: some View {
         ScrollView {
             VStack(spacing: HubLayout.sectionSpacing) {
-                if !viewModel.calendarData.isEmpty {
-                    CalendarHeatmap(
-                        title: "Activity",
-                        data: viewModel.calendarData,
-                        color: .hubPrimary
-                    )
-                    .padding(.horizontal, HubLayout.standardPadding)
-                }
+                // Calendar Heatmap
+                CalendarHeatmap(
+                    title: "Activity",
+                    data: heatmapData,
+                    color: .hubPrimary
+                )
 
-                if viewModel.entries.isEmpty {
-                    emptyStateView
-                } else {
-                    entriesListView
-                }
-            }
-            .padding(.vertical, HubLayout.standardPadding)
-        }
-        .background(AdaptiveColors.background(for: colorScheme))
-    }
-
-    private var emptyStateView: some View {
-        VStack(spacing: HubLayout.itemSpacing) {
-            Spacer(minLength: 60)
-            Image(systemName: "drop.fill")
-                .font(.system(size: 52))
-                .foregroundStyle(Color.hubPrimary.opacity(0.35))
-            Text("No entries yet")
-                .font(.hubHeading)
-                .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
-            Text("Start tracking your hydration to see your history here.")
-                .font(.hubBody)
-                .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, HubLayout.sectionSpacing)
-            Spacer(minLength: 60)
-        }
-        .frame(maxWidth: .infinity)
-    }
-
-    private var entriesListView: some View {
-        LazyVStack(spacing: HubLayout.sectionSpacing, pinnedViews: .sectionHeaders) {
-            ForEach(groupedEntries, id: \.0) { dayKey, entries in
-                Section {
-                    VStack(spacing: HubLayout.itemSpacing) {
+                // Grouped entries by date
+                ForEach(groupedEntries, id: \.0) { dateStr, entries in
+                    VStack(alignment: .leading, spacing: HubLayout.itemSpacing) {
+                        SectionHeader(title: dateStr)
                         ForEach(entries) { entry in
-                            HydrationEntryRow(entry: entry, colorScheme: colorScheme) {
-                                Task { await viewModel.deleteEntry(entry) }
+                            HubCard {
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(entry.summaryLine)
+                                            .font(.hubBody)
+                                            .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                                        Text(entry.date)
+                                            .font(.hubCaption)
+                                            .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                                    }
+                                    Spacer()
+                                    Button {
+                                        Task { await viewModel.deleteEntry(entry) }
+                                    } label: {
+                                        Image(systemName: "trash")
+                                            .font(.system(size: 14))
+                                            .foregroundStyle(Color.hubAccentRed.opacity(0.7))
+                                    }
+                                }
                             }
                         }
                     }
-                    .padding(.horizontal, HubLayout.standardPadding)
-                } header: {
-                    HStack {
-                        SectionHeader(title: formattedDayKey(dayKey))
-                        Spacer()
-                        let total = entries.reduce(0.0) { $0 + $1.effectiveOz }
-                        Text(String(format: "%.0f oz", total))
-                            .font(.hubCaption)
+                }
+
+                if viewModel.entries.isEmpty {
+                    VStack(spacing: 12) {
+                        Image(systemName: "tray")
+                            .font(.system(size: 40))
+                            .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                        Text("No entries yet")
+                            .font(.hubBody)
                             .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
                     }
-                    .padding(.horizontal, HubLayout.standardPadding)
-                    .padding(.vertical, 6)
-                    .background(AdaptiveColors.background(for: colorScheme))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 40)
                 }
             }
+            .padding(HubLayout.standardPadding)
         }
-    }
-}
-
-private struct HydrationEntryRow: View {
-    let entry: HydrationTrackerEntry
-    let colorScheme: ColorScheme
-    let onDelete: () -> Void
-
-    var body: some View {
-        HubCard {
-            HStack(spacing: HubLayout.itemSpacing) {
-                ZStack {
-                    Circle()
-                        .fill(Color.hubPrimary.opacity(0.12))
-                        .frame(width: 40, height: 40)
-                    Image(systemName: entry.beverageType.icon)
-                        .font(.system(size: 18, weight: .medium))
-                        .foregroundStyle(Color.hubPrimary)
-                }
-
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(entry.summaryLine)
-                        .font(.hubBody)
-                        .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
-                    HStack(spacing: 6) {
-                        Text(entry.formattedTime)
-                            .font(.hubCaption)
-                            .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
-                        if entry.effectiveOz != entry.amountOz {
-                            Text("·")
-                                .font(.hubCaption)
-                                .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
-                            Text(entry.formattedEffectiveOz)
-                                .font(.hubCaption)
-                                .foregroundStyle(Color.hubPrimary.opacity(0.8))
-                        }
-                    }
-                    if !entry.note.isEmpty {
-                        Text(entry.note)
-                            .font(.hubCaption)
-                            .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme).opacity(0.75))
-                            .lineLimit(1)
-                    }
-                }
-
-                Spacer(minLength: 0)
-
-                Button(action: onDelete) {
-                    Image(systemName: "trash")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(Color.hubAccentRed)
-                        .frame(width: 32, height: 32)
-                        .background(Color.hubAccentRed.opacity(0.1))
-                        .clipShape(Circle())
-                }
-                .buttonStyle(.plain)
-            }
-        }
+        .background(AdaptiveColors.background(for: colorScheme))
     }
 }

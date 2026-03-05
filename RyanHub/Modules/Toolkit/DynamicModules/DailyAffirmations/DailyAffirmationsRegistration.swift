@@ -11,7 +11,7 @@ extension DynamicModuleRegistry {
             shortName: "Affirmations",
             subtitle: "Nurture your mindset daily",
             icon: "sparkles",
-            iconColorName: "hubAccentYellow",
+            iconColorName: "hubPrimaryLight",
             viewBuilder: { AnyView(DailyAffirmationsView()) },
             dataProviderType: DailyAffirmationsDataProvider.self
         ))

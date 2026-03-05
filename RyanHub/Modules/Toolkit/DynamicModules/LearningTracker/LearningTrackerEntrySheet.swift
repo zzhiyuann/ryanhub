@@ -4,15 +4,13 @@ struct LearningTrackerEntrySheet: View {
     @Environment(\.colorScheme) private var colorScheme
     let viewModel: LearningTrackerViewModel
     var onSave: (() -> Void)?
-    @State private var inputSubject: String = ""
-    @State private var selectedCategory: LearningCategory = .programming
+    @State private var inputSubjectname: String = ""
+    @State private var selectedCategory: LearningCategory = .technology
+    @State private var selectedSessiontype: LearningSessionType = .lecture
     @State private var inputDurationminutes: Int = 1
-    @State private var selectedResourcetype: ResourceType = .onlineCourse
-    @State private var inputResourcename: String = ""
-    @State private var inputConfidencelevel: Double = 5
-    @State private var inputCompletionpercent: Double = 5
-    @State private var inputSessiongoalmet: Bool = false
-    @State private var inputNotes: String = ""
+    @State private var inputFocusrating: Double = 5
+    @State private var inputProgresspercent: Double = 5
+    @State private var inputKeytakeaway: String = ""
 
     var body: some View {
         QuickEntrySheet(
@@ -20,14 +18,14 @@ struct LearningTrackerEntrySheet: View {
             icon: "plus.circle.fill",
             canSave: true,
             onSave: {
-                let entry = LearningTrackerEntry(subject: inputSubject, category: selectedCategory, durationMinutes: inputDurationminutes, resourceType: selectedResourcetype, resourceName: inputResourcename, confidenceLevel: Int(inputConfidencelevel), completionPercent: Int(inputCompletionpercent), sessionGoalMet: inputSessiongoalmet, notes: inputNotes)
+                let entry = LearningTrackerEntry(subjectName: inputSubjectname, category: selectedCategory, sessionType: selectedSessiontype, durationMinutes: inputDurationminutes, focusRating: Int(inputFocusrating), progressPercent: Int(inputProgresspercent), keyTakeaway: inputKeytakeaway)
                 Task { await viewModel.addEntry(entry) }
                 onSave?()
             }
         ) {
 
-                EntryFormSection(title: "Subject / Skill") {
-                    HubTextField(placeholder: "Subject / Skill", text: $inputSubject)
+                EntryFormSection(title: "Subject / Course") {
+                    HubTextField(placeholder: "Subject / Course", text: $inputSubjectname)
                 }
 
                 EntryFormSection(title: "Category") {
@@ -39,56 +37,47 @@ struct LearningTrackerEntrySheet: View {
                     .pickerStyle(.menu)
                 }
 
-                EntryFormSection(title: "Duration (min)") {
-                    Stepper("\(inputDurationminutes) duration (min)", value: $inputDurationminutes, in: 0...9999)
-                }
-
-                EntryFormSection(title: "Resource Type") {
-                    Picker("Resource Type", selection: $selectedResourcetype) {
-                        ForEach(ResourceType.allCases) { item in
+                EntryFormSection(title: "Session Type") {
+                    Picker("Session Type", selection: $selectedSessiontype) {
+                        ForEach(LearningSessionType.allCases) { item in
                             Label(item.displayName, systemImage: item.icon).tag(item)
                         }
                     }
                     .pickerStyle(.menu)
                 }
 
-                EntryFormSection(title: "Resource Name") {
-                    HubTextField(placeholder: "Resource Name", text: $inputResourcename)
+                EntryFormSection(title: "Duration (min)") {
+                    Stepper("\(inputDurationminutes) duration (min)", value: $inputDurationminutes, in: 0...9999)
                 }
 
-                EntryFormSection(title: "Confidence Level") {
+                EntryFormSection(title: "Focus Quality") {
                     VStack {
                         HStack {
-                            Text("\(Int(inputConfidencelevel))")
+                            Text("\(Int(inputFocusrating))")
                                 .font(.system(size: 24, weight: .bold, design: .rounded))
                                 .foregroundStyle(Color.hubPrimary)
                             Spacer()
                         }
-                        Slider(value: $inputConfidencelevel, in: 1...10, step: 1)
+                        Slider(value: $inputFocusrating, in: 1...10, step: 1)
                             .tint(Color.hubPrimary)
                     }
                 }
 
-                EntryFormSection(title: "Completion %") {
+                EntryFormSection(title: "Course Progress %") {
                     VStack {
                         HStack {
-                            Text("\(Int(inputCompletionpercent))")
+                            Text("\(Int(inputProgresspercent))")
                                 .font(.system(size: 24, weight: .bold, design: .rounded))
                                 .foregroundStyle(Color.hubPrimary)
                             Spacer()
                         }
-                        Slider(value: $inputCompletionpercent, in: 1...10, step: 1)
+                        Slider(value: $inputProgresspercent, in: 1...10, step: 1)
                             .tint(Color.hubPrimary)
                     }
                 }
 
-                EntryFormSection(title: "Session Goal Met") {
-                    Toggle("Session Goal Met", isOn: $inputSessiongoalmet)
-                        .tint(Color.hubPrimary)
-                }
-
-                EntryFormSection(title: "Notes") {
-                    HubTextField(placeholder: "Notes", text: $inputNotes)
+                EntryFormSection(title: "Key Takeaway") {
+                    HubTextField(placeholder: "Key Takeaway", text: $inputKeytakeaway)
                 }
         }
     }

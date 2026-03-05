@@ -9,7 +9,7 @@ extension DynamicModuleRegistry {
             toolkitId: "catCareTracker",
             displayName: "Cat Care Tracker",
             shortName: "Cat Care",
-            subtitle: "Feeding, health & vet care for your cat",
+            subtitle: "Feeding, health & vet care for your feline",
             icon: "cat.fill",
             iconColorName: "hubAccentYellow",
             viewBuilder: { AnyView(CatCareTrackerView()) },

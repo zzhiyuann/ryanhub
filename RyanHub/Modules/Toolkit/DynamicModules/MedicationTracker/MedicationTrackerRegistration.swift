@@ -9,9 +9,9 @@ extension DynamicModuleRegistry {
             toolkitId: "medicationTracker",
             displayName: "Medication Tracker",
             shortName: "Meds",
-            subtitle: "Stay on top of your medications",
+            subtitle: "Track doses, schedules & adherence",
             icon: "pills.fill",
-            iconColorName: "hubAccentGreen",
+            iconColorName: "hubAccentRed",
             viewBuilder: { AnyView(MedicationTrackerView()) },
             dataProviderType: MedicationTrackerDataProvider.self
         ))

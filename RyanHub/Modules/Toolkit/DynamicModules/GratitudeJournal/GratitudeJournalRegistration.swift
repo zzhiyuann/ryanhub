@@ -9,8 +9,8 @@ extension DynamicModuleRegistry {
             toolkitId: "gratitudeJournal",
             displayName: "Gratitude Journal",
             shortName: "Gratitude",
-            subtitle: "3 things to be thankful for, every day",
-            icon: "sparkles",
+            subtitle: "Cultivate daily thankfulness",
+            icon: "heart.text.clipboard",
             iconColorName: "hubAccentYellow",
             viewBuilder: { AnyView(GratitudeJournalView()) },
             dataProviderType: GratitudeJournalDataProvider.self

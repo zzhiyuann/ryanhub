@@ -10,7 +10,7 @@ extension DynamicModuleRegistry {
             displayName: "Learning Tracker",
             shortName: "Learning",
             subtitle: "Track courses, skills & study sessions",
-            icon: "book.and.wreath",
+            icon: "book.and.wrench.fill",
             iconColorName: "hubPrimary",
             viewBuilder: { AnyView(LearningTrackerView()) },
             dataProviderType: LearningTrackerDataProvider.self

@@ -14,7 +14,7 @@ struct RecipeBoxView: View {
                     Circle()
                         .fill(Color.hubPrimary.opacity(0.12))
                         .frame(width: 40, height: 40)
-                    Image(systemName: "book.closed.fill")
+                    Image(systemName: "menucard")
                         .font(.system(size: 18, weight: .medium))
                         .foregroundStyle(Color.hubPrimary)
                 }

@@ -1,8 +1,8 @@
 import SwiftUI
 
-struct PeopleNotesAnalyticsView: View {
+struct PeopleJournalAnalyticsView: View {
     @Environment(\.colorScheme) private var colorScheme
-    let viewModel: PeopleNotesViewModel
+    let viewModel: PeopleJournalViewModel
 
     var body: some View {
         ScrollView {

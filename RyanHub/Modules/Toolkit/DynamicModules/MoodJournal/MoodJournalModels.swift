@@ -1,130 +1,96 @@
 import Foundation
 
-// MARK: - MoodActivity
+// MARK: - MoodJournal Models
 
-enum MoodActivity: String, CaseIterable, Codable, Identifiable {
-    case exercise
+enum PrimaryEmotion: String, Codable, CaseIterable, Identifiable {
+    case happy
+    case calm
+    case excited
+    case grateful
+    case hopeful
+    case neutral
+    case tired
+    case anxious
+    case stressed
+    case sad
+    case angry
+    case lonely
+    var id: String { rawValue }
+    var displayName: String {
+        switch self {
+        case .happy: return "Happy"
+        case .calm: return "Calm"
+        case .excited: return "Excited"
+        case .grateful: return "Grateful"
+        case .hopeful: return "Hopeful"
+        case .neutral: return "Neutral"
+        case .tired: return "Tired"
+        case .anxious: return "Anxious"
+        case .stressed: return "Stressed"
+        case .sad: return "Sad"
+        case .angry: return "Angry"
+        case .lonely: return "Lonely"
+        }
+    }
+    var icon: String {
+        switch self {
+        case .happy: return "face.smiling"
+        case .calm: return "leaf"
+        case .excited: return "star"
+        case .grateful: return "heart"
+        case .hopeful: return "sunrise"
+        case .neutral: return "face.dashed"
+        case .tired: return "moon.zzz"
+        case .anxious: return "waveform.path.ecg"
+        case .stressed: return "bolt"
+        case .sad: return "cloud.rain"
+        case .angry: return "flame"
+        case .lonely: return "person.slash"
+        }
+    }
+}
+
+enum MoodContext: String, Codable, CaseIterable, Identifiable {
     case work
-    case socializing
+    case social
+    case exercise
     case rest
     case creative
     case outdoors
-    case reading
-    case meditation
-    case cooking
-    case other
-
-    var id: String { rawValue }
-
-    var displayName: String {
-        switch self {
-        case .exercise:   return "Exercise"
-        case .work:       return "Work"
-        case .socializing:return "Socializing"
-        case .rest:       return "Rest"
-        case .creative:   return "Creative"
-        case .outdoors:   return "Outdoors"
-        case .reading:    return "Reading"
-        case .meditation: return "Meditation"
-        case .cooking:    return "Cooking"
-        case .other:      return "Other"
-        }
-    }
-
-    var icon: String {
-        switch self {
-        case .exercise:   return "figure.run"
-        case .work:       return "briefcase.fill"
-        case .socializing:return "person.2.fill"
-        case .rest:       return "bed.double.fill"
-        case .creative:   return "paintbrush.fill"
-        case .outdoors:   return "leaf.fill"
-        case .reading:    return "book.fill"
-        case .meditation: return "brain.head.profile"
-        case .cooking:    return "fork.knife"
-        case .other:      return "ellipsis.circle.fill"
-        }
-    }
-}
-
-// MARK: - SocialContext
-
-enum SocialContext: String, CaseIterable, Codable, Identifiable {
-    case alone
-    case partner
     case family
-    case friends
-    case coworkers
-    case publicCrowd
-
+    case commute
+    case eating
+    case learning
     var id: String { rawValue }
-
     var displayName: String {
         switch self {
-        case .alone:       return "Alone"
-        case .partner:     return "Partner"
-        case .family:      return "Family"
-        case .friends:     return "Friends"
-        case .coworkers:   return "Coworkers"
-        case .publicCrowd: return "Public"
+        case .work: return "Work"
+        case .social: return "Social"
+        case .exercise: return "Exercise"
+        case .rest: return "Rest"
+        case .creative: return "Creative"
+        case .outdoors: return "Outdoors"
+        case .family: return "Family"
+        case .commute: return "Commute"
+        case .eating: return "Eating"
+        case .learning: return "Learning"
         }
     }
-
     var icon: String {
         switch self {
-        case .alone:       return "person.fill"
-        case .partner:     return "heart.fill"
-        case .family:      return "house.fill"
-        case .friends:     return "person.3.fill"
-        case .coworkers:   return "person.2.badge.gearshape"
-        case .publicCrowd: return "person.2.wave.2.fill"
+        case .work: return "laptopcomputer"
+        case .social: return "person.2"
+        case .exercise: return "figure.run"
+        case .rest: return "bed.double"
+        case .creative: return "paintbrush"
+        case .outdoors: return "sun.max"
+        case .family: return "house"
+        case .commute: return "car"
+        case .eating: return "fork.knife"
+        case .learning: return "book"
         }
     }
 }
-
-// MARK: - TrendDirection
-
-enum TrendDirection {
-    case up
-    case down
-    case stable
-
-    var icon: String {
-        switch self {
-        case .up:     return "arrow.up.right"
-        case .down:   return "arrow.down.right"
-        case .stable: return "arrow.right"
-        }
-    }
-
-    var label: String {
-        switch self {
-        case .up:     return "Improving"
-        case .down:   return "Declining"
-        case .stable: return "Stable"
-        }
-    }
-}
-
-// MARK: - MoodInsight
-
-struct MoodInsight: Identifiable {
-    let id: String
-    let title: String
-    let body: String
-    let icon: String
-    let isAlert: Bool
-
-    init(title: String, body: String, icon: String, isAlert: Bool = false) {
-        self.id = UUID().uuidString
-        self.title = title
-        self.body = body
-        self.icon = icon
-        self.isAlert = isAlert
-    }
-}
-
-// MARK: - MoodJournalEntry
 
 struct MoodJournalEntry: Codable, Identifiable {
     var id: String = UUID().uuidString
@@ -133,107 +99,23 @@ struct MoodJournalEntry: Codable, Identifiable {
         f.dateFormat = "yyyy-MM-dd HH:mm"
         return f.string(from: Date())
     }()
-
-    // Data fields
-    var moodRating: Int = 5
-    var energyLevel: Int = 5
-    var anxietyLevel: Int = 5
-    var activity: MoodActivity = .other
-    var socialContext: SocialContext = .alone
-    var notes: String = ""
-
-    // MARK: - Date Helpers
-
-    var calendarDate: Date? {
-        let f = DateFormatter()
-        f.dateFormat = "yyyy-MM-dd HH:mm"
-        return f.date(from: date)
-    }
-
-    /// "yyyy-MM-dd" prefix used as dictionary key for day grouping
-    var dayKey: String { String(date.prefix(10)) }
-
-    var formattedDate: String {
-        guard let d = calendarDate else { return date }
-        let f = DateFormatter()
-        f.dateStyle = .medium
-        f.timeStyle = .short
-        return f.string(from: d)
-    }
-
-    var formattedTime: String {
-        guard let d = calendarDate else { return "" }
-        let f = DateFormatter()
-        f.timeStyle = .short
-        return f.string(from: d)
-    }
-
-    // MARK: - Mood Representation
-
-    var moodEmoji: String {
-        switch moodRating {
-        case 1:  return "😞"
-        case 2:  return "😟"
-        case 3:  return "😕"
-        case 4:  return "😐"
-        case 5:  return "🙂"
-        case 6:  return "😊"
-        case 7:  return "😄"
-        case 8:  return "😁"
-        case 9:  return "🤩"
-        case 10: return "🥳"
-        default: return "🙂"
-        }
-    }
-
-    var moodLabel: String {
-        switch moodRating {
-        case 1...2:  return "Very Low"
-        case 3...4:  return "Low"
-        case 5...6:  return "Neutral"
-        case 7...8:  return "Good"
-        case 9...10: return "Excellent"
-        default:     return "Neutral"
-        }
-    }
-
-    /// Returns "hubAccentRed", "hubAccentYellow", or "hubAccentGreen" for use with named colors
-    var moodColorName: String {
-        switch moodRating {
-        case 1...3:  return "hubAccentRed"
-        case 4...6:  return "hubAccentYellow"
-        case 7...10: return "hubAccentGreen"
-        default:     return "hubAccentYellow"
-        }
-    }
-
-    // MARK: - Energy / Anxiety Labels
-
-    var energyLabel: String {
-        switch energyLevel {
-        case 1...3:  return "Drained"
-        case 4...6:  return "Moderate"
-        case 7...10: return "Energized"
-        default:     return "Moderate"
-        }
-    }
-
-    var anxietyLabel: String {
-        switch anxietyLevel {
-        case 1...3:  return "Calm"
-        case 4...6:  return "Mild"
-        case 7...10: return "High"
-        default:     return "Mild"
-        }
-    }
-
-    // MARK: - Summary
+    var moodRating: Int
+    var primaryEmotion: PrimaryEmotion
+    var energyLevel: Int
+    var context: MoodContext
+    var sleepQuality: Int
+    var gratitudeNote: String
+    var notes: String
 
     var summaryLine: String {
-        "\(moodEmoji) Mood \(moodRating)/10 · \(activity.displayName) · \(socialContext.displayName)"
-    }
-
-    var hasNotes: Bool {
-        !notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        var parts: [String] = [date]
+        parts.append("\(moodRating)")
+        parts.append("\(primaryEmotion)")
+        parts.append("\(energyLevel)")
+        parts.append("\(context)")
+        parts.append("\(sleepQuality)")
+        parts.append("\(gratitudeNote)")
+        parts.append("\(notes)")
+        return parts.joined(separator: " | ")
     }
 }

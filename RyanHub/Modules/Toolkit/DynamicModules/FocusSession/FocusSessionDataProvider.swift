@@ -1,11 +1,11 @@
 import Foundation
 
-// MARK: - FocusTimer Data Provider
+// MARK: - FocusSession Data Provider
 
-enum FocusTimerDataProvider: ToolkitDataProvider {
-    static let toolkitId = "focusTimer"
-    static let displayName = "Focus Timer"
-    static let relevanceKeywords: [String] = ["pomodoro", "focus", "timer", "productivity", "deep work", "session", "concentration", "task", "distraction", "time management"]
+enum FocusSessionDataProvider: ToolkitDataProvider {
+    static let toolkitId = "focusSession"
+    static let displayName = "Focus Sessions"
+    static let relevanceKeywords: [String] = ["focus", "pomodoro", "productivity", "deep work", "concentration", "timer", "session", "task", "distraction", "work"]
 
     private static var bridgeBaseURL: String {
         UserDefaults.standard.string(forKey: "ryanhub_server_url")
@@ -15,8 +15,8 @@ enum FocusTimerDataProvider: ToolkitDataProvider {
     }
 
     static func buildContextSummary() -> String? {
-        guard let data = UserDefaults.standard.data(forKey: "dynamic_module_focusTimer_cache"),
-              let entries = try? JSONDecoder().decode([FocusTimerEntry].self, from: data),
+        guard let data = UserDefaults.standard.data(forKey: "dynamic_module_focusSession_cache"),
+              let entries = try? JSONDecoder().decode([FocusSessionEntry].self, from: data),
               !entries.isEmpty else {
             return nil
         }
@@ -28,8 +28,8 @@ enum FocusTimerDataProvider: ToolkitDataProvider {
             lines.append("  - \(entry.summaryLine)")
         }
         lines.append("Actions:")
-        lines.append("  - Add: POST http://localhost:18790/modules/focusTimer/data/add")
-        lines.append("  - View: GET http://localhost:18790/modules/focusTimer/data")
+        lines.append("  - Add: POST http://localhost:18790/modules/focusSession/data/add")
+        lines.append("  - View: GET http://localhost:18790/modules/focusSession/data")
         lines.append("[End \(displayName)]")
         return lines.joined(separator: "\n")
     }

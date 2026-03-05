@@ -1,8 +1,8 @@
 import SwiftUI
 
-struct FocusTimerHistoryView: View {
+struct PeopleJournalHistoryView: View {
     @Environment(\.colorScheme) private var colorScheme
-    let viewModel: FocusTimerViewModel
+    let viewModel: PeopleJournalViewModel
 
     private var heatmapData: [Date: Double] {
         let calendar = Calendar.current
@@ -18,7 +18,7 @@ struct FocusTimerHistoryView: View {
         return result
     }
 
-    private var groupedEntries: [(String, [FocusTimerEntry])] {
+    private var groupedEntries: [(String, [PeopleJournalEntry])] {
         let df = DateFormatter()
         df.dateFormat = "yyyy-MM-dd"
         let grouped = Dictionary(grouping: viewModel.entries) { String($0.date.prefix(10)) }

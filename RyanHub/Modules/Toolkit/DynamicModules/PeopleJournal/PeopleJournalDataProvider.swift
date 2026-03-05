@@ -1,11 +1,11 @@
 import Foundation
 
-// MARK: - PeopleNotes Data Provider
+// MARK: - PeopleJournal Data Provider
 
-enum PeopleNotesDataProvider: ToolkitDataProvider {
-    static let toolkitId = "peopleNotes"
-    static let displayName = "People Notes"
-    static let relevanceKeywords: [String] = ["people", "contacts", "meetings", "relationships", "networking", "notes", "follow-up", "crm", "connections", "social"]
+enum PeopleJournalDataProvider: ToolkitDataProvider {
+    static let toolkitId = "peopleJournal"
+    static let displayName = "People Journal"
+    static let relevanceKeywords: [String] = ["people", "contacts", "relationships", "networking", "crm", "meetings", "notes", "connections", "follow-up", "remember"]
 
     private static var bridgeBaseURL: String {
         UserDefaults.standard.string(forKey: "ryanhub_server_url")
@@ -15,8 +15,8 @@ enum PeopleNotesDataProvider: ToolkitDataProvider {
     }
 
     static func buildContextSummary() -> String? {
-        guard let data = UserDefaults.standard.data(forKey: "dynamic_module_peopleNotes_cache"),
-              let entries = try? JSONDecoder().decode([PeopleNotesEntry].self, from: data),
+        guard let data = UserDefaults.standard.data(forKey: "dynamic_module_peopleJournal_cache"),
+              let entries = try? JSONDecoder().decode([PeopleJournalEntry].self, from: data),
               !entries.isEmpty else {
             return nil
         }
@@ -28,8 +28,8 @@ enum PeopleNotesDataProvider: ToolkitDataProvider {
             lines.append("  - \(entry.summaryLine)")
         }
         lines.append("Actions:")
-        lines.append("  - Add: POST http://localhost:18790/modules/peopleNotes/data/add")
-        lines.append("  - View: GET http://localhost:18790/modules/peopleNotes/data")
+        lines.append("  - Add: POST http://localhost:18790/modules/peopleJournal/data/add")
+        lines.append("  - View: GET http://localhost:18790/modules/peopleJournal/data")
         lines.append("[End \(displayName)]")
         return lines.joined(separator: "\n")
     }

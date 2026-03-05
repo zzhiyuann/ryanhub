@@ -5,7 +5,7 @@ import Foundation
 enum SpendingTrackerDataProvider: ToolkitDataProvider {
     static let toolkitId = "spendingTracker"
     static let displayName = "Spending Tracker"
-    static let relevanceKeywords: [String] = ["spending", "expense", "budget", "money", "finance", "purchase", "cost", "category", "daily", "wallet"]
+    static let relevanceKeywords: [String] = ["spending", "expense", "budget", "money", "finance", "purchase", "payment", "category", "cost", "wallet"]
 
     private static var bridgeBaseURL: String {
         UserDefaults.standard.string(forKey: "ryanhub_server_url")

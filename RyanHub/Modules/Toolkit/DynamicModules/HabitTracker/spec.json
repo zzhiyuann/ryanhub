@@ -4,25 +4,25 @@
   "displayName": "Habit Tracker",
   "shortName": "Habits",
   "subtitle": "Build streaks, build yourself",
-  "icon": "checkmark.seal.fill",
+  "icon": "checklist",
   "iconColor": "hubAccentGreen",
   "relevanceKeywords": [
     "habit",
     "streak",
     "routine",
+    "daily",
     "meditation",
     "journaling",
-    "daily",
     "consistency",
     "discipline",
-    "morning routine",
-    "self-improvement"
+    "goal",
+    "tracking"
   ],
   "dataFields": [
     {
       "name": "habitName",
       "type": "String",
-      "label": "Habit Name",
+      "label": "Habit",
       "control": "text"
     },
     {
@@ -44,14 +44,14 @@
       "control": "stepper"
     },
     {
-      "name": "satisfaction",
+      "name": "difficulty",
       "type": "Int",
-      "label": "Satisfaction",
+      "label": "Difficulty (1-5)",
       "control": "slider"
     },
     {
-      "name": "timeOfDay",
-      "type": "TimeOfDay",
+      "name": "timeSlot",
+      "type": "HabitTimeSlot",
       "label": "Time of Day",
       "control": "picker"
     },
@@ -72,8 +72,23 @@
           "icon": "brain.head.profile"
         },
         {
+          "name": "fitness",
+          "displayName": "Fitness",
+          "icon": "figure.run"
+        },
+        {
+          "name": "learning",
+          "displayName": "Learning",
+          "icon": "book.fill"
+        },
+        {
+          "name": "creativity",
+          "displayName": "Creativity",
+          "icon": "paintbrush.fill"
+        },
+        {
           "name": "health",
-          "displayName": "Health & Fitness",
+          "displayName": "Health",
           "icon": "heart.fill"
         },
         {
@@ -82,29 +97,14 @@
           "icon": "bolt.fill"
         },
         {
-          "name": "learning",
-          "displayName": "Learning",
-          "icon": "book.fill"
-        },
-        {
-          "name": "creative",
-          "displayName": "Creative",
-          "icon": "paintpalette.fill"
-        },
-        {
           "name": "social",
           "displayName": "Social",
           "icon": "person.2.fill"
-        },
-        {
-          "name": "selfCare",
-          "displayName": "Self-Care",
-          "icon": "sparkles"
         }
       ]
     },
     {
-      "name": "TimeOfDay",
+      "name": "HabitTimeSlot",
       "cases": [
         {
           "name": "morning",
@@ -132,157 +132,159 @@
   "views": [
     {
       "name": "DashboardView",
-      "purpose": "Shows today's habit checklist with completion ring, current streaks per habit, and quick-complete buttons. The hero element is a large progress ring showing X/Y habits done today, surrounded by individual habit cards users can tap to mark complete.",
+      "purpose": "Main dashboard showing today's habit completion ring with count inside, current streak with flame icon, stat grid (today completed, weekly rate, longest streak, avg duration), and a quick-glance weekly bar chart of daily completion counts",
       "components": [
         "ProgressRingView",
         "StatGrid",
-        "QuickEntryFAB"
+        "QuickEntryFAB",
+        "StreakBadge",
+        "WeeklyBarChart"
       ]
     },
     {
       "name": "EntrySheet",
-      "purpose": "Quick-add or log a habit completion. Pre-populates with known habits from history. Category picker, optional duration stepper (0-120 min), satisfaction slider (1-5 stars), and time-of-day selector. Supports both 'new habit' and 'log existing habit' flows.",
+      "purpose": "Quick habit check-in modal with habit name field (with autocomplete from recent habits), category picker, completion toggle, optional duration stepper, difficulty slider 1-5, time-of-day picker, and optional notes",
       "components": [
         "QuickEntrySheet",
-        "EntryFormSection"
+        "EntryFormSection",
+        "CategoryPicker",
+        "RecentHabitSuggestions"
       ]
     },
     {
       "name": "HistoryView",
-      "purpose": "GitHub-style calendar heatmap showing daily completion rates (color intensity = % habits done). Below the heatmap, date-grouped list of individual habit logs with completion status, duration, and satisfaction. Filter by habit name or category.",
+      "purpose": "Calendar heatmap at top showing completion density per day (darker green = more habits done), filter chips by habit name and category, date-grouped entry list with completion badges and duration labels",
       "components": [
         "CalendarHeatmap",
-        "FilterableList"
+        "FilterChips",
+        "EntryList"
       ]
     },
     {
       "name": "AnalyticsView",
-      "purpose": "Multi-section analytics: (1) Weekly completion rate trend line chart, (2) Per-habit completion rate bar chart, (3) Best day-of-week radar/bar chart, (4) Category breakdown donut, (5) AI-style insight cards like 'Your meditation streak is at 14 days \u2014 your longest yet!' and 'You complete 23% more habits on Mondays than Fridays'.",
+      "purpose": "Deep analytics with per-habit consistency bar chart (sorted by completion rate), category breakdown donut chart, weekday completion pattern heatmap, streak timeline showing streak start/end history, trend arrows comparing this week vs last, and AI-generated insight cards",
       "components": [
         "ModuleChartView",
         "InsightsList",
-        "StatGrid"
+        "CategoryPieChart",
+        "WeekdayHeatmap",
+        "StreakTimeline"
       ]
     }
   ],
   "viewModelComputedProperties": [
     {
-      "name": "todayCompletedCount",
-      "type": "Int",
-      "description": "Number of unique habits marked completed today"
+      "name": "todayCompletedHabits",
+      "type": "[HabitTrackerEntry]",
+      "description": "All entries marked completed for today, used to render today's checklist state"
     },
     {
-      "name": "todayTotalHabits",
+      "name": "todayCompletionCount",
       "type": "Int",
-      "description": "Number of unique habits logged today (completed or not)"
+      "description": "Count of distinct habit names completed today"
     },
     {
-      "name": "todayCompletionRate",
+      "name": "dailyGoalProgress",
       "type": "Double",
-      "description": "todayCompletedCount / todayTotalHabits as percentage (0-100)"
+      "description": "todayCompletionCount / dailyHabitGoal clamped to 0.0-1.0 for the progress ring"
     },
     {
-      "name": "activeHabits",
-      "type": "[String]",
-      "description": "Unique habit names seen in last 14 days, sorted by frequency. Used to pre-populate entry sheet."
-    },
-    {
-      "name": "overallStreak",
+      "name": "currentStreak",
       "type": "Int",
-      "description": "Consecutive days where ALL tracked habits were completed (100% completion rate). Breaks if any day has <100%."
+      "description": "Consecutive days ending today-or-yesterday where completed habit count >= dailyHabitGoal. Walks backward from most recent qualifying day."
     },
     {
-      "name": "longestOverallStreak",
+      "name": "longestStreak",
       "type": "Int",
-      "description": "All-time longest overall streak for display as personal best"
-    },
-    {
-      "name": "perHabitStreaks",
-      "type": "[(habitName: String, currentStreak: Int, bestStreak: Int)]",
-      "description": "For each active habit, calculate its individual current and best streak. A habit's streak = consecutive days it appears as completed."
+      "description": "Maximum streak ever recorded by scanning all entries chronologically"
     },
     {
       "name": "weeklyCompletionRate",
       "type": "Double",
-      "description": "Average daily completion rate over the current Mon-Sun week"
+      "description": "This week's total completions divided by (uniqueHabitCount \u00d7 daysElapsedThisWeek), as percentage 0-100"
     },
     {
       "name": "previousWeekCompletionRate",
       "type": "Double",
-      "description": "Same metric for prior week, used to compute trend direction"
+      "description": "Same formula applied to prior Mon-Sun period for trend comparison"
     },
     {
-      "name": "weeklyTrend",
+      "name": "trendDirection",
       "type": "String",
-      "description": "Comparison: 'improving' if current > previous by >5%, 'declining' if lower by >5%, else 'stable'. Include delta percentage."
+      "description": "'up' if weeklyCompletionRate exceeds previous by \u22655 points, 'down' if lower by \u22655, 'stable' otherwise"
     },
     {
-      "name": "completionRateByDayOfWeek",
-      "type": "[(day: String, rate: Double)]",
-      "description": "Average completion rate per weekday over last 4 weeks. Reveals which days user is most/least consistent."
+      "name": "weeklyCompletionData",
+      "type": "[(String, Double)]",
+      "description": "Last 7 days as (abbreviated day label, completion count) tuples for dashboard bar chart"
+    },
+    {
+      "name": "habitConsistencyRanking",
+      "type": "[(String, Double)]",
+      "description": "Each unique habit paired with its 30-day completion rate (days done / days since first tracked), sorted descending"
     },
     {
       "name": "mostConsistentHabit",
       "type": "String?",
-      "description": "Habit with highest completion rate over last 30 days (minimum 7 data points)"
+      "description": "Top habit from consistencyRanking, nil if no data"
     },
     {
       "name": "leastConsistentHabit",
       "type": "String?",
-      "description": "Habit with lowest completion rate over last 30 days \u2014 candidate for insight nudge"
+      "description": "Bottom habit from consistencyRanking among those attempted \u22653 times"
     },
     {
       "name": "categoryBreakdown",
-      "type": "[(category: String, count: Int, completionRate: Double)]",
-      "description": "Entries grouped by HabitCategory with count and completion rate for donut chart"
+      "type": "[(String, Int)]",
+      "description": "Completed entries per HabitCategory over last 30 days for donut chart"
     },
     {
-      "name": "weeklyChartData",
-      "type": "[(date: Date, rate: Double)]",
-      "description": "Daily completion rate for last 8 weeks as time-series for line chart"
-    },
-    {
-      "name": "perHabitChartData",
-      "type": "[(habitName: String, rate: Double)]",
-      "description": "Completion rate per habit for horizontal bar chart, sorted descending"
-    },
-    {
-      "name": "heatmapData",
-      "type": "[(date: Date, intensity: Double)]",
-      "description": "Last 90 days of daily completion rates (0.0-1.0) for calendar heatmap coloring"
-    },
-    {
-      "name": "insights",
-      "type": "[String]",
-      "description": "Generated insight strings: streak milestones, consistency trends, best/worst day alerts, habit-specific encouragement, and week-over-week comparisons"
+      "name": "bestDayOfWeek",
+      "type": "String?",
+      "description": "Weekday name with highest average daily completion count across all history"
     },
     {
       "name": "averageDailyDuration",
       "type": "Int",
-      "description": "Average total minutes spent on all habits per day over last 7 days"
+      "description": "Mean of total durationMinutes per day over the last 7 days"
     },
     {
-      "name": "totalCompletionsAllTime",
+      "name": "uniqueHabitCount",
       "type": "Int",
-      "description": "Lifetime count of completed habit entries for milestone gamification"
+      "description": "Count of distinct habitName values across all entries"
+    },
+    {
+      "name": "monthlyHeatmapData",
+      "type": "[(Date, Int)]",
+      "description": "Last 35 days as (date, completionCount) for the calendar heatmap visualization"
+    },
+    {
+      "name": "streakMilestone",
+      "type": "String?",
+      "description": "Non-nil motivational string when currentStreak hits 7, 14, 21, 30, 50, 100 days (e.g. '21 days \u2014 habit is forming!')"
+    },
+    {
+      "name": "recentHabitNames",
+      "type": "[String]",
+      "description": "Unique habit names from last 30 days sorted by frequency descending, used for autocomplete suggestions in entry sheet"
     }
   ],
   "domainLogic": {
     "dailyGoal": {
-      "description": "Complete all tracked habits each day. The system infers which habits are 'active' by looking at habits logged in the last 14 days. A day is considered 100% when all active habits are marked completed.",
-      "defaultValue": "100% daily completion"
+      "description": "Target number of distinct habits to complete each day. Drives the progress ring and streak calculation.",
+      "defaultValue": "3"
     },
-    "streakDefinition": "Overall streak: consecutive calendar days where every active habit is completed (100% rate). Per-habit streak: consecutive days that specific habit appears as completed. A missed day breaks the streak. Weekends count \u2014 habits are daily commitments. Grace: if a habit was not logged at all on a day (vs logged as not-completed), it does not break that habit's individual streak but DOES reduce overall completion rate.",
-    "trendAnalysis": "Primary: weekly completion rate (current week vs previous week, expressed as +/- percentage points). Secondary: per-habit 7-day rolling completion rate compared to 30-day baseline. Tertiary: day-of-week consistency pattern to identify strong/weak days. Duration trend: average minutes spent per day, 7-day vs 30-day.",
+    "streakDefinition": "A day qualifies for the streak if the user completed at least [dailyHabitGoal] distinct habits. The streak counts consecutive qualifying days walking backward from today (or yesterday if today has no entries yet). A single missed day breaks the streak.",
+    "trendAnalysis": "Primary: compare current 7-day completion rate vs previous 7-day rate, surface as percentage change with direction arrow. Secondary: per-habit 30-day rolling rate \u2014 flag any habit whose rate dropped >20% in the last 7 days vs prior 7 as 'needs attention'. Tertiary: weekday analysis \u2014 compute average completions per day-of-week to surface strong/weak day patterns.",
     "insights": [
-      "Streak milestone alerts: 'You've meditated 7 days straight! That's a new record.' at 7, 14, 21, 30, 50, 100 day marks",
-      "Consistency winner: 'Journaling is your most consistent habit at 92% completion rate'",
-      "Struggling habit nudge: 'Exercise has dropped to 40% this week \u2014 down from 75% last month'",
-      "Day-of-week pattern: 'You complete 30% more habits on Mondays than Fridays \u2014 consider lighter Friday goals'",
-      "Week-over-week trend: 'Great week! Your completion rate improved from 68% to 85%'",
-      "Category balance: 'All your habits are Health-related \u2014 consider adding a Mindfulness or Learning habit'",
-      "Duration insight: 'You spend an average of 47 minutes daily on habits \u2014 up 12 minutes from last month'",
-      "Comeback detection: 'Welcome back! You logged habits after a 3-day gap \u2014 your meditation streak resets but you can rebuild it'"
+      "Streak milestone celebrations at 7, 14, 21, 30, 50, 100 days with escalating motivational messages (e.g., '7 days: You're building momentum!', '21 days: Science says this is becoming automatic!')",
+      "Most and least consistent habit surfaced with specific completion rates and suggestion to adjust schedule for struggling habits",
+      "Day-of-week pattern insight (e.g., 'Mondays are your strongest day at 92% \u2014 Fridays drop to 45%, consider lighter Friday habits')",
+      "Weekly trend comparison showing exact percentage change with up/down/stable indicator",
+      "Category balance analysis \u2014 flag if >60% of completions are in one category ('Great fitness focus, but mindfulness needs love')",
+      "Time-of-day optimization \u2014 correlate timeSlot with completion rates to suggest best scheduling per habit",
+      "Duration trend \u2014 detect if average time per habit is declining (possible burnout signal) or increasing (deepening practice)",
+      "New habit celebration \u2014 recognize first 3 completions of any new habit name ('You started Meditation 3 days ago \u2014 keep it up!')"
     ]
   }
 }
