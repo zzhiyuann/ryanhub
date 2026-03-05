@@ -4,12 +4,12 @@ struct HydrationTrackerEntrySheet: View {
     @Environment(\.colorScheme) private var colorScheme
     let viewModel: HydrationTrackerViewModel
     var onSave: (() -> Void)?
-    @State private var inputAmountml: Int = 250
-    @State private var selectedBeveragetype: BeverageType = .water
-    @State private var selectedContainerpreset: ContainerPreset = .small
-    @State private var selectedTemperature: DrinkTemperature = .cold
-    @State private var inputTimeconsumed: Date = Date()
+    @State private var inputAmount: Int = 1
+    @State private var selectedDrinktype: DrinkType = .water
+    @State private var selectedContainersize: ContainerSize = .sip
     @State private var inputCaffeinated: Bool = false
+    @State private var selectedTemperature: DrinkTemperature = .cold
+    @State private var inputTime: Date = Date()
     @State private var inputNotes: String = ""
 
     var body: some View {
@@ -18,32 +18,37 @@ struct HydrationTrackerEntrySheet: View {
             icon: "plus.circle.fill",
             canSave: true,
             onSave: {
-                let entry = HydrationTrackerEntry(amountMl: inputAmountml, beverageType: selectedBeveragetype, containerPreset: selectedContainerpreset, temperature: selectedTemperature, timeConsumed: inputTimeconsumed, caffeinated: inputCaffeinated, notes: inputNotes)
+                let entry = HydrationTrackerEntry(amount: inputAmount, drinkType: selectedDrinktype, containerSize: selectedContainersize, caffeinated: inputCaffeinated, temperature: selectedTemperature, time: inputTime, notes: inputNotes)
                 Task { await viewModel.addEntry(entry) }
                 onSave?()
             }
         ) {
 
                 EntryFormSection(title: "Amount (ml)") {
-                    Stepper("\(inputAmountml) ml", value: $inputAmountml, in: 50...2000, step: 50)
+                    Stepper("\(inputAmount) amount (ml)", value: $inputAmount, in: 0...9999)
                 }
 
-                EntryFormSection(title: "Beverage Type") {
-                    Picker("Beverage Type", selection: $selectedBeveragetype) {
-                        ForEach(BeverageType.allCases) { item in
+                EntryFormSection(title: "Drink Type") {
+                    Picker("Drink Type", selection: $selectedDrinktype) {
+                        ForEach(DrinkType.allCases) { item in
                             Label(item.displayName, systemImage: item.icon).tag(item)
                         }
                     }
                     .pickerStyle(.menu)
                 }
 
-                EntryFormSection(title: "Container Size") {
-                    Picker("Container Size", selection: $selectedContainerpreset) {
-                        ForEach(ContainerPreset.allCases) { item in
+                EntryFormSection(title: "Container") {
+                    Picker("Container", selection: $selectedContainersize) {
+                        ForEach(ContainerSize.allCases) { item in
                             Label(item.displayName, systemImage: item.icon).tag(item)
                         }
                     }
                     .pickerStyle(.menu)
+                }
+
+                EntryFormSection(title: "Caffeinated") {
+                    Toggle("Caffeinated", isOn: $inputCaffeinated)
+                        .tint(Color.hubPrimary)
                 }
 
                 EntryFormSection(title: "Temperature") {
@@ -56,12 +61,7 @@ struct HydrationTrackerEntrySheet: View {
                 }
 
                 EntryFormSection(title: "Time") {
-                    DatePicker("Time", selection: $inputTimeconsumed, displayedComponents: .hourAndMinute)
-                }
-
-                EntryFormSection(title: "Caffeinated") {
-                    Toggle("Caffeinated", isOn: $inputCaffeinated)
-                        .tint(Color.hubPrimary)
+                    DatePicker("Time", selection: $inputTime, displayedComponents: .hourAndMinute)
                 }
 
                 EntryFormSection(title: "Notes") {

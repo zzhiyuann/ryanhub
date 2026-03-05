@@ -14,7 +14,7 @@ struct MoodJournalView: View {
                     Circle()
                         .fill(Color.hubPrimary.opacity(0.12))
                         .frame(width: 40, height: 40)
-                    Image(systemName: "brain.head.profile")
+                    Image(systemName: "face.smiling")
                         .font(.system(size: 18, weight: .medium))
                         .foregroundStyle(Color.hubPrimary)
                 }
@@ -47,6 +47,7 @@ struct MoodJournalView: View {
                     if selectedTab == 2 {
                         MoodJournalAnalyticsView(viewModel: viewModel)
                     }
+
                 // FAB
                 QuickEntryFAB {
                     showAddSheet = true

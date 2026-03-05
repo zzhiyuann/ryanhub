@@ -8,27 +8,21 @@ struct HydrationTrackerDashboardView: View {
         ScrollView {
             VStack(spacing: HubLayout.sectionSpacing) {
 
-                // Progress Ring
+                // Summary Card
                 HubCard {
-                    HStack(spacing: 20) {
-                        ProgressRingView(
-                            progress: viewModel.todayProgress,
-                            current: "\(viewModel.todayTotalMl)",
-                            unit: "ml",
-                            goal: "of \(viewModel.dailyGoalMl)ml",
-                            color: .hubPrimary,
-                            size: 100
-                        )
-
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Daily Goal")
-                                .font(.hubBody)
-                                .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
-                            Text("\(viewModel.todayGlassCount) glasses today")
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("\(viewModel.todayEntries.count)")
+                                .font(.system(size: 32, weight: .bold, design: .rounded))
+                                .foregroundStyle(Color.hubPrimary)
+                            Text("Today's entries")
                                 .font(.hubCaption)
                                 .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
                         }
                         Spacer()
+                        Text("\(viewModel.entries.count) total")
+                            .font(.hubCaption)
+                            .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
                     }
                 }
 
@@ -37,15 +31,9 @@ struct HydrationTrackerDashboardView: View {
                 StatGrid {
                     StatCard(
                         title: "Today",
-                        value: "\(viewModel.todayTotalMl) ml",
+                        value: "\(viewModel.todayEntries.count)",
                         icon: "drop.fill",
                         color: .hubPrimary
-                    )
-                    StatCard(
-                        title: "Weekly Avg",
-                        value: "\(viewModel.weeklyAverageMl) ml",
-                        icon: "calendar",
-                        color: .hubPrimaryLight
                     )
                     StatCard(
                         title: "Streak",
@@ -54,10 +42,16 @@ struct HydrationTrackerDashboardView: View {
                         color: .hubAccentYellow
                     )
                     StatCard(
+                        title: "Best",
+                        value: "\(viewModel.longestStreak)d",
+                        icon: "trophy.fill",
+                        color: .hubAccentGreen
+                    )
+                    StatCard(
                         title: "Total",
                         value: "\(viewModel.entries.count)",
                         icon: "chart.bar.fill",
-                        color: .hubAccentGreen
+                        color: .hubPrimaryLight
                     )
                 }
 

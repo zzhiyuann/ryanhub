@@ -1,0 +1,256 @@
+{
+  "moduleId": "plantCareTracker",
+  "moduleName": "PlantCareTracker",
+  "displayName": "Plant Care Tracker",
+  "shortName": "Plants",
+  "subtitle": "Keep your green friends thriving",
+  "icon": "leaf.fill",
+  "iconColor": "hubAccentGreen",
+  "relevanceKeywords": [
+    "plant",
+    "water",
+    "watering",
+    "houseplant",
+    "garden",
+    "fertilize",
+    "mist",
+    "care",
+    "succulent",
+    "indoor"
+  ],
+  "dataFields": [
+    {
+      "name": "plantName",
+      "type": "String",
+      "label": "Plant Name",
+      "control": "text"
+    },
+    {
+      "name": "location",
+      "type": "PlantLocation",
+      "label": "Location",
+      "control": "picker"
+    },
+    {
+      "name": "waterAmount",
+      "type": "WaterAmount",
+      "label": "Water Amount",
+      "control": "picker"
+    },
+    {
+      "name": "healthRating",
+      "type": "Int",
+      "label": "Health Rating (1\u20135)",
+      "control": "slider"
+    },
+    {
+      "name": "fertilized",
+      "type": "Bool",
+      "label": "Fertilized",
+      "control": "toggle"
+    },
+    {
+      "name": "misted",
+      "type": "Bool",
+      "label": "Misted",
+      "control": "toggle"
+    },
+    {
+      "name": "notes",
+      "type": "String",
+      "label": "Notes",
+      "control": "text"
+    }
+  ],
+  "enums": [
+    {
+      "name": "PlantLocation",
+      "cases": [
+        {
+          "name": "livingRoom",
+          "displayName": "Living Room",
+          "icon": "sofa.fill"
+        },
+        {
+          "name": "bedroom",
+          "displayName": "Bedroom",
+          "icon": "bed.double.fill"
+        },
+        {
+          "name": "kitchen",
+          "displayName": "Kitchen",
+          "icon": "fork.knife"
+        },
+        {
+          "name": "bathroom",
+          "displayName": "Bathroom",
+          "icon": "bathtub.fill"
+        },
+        {
+          "name": "office",
+          "displayName": "Office",
+          "icon": "desktopcomputer"
+        },
+        {
+          "name": "balcony",
+          "displayName": "Balcony",
+          "icon": "sun.max.fill"
+        },
+        {
+          "name": "windowsill",
+          "displayName": "Windowsill",
+          "icon": "window.casement"
+        }
+      ]
+    },
+    {
+      "name": "WaterAmount",
+      "cases": [
+        {
+          "name": "lightSplash",
+          "displayName": "Light Splash",
+          "icon": "drop"
+        },
+        {
+          "name": "moderate",
+          "displayName": "Moderate",
+          "icon": "drop.fill"
+        },
+        {
+          "name": "deepSoak",
+          "displayName": "Deep Soak",
+          "icon": "humidity.fill"
+        }
+      ]
+    }
+  ],
+  "views": [
+    {
+      "name": "DashboardView",
+      "purpose": "Main dashboard showing total plant count, today's watering count, care streak, average health score, a progress ring for daily care goal, and overdue plant alerts with quick-water FAB",
+      "components": [
+        "StatGrid",
+        "ProgressRingView",
+        "QuickEntryFAB"
+      ]
+    },
+    {
+      "name": "EntrySheet",
+      "purpose": "Quick watering entry modal with plant name (auto-suggests from history), location picker, water amount selector, health rating slider, fertilize/mist toggles, and optional notes",
+      "components": [
+        "QuickEntrySheet",
+        "EntryFormSection"
+      ]
+    },
+    {
+      "name": "HistoryView",
+      "purpose": "Calendar heatmap showing watering activity density by day, with a date-grouped detail list filterable by individual plant name",
+      "components": [
+        "CalendarHeatmap"
+      ]
+    },
+    {
+      "name": "AnalyticsView",
+      "purpose": "Per-plant watering frequency bar charts, health trend line chart over 30 days, care consistency score gauge, location-based health comparison, and generated care insights list",
+      "components": [
+        "ModuleChartView",
+        "InsightsList"
+      ]
+    }
+  ],
+  "viewModelComputedProperties": [
+    {
+      "name": "todayWateringCount",
+      "type": "Int",
+      "description": "Number of distinct plants watered today"
+    },
+    {
+      "name": "uniquePlantCount",
+      "type": "Int",
+      "description": "Total unique plant names across all historical entries"
+    },
+    {
+      "name": "plantsWateredToday",
+      "type": "[String]",
+      "description": "Deduplicated list of plant names with an entry logged today"
+    },
+    {
+      "name": "currentStreak",
+      "type": "Int",
+      "description": "Consecutive calendar days with at least one watering entry logged, ending today or yesterday"
+    },
+    {
+      "name": "weeklyWateringCount",
+      "type": "Int",
+      "description": "Total watering entries logged in the current Monday-through-Sunday week"
+    },
+    {
+      "name": "weeklyTrend",
+      "type": "Double",
+      "description": "Percentage change: (this week count - last week count) / last week count. Positive means more active."
+    },
+    {
+      "name": "averageHealthRating",
+      "type": "Double",
+      "description": "Mean of the most recent healthRating entry per unique plant. Ranges 1.0\u20135.0."
+    },
+    {
+      "name": "healthTrend",
+      "type": "Double",
+      "description": "Difference between average health rating of entries in last 15 days vs prior 15 days. Positive means improving."
+    },
+    {
+      "name": "mostNeglectedPlant",
+      "type": "String?",
+      "description": "Plant name with the longest gap between its last watering entry and today. Nil if no entries exist."
+    },
+    {
+      "name": "daysSinceLastWateringByPlant",
+      "type": "[(String, Int)]",
+      "description": "Each unique plant paired with days since its most recent watering, sorted descending by days (most overdue first)"
+    },
+    {
+      "name": "weeklyChartData",
+      "type": "[(Date, Int)]",
+      "description": "Array of (date, count) for the past 7 days representing daily watering entry totals for bar chart rendering"
+    },
+    {
+      "name": "fertilizerDueList",
+      "type": "[String]",
+      "description": "Plant names whose most recent entry with fertilized=true is more than 30 days ago, or have never been fertilized"
+    },
+    {
+      "name": "careConsistencyScore",
+      "type": "Double",
+      "description": "0\u2013100 score. For each plant, compute stdev of intervals between waterings; lower variance = higher score. Averaged across all plants."
+    },
+    {
+      "name": "locationBreakdown",
+      "type": "[(String, Int)]",
+      "description": "Count of unique plants grouped by PlantLocation rawValue, sorted descending for bar/pie chart"
+    },
+    {
+      "name": "insights",
+      "type": "[String]",
+      "description": "Array of human-readable insight strings dynamically generated from computed stats (overdue alerts, health warnings, fertilizer reminders, location comparisons, streak celebrations)"
+    }
+  ],
+  "domainLogic": {
+    "dailyGoal": {
+      "description": "Number of plants that should be watered today, computed by checking each plant's average watering interval and whether it is due. Plants are 'due' when daysSinceLastWatering >= averageInterval for that plant.",
+      "defaultValue": "Water all plants that are due based on their individual historical watering intervals"
+    },
+    "streakDefinition": "A day is active if at least one watering entry was logged. The streak counts consecutive active days backward from today (or yesterday if today has no entries yet). Missing a single day resets the streak to zero.",
+    "trendAnalysis": "Track three trend dimensions: (1) Weekly watering frequency compared to 4-week rolling average \u2014 flags if current week is below 70% of average. (2) Per-plant health rating trajectory using linear regression over last 10 entries \u2014 flags plants with negative slope exceeding -0.3 per entry. (3) Watering interval regularity per plant \u2014 compute coefficient of variation of intervals; CV > 0.5 flags inconsistent care.",
+    "insights": [
+      "Overdue alert: '{plantName} was last watered {N} days ago \u2014 {X} days past its usual interval of {Y} days'",
+      "Health decline: '{plantName} health has dropped from {old} to {new} over the last {N} entries \u2014 check for pests or light issues'",
+      "Fertilizer reminder: '{plantName} hasn't been fertilized in {N} days \u2014 most houseplants benefit from monthly feeding during growing season'",
+      "Location comparison: 'Plants on your {location} average {rating} health vs {otherLocation} at {otherRating} \u2014 consider relocating struggling plants'",
+      "Consistency praise: 'Your care consistency score is {score}/100 this month \u2014 {change} from last month'",
+      "Seasonal tip: 'Winter months (Nov\u2013Feb): most houseplants need 30\u201350% less water. Consider extending intervals.'",
+      "Misting reminder: '{plantName} hasn't been misted in {N} days \u2014 tropical plants benefit from regular misting'",
+      "Streak celebration: '{N}-day care streak! Your longest streak was {max} days \u2014 keep it going!'"
+    ]
+  }
+}

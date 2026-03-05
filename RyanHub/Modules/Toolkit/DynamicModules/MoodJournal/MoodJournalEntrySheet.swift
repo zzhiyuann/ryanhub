@@ -4,18 +4,13 @@ struct MoodJournalEntrySheet: View {
     @Environment(\.colorScheme) private var colorScheme
     let viewModel: MoodJournalViewModel
     var onSave: (() -> Void)?
-    @State private var inputMoodlevel: Double = 5
-    @State private var selectedEmotion: EmotionType = .joyful
-    @State private var selectedSecondaryemotion: EmotionType = .joyful
-    @State private var inputEnergylevel: Double = 5
-    @State private var inputAnxietylevel: Double = 5
-    @State private var inputActivities: Set<ActivityTag> = []
-    @State private var selectedSocialcontext: SocialContext = .alone
+    @State private var inputRating: Double = 5
+    @State private var inputEnergy: Double = 5
+    @State private var selectedEmotion: MoodEmotion = .happy
+    @State private var inputActivities: Set<MoodActivity> = []
     @State private var inputSleepquality: Double = 5
-    @State private var selectedWeather: WeatherType = .sunny
-    @State private var inputReflection: String = ""
-    @State private var inputGratitude: String = ""
-    @State private var inputLogtime: Date = Date()
+    @State private var selectedSociallevel: SocialLevel = .alone
+    @State private var inputNotes: String = ""
 
     var body: some View {
         QuickEntrySheet(
@@ -23,104 +18,71 @@ struct MoodJournalEntrySheet: View {
             icon: "plus.circle.fill",
             canSave: true,
             onSave: {
-                let entry = MoodJournalEntry(moodLevel: Int(inputMoodlevel), emotion: selectedEmotion, secondaryEmotion: selectedSecondaryemotion, energyLevel: Int(inputEnergylevel), anxietyLevel: Int(inputAnxietylevel), activities: Array(inputActivities), socialContext: selectedSocialcontext, sleepQuality: Int(inputSleepquality), weather: selectedWeather, reflection: inputReflection, gratitude: inputGratitude, logTime: inputLogtime)
+                let entry = MoodJournalEntry(rating: Int(inputRating), energy: Int(inputEnergy), emotion: selectedEmotion, activities: Array(inputActivities), sleepQuality: Int(inputSleepquality), socialLevel: selectedSociallevel, notes: inputNotes)
                 Task { await viewModel.addEntry(entry) }
                 onSave?()
             }
         ) {
 
-                EntryFormSection(title: "Mood Level") {
+                EntryFormSection(title: "Mood Rating") {
                     VStack {
                         HStack {
-                            Text("\(Int(inputMoodlevel))")
+                            Text("\(Int(inputRating))")
                                 .font(.system(size: 24, weight: .bold, design: .rounded))
                                 .foregroundStyle(Color.hubPrimary)
                             Spacer()
                         }
-                        Slider(value: $inputMoodlevel, in: 1...10, step: 1)
+                        Slider(value: $inputRating, in: 1...10, step: 1)
+                            .tint(Color.hubPrimary)
+                    }
+                }
+
+                EntryFormSection(title: "Energy Level") {
+                    VStack {
+                        HStack {
+                            Text("\(Int(inputEnergy))")
+                                .font(.system(size: 24, weight: .bold, design: .rounded))
+                                .foregroundStyle(Color.hubPrimary)
+                            Spacer()
+                        }
+                        Slider(value: $inputEnergy, in: 1...10, step: 1)
                             .tint(Color.hubPrimary)
                     }
                 }
 
                 EntryFormSection(title: "Primary Emotion") {
                     Picker("Primary Emotion", selection: $selectedEmotion) {
-                        ForEach(EmotionType.allCases) { item in
+                        ForEach(MoodEmotion.allCases) { item in
                             Label(item.displayName, systemImage: item.icon).tag(item)
                         }
                     }
                     .pickerStyle(.menu)
-                }
-
-                EntryFormSection(title: "Secondary Emotion") {
-                    Picker("Secondary Emotion", selection: $selectedSecondaryemotion) {
-                        ForEach(EmotionType.allCases) { item in
-                            Label(item.displayName, systemImage: item.icon).tag(item)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                }
-
-                EntryFormSection(title: "Energy Level") {
-                    VStack {
-                        HStack {
-                            Text("\(Int(inputEnergylevel))")
-                                .font(.system(size: 24, weight: .bold, design: .rounded))
-                                .foregroundStyle(Color.hubPrimary)
-                            Spacer()
-                        }
-                        Slider(value: $inputEnergylevel, in: 1...10, step: 1)
-                            .tint(Color.hubPrimary)
-                    }
-                }
-
-                EntryFormSection(title: "Anxiety Level") {
-                    VStack {
-                        HStack {
-                            Text("\(Int(inputAnxietylevel))")
-                                .font(.system(size: 24, weight: .bold, design: .rounded))
-                                .foregroundStyle(Color.hubPrimary)
-                            Spacer()
-                        }
-                        Slider(value: $inputAnxietylevel, in: 1...10, step: 1)
-                            .tint(Color.hubPrimary)
-                    }
                 }
 
                 EntryFormSection(title: "Activities") {
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 90))], spacing: 8) {
-                        ForEach(ActivityTag.allCases) { tag in
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 90), spacing: 8)], spacing: 8) {
+                        ForEach(MoodActivity.allCases) { activity in
                             Button {
-                                if inputActivities.contains(tag) {
-                                    inputActivities.remove(tag)
+                                if inputActivities.contains(activity) {
+                                    inputActivities.remove(activity)
                                 } else {
-                                    inputActivities.insert(tag)
+                                    inputActivities.insert(activity)
                                 }
                             } label: {
-                                Label(tag.displayName, systemImage: tag.icon)
-                                    .font(.system(size: 12))
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 6)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 8)
-                                            .fill(inputActivities.contains(tag) ? Color.hubPrimary.opacity(0.15) : Color.clear)
-                                    )
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 8)
-                                            .stroke(inputActivities.contains(tag) ? Color.hubPrimary : Color.gray.opacity(0.3), lineWidth: 1)
-                                    )
-                                    .foregroundStyle(inputActivities.contains(tag) ? Color.hubPrimary : AdaptiveColors.textSecondary(for: colorScheme))
+                                HStack(spacing: 4) {
+                                    Image(systemName: activity.icon)
+                                        .font(.caption)
+                                    Text(activity.displayName)
+                                        .font(.caption)
+                                }
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(inputActivities.contains(activity) ? Color.hubPrimary.opacity(0.2) : AdaptiveColors.surfaceSecondary(for: colorScheme))
+                                .foregroundStyle(inputActivities.contains(activity) ? Color.hubPrimary : AdaptiveColors.textSecondary(for: colorScheme))
+                                .clipShape(Capsule())
                             }
                         }
                     }
-                }
-
-                EntryFormSection(title: "Social Context") {
-                    Picker("Social Context", selection: $selectedSocialcontext) {
-                        ForEach(SocialContext.allCases) { item in
-                            Label(item.displayName, systemImage: item.icon).tag(item)
-                        }
-                    }
-                    .pickerStyle(.menu)
                 }
 
                 EntryFormSection(title: "Sleep Quality") {
@@ -136,25 +98,17 @@ struct MoodJournalEntrySheet: View {
                     }
                 }
 
-                EntryFormSection(title: "Weather") {
-                    Picker("Weather", selection: $selectedWeather) {
-                        ForEach(WeatherType.allCases) { item in
+                EntryFormSection(title: "Social Interaction") {
+                    Picker("Social Interaction", selection: $selectedSociallevel) {
+                        ForEach(SocialLevel.allCases) { item in
                             Label(item.displayName, systemImage: item.icon).tag(item)
                         }
                     }
                     .pickerStyle(.menu)
                 }
 
-                EntryFormSection(title: "Reflection") {
-                    HubTextField(placeholder: "Reflection", text: $inputReflection)
-                }
-
-                EntryFormSection(title: "Gratitude Note") {
-                    HubTextField(placeholder: "Gratitude Note", text: $inputGratitude)
-                }
-
-                EntryFormSection(title: "Time of Check-in") {
-                    DatePicker("Time of Check-in", selection: $inputLogtime, displayedComponents: .hourAndMinute)
+                EntryFormSection(title: "Journal Notes") {
+                    HubTextField(placeholder: "Journal Notes", text: $inputNotes)
                 }
         }
     }

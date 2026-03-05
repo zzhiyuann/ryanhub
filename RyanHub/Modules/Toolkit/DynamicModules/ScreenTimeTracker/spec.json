@@ -1,0 +1,228 @@
+{
+  "moduleId": "screenTimeTracker",
+  "moduleName": "ScreenTimeTracker",
+  "displayName": "Screen Time Tracker",
+  "shortName": "Screen Time",
+  "subtitle": "Set goals and reclaim your hours",
+  "icon": "hourglass",
+  "iconColor": "hubPrimary",
+  "relevanceKeywords": [
+    "screen time",
+    "digital wellbeing",
+    "phone usage",
+    "screen",
+    "hours",
+    "goal",
+    "limit",
+    "device",
+    "productivity",
+    "focus"
+  ],
+  "dataFields": [
+    {
+      "name": "category",
+      "type": "ScreenTimeCategory",
+      "label": "Category",
+      "control": "picker"
+    },
+    {
+      "name": "durationMinutes",
+      "type": "Int",
+      "label": "Duration (minutes)",
+      "control": "stepper"
+    },
+    {
+      "name": "intentional",
+      "type": "Bool",
+      "label": "Intentional Use",
+      "control": "toggle"
+    },
+    {
+      "name": "notes",
+      "type": "String",
+      "label": "Notes",
+      "control": "text"
+    }
+  ],
+  "enums": [
+    {
+      "name": "ScreenTimeCategory",
+      "cases": [
+        {
+          "name": "socialMedia",
+          "displayName": "Social Media",
+          "icon": "bubble.left.and.bubble.right.fill"
+        },
+        {
+          "name": "entertainment",
+          "displayName": "Entertainment",
+          "icon": "play.tv.fill"
+        },
+        {
+          "name": "productivity",
+          "displayName": "Productivity",
+          "icon": "briefcase.fill"
+        },
+        {
+          "name": "communication",
+          "displayName": "Communication",
+          "icon": "message.fill"
+        },
+        {
+          "name": "gaming",
+          "displayName": "Gaming",
+          "icon": "gamecontroller.fill"
+        },
+        {
+          "name": "education",
+          "displayName": "Education",
+          "icon": "book.fill"
+        },
+        {
+          "name": "news",
+          "displayName": "News & Reading",
+          "icon": "newspaper.fill"
+        },
+        {
+          "name": "shopping",
+          "displayName": "Shopping",
+          "icon": "cart.fill"
+        },
+        {
+          "name": "other",
+          "displayName": "Other",
+          "icon": "ellipsis.circle.fill"
+        }
+      ]
+    }
+  ],
+  "views": [
+    {
+      "name": "DashboardView",
+      "purpose": "Main dashboard showing an inverted progress ring (filling up = approaching limit), category breakdown horizontal bar, current streak badge, and a quick-add FAB. The ring turns amber at 75% of goal and red at 100%.",
+      "components": [
+        "ProgressRingView",
+        "StatGrid",
+        "CategoryBreakdownBar",
+        "StreakBadge",
+        "QuickEntryFAB"
+      ]
+    },
+    {
+      "name": "EntrySheet",
+      "purpose": "Quick entry modal with category picker wheel, duration stepper in 5-minute increments, intentional-use toggle with explanatory subtitle, and optional notes field",
+      "components": [
+        "QuickEntrySheet",
+        "EntryFormSection"
+      ]
+    },
+    {
+      "name": "HistoryView",
+      "purpose": "Calendar heatmap colored by daily total relative to goal (green = well under, yellow = near limit, red = over), with expandable date-grouped entry list below showing category icons and durations",
+      "components": [
+        "CalendarHeatmap",
+        "EntryListSection"
+      ]
+    },
+    {
+      "name": "AnalyticsView",
+      "purpose": "Weekly trend line chart of daily totals with goal line overlay, category distribution donut chart, intentional vs mindless usage ratio bar, and generated insight cards",
+      "components": [
+        "ModuleChartView",
+        "CategoryPieChart",
+        "IntentionalRatioBar",
+        "InsightsList"
+      ]
+    }
+  ],
+  "viewModelComputedProperties": [
+    {
+      "name": "todayTotalMinutes",
+      "type": "Int",
+      "description": "Sum of durationMinutes for all entries logged today"
+    },
+    {
+      "name": "todayTotalHours",
+      "type": "Double",
+      "description": "todayTotalMinutes converted to hours rounded to one decimal place"
+    },
+    {
+      "name": "goalProgressPercent",
+      "type": "Double",
+      "description": "todayTotalMinutes divided by (dailyGoalHours * 60), clamped to 0.0...1.5 to allow overshoot visualization on the progress ring"
+    },
+    {
+      "name": "isUnderGoalToday",
+      "type": "Bool",
+      "description": "True when todayTotalMinutes is less than or equal to dailyGoalHours * 60"
+    },
+    {
+      "name": "currentStreak",
+      "type": "Int",
+      "description": "Count of consecutive calendar days ending today or yesterday where at least one entry was logged and total screen time was at or below the daily goal"
+    },
+    {
+      "name": "longestStreak",
+      "type": "Int",
+      "description": "All-time maximum consecutive days under goal across entire history"
+    },
+    {
+      "name": "weeklyAverageMinutes",
+      "type": "Double",
+      "description": "Mean daily screen time in minutes over the last 7 calendar days, counting days with no entries as 0"
+    },
+    {
+      "name": "weekOverWeekChange",
+      "type": "Double",
+      "description": "Percentage change calculated as (thisWeekAvg - lastWeekAvg) / lastWeekAvg * 100. Negative values indicate improvement (less screen time)"
+    },
+    {
+      "name": "categoryBreakdownToday",
+      "type": "[(ScreenTimeCategory, Int)]",
+      "description": "Today's total minutes grouped and summed by category, sorted in descending order by duration"
+    },
+    {
+      "name": "weeklyTrendData",
+      "type": "[(Date, Int)]",
+      "description": "Array of 7 tuples, one per day for the last week, each containing the date and total minutes for line chart rendering"
+    },
+    {
+      "name": "mostUsedCategory",
+      "type": "ScreenTimeCategory?",
+      "description": "The category with the highest cumulative minutes over the last 7 days; nil if no entries exist"
+    },
+    {
+      "name": "intentionalUsePercent",
+      "type": "Double",
+      "description": "Percentage of total minutes from entries marked intentional=true over the last 7 days. Formula: intentionalMinutes / totalMinutes * 100"
+    },
+    {
+      "name": "bestDayThisWeek",
+      "type": "(Date, Int)?",
+      "description": "The day within the last 7 days with the lowest non-zero total screen time, returned as date and minutes"
+    },
+    {
+      "name": "insights",
+      "type": "[String]",
+      "description": "Array of dynamically generated insight strings based on current data: streak milestones, week-over-week comparison, top category warnings, intentional use ratio assessment, best day highlight, and goal adjustment suggestions"
+    }
+  ],
+  "domainLogic": {
+    "dailyGoal": {
+      "description": "Daily screen time budget in hours. The progress ring fills as the user logs time \u2014 unlike fitness trackers, a full ring is undesirable. Ring color transitions: hubAccentGreen (0-74%), hubAccentYellow (75-99%), hubAccentRed (100%+). Users can adjust the goal in 0.5-hour increments from 1.0 to 12.0 hours.",
+      "defaultValue": "4.0"
+    },
+    "streakDefinition": "A day qualifies for the streak if at least one screen time entry was logged AND the day's total duration is at or below the daily goal. Days with zero entries neither break nor extend the streak \u2014 the streak pauses and resumes when logging continues. This prevents penalizing users who forget to log on weekends.",
+    "trendAnalysis": "Primary metric: 7-day rolling average of daily total minutes, plotted as a line chart with the daily goal shown as a horizontal reference line. Secondary metrics: (1) week-over-week percentage change in average daily total, (2) 30-day category distribution shift \u2014 detect if any category's share increased by more than 10 percentage points, (3) intentional use ratio trend over 14 days. All trends recalculated on each app open.",
+    "insights": [
+      "Streak milestones: celebrate at 3, 7, 14, 30, 60, and 90 consecutive days under goal with encouraging messages",
+      "Week-over-week delta: 'Your screen time is down 15% compared to last week \u2014 great progress!' or 'Screen time increased 20% this week \u2014 your Social Media usage drove most of the increase'",
+      "Category dominance alert: triggered when any single category exceeds 40% of weekly total \u2014 'Social Media accounts for 47% of your screen time this week'",
+      "Intentional use assessment: 'Only 38% of your screen time was intentional this week \u2014 try setting purpose before picking up your phone'",
+      "Best day spotlight: 'Wednesday was your lightest day at just 1.8 hours \u2014 what made it work?'",
+      "Goal calibration: if under goal 6+ of last 7 days, suggest lowering by 0.5h; if over goal 5+ of 7 days, suggest raising or breaking the goal into category sub-budgets",
+      "Pattern detection: identify if screen time consistently spikes on specific weekdays \u2014 'Your Saturday screen time averages 5.2h vs 3.1h on weekdays'",
+      "Mindless usage warning: if more than 60% of minutes are non-intentional, surface a nudge to pause and set intention before sessions"
+    ]
+  }
+}

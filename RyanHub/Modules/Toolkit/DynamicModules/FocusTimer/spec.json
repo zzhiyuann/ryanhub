@@ -1,0 +1,266 @@
+{
+  "moduleId": "focusTimer",
+  "moduleName": "FocusTimer",
+  "displayName": "Focus Timer",
+  "shortName": "Focus",
+  "subtitle": "Pomodoro sessions & deep work tracking",
+  "icon": "timer",
+  "iconColor": "hubPrimary",
+  "relevanceKeywords": [
+    "pomodoro",
+    "focus",
+    "timer",
+    "productivity",
+    "deep work",
+    "concentration",
+    "task",
+    "session",
+    "work"
+  ],
+  "dataFields": [
+    {
+      "name": "durationMinutes",
+      "type": "Int",
+      "label": "Duration (min)",
+      "control": "stepper"
+    },
+    {
+      "name": "task",
+      "type": "String",
+      "label": "Task",
+      "control": "text"
+    },
+    {
+      "name": "category",
+      "type": "FocusCategory",
+      "label": "Category",
+      "control": "picker"
+    },
+    {
+      "name": "sessionType",
+      "type": "SessionType",
+      "label": "Session Type",
+      "control": "picker"
+    },
+    {
+      "name": "focusQuality",
+      "type": "Int",
+      "label": "Focus Quality (1\u20135)",
+      "control": "slider"
+    },
+    {
+      "name": "distractionCount",
+      "type": "Int",
+      "label": "Distractions",
+      "control": "stepper"
+    },
+    {
+      "name": "completed",
+      "type": "Bool",
+      "label": "Completed Full Session",
+      "control": "toggle"
+    },
+    {
+      "name": "startTime",
+      "type": "Date",
+      "label": "Start Time",
+      "control": "datePicker"
+    },
+    {
+      "name": "notes",
+      "type": "String",
+      "label": "Notes",
+      "control": "text"
+    }
+  ],
+  "enums": [
+    {
+      "name": "FocusCategory",
+      "cases": [
+        {
+          "name": "coding",
+          "displayName": "Coding",
+          "icon": "chevron.left.forwardslash.chevron.right"
+        },
+        {
+          "name": "writing",
+          "displayName": "Writing",
+          "icon": "pencil.line"
+        },
+        {
+          "name": "studying",
+          "displayName": "Studying",
+          "icon": "book.fill"
+        },
+        {
+          "name": "design",
+          "displayName": "Design",
+          "icon": "paintbrush.fill"
+        },
+        {
+          "name": "planning",
+          "displayName": "Planning",
+          "icon": "list.clipboard.fill"
+        },
+        {
+          "name": "research",
+          "displayName": "Research",
+          "icon": "magnifyingglass"
+        },
+        {
+          "name": "meeting",
+          "displayName": "Meeting",
+          "icon": "person.2.fill"
+        },
+        {
+          "name": "other",
+          "displayName": "Other",
+          "icon": "ellipsis.circle.fill"
+        }
+      ]
+    },
+    {
+      "name": "SessionType",
+      "cases": [
+        {
+          "name": "pomodoro",
+          "displayName": "Pomodoro (25m)",
+          "icon": "timer"
+        },
+        {
+          "name": "deepWork",
+          "displayName": "Deep Work (50m)",
+          "icon": "brain.head.profile"
+        },
+        {
+          "name": "shortBurst",
+          "displayName": "Short Burst (15m)",
+          "icon": "bolt.fill"
+        },
+        {
+          "name": "custom",
+          "displayName": "Custom",
+          "icon": "slider.horizontal.3"
+        }
+      ]
+    }
+  ],
+  "views": [
+    {
+      "name": "DashboardView",
+      "purpose": "Main dashboard showing today's focus time progress ring, session count, current streak, and quick-start button for common session types",
+      "components": [
+        "ProgressRingView",
+        "StatGrid",
+        "QuickEntryFAB"
+      ]
+    },
+    {
+      "name": "EntrySheet",
+      "purpose": "Log a completed focus session with task name, category, duration, quality rating, and distraction count",
+      "components": [
+        "QuickEntrySheet",
+        "EntryFormSection"
+      ]
+    },
+    {
+      "name": "HistoryView",
+      "purpose": "Date-grouped session log with filtering by category and session type, showing task names, durations, and quality badges",
+      "components": [
+        "CalendarHeatmap"
+      ]
+    },
+    {
+      "name": "AnalyticsView",
+      "purpose": "Weekly/monthly focus time charts, category time distribution pie chart, peak productivity hour heatmap, focus quality trends, and AI-generated insights",
+      "components": [
+        "ModuleChartView",
+        "InsightsList"
+      ]
+    }
+  ],
+  "viewModelComputedProperties": [
+    {
+      "name": "todayTotalMinutes",
+      "type": "Int",
+      "description": "Sum of durationMinutes for all sessions logged today"
+    },
+    {
+      "name": "todaySessionCount",
+      "type": "Int",
+      "description": "Number of focus sessions completed today"
+    },
+    {
+      "name": "todayCompletionRate",
+      "type": "Double",
+      "description": "Percentage of today's sessions where completed == true"
+    },
+    {
+      "name": "todayGoalProgress",
+      "type": "Double",
+      "description": "todayTotalMinutes / dailyGoalMinutes as 0.0\u20131.0"
+    },
+    {
+      "name": "averageFocusQuality",
+      "type": "Double",
+      "description": "Mean focusQuality across all sessions in the last 7 days"
+    },
+    {
+      "name": "currentStreak",
+      "type": "Int",
+      "description": "Consecutive days with at least one completed session meeting the daily goal"
+    },
+    {
+      "name": "weeklyTotalMinutes",
+      "type": "Int",
+      "description": "Sum of durationMinutes for the current calendar week (Mon\u2013Sun)"
+    },
+    {
+      "name": "weeklyTrend",
+      "type": "Double",
+      "description": "Percentage change: (thisWeekMinutes - lastWeekMinutes) / lastWeekMinutes"
+    },
+    {
+      "name": "peakProductivityHour",
+      "type": "Int",
+      "description": "Hour of day (0\u201323) with the highest average focus quality across all sessions"
+    },
+    {
+      "name": "categoryBreakdown",
+      "type": "[(FocusCategory, Int)]",
+      "description": "Total minutes per category for the selected time range, sorted descending"
+    },
+    {
+      "name": "averageDistractions",
+      "type": "Double",
+      "description": "Mean distractionCount per session over the last 7 days"
+    },
+    {
+      "name": "chartData",
+      "type": "[DailyFocusPoint]",
+      "description": "Array of (date, totalMinutes, sessionCount) for the last 30 days for charting"
+    },
+    {
+      "name": "insights",
+      "type": "[String]",
+      "description": "Generated insight strings: best day, peak hour, quality trend, category dominance, distraction trend"
+    }
+  ],
+  "domainLogic": {
+    "dailyGoal": {
+      "description": "Target total focus minutes per day",
+      "defaultValue": "120"
+    },
+    "streakDefinition": "A day counts toward the streak if the user completes at least one full session (completed == true) AND total focus minutes >= 25 (one standard pomodoro)",
+    "trendAnalysis": "Compare current week's total focus minutes and average quality against the previous week. Track 30-day rolling average of daily focus minutes. Monitor distraction count trend (decreasing = improving focus discipline).",
+    "insights": [
+      "Peak hour: 'You focus best at [hour] \u2014 schedule deep work then'",
+      "Category dominance: 'You spent [X]% of focus time on [category] this week'",
+      "Quality trend: 'Your focus quality improved/declined [X]% vs last week'",
+      "Distraction improvement: 'Distractions down [X]% \u2014 your focus discipline is strengthening'",
+      "Completion rate: '[X]% of sessions completed without early termination'",
+      "Streak milestone: 'You've maintained focus for [N] days straight \u2014 personal best!'",
+      "Optimal duration: 'Your highest quality sessions are [type] \u2014 consider using this format more'"
+    ]
+  }
+}

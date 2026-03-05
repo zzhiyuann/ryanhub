@@ -1,0 +1,280 @@
+{
+  "moduleId": "sleepTracker",
+  "moduleName": "SleepTracker",
+  "displayName": "Sleep Tracker",
+  "shortName": "Sleep",
+  "subtitle": "Track sleep, quality & mood",
+  "icon": "moon.zzz.fill",
+  "iconColor": "hubPrimary",
+  "relevanceKeywords": [
+    "sleep",
+    "rest",
+    "bedtime",
+    "wake",
+    "mood",
+    "quality",
+    "insomnia",
+    "nap",
+    "dream",
+    "circadian"
+  ],
+  "dataFields": [
+    {
+      "name": "bedtime",
+      "type": "Date",
+      "label": "Bedtime",
+      "control": "datePicker"
+    },
+    {
+      "name": "wakeTime",
+      "type": "Date",
+      "label": "Wake Time",
+      "control": "datePicker"
+    },
+    {
+      "name": "sleepHours",
+      "type": "Double",
+      "label": "Hours Slept",
+      "control": "stepper"
+    },
+    {
+      "name": "qualityRating",
+      "type": "Int",
+      "label": "Sleep Quality (1\u20135)",
+      "control": "slider"
+    },
+    {
+      "name": "wakeUpMood",
+      "type": "WakeUpMood",
+      "label": "Wake-Up Mood",
+      "control": "picker"
+    },
+    {
+      "name": "sleepFactor",
+      "type": "SleepFactor",
+      "label": "Primary Factor",
+      "control": "picker"
+    },
+    {
+      "name": "hadDreams",
+      "type": "Bool",
+      "label": "Had Dreams",
+      "control": "toggle"
+    },
+    {
+      "name": "notes",
+      "type": "String",
+      "label": "Notes",
+      "control": "text"
+    }
+  ],
+  "enums": [
+    {
+      "name": "WakeUpMood",
+      "cases": [
+        {
+          "name": "energized",
+          "displayName": "Energized",
+          "icon": "sun.max.fill"
+        },
+        {
+          "name": "refreshed",
+          "displayName": "Refreshed",
+          "icon": "leaf.fill"
+        },
+        {
+          "name": "neutral",
+          "displayName": "Neutral",
+          "icon": "face.smiling"
+        },
+        {
+          "name": "groggy",
+          "displayName": "Groggy",
+          "icon": "cloud.fill"
+        },
+        {
+          "name": "exhausted",
+          "displayName": "Exhausted",
+          "icon": "moon.fill"
+        }
+      ]
+    },
+    {
+      "name": "SleepFactor",
+      "cases": [
+        {
+          "name": "none",
+          "displayName": "None",
+          "icon": "minus.circle"
+        },
+        {
+          "name": "caffeine",
+          "displayName": "Caffeine",
+          "icon": "cup.and.saucer.fill"
+        },
+        {
+          "name": "exercise",
+          "displayName": "Exercise",
+          "icon": "figure.run"
+        },
+        {
+          "name": "screenTime",
+          "displayName": "Screen Time",
+          "icon": "iphone"
+        },
+        {
+          "name": "stress",
+          "displayName": "Stress",
+          "icon": "brain.head.profile"
+        },
+        {
+          "name": "alcohol",
+          "displayName": "Alcohol",
+          "icon": "wineglass.fill"
+        },
+        {
+          "name": "lateMeal",
+          "displayName": "Late Meal",
+          "icon": "fork.knife"
+        },
+        {
+          "name": "noise",
+          "displayName": "Noise",
+          "icon": "speaker.wave.3.fill"
+        }
+      ]
+    }
+  ],
+  "views": [
+    {
+      "name": "DashboardView",
+      "purpose": "Main dashboard showing last night's sleep summary hero card, weekly average progress ring against goal, current streak badge, mood distribution bar, and floating quick-add button",
+      "components": [
+        "StatGrid",
+        "ProgressRingView",
+        "QuickEntryFAB",
+        "MoodDistributionBar"
+      ]
+    },
+    {
+      "name": "EntrySheet",
+      "purpose": "Sleep log entry sheet with bedtime and wake-time pickers that auto-calculate duration, a 5-star quality slider, horizontal mood picker with emoji-style icons, optional factor selector, dream toggle, and notes field",
+      "components": [
+        "QuickEntrySheet",
+        "EntryFormSection",
+        "StarRatingControl"
+      ]
+    },
+    {
+      "name": "HistoryView",
+      "purpose": "Calendar heatmap colored by sleep quality (green=high, red=low), date-grouped entry list with mood and quality filter chips, swipe-to-delete support",
+      "components": [
+        "CalendarHeatmap",
+        "FilterChipBar"
+      ]
+    },
+    {
+      "name": "AnalyticsView",
+      "purpose": "Multi-chart analytics: sleep hours bar chart overlaid with quality trend line, mood distribution pie chart, factor impact horizontal bar chart showing average quality per factor, consistency score gauge, and generated weekly insight cards",
+      "components": [
+        "ModuleChartView",
+        "InsightsList",
+        "CorrelationMatrix"
+      ]
+    }
+  ],
+  "viewModelComputedProperties": [
+    {
+      "name": "lastNightSleep",
+      "type": "SleepTrackerEntry?",
+      "description": "Most recent entry for today or yesterday, used for dashboard hero card display"
+    },
+    {
+      "name": "todayLogged",
+      "type": "Bool",
+      "description": "Whether sleep has already been logged for today to toggle entry prompt vs summary"
+    },
+    {
+      "name": "weeklyAverageHours",
+      "type": "Double",
+      "description": "Mean sleep hours over the last 7 days, displayed as primary stat"
+    },
+    {
+      "name": "weeklyAverageQuality",
+      "type": "Double",
+      "description": "Mean quality rating (1.0\u20135.0) over the last 7 days"
+    },
+    {
+      "name": "previousWeekAverageHours",
+      "type": "Double",
+      "description": "Mean sleep hours for days 8\u201314 ago, used to compute week-over-week trend delta"
+    },
+    {
+      "name": "currentStreak",
+      "type": "Int",
+      "description": "Consecutive days where sleepHours >= dailyGoal AND qualityRating >= 3"
+    },
+    {
+      "name": "sleepGoalProgress",
+      "type": "Double",
+      "description": "Last night's sleepHours divided by dailyGoal, clamped to 0.0\u20131.0 for progress ring"
+    },
+    {
+      "name": "consistencyScore",
+      "type": "Int",
+      "description": "0\u2013100 score: 100 minus (standard deviation of bedtime in minutes over 14 days, capped at 100). Low variance = high score"
+    },
+    {
+      "name": "sleepDebt",
+      "type": "Double",
+      "description": "Sum of max(0, dailyGoal - sleepHours) for the past 7 days, representing cumulative deficit"
+    },
+    {
+      "name": "moodDistribution",
+      "type": "[WakeUpMood: Int]",
+      "description": "Count of each wake-up mood over the last 30 days for mood pie/bar chart"
+    },
+    {
+      "name": "qualityTrendData",
+      "type": "[(Date, Double)]",
+      "description": "Daily quality ratings over 30 days for sparkline or trend chart"
+    },
+    {
+      "name": "hoursTrendData",
+      "type": "[(Date, Double)]",
+      "description": "Daily sleep hours over 30 days for bar chart"
+    },
+    {
+      "name": "factorImpactAnalysis",
+      "type": "[(SleepFactor, Double)]",
+      "description": "Average quality rating grouped by logged sleep factor \u2014 identifies which factors correlate with better or worse sleep"
+    },
+    {
+      "name": "bestSleepDay",
+      "type": "String",
+      "description": "Day of week name with highest average quality over all entries (e.g. 'Saturday')"
+    },
+    {
+      "name": "weeklyInsights",
+      "type": "[String]",
+      "description": "Array of generated insight strings: week-over-week hours delta, quality trend direction, top mood this week, sleep debt warning, factor correlation highlight"
+    }
+  ],
+  "domainLogic": {
+    "dailyGoal": {
+      "description": "Target sleep hours per night, user-configurable",
+      "defaultValue": "8.0"
+    },
+    "streakDefinition": "A day counts toward the streak if sleepHours >= dailyGoal AND qualityRating >= 3. Missing a day or logging below threshold resets the streak to zero.",
+    "trendAnalysis": "Compute 7-day rolling averages for both hours and quality. Compare against previous 7-day period to determine trend direction and magnitude (percentage change). Track bedtime consistency via standard deviation of bedtime timestamps over 14 days \u2014 flag if stddev exceeds 45 minutes. Compute sleep efficiency as sleepHours / (wakeTime - bedtime) when both times are logged.",
+    "insights": [
+      "Sleep debt alert: 'You have {X}h of sleep debt this week. Consider a {suggested_bedtime} bedtime tonight to recover.'",
+      "Quality-mood correlation: 'When quality is 4+, you wake up Energized or Refreshed {X}% of the time vs {Y}% when quality is 2 or below.'",
+      "Factor impact: 'Nights after {best_factor} show {X} higher average quality than nights with {worst_factor}.'",
+      "Consistency insight: 'Your bedtime varied by {X} minutes this week. Sleep research shows consistent schedules improve quality by up to 20%.'",
+      "Weekly trend: 'You slept {delta} minutes {more/less} per night this week compared to last week.'",
+      "Best day pattern: 'Your best sleep quality averages {X}/5 on {day_name}s \u2014 your worst is {Y}/5 on {day_name}s.'",
+      "Dream correlation: 'You report dreams on {X}% of nights rated 4+ quality, suggesting deeper REM sleep on good nights.'"
+    ]
+  }
+}

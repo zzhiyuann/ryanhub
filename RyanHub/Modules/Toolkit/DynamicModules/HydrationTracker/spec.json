@@ -20,22 +20,28 @@
   ],
   "dataFields": [
     {
-      "name": "amountMl",
+      "name": "amount",
       "type": "Int",
       "label": "Amount (ml)",
       "control": "stepper"
     },
     {
-      "name": "beverageType",
-      "type": "BeverageType",
-      "label": "Beverage Type",
+      "name": "drinkType",
+      "type": "DrinkType",
+      "label": "Drink Type",
       "control": "picker"
     },
     {
-      "name": "containerPreset",
-      "type": "ContainerPreset",
-      "label": "Container Size",
+      "name": "containerSize",
+      "type": "ContainerSize",
+      "label": "Container",
       "control": "picker"
+    },
+    {
+      "name": "caffeinated",
+      "type": "Bool",
+      "label": "Caffeinated",
+      "control": "toggle"
     },
     {
       "name": "temperature",
@@ -44,16 +50,10 @@
       "control": "picker"
     },
     {
-      "name": "timeConsumed",
+      "name": "time",
       "type": "Date",
       "label": "Time",
       "control": "datePicker"
-    },
-    {
-      "name": "caffeinated",
-      "type": "Bool",
-      "label": "Caffeinated",
-      "control": "toggle"
     },
     {
       "name": "notes",
@@ -64,7 +64,7 @@
   ],
   "enums": [
     {
-      "name": "BeverageType",
+      "name": "DrinkType",
       "cases": [
         {
           "name": "water",
@@ -94,7 +94,7 @@
         {
           "name": "milk",
           "displayName": "Milk",
-          "icon": "cup.and.saucer.fill"
+          "icon": "cup.and.heat.waves.fill"
         },
         {
           "name": "smoothie",
@@ -107,6 +107,11 @@
           "icon": "bolt.fill"
         },
         {
+          "name": "soup",
+          "displayName": "Soup",
+          "icon": "takeoutbag.and.cup.and.straw.fill"
+        },
+        {
           "name": "other",
           "displayName": "Other",
           "icon": "ellipsis.circle.fill"
@@ -114,32 +119,37 @@
       ]
     },
     {
-      "name": "ContainerPreset",
+      "name": "ContainerSize",
       "cases": [
         {
-          "name": "small",
-          "displayName": "Small Glass (200ml)",
+          "name": "sip",
+          "displayName": "Sip (100ml)",
           "icon": "drop"
         },
         {
-          "name": "medium",
-          "displayName": "Medium Glass (350ml)",
-          "icon": "drop.half.full"
+          "name": "small",
+          "displayName": "Small Glass (200ml)",
+          "icon": "drop.halffull"
         },
         {
-          "name": "large",
-          "displayName": "Large Glass (500ml)",
+          "name": "medium",
+          "displayName": "Glass (250ml)",
           "icon": "drop.fill"
         },
         {
+          "name": "large",
+          "displayName": "Large Glass (350ml)",
+          "icon": "waterbottle"
+        },
+        {
           "name": "bottle",
-          "displayName": "Bottle (750ml)",
+          "displayName": "Bottle (500ml)",
           "icon": "waterbottle.fill"
         },
         {
           "name": "largeBottle",
-          "displayName": "Large Bottle (1000ml)",
-          "icon": "waterbottle.fill"
+          "displayName": "Large Bottle (750ml)",
+          "icon": "takeoutbag.and.cup.and.straw.fill"
         },
         {
           "name": "custom",
@@ -157,7 +167,7 @@
           "icon": "snowflake"
         },
         {
-          "name": "room",
+          "name": "roomTemp",
           "displayName": "Room Temp",
           "icon": "thermometer.medium"
         },
@@ -177,17 +187,17 @@
   "views": [
     {
       "name": "DashboardView",
-      "purpose": "Main hub showing today's hydration progress with a large animated progress ring, quick-add buttons for common container sizes, current streak badge, and a mini hourly distribution chart showing when the user drinks most",
+      "purpose": "Central hub showing today's hydration progress as a prominent animated water-fill ring, current intake vs goal, quick-add buttons for common container sizes, active streak badge, and a mini hourly timeline showing when drinks were logged today",
       "components": [
         "ProgressRingView",
         "StatGrid",
         "QuickEntryFAB",
-        "MiniBarChart"
+        "MiniTimeline"
       ]
     },
     {
       "name": "EntrySheet",
-      "purpose": "Bottom sheet for logging a drink with container preset buttons that auto-fill amount, beverage type picker with icons, and optional detail fields for temperature and notes",
+      "purpose": "Quick-entry modal optimized for one-handed use: top row of preset container buttons for instant logging, drink type picker with icons, optional fields for temperature and notes, and a time picker defaulting to now",
       "components": [
         "QuickEntrySheet",
         "EntryFormSection"
@@ -195,20 +205,20 @@
     },
     {
       "name": "HistoryView",
-      "purpose": "Scrollable timeline of all entries grouped by date, with a calendar heatmap at the top showing daily completion intensity (color-coded by percentage of goal met), and swipe-to-delete on individual entries",
+      "purpose": "Scrollable calendar heatmap colored by goal completion percentage (gray=0%, light blue=partial, deep blue=100%+), tappable days expanding to show individual entries with drink type icons, amounts, and timestamps, plus swipe-to-delete",
       "components": [
         "CalendarHeatmap",
-        "EntryTimeline"
+        "EntryListSection"
       ]
     },
     {
       "name": "AnalyticsView",
-      "purpose": "Deep insights with weekly bar chart comparing intake vs goal, 30-day trend line, beverage type breakdown donut chart, best/worst day highlights, hourly distribution pattern, and personalized hydration insights",
+      "purpose": "Multi-section analytics: weekly bar chart comparing daily totals with goal line overlay, drink type breakdown donut chart, hourly distribution histogram showing peak hydration times, weekly trend comparison (this week vs last), goal completion rate over 30 days, and AI-generated plain-language insights",
       "components": [
         "ModuleChartView",
         "InsightsList",
-        "BreakdownDonut",
-        "HourlyPatternChart"
+        "DonutChart",
+        "HourlyHistogram"
       ]
     }
   ],
@@ -216,102 +226,100 @@
     {
       "name": "todayTotalMl",
       "type": "Int",
-      "description": "Sum of amountMl for all entries with today's date"
+      "description": "Sum of all entry amounts logged today in milliliters"
     },
     {
-      "name": "todayProgress",
+      "name": "todayGoalProgress",
       "type": "Double",
-      "description": "todayTotalMl divided by dailyGoalMl, capped at 1.0 for progress ring"
+      "description": "Fraction of daily goal achieved today (0.0 to 1.0+), used for progress ring fill"
+    },
+    {
+      "name": "todayGlassesEquivalent",
+      "type": "Double",
+      "description": "Today's total converted to standard 250ml glasses for friendly display"
     },
     {
       "name": "todayEntries",
-      "type": "[HydrationTrackerEntry]",
-      "description": "All entries filtered to today, sorted by timeConsumed descending"
+      "type": "[Entry]",
+      "description": "All entries logged today, sorted by time descending"
     },
     {
-      "name": "todayGlassCount",
-      "type": "Int",
-      "description": "Count of today's entries as a simple glasses-equivalent metric"
+      "name": "todayDrinkTypeBreakdown",
+      "type": "[(DrinkType, Int)]",
+      "description": "Today's intake grouped by drink type with ml totals, sorted descending"
     },
     {
       "name": "currentStreak",
       "type": "Int",
-      "description": "Consecutive days ending today (or yesterday) where daily total met or exceeded goal"
+      "description": "Consecutive days (ending today or yesterday) where total intake met or exceeded the daily goal"
     },
     {
       "name": "longestStreak",
       "type": "Int",
-      "description": "Maximum consecutive goal-met days across all recorded history"
+      "description": "All-time longest consecutive days meeting the daily goal"
     },
     {
-      "name": "weeklyAverageMl",
+      "name": "weeklyDailyTotals",
+      "type": "[(Date, Int)]",
+      "description": "Array of (date, totalMl) for the current 7-day window, used for bar chart"
+    },
+    {
+      "name": "weeklyAverage",
       "type": "Int",
       "description": "Average daily intake in ml over the last 7 days"
     },
     {
-      "name": "weeklyTrendPercent",
+      "name": "weeklyTrend",
       "type": "Double",
-      "description": "Percentage change comparing this week's average to previous week's average, positive means improvement"
+      "description": "Percentage change of this week's average vs previous week's average; positive means improvement"
     },
     {
-      "name": "weeklyChartData",
-      "type": "[(day: String, amount: Int, goal: Int)]",
-      "description": "Last 7 days of daily totals paired with goal for bar chart rendering"
-    },
-    {
-      "name": "monthlyChartData",
-      "type": "[(date: Date, amount: Int)]",
-      "description": "Last 30 days of daily totals for trend line chart"
-    },
-    {
-      "name": "beverageBreakdown",
-      "type": "[(type: BeverageType, totalMl: Int, percentage: Double)]",
-      "description": "All-time or current-period breakdown of intake by beverage type for donut chart"
+      "name": "monthlyGoalCompletionRate",
+      "type": "Double",
+      "description": "Fraction of days in the last 30 days where the daily goal was met (0.0 to 1.0)"
     },
     {
       "name": "hourlyDistribution",
       "type": "[Int]",
-      "description": "24-element array showing average ml consumed in each hour of the day, reveals drinking patterns"
+      "description": "Array of 24 integers representing total ml consumed in each hour across all entries, for histogram"
     },
     {
-      "name": "goalCompletionRate",
-      "type": "Double",
-      "description": "Percentage of tracked days where daily goal was met, last 30 days"
-    },
-    {
-      "name": "bestDayRecord",
-      "type": "(date: Date, amount: Int)?",
-      "description": "Date and amount of the highest single-day intake ever recorded"
-    },
-    {
-      "name": "caffeineToWaterRatio",
-      "type": "Double",
-      "description": "Ratio of caffeinated beverage ml to total ml this week, flags if too high"
+      "name": "peakHydrationHour",
+      "type": "Int",
+      "description": "Hour of day (0-23) with the highest average intake, used for insights"
     },
     {
       "name": "hydrationInsights",
       "type": "[InsightItem]",
-      "description": "Array of computed personalized insights: streak status, trend direction, best drinking hour, caffeine ratio warning, weekend vs weekday comparison, goal adjustment suggestion"
+      "description": "Array of generated insight strings based on trend analysis, streak status, goal completion patterns, and drink type diversity"
+    },
+    {
+      "name": "bestDay",
+      "type": "(Date, Int)?",
+      "description": "The single day with the highest total intake in the last 30 days"
+    },
+    {
+      "name": "caffeineRatio",
+      "type": "Double",
+      "description": "Fraction of today's total intake from caffeinated drinks, flagged if over 40%"
     }
   ],
   "domainLogic": {
     "dailyGoal": {
-      "description": "Recommended daily water intake based on general health guidelines. Default 2500ml (about 8 standard glasses). User can customize in settings. The system should suggest adjustments based on actual consumption patterns \u2014 if user consistently exceeds goal by 20%+, suggest raising it; if consistently under 50%, suggest a more achievable intermediate goal.",
+      "description": "Recommended daily water intake based on general health guidelines. Default 2500ml (roughly 10 glasses of 250ml). User can customize in settings. Premium apps adjust by body weight (30-35ml per kg), activity level, and climate, but default is a sensible fixed target.",
       "defaultValue": "2500"
     },
-    "streakDefinition": "A day counts as 'active' if the user's total intake meets or exceeds 80% of their daily goal (not 100%, to be forgiving of near-misses). Streak resets if a day falls below 80%. Streak continues through days with no entries only if the gap is a single day (grace period for forgetting to log).",
-    "trendAnalysis": "Track three trend dimensions: (1) Volume trend \u2014 7-day rolling average compared to previous 7-day period, expressed as percentage change. (2) Consistency trend \u2014 standard deviation of daily intake over rolling 14 days, lower is better. (3) Timing trend \u2014 whether the user is front-loading hydration (morning) vs back-loading (evening), with a nudge toward even distribution throughout the day.",
+    "streakDefinition": "A day counts toward the streak if total intake >= 100% of the daily goal. The streak is the count of consecutive qualifying days ending on today (if today qualifies) or yesterday (if today is still in progress). A missed day resets the streak to zero.",
+    "trendAnalysis": "Compare the rolling 7-day average intake against the previous 7-day average. Calculate percentage change. Also track the 7-day goal completion count (days meeting goal out of 7) compared to the prior week. Surface the trend as 'improving', 'steady', or 'declining' with the percentage delta.",
     "insights": [
       "Streak milestone celebrations (3, 7, 14, 30, 60, 100 days)",
-      "Weekly trend direction with specific ml change ('You drank 340ml more per day this week')",
+      "Weekly trend direction with specific percentage ('You drank 12% more this week than last week')",
+      "Peak hydration hour identification ('You hydrate most around 2 PM \u2014 consider adding a morning glass')",
+      "Low intake warning if today's pace projects below 70% of goal by end of day",
       "Caffeine ratio alert if caffeinated drinks exceed 40% of total intake",
-      "Weekend vs weekday comparison ('You drink 30% less on weekends')",
-      "Peak hydration hour identification ('You hydrate most between 2-3 PM')",
-      "Consistency score based on daily variance ('Very consistent this week \u2014 only \u00b1150ml variation')",
-      "Beverage diversity insight ('Try mixing in more plain water \u2014 60% of your intake is coffee')",
-      "Goal adjustment suggestion based on 14-day rolling average vs current goal",
-      "Morning hydration check ('You averaged only 200ml before noon \u2014 try starting earlier')",
-      "Personal best notifications when breaking daily or weekly records"
+      "Drink diversity insight encouraging variety if >90% of entries are plain water",
+      "Weekend vs weekday comparison highlighting any pattern differences",
+      "Goal completion rate trend over the last 30 days with encouragement or nudge"
     ]
   }
 }

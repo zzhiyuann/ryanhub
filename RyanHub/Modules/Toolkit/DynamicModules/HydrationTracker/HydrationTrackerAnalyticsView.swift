@@ -10,23 +10,17 @@ struct HydrationTrackerAnalyticsView: View {
                 // Weekly Chart
                 ModuleChartView(
                     title: "This Week",
-                    subtitle: "Daily intake (ml)",
-                    dataPoints: viewModel.weeklyChartData.map { ChartDataPoint(label: $0.day, value: Double($0.amount)) },
+                    subtitle: "Daily entries",
+                    dataPoints: viewModel.weeklyChartData,
                     style: .bar,
                     color: .hubPrimary
                 )
 
                 // Insights
-                if !viewModel.hydrationInsights.isEmpty {
+                if !viewModel.insights.isEmpty {
                     VStack(alignment: .leading, spacing: HubLayout.itemSpacing) {
                         SectionHeader(title: "Insights")
-                        InsightsList(insights: viewModel.hydrationInsights.map { item in
-                            ModuleInsight(
-                                type: item.priority == .high ? .warning : .suggestion,
-                                title: item.title,
-                                message: item.detail
-                            )
-                        })
+                        InsightsList(insights: viewModel.insights)
                     }
                 }
 

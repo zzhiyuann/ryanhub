@@ -1,0 +1,348 @@
+{
+  "moduleId": "groceryList",
+  "moduleName": "GroceryList",
+  "displayName": "Grocery List",
+  "shortName": "Grocery",
+  "subtitle": "Smart shopping with budget tracking",
+  "icon": "cart.fill",
+  "iconColor": "hubAccentGreen",
+  "relevanceKeywords": [
+    "grocery",
+    "shopping",
+    "list",
+    "food",
+    "supermarket",
+    "budget",
+    "ingredients",
+    "pantry",
+    "checklist",
+    "meal"
+  ],
+  "dataFields": [
+    {
+      "name": "itemName",
+      "type": "String",
+      "label": "Item Name",
+      "control": "text"
+    },
+    {
+      "name": "category",
+      "type": "GroceryCategory",
+      "label": "Category",
+      "control": "picker"
+    },
+    {
+      "name": "quantity",
+      "type": "Int",
+      "label": "Quantity",
+      "control": "stepper"
+    },
+    {
+      "name": "unit",
+      "type": "ItemUnit",
+      "label": "Unit",
+      "control": "picker"
+    },
+    {
+      "name": "estimatedPrice",
+      "type": "Double",
+      "label": "Est. Price ($)",
+      "control": "stepper"
+    },
+    {
+      "name": "priority",
+      "type": "ItemPriority",
+      "label": "Priority",
+      "control": "picker"
+    },
+    {
+      "name": "isChecked",
+      "type": "Bool",
+      "label": "Purchased",
+      "control": "toggle"
+    },
+    {
+      "name": "notes",
+      "type": "String",
+      "label": "Notes",
+      "control": "text"
+    }
+  ],
+  "enums": [
+    {
+      "name": "GroceryCategory",
+      "cases": [
+        {
+          "name": "produce",
+          "displayName": "Produce",
+          "icon": "leaf.fill"
+        },
+        {
+          "name": "dairy",
+          "displayName": "Dairy & Eggs",
+          "icon": "cup.and.saucer.fill"
+        },
+        {
+          "name": "meat",
+          "displayName": "Meat & Seafood",
+          "icon": "flame.fill"
+        },
+        {
+          "name": "bakery",
+          "displayName": "Bakery",
+          "icon": "birthday.cake.fill"
+        },
+        {
+          "name": "frozen",
+          "displayName": "Frozen",
+          "icon": "snowflake"
+        },
+        {
+          "name": "beverages",
+          "displayName": "Beverages",
+          "icon": "mug.fill"
+        },
+        {
+          "name": "snacks",
+          "displayName": "Snacks",
+          "icon": "bag.fill"
+        },
+        {
+          "name": "grains",
+          "displayName": "Grains & Pasta",
+          "icon": "basket.fill"
+        },
+        {
+          "name": "condiments",
+          "displayName": "Condiments & Sauces",
+          "icon": "fork.knife"
+        },
+        {
+          "name": "household",
+          "displayName": "Household",
+          "icon": "house.fill"
+        },
+        {
+          "name": "personalCare",
+          "displayName": "Personal Care",
+          "icon": "heart.fill"
+        },
+        {
+          "name": "other",
+          "displayName": "Other",
+          "icon": "ellipsis.circle.fill"
+        }
+      ]
+    },
+    {
+      "name": "ItemUnit",
+      "cases": [
+        {
+          "name": "pieces",
+          "displayName": "Pieces",
+          "icon": "number"
+        },
+        {
+          "name": "lbs",
+          "displayName": "Pounds",
+          "icon": "scalemass.fill"
+        },
+        {
+          "name": "oz",
+          "displayName": "Ounces",
+          "icon": "scalemass"
+        },
+        {
+          "name": "kg",
+          "displayName": "Kilograms",
+          "icon": "lineweight"
+        },
+        {
+          "name": "liters",
+          "displayName": "Liters",
+          "icon": "drop.fill"
+        },
+        {
+          "name": "gallons",
+          "displayName": "Gallons",
+          "icon": "drop.circle.fill"
+        },
+        {
+          "name": "packs",
+          "displayName": "Packs",
+          "icon": "shippingbox.fill"
+        },
+        {
+          "name": "bags",
+          "displayName": "Bags",
+          "icon": "bag.fill"
+        },
+        {
+          "name": "bottles",
+          "displayName": "Bottles",
+          "icon": "waterbottle.fill"
+        },
+        {
+          "name": "boxes",
+          "displayName": "Boxes",
+          "icon": "archivebox.fill"
+        }
+      ]
+    },
+    {
+      "name": "ItemPriority",
+      "cases": [
+        {
+          "name": "essential",
+          "displayName": "Essential",
+          "icon": "exclamationmark.circle.fill"
+        },
+        {
+          "name": "preferred",
+          "displayName": "Preferred",
+          "icon": "star.fill"
+        },
+        {
+          "name": "optional",
+          "displayName": "Optional",
+          "icon": "questionmark.circle.fill"
+        }
+      ]
+    }
+  ],
+  "views": [
+    {
+      "name": "DashboardView",
+      "purpose": "Active shopping list grouped by category with progress bar showing checked vs total items, budget summary cards showing estimated total and amount remaining, and floating quick-add button",
+      "components": [
+        "StatGrid",
+        "ProgressRingView",
+        "QuickEntryFAB",
+        "CategoryGroupedList"
+      ]
+    },
+    {
+      "name": "EntrySheet",
+      "purpose": "Quick add item modal with item name field, category picker, quantity stepper with unit selector, estimated price input, and priority toggle",
+      "components": [
+        "QuickEntrySheet",
+        "EntryFormSection"
+      ]
+    },
+    {
+      "name": "HistoryView",
+      "purpose": "Past shopping trips grouped by date showing total spend per trip, number of items purchased, completion rate, and calendar heatmap of shopping frequency",
+      "components": [
+        "CalendarHeatmap",
+        "TripSummaryCard"
+      ]
+    },
+    {
+      "name": "AnalyticsView",
+      "purpose": "Spending trends line chart over 4 weeks, category breakdown donut chart, most purchased items ranking list, and actionable budget insights",
+      "components": [
+        "ModuleChartView",
+        "InsightsList",
+        "CategoryPieChart"
+      ]
+    }
+  ],
+  "viewModelComputedProperties": [
+    {
+      "name": "activeItems",
+      "type": "[GroceryListEntry]",
+      "description": "Unchecked items in the current list sorted by priority (essential first) then alphabetically within each priority"
+    },
+    {
+      "name": "completedItems",
+      "type": "[GroceryListEntry]",
+      "description": "Items checked off today, sorted by most recently checked"
+    },
+    {
+      "name": "completionPercentage",
+      "type": "Double",
+      "description": "Ratio of checked items to total items in today's list (0.0 to 1.0)"
+    },
+    {
+      "name": "estimatedTotal",
+      "type": "Double",
+      "description": "Sum of (estimatedPrice \u00d7 quantity) for all items in the current active list"
+    },
+    {
+      "name": "checkedTotal",
+      "type": "Double",
+      "description": "Sum of (estimatedPrice \u00d7 quantity) for all checked-off items in the current session"
+    },
+    {
+      "name": "remainingBudget",
+      "type": "Double",
+      "description": "Weekly budget goal minus total spent this week; negative means over budget"
+    },
+    {
+      "name": "itemsByCategory",
+      "type": "[GroceryCategory: [GroceryListEntry]]",
+      "description": "Active unchecked items grouped by grocery category for aisle-organized shopping view"
+    },
+    {
+      "name": "currentStreak",
+      "type": "Int",
+      "description": "Consecutive weeks with at least one completed shopping trip (items checked off)"
+    },
+    {
+      "name": "weeklySpending",
+      "type": "Double",
+      "description": "Total estimated cost of all checked items from Monday through Sunday of the current week"
+    },
+    {
+      "name": "monthlySpending",
+      "type": "Double",
+      "description": "Total estimated cost of all checked items in the current calendar month"
+    },
+    {
+      "name": "spendingTrend",
+      "type": "Double",
+      "description": "Percentage change of current week spending vs the 4-week rolling average; positive means spending more than usual"
+    },
+    {
+      "name": "topItems",
+      "type": "[(String, Int)]",
+      "description": "Top 10 most frequently purchased item names with their total purchase count across all history"
+    },
+    {
+      "name": "categoryBreakdown",
+      "type": "[(GroceryCategory, Double)]",
+      "description": "Total spending per category across the current month as (category, totalSpend) pairs for donut chart"
+    },
+    {
+      "name": "averageTripCost",
+      "type": "Double",
+      "description": "Mean total cost per shopping trip (a trip is defined as a day with at least one checked item)"
+    },
+    {
+      "name": "weeklyChartData",
+      "type": "[(Date, Double)]",
+      "description": "Daily total spend for the past 28 days for the spending trend line chart"
+    },
+    {
+      "name": "budgetInsights",
+      "type": "[String]",
+      "description": "Generated text insights: budget pace (on track/over), biggest category this month, spending spike alerts, staple item reminders"
+    }
+  ],
+  "domainLogic": {
+    "dailyGoal": {
+      "description": "Weekly grocery budget target in dollars; shown as a progress ring on dashboard comparing actual spend vs target",
+      "defaultValue": "150"
+    },
+    "streakDefinition": "A week (Monday\u2013Sunday) counts as active if the user checked off at least one item, indicating a completed shopping trip that week",
+    "trendAnalysis": "Compare current week spending against 4-week rolling average; flag overspending when current exceeds average by 20%+; track month-over-month shifts in category proportions to surface changing habits",
+    "insights": [
+      "Budget pace: project end-of-week total based on current spending rate vs weekly budget target",
+      "Category shift: alert when any category's share of total spend increases by 15%+ vs 4-week average",
+      "Staples reminder: items purchased in 3+ of last 4 weeks that are missing from current list",
+      "Savings opportunity: identify the category with the fastest rising spend trend over 4 weeks",
+      "Shopping frequency: compare trips this month vs historical monthly average",
+      "List efficiency: ratio of items actually purchased (checked) vs items added but never checked off (abandoned)"
+    ]
+  }
+}

@@ -3,62 +3,44 @@
   "moduleName": "MoodJournal",
   "displayName": "Mood Journal",
   "shortName": "Mood",
-  "subtitle": "Track emotions, discover patterns",
-  "icon": "brain.head.profile",
+  "subtitle": "Track your emotional wellbeing",
+  "icon": "face.smiling",
   "iconColor": "hubPrimaryLight",
   "relevanceKeywords": [
     "mood",
-    "emotion",
     "journal",
+    "emotion",
     "feeling",
     "mental health",
-    "reflection",
-    "anxiety",
-    "happiness",
     "wellbeing",
-    "diary"
+    "diary",
+    "happiness",
+    "anxiety",
+    "stress"
   ],
   "dataFields": [
     {
-      "name": "moodLevel",
+      "name": "rating",
       "type": "Int",
-      "label": "Mood Level",
+      "label": "Mood Rating",
       "control": "slider"
     },
     {
-      "name": "emotion",
-      "type": "EmotionType",
-      "label": "Primary Emotion",
-      "control": "picker"
-    },
-    {
-      "name": "secondaryEmotion",
-      "type": "EmotionType?",
-      "label": "Secondary Emotion",
-      "control": "picker"
-    },
-    {
-      "name": "energyLevel",
+      "name": "energy",
       "type": "Int",
       "label": "Energy Level",
       "control": "slider"
     },
     {
-      "name": "anxietyLevel",
-      "type": "Int",
-      "label": "Anxiety Level",
-      "control": "slider"
-    },
-    {
-      "name": "activities",
-      "type": "[ActivityTag]",
-      "label": "Activities",
+      "name": "emotion",
+      "type": "MoodEmotion",
+      "label": "Primary Emotion",
       "control": "picker"
     },
     {
-      "name": "socialContext",
-      "type": "SocialContext",
-      "label": "Social Context",
+      "name": "activities",
+      "type": "[MoodActivity]",
+      "label": "Activities",
       "control": "picker"
     },
     {
@@ -68,43 +50,26 @@
       "control": "slider"
     },
     {
-      "name": "weather",
-      "type": "WeatherType",
-      "label": "Weather",
+      "name": "socialLevel",
+      "type": "SocialLevel",
+      "label": "Social Interaction",
       "control": "picker"
     },
     {
-      "name": "reflection",
+      "name": "notes",
       "type": "String",
-      "label": "Reflection",
+      "label": "Journal Notes",
       "control": "text"
-    },
-    {
-      "name": "gratitude",
-      "type": "String",
-      "label": "Gratitude Note",
-      "control": "text"
-    },
-    {
-      "name": "logTime",
-      "type": "Date",
-      "label": "Time of Check-in",
-      "control": "datePicker"
     }
   ],
   "enums": [
     {
-      "name": "EmotionType",
+      "name": "MoodEmotion",
       "cases": [
         {
-          "name": "joyful",
-          "displayName": "Joyful",
-          "icon": "sun.max.fill"
-        },
-        {
-          "name": "content",
-          "displayName": "Content",
-          "icon": "face.smiling"
+          "name": "happy",
+          "displayName": "Happy",
+          "icon": "face.smiling.inverse"
         },
         {
           "name": "calm",
@@ -119,27 +84,17 @@
         {
           "name": "excited",
           "displayName": "Excited",
-          "icon": "sparkles"
-        },
-        {
-          "name": "hopeful",
-          "displayName": "Hopeful",
-          "icon": "sunrise.fill"
+          "icon": "star.fill"
         },
         {
           "name": "neutral",
           "displayName": "Neutral",
-          "icon": "circle.fill"
+          "icon": "face.dashed"
         },
         {
           "name": "tired",
           "displayName": "Tired",
-          "icon": "moon.zzz.fill"
-        },
-        {
-          "name": "stressed",
-          "displayName": "Stressed",
-          "icon": "bolt.fill"
+          "icon": "powersleep"
         },
         {
           "name": "anxious",
@@ -147,34 +102,24 @@
           "icon": "waveform.path.ecg"
         },
         {
+          "name": "stressed",
+          "displayName": "Stressed",
+          "icon": "bolt.fill"
+        },
+        {
           "name": "sad",
           "displayName": "Sad",
           "icon": "cloud.rain.fill"
         },
         {
-          "name": "frustrated",
-          "displayName": "Frustrated",
-          "icon": "flame.fill"
-        },
-        {
           "name": "angry",
           "displayName": "Angry",
-          "icon": "exclamationmark.triangle.fill"
-        },
-        {
-          "name": "lonely",
-          "displayName": "Lonely",
-          "icon": "person.fill.xmark"
-        },
-        {
-          "name": "overwhelmed",
-          "displayName": "Overwhelmed",
-          "icon": "tornado"
+          "icon": "flame.fill"
         }
       ]
     },
     {
-      "name": "ActivityTag",
+      "name": "MoodActivity",
       "cases": [
         {
           "name": "work",
@@ -197,34 +142,9 @@
           "icon": "book.fill"
         },
         {
-          "name": "meditation",
-          "displayName": "Meditation",
-          "icon": "figure.mind.and.body"
-        },
-        {
-          "name": "cooking",
-          "displayName": "Cooking",
-          "icon": "frying.pan.fill"
-        },
-        {
-          "name": "outdoors",
-          "displayName": "Outdoors",
-          "icon": "tree.fill"
-        },
-        {
-          "name": "music",
-          "displayName": "Music",
-          "icon": "music.note"
-        },
-        {
-          "name": "gaming",
-          "displayName": "Gaming",
-          "icon": "gamecontroller.fill"
-        },
-        {
-          "name": "family",
-          "displayName": "Family",
-          "icon": "house.fill"
+          "name": "nature",
+          "displayName": "Nature",
+          "icon": "leaf.fill"
         },
         {
           "name": "creative",
@@ -232,29 +152,39 @@
           "icon": "paintbrush.fill"
         },
         {
-          "name": "shopping",
-          "displayName": "Shopping",
-          "icon": "cart.fill"
+          "name": "family",
+          "displayName": "Family",
+          "icon": "house.fill"
+        },
+        {
+          "name": "rest",
+          "displayName": "Rest",
+          "icon": "bed.double.fill"
         },
         {
           "name": "travel",
           "displayName": "Travel",
-          "icon": "airplane"
-        },
-        {
-          "name": "selfCare",
-          "displayName": "Self Care",
-          "icon": "sparkles"
+          "icon": "car.fill"
         },
         {
           "name": "learning",
           "displayName": "Learning",
           "icon": "graduationcap.fill"
+        },
+        {
+          "name": "cooking",
+          "displayName": "Cooking",
+          "icon": "fork.knife"
+        },
+        {
+          "name": "meditation",
+          "displayName": "Meditation",
+          "icon": "brain.head.profile.fill"
         }
       ]
     },
     {
-      "name": "SocialContext",
+      "name": "SocialLevel",
       "cases": [
         {
           "name": "alone",
@@ -262,74 +192,19 @@
           "icon": "person.fill"
         },
         {
-          "name": "partner",
-          "displayName": "Partner",
-          "icon": "heart.circle.fill"
+          "name": "onePerson",
+          "displayName": "One Person",
+          "icon": "person.2.fill"
         },
         {
-          "name": "friends",
-          "displayName": "Friends",
+          "name": "smallGroup",
+          "displayName": "Small Group",
           "icon": "person.3.fill"
         },
         {
-          "name": "family",
-          "displayName": "Family",
-          "icon": "figure.2.and.child.holdinghands"
-        },
-        {
-          "name": "coworkers",
-          "displayName": "Coworkers",
-          "icon": "person.2.badge.gearshape.fill"
-        },
-        {
-          "name": "strangers",
-          "displayName": "Strangers",
-          "icon": "person.fill.questionmark"
-        },
-        {
-          "name": "crowd",
-          "displayName": "Crowd",
+          "name": "largeGroup",
+          "displayName": "Large Group",
           "icon": "person.3.sequence.fill"
-        }
-      ]
-    },
-    {
-      "name": "WeatherType",
-      "cases": [
-        {
-          "name": "sunny",
-          "displayName": "Sunny",
-          "icon": "sun.max.fill"
-        },
-        {
-          "name": "cloudy",
-          "displayName": "Cloudy",
-          "icon": "cloud.fill"
-        },
-        {
-          "name": "rainy",
-          "displayName": "Rainy",
-          "icon": "cloud.rain.fill"
-        },
-        {
-          "name": "stormy",
-          "displayName": "Stormy",
-          "icon": "cloud.bolt.fill"
-        },
-        {
-          "name": "snowy",
-          "displayName": "Snowy",
-          "icon": "cloud.snow.fill"
-        },
-        {
-          "name": "windy",
-          "displayName": "Windy",
-          "icon": "wind"
-        },
-        {
-          "name": "foggy",
-          "displayName": "Foggy",
-          "icon": "cloud.fog.fill"
         }
       ]
     }
@@ -337,159 +212,158 @@
   "views": [
     {
       "name": "DashboardView",
-      "purpose": "Main hub showing today's mood state, current streak, weekly mood trend sparkline, emotion distribution donut, and quick check-in button",
+      "purpose": "Main hub showing today's mood status, current streak, weekly mood trend sparkline, and emotion distribution summary with quick-add floating button",
       "components": [
         "StatGrid",
         "ProgressRingView",
         "QuickEntryFAB",
-        "ModuleChartView"
+        "MoodSparkline"
       ]
     },
     {
       "name": "EntrySheet",
-      "purpose": "Multi-step check-in flow: step 1 picks mood level via large emoji slider, step 2 selects emotions from a grid, step 3 tags activities and social context, step 4 optional reflection text",
+      "purpose": "Modal entry with an interactive mood slider (emoji face morphs from sad to happy), emotion chip selector, multi-select activity tags, energy and sleep sliders, and optional journal text",
       "components": [
         "QuickEntrySheet",
-        "EntryFormSection"
+        "EntryFormSection",
+        "MoodFaceSlider",
+        "ChipSelector"
       ]
     },
     {
       "name": "HistoryView",
-      "purpose": "Calendar heatmap colored by mood level (red-yellow-green gradient), tappable days revealing entries, scrollable timeline below with entry cards showing emotion icons and snippets",
+      "purpose": "Year-in-pixels calendar heatmap colored by mood rating, plus a date-grouped list of entries filterable by emotion and rating range",
       "components": [
         "CalendarHeatmap",
-        "EntryCard"
+        "FilterableEntryList"
       ]
     },
     {
       "name": "AnalyticsView",
-      "purpose": "Weekly and monthly mood trend line charts, emotion frequency bar chart, activity-mood correlation matrix showing which activities correlate with higher moods, time-of-day mood patterns, and AI-generated insight cards",
-      "components": [
-        "ModuleChartView",
-        "InsightsList"
-      ]
-    },
-    {
-      "name": "PatternsView",
-      "purpose": "Deep pattern analysis: day-of-week mood averages, social context impact rankings, sleep-mood correlation scatter, weather impact summary, and top mood-boosting activity combinations",
+      "purpose": "Weekly and monthly mood trend line charts, emotion frequency pie chart, activity-mood correlation bar chart, sleep vs mood scatter insight, and AI-generated text insights",
       "components": [
         "ModuleChartView",
         "InsightsList",
-        "StatGrid"
+        "CorrelationChart",
+        "EmotionPieChart"
       ]
     }
   ],
   "viewModelComputedProperties": [
     {
-      "name": "todayEntries",
-      "type": "[MoodJournalEntry]",
-      "description": "All check-in entries logged today, sorted by time"
+      "name": "todayEntry",
+      "type": "MoodJournalEntry?",
+      "description": "The most recent entry logged today, nil if none exists"
     },
     {
-      "name": "todayAverageMood",
-      "type": "Double?",
-      "description": "Average mood level across all of today's check-ins (1-10 scale)"
-    },
-    {
-      "name": "todayDominantEmotion",
-      "type": "EmotionType?",
-      "description": "Most frequently logged emotion today across all entries"
+      "name": "todayMoodLabel",
+      "type": "String",
+      "description": "Human-readable label for today's mood rating (e.g. 'Great', 'Okay', 'Rough') mapped from 1-10 scale"
     },
     {
       "name": "currentStreak",
       "type": "Int",
-      "description": "Consecutive days with at least one check-in, including today if logged"
+      "description": "Consecutive days with at least one mood entry, breaking on any missed day"
     },
     {
       "name": "longestStreak",
       "type": "Int",
-      "description": "All-time longest consecutive check-in streak"
+      "description": "All-time longest consecutive logging streak"
     },
     {
-      "name": "weeklyMoodAverage",
+      "name": "weeklyAverage",
       "type": "Double",
-      "description": "Average mood level for the current Mon-Sun week"
+      "description": "Average mood rating over the last 7 days"
     },
     {
-      "name": "weeklyMoodTrend",
+      "name": "previousWeekAverage",
       "type": "Double",
-      "description": "Difference between this week's average and last week's average mood; positive means improving"
+      "description": "Average mood rating for the 7 days before the current week, used for trend comparison"
     },
     {
-      "name": "weeklyMoodChartData",
-      "type": "[(date: Date, value: Double)]",
-      "description": "Daily average mood values for the past 7 days, suitable for sparkline rendering"
+      "name": "weeklyTrend",
+      "type": "Double",
+      "description": "Difference between weeklyAverage and previousWeekAverage; positive means improving mood"
     },
     {
-      "name": "monthlyMoodChartData",
-      "type": "[(date: Date, value: Double)]",
-      "description": "Daily average mood values for the past 30 days for trend chart"
+      "name": "monthlyAverages",
+      "type": "[(month: String, average: Double)]",
+      "description": "Per-month average mood ratings for the last 6 months, used for trend line chart"
     },
     {
-      "name": "emotionFrequencyData",
-      "type": "[(emotion: EmotionType, count: Int)]",
-      "description": "Frequency count of each emotion type over the past 30 days, sorted descending"
+      "name": "emotionFrequency",
+      "type": "[(emotion: MoodEmotion, count: Int)]",
+      "description": "Frequency count of each emotion across all entries, sorted descending for pie chart"
     },
     {
-      "name": "activityMoodCorrelations",
-      "type": "[(activity: ActivityTag, averageMood: Double, count: Int)]",
-      "description": "Average mood level associated with each activity tag, sorted by average mood descending"
+      "name": "dominantEmotion",
+      "type": "MoodEmotion?",
+      "description": "The most frequently logged emotion in the last 30 days"
     },
     {
-      "name": "socialContextMoodAverages",
-      "type": "[(context: SocialContext, averageMood: Double)]",
-      "description": "Average mood when in each social context over the past 30 days"
-    },
-    {
-      "name": "dayOfWeekAverages",
-      "type": "[Double]",
-      "description": "Array of 7 average mood values indexed by weekday (0=Mon..6=Sun) over all history"
-    },
-    {
-      "name": "timeOfDayAverages",
-      "type": "[(hour: Int, averageMood: Double)]",
-      "description": "Average mood grouped by hour of day to reveal daily rhythm patterns"
+      "name": "activityMoodCorrelation",
+      "type": "[(activity: MoodActivity, avgMood: Double)]",
+      "description": "Average mood rating grouped by activity tag, revealing which activities correlate with higher moods"
     },
     {
       "name": "sleepMoodCorrelation",
       "type": "Double",
-      "description": "Pearson correlation coefficient between sleep quality and mood level over the past 30 days"
+      "description": "Pearson correlation coefficient between sleep quality and mood rating over last 30 entries"
+    },
+    {
+      "name": "energyMoodCorrelation",
+      "type": "Double",
+      "description": "Pearson correlation coefficient between energy level and mood rating over last 30 entries"
+    },
+    {
+      "name": "bestDayOfWeek",
+      "type": "String",
+      "description": "Day of the week with the highest average mood rating (e.g. 'Saturday')"
+    },
+    {
+      "name": "worstDayOfWeek",
+      "type": "String",
+      "description": "Day of the week with the lowest average mood rating"
     },
     {
       "name": "goalProgress",
       "type": "Double",
-      "description": "Fraction of daily check-in goal met today (e.g., 2 of 3 check-ins = 0.67)"
+      "description": "Percentage of days this week with a logged entry (0.0 to 1.0), targeting daily journaling"
     },
     {
-      "name": "moodVolatility",
-      "type": "Double",
-      "description": "Standard deviation of mood levels over the past 7 days; high volatility triggers stability insights"
+      "name": "calendarHeatmapData",
+      "type": "[Date: Int]",
+      "description": "Dictionary mapping dates to mood ratings for the year-in-pixels calendar view"
     },
     {
-      "name": "generatedInsights",
-      "type": "[InsightItem]",
-      "description": "Dynamic insight cards: top mood booster activity, worst day pattern, sleep impact, social correlation, streak milestone, volatility alert, and weather impact"
+      "name": "moodDistribution",
+      "type": "[Int: Int]",
+      "description": "Histogram of mood ratings (1-10) showing how often each rating was used"
+    },
+    {
+      "name": "insights",
+      "type": "[MoodInsight]",
+      "description": "Array of computed text insights based on trends, correlations, streaks, and anomalies"
     }
   ],
   "domainLogic": {
     "dailyGoal": {
-      "description": "Number of mood check-ins per day",
-      "defaultValue": "2"
+      "description": "Log at least one mood entry per day to maintain streak and build self-awareness habit",
+      "defaultValue": "1 entry per day"
     },
-    "streakDefinition": "A day counts as active if it has at least one mood check-in entry. Streak breaks if any calendar day has zero entries.",
-    "trendAnalysis": "Compare current week's average mood to previous week. Track 30-day moving average and flag when current week deviates by more than 1 point. Compute 7-day mood volatility (standard deviation) and flag when above 2.0 as 'emotionally turbulent period'.",
+    "streakDefinition": "A streak day requires at least one entry with a mood rating. The streak breaks if a calendar day passes with zero entries. Streaks reset at midnight local time.",
+    "trendAnalysis": "Compare current 7-day rolling average against previous 7-day average. Track month-over-month average mood. Detect sustained downtrends (3+ consecutive weeks declining) and uptrends. Flag anomalies where a single day deviates more than 3 points from the 7-day average.",
     "insights": [
-      "Mood Booster: identify the activity tag with highest average associated mood (min 3 occurrences) \u2014 e.g., 'Exercise days average 7.8 mood vs 5.2 overall'",
-      "Mood Drain: identify activity or social context with lowest average mood correlation \u2014 e.g., 'Work alone days average 4.1'",
-      "Best Day: which day of week has historically highest mood \u2014 e.g., 'Saturdays are your happiest day (avg 7.5)'",
-      "Sleep Impact: when sleep quality \u2265 4, show average mood vs when sleep quality \u2264 2 \u2014 e.g., 'Good sleep = 2.3 points higher mood'",
-      "Social Insight: compare mood when alone vs with friends/partner \u2014 e.g., 'You're 1.8 points happier with friends'",
-      "Streak Milestone: celebrate at 7, 14, 30, 60, 100, 365 day streaks with encouraging messages",
-      "Volatility Alert: when 7-day standard deviation > 2.0, suggest grounding activities or reflection",
-      "Weather Pattern: if enough weather data, correlate weather types with mood averages",
-      "Time Awareness: identify best and worst times of day for mood \u2014 e.g., 'Your mood peaks at 2pm and dips at 9pm'",
-      "Emotional Diversity: track how many unique emotions logged in past week; low diversity may indicate emotional suppression",
-      "Gratitude Effect: compare mood on days with gratitude notes vs without"
+      "Weekly trend insight: 'Your mood improved by X.X points compared to last week' or 'Your mood dipped this week'",
+      "Activity correlation: 'You tend to feel best on days involving [activity] (avg X.X vs overall X.X)'",
+      "Sleep impact: 'Better sleep quality correlates with +X.X mood points for you'",
+      "Best/worst day: 'Saturdays are consistently your happiest day (avg X.X)'",
+      "Emotion pattern: 'You've felt [emotion] X times this month \u2014 that's more/less than usual'",
+      "Streak motivation: 'You've logged your mood X days in a row \u2014 keep the streak alive!'",
+      "Energy link: 'Your energy and mood are strongly correlated (r=0.XX) \u2014 boosting energy may help mood'",
+      "Social insight: 'You rate your mood X.X points higher when around others vs alone'",
+      "Monthly reflection: 'Your average mood this month is X.X \u2014 your best/worst month in 6 months'",
+      "Anomaly alert: 'Yesterday's rating of X was unusually low for you \u2014 check in with yourself'"
     ]
   }
 }

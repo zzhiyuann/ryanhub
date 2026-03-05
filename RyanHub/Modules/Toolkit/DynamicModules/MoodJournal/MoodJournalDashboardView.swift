@@ -8,27 +8,21 @@ struct MoodJournalDashboardView: View {
         ScrollView {
             VStack(spacing: HubLayout.sectionSpacing) {
 
-                // Progress Ring
+                // Summary Card
                 HubCard {
-                    HStack(spacing: 20) {
-                        ProgressRingView(
-                            progress: Double(viewModel.todayEntries.count) / Double(2),
-                            current: "\(viewModel.todayEntries.count)",
-                            unit: "today",
-                            goal: "of 2",
-                            color: .hubPrimary,
-                            size: 100
-                        )
-
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Number of mood check-ins per day")
-                                .font(.hubBody)
-                                .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
-                            Text("\(viewModel.entries.count) total entries")
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("\(viewModel.todayEntries.count)")
+                                .font(.system(size: 32, weight: .bold, design: .rounded))
+                                .foregroundStyle(Color.hubPrimary)
+                            Text("Today's entries")
                                 .font(.hubCaption)
                                 .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
                         }
                         Spacer()
+                        Text("\(viewModel.entries.count) total")
+                            .font(.hubCaption)
+                            .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
                     }
                 }
 
@@ -38,14 +32,8 @@ struct MoodJournalDashboardView: View {
                     StatCard(
                         title: "Today",
                         value: "\(viewModel.todayEntries.count)",
-                        icon: "brain.head.profile",
+                        icon: "face.smiling",
                         color: .hubPrimary
-                    )
-                    StatCard(
-                        title: "This Week",
-                        value: "\(viewModel.weeklyChartData.reduce(0) { $0 + Int($1.value) })",
-                        icon: "calendar",
-                        color: .hubPrimaryLight
                     )
                     StatCard(
                         title: "Streak",
@@ -54,10 +42,16 @@ struct MoodJournalDashboardView: View {
                         color: .hubAccentYellow
                     )
                     StatCard(
+                        title: "Best",
+                        value: "\(viewModel.longestStreak)d",
+                        icon: "trophy.fill",
+                        color: .hubAccentGreen
+                    )
+                    StatCard(
                         title: "Total",
                         value: "\(viewModel.entries.count)",
                         icon: "chart.bar.fill",
-                        color: .hubAccentGreen
+                        color: .hubPrimaryLight
                     )
                 }
 

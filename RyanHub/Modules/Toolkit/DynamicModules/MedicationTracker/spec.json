@@ -1,0 +1,339 @@
+{
+  "moduleId": "medicationTracker",
+  "moduleName": "MedicationTracker",
+  "displayName": "Medication Tracker",
+  "shortName": "Medications",
+  "subtitle": "Track doses, schedules & adherence",
+  "icon": "pills.fill",
+  "iconColor": "hubAccentGreen",
+  "relevanceKeywords": [
+    "medication",
+    "medicine",
+    "pills",
+    "dose",
+    "prescription",
+    "adherence",
+    "pharmacy",
+    "refill",
+    "schedule",
+    "drug"
+  ],
+  "dataFields": [
+    {
+      "name": "medicationName",
+      "type": "String",
+      "label": "Medication Name",
+      "control": "text"
+    },
+    {
+      "name": "dosageAmount",
+      "type": "Double",
+      "label": "Dosage Amount",
+      "control": "stepper"
+    },
+    {
+      "name": "dosageUnit",
+      "type": "DosageUnit",
+      "label": "Dosage Unit",
+      "control": "picker"
+    },
+    {
+      "name": "medicationForm",
+      "type": "MedicationForm",
+      "label": "Form",
+      "control": "picker"
+    },
+    {
+      "name": "quantity",
+      "type": "Int",
+      "label": "Quantity Taken",
+      "control": "stepper"
+    },
+    {
+      "name": "scheduledTime",
+      "type": "Date",
+      "label": "Scheduled Time",
+      "control": "datePicker"
+    },
+    {
+      "name": "adherenceStatus",
+      "type": "AdherenceStatus",
+      "label": "Status",
+      "control": "picker"
+    },
+    {
+      "name": "withFood",
+      "type": "Bool",
+      "label": "Taken with Food",
+      "control": "toggle"
+    },
+    {
+      "name": "sideEffectNoted",
+      "type": "Bool",
+      "label": "Side Effect Noted",
+      "control": "toggle"
+    },
+    {
+      "name": "notes",
+      "type": "String",
+      "label": "Notes",
+      "control": "text"
+    }
+  ],
+  "enums": [
+    {
+      "name": "MedicationForm",
+      "cases": [
+        {
+          "name": "pill",
+          "displayName": "Pill",
+          "icon": "pills.fill"
+        },
+        {
+          "name": "capsule",
+          "displayName": "Capsule",
+          "icon": "capsule.fill"
+        },
+        {
+          "name": "tablet",
+          "displayName": "Tablet",
+          "icon": "cross.vial.fill"
+        },
+        {
+          "name": "liquid",
+          "displayName": "Liquid",
+          "icon": "drop.fill"
+        },
+        {
+          "name": "injection",
+          "displayName": "Injection",
+          "icon": "syringe.fill"
+        },
+        {
+          "name": "inhaler",
+          "displayName": "Inhaler",
+          "icon": "lungs.fill"
+        },
+        {
+          "name": "topical",
+          "displayName": "Topical / Cream",
+          "icon": "hand.raised.fill"
+        },
+        {
+          "name": "drops",
+          "displayName": "Drops",
+          "icon": "drop.triangle.fill"
+        },
+        {
+          "name": "patch",
+          "displayName": "Patch",
+          "icon": "bandage.fill"
+        },
+        {
+          "name": "powder",
+          "displayName": "Powder",
+          "icon": "aqi.medium"
+        }
+      ]
+    },
+    {
+      "name": "DosageUnit",
+      "cases": [
+        {
+          "name": "mg",
+          "displayName": "mg",
+          "icon": "scalemass.fill"
+        },
+        {
+          "name": "mcg",
+          "displayName": "mcg",
+          "icon": "scalemass"
+        },
+        {
+          "name": "ml",
+          "displayName": "mL",
+          "icon": "drop.fill"
+        },
+        {
+          "name": "units",
+          "displayName": "Units",
+          "icon": "number"
+        },
+        {
+          "name": "puffs",
+          "displayName": "Puffs",
+          "icon": "wind"
+        },
+        {
+          "name": "drops",
+          "displayName": "Drops",
+          "icon": "drop.triangle.fill"
+        },
+        {
+          "name": "tablets",
+          "displayName": "Tablets",
+          "icon": "pills.fill"
+        },
+        {
+          "name": "patches",
+          "displayName": "Patches",
+          "icon": "bandage.fill"
+        },
+        {
+          "name": "tsp",
+          "displayName": "tsp",
+          "icon": "spoon"
+        }
+      ]
+    },
+    {
+      "name": "AdherenceStatus",
+      "cases": [
+        {
+          "name": "onTime",
+          "displayName": "On Time",
+          "icon": "checkmark.circle.fill"
+        },
+        {
+          "name": "late",
+          "displayName": "Late",
+          "icon": "clock.badge.exclamationmark.fill"
+        },
+        {
+          "name": "missed",
+          "displayName": "Missed",
+          "icon": "xmark.circle.fill"
+        },
+        {
+          "name": "skipped",
+          "displayName": "Skipped",
+          "icon": "forward.fill"
+        }
+      ]
+    }
+  ],
+  "views": [
+    {
+      "name": "DashboardView",
+      "purpose": "Today's medication overview showing adherence ring, active medications list with take/skip actions, current streak, and quick-log FAB. Each medication row shows scheduled time, dosage, and status badge.",
+      "components": [
+        "ProgressRingView",
+        "StatGrid",
+        "QuickEntryFAB"
+      ]
+    },
+    {
+      "name": "EntrySheet",
+      "purpose": "Quick dose-logging modal. Medication name with autocomplete from history, form picker with icons, dosage amount stepper with unit picker, scheduled time, adherence status selector, with-food toggle, side effect toggle, and notes field.",
+      "components": [
+        "QuickEntrySheet",
+        "EntryFormSection"
+      ]
+    },
+    {
+      "name": "HistoryView",
+      "purpose": "Calendar heatmap colored by daily adherence rate (green=100%, yellow=partial, red=missed). Tapping a day shows all doses for that date grouped by medication. Filter by specific medication. Swipeable month navigation.",
+      "components": [
+        "CalendarHeatmap"
+      ]
+    },
+    {
+      "name": "AnalyticsView",
+      "purpose": "Multi-section analytics: 7/30/90-day adherence trend line chart, per-medication adherence bar chart, time-of-day distribution showing when doses are most often missed, side effect frequency tracker, and AI-generated insights about patterns (e.g., 'You miss evening doses 3x more than morning').",
+      "components": [
+        "ModuleChartView",
+        "InsightsList"
+      ]
+    }
+  ],
+  "viewModelComputedProperties": [
+    {
+      "name": "todayDoses",
+      "type": "[Entry]",
+      "description": "All dose entries logged today, sorted by scheduledTime"
+    },
+    {
+      "name": "todayAdherenceRate",
+      "type": "Double",
+      "description": "Percentage of today's doses with status onTime out of total today doses (onTime + late + missed + skipped). Returns 1.0 if no doses today."
+    },
+    {
+      "name": "weeklyAdherenceRate",
+      "type": "Double",
+      "description": "Percentage of doses taken on time or late (not missed/skipped) over the past 7 days"
+    },
+    {
+      "name": "monthlyAdherenceRate",
+      "type": "Double",
+      "description": "Same calculation over past 30 days for trend comparison"
+    },
+    {
+      "name": "currentStreak",
+      "type": "Int",
+      "description": "Consecutive days ending today where every logged dose has status onTime or late (no missed doses). A day with zero entries breaks the streak."
+    },
+    {
+      "name": "longestStreak",
+      "type": "Int",
+      "description": "Maximum adherence streak ever recorded across all history"
+    },
+    {
+      "name": "uniqueMedications",
+      "type": "[String]",
+      "description": "Distinct medication names from all entries, sorted alphabetically, used for filter dropdowns and per-med analytics"
+    },
+    {
+      "name": "adherenceByMedication",
+      "type": "[(String, Double)]",
+      "description": "For each unique medication, compute adherence rate (onTime+late / total). Sorted by adherence ascending to highlight problem medications first."
+    },
+    {
+      "name": "weeklyTrendData",
+      "type": "[(Date, Double)]",
+      "description": "Daily adherence rate for the past 7 days as (date, rate) tuples for line chart rendering"
+    },
+    {
+      "name": "monthlyTrendData",
+      "type": "[(Date, Double)]",
+      "description": "Daily adherence rate for past 30 days for the extended trend chart"
+    },
+    {
+      "name": "mostMissedTimeSlot",
+      "type": "String",
+      "description": "Categorize scheduledTime into Morning (5-12), Afternoon (12-17), Evening (17-21), Night (21-5). Return the slot with highest miss rate."
+    },
+    {
+      "name": "sideEffectRate",
+      "type": "Double",
+      "description": "Percentage of all dose entries where sideEffectNoted is true"
+    },
+    {
+      "name": "todayDoseCount",
+      "type": "Int",
+      "description": "Total number of doses logged today for the stat grid"
+    },
+    {
+      "name": "insights",
+      "type": "[String]",
+      "description": "Array of human-readable insight strings generated from data patterns: streak milestones, adherence changes week-over-week, most/least adherent medications, time-slot vulnerability, side effect correlations"
+    }
+  ],
+  "domainLogic": {
+    "dailyGoal": {
+      "description": "Target number of scheduled medication doses per day. Unlike hydration where everyone has a similar goal, this is highly individual. Default represents a common multi-medication regimen.",
+      "defaultValue": "4"
+    },
+    "streakDefinition": "A day counts toward the streak if at least one dose was logged AND zero doses have adherenceStatus == .missed. Days with only .onTime and .late statuses are streak-valid. A day with no entries at all breaks the streak (implies all doses were missed).",
+    "trendAnalysis": "Primary metric: weekly adherence rate compared to previous week (delta percentage). Secondary: per-medication adherence trend (improving vs declining). Tertiary: time-of-day pattern analysis \u2014 compute miss rate by 4 time slots (morning/afternoon/evening/night) to identify vulnerable windows. Flag any medication where adherence drops below 80% in the past 7 days.",
+    "insights": [
+      "Streak milestone celebrations: 7, 14, 30, 60, 90, 180, 365 days",
+      "Week-over-week adherence change: 'Your adherence improved 12% this week vs last week'",
+      "Time vulnerability: 'Evening doses are missed 3x more often than morning doses'",
+      "Per-medication alert: 'Metformin adherence dropped to 60% this week \u2014 down from 90% last week'",
+      "Side effect correlation: '40% of Ibuprofen doses had side effects noted \u2014 consider discussing with your doctor'",
+      "Consistency recognition: 'You've taken all morning medications on time for 14 consecutive days'",
+      "With-food pattern: '70% of doses marked as taken without food \u2014 check if any require food'",
+      "Weekend vs weekday: 'Your weekend adherence (65%) is significantly lower than weekdays (92%)'"
+    ]
+  }
+}

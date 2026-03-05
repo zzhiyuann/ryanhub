@@ -1,0 +1,291 @@
+{
+  "moduleId": "gratitudeJournal",
+  "moduleName": "GratitudeJournal",
+  "displayName": "Gratitude Journal",
+  "shortName": "Gratitude",
+  "subtitle": "3 things you're grateful for, every day",
+  "icon": "heart.text.clipboard",
+  "iconColor": "hubAccentYellow",
+  "relevanceKeywords": [
+    "gratitude",
+    "grateful",
+    "thankful",
+    "journal",
+    "wellbeing",
+    "mindfulness",
+    "positivity",
+    "reflection",
+    "daily",
+    "appreciation"
+  ],
+  "dataFields": [
+    {
+      "name": "gratitudeText",
+      "type": "String",
+      "label": "I'm grateful for\u2026",
+      "control": "text"
+    },
+    {
+      "name": "category",
+      "type": "GratitudeCategory",
+      "label": "Category",
+      "control": "picker"
+    },
+    {
+      "name": "intensity",
+      "type": "Int",
+      "label": "How deeply grateful (1\u20135)",
+      "control": "slider"
+    },
+    {
+      "name": "mood",
+      "type": "MoodLevel",
+      "label": "Current Mood",
+      "control": "picker"
+    },
+    {
+      "name": "isHighlight",
+      "type": "Bool",
+      "label": "Mark as highlight",
+      "control": "toggle"
+    }
+  ],
+  "enums": [
+    {
+      "name": "GratitudeCategory",
+      "cases": [
+        {
+          "name": "people",
+          "displayName": "People",
+          "icon": "person.2.fill"
+        },
+        {
+          "name": "health",
+          "displayName": "Health",
+          "icon": "heart.fill"
+        },
+        {
+          "name": "work",
+          "displayName": "Work & Career",
+          "icon": "briefcase.fill"
+        },
+        {
+          "name": "nature",
+          "displayName": "Nature",
+          "icon": "leaf.fill"
+        },
+        {
+          "name": "experiences",
+          "displayName": "Experiences",
+          "icon": "sparkles"
+        },
+        {
+          "name": "growth",
+          "displayName": "Personal Growth",
+          "icon": "arrow.up.forward.circle.fill"
+        },
+        {
+          "name": "comforts",
+          "displayName": "Daily Comforts",
+          "icon": "cup.and.saucer.fill"
+        },
+        {
+          "name": "achievements",
+          "displayName": "Achievements",
+          "icon": "trophy.fill"
+        },
+        {
+          "name": "relationships",
+          "displayName": "Relationships",
+          "icon": "heart.circle.fill"
+        },
+        {
+          "name": "other",
+          "displayName": "Other",
+          "icon": "ellipsis.circle.fill"
+        }
+      ]
+    },
+    {
+      "name": "MoodLevel",
+      "cases": [
+        {
+          "name": "amazing",
+          "displayName": "Amazing",
+          "icon": "sun.max.fill"
+        },
+        {
+          "name": "good",
+          "displayName": "Good",
+          "icon": "face.smiling"
+        },
+        {
+          "name": "okay",
+          "displayName": "Okay",
+          "icon": "cloud.sun.fill"
+        },
+        {
+          "name": "low",
+          "displayName": "Low",
+          "icon": "cloud.fill"
+        },
+        {
+          "name": "rough",
+          "displayName": "Rough",
+          "icon": "cloud.rain.fill"
+        }
+      ]
+    }
+  ],
+  "views": [
+    {
+      "name": "DashboardView",
+      "purpose": "Shows today's gratitude entries with a 3/3 progress ring, current streak flame counter, mood snapshot, and quick-add floating button. Highlights section shows starred entries from the past week.",
+      "components": [
+        "ProgressRingView",
+        "StatGrid",
+        "QuickEntryFAB",
+        "HighlightCarousel"
+      ]
+    },
+    {
+      "name": "EntrySheet",
+      "purpose": "Quick entry modal: large text field for the gratitude, horizontal scrolling category chips with icons, intensity slider with emoji anchors (\ud83d\ude42\u2192\ud83e\udd70), mood picker, highlight toggle. Supports adding up to 3 entries in one session without dismissing.",
+      "components": [
+        "QuickEntrySheet",
+        "EntryFormSection",
+        "CategoryChipRow"
+      ]
+    },
+    {
+      "name": "HistoryView",
+      "purpose": "Calendar heatmap colored by entry count per day (0=empty, 1-2=light, 3=full). Tapping a day shows that day's entries grouped as cards. Filter by category. Search by keyword.",
+      "components": [
+        "CalendarHeatmap",
+        "EntryCardList",
+        "FilterBar"
+      ]
+    },
+    {
+      "name": "AnalyticsView",
+      "purpose": "Multi-section analytics: category pie chart, mood trend line over 30 days, intensity distribution bar chart, streak history timeline, weekly completion rate, and AI-style insight cards.",
+      "components": [
+        "ModuleChartView",
+        "InsightsList",
+        "CategoryPieChart",
+        "MoodTrendLine",
+        "StreakTimeline"
+      ]
+    }
+  ],
+  "viewModelComputedProperties": [
+    {
+      "name": "todayEntries",
+      "type": "[GratitudeJournalEntry]",
+      "description": "All entries logged today, sorted by creation time"
+    },
+    {
+      "name": "todayCount",
+      "type": "Int",
+      "description": "Number of gratitude entries logged today (target: 3)"
+    },
+    {
+      "name": "dailyGoalProgress",
+      "type": "Double",
+      "description": "todayCount / dailyGoal clamped to 0...1 for the progress ring"
+    },
+    {
+      "name": "currentStreak",
+      "type": "Int",
+      "description": "Consecutive days with at least 3 entries, counting back from today (breaks if a day has <3)"
+    },
+    {
+      "name": "longestStreak",
+      "type": "Int",
+      "description": "All-time longest streak of consecutive days meeting the daily goal"
+    },
+    {
+      "name": "weeklyAverage",
+      "type": "Double",
+      "description": "Average entries per day over the last 7 days"
+    },
+    {
+      "name": "weeklyTrend",
+      "type": "Double",
+      "description": "Percentage change: (thisWeekAvg - lastWeekAvg) / lastWeekAvg. Positive = improving consistency"
+    },
+    {
+      "name": "categoryDistribution",
+      "type": "[(GratitudeCategory, Int)]",
+      "description": "Count of entries per category over the last 30 days, sorted descending for pie chart"
+    },
+    {
+      "name": "categoryDiversityScore",
+      "type": "Double",
+      "description": "Shannon entropy of category distribution normalized to 0-1. Higher = more diverse gratitude sources"
+    },
+    {
+      "name": "averageMood",
+      "type": "Double",
+      "description": "Numeric average of mood levels over last 7 days (amazing=5, rough=1)"
+    },
+    {
+      "name": "moodTrend",
+      "type": "[DailyMoodPoint]",
+      "description": "Array of (date, averageMood) for the last 30 days for the mood trend line chart"
+    },
+    {
+      "name": "averageIntensity",
+      "type": "Double",
+      "description": "Mean intensity rating across all entries in the last 30 days"
+    },
+    {
+      "name": "completionRate",
+      "type": "Double",
+      "description": "Percentage of days in the last 30 days where the user logged >= 3 entries"
+    },
+    {
+      "name": "totalEntries",
+      "type": "Int",
+      "description": "All-time total number of gratitude entries"
+    },
+    {
+      "name": "totalDaysJournaled",
+      "type": "Int",
+      "description": "Count of unique dates that have at least one entry"
+    },
+    {
+      "name": "highlights",
+      "type": "[GratitudeJournalEntry]",
+      "description": "Entries marked as highlights from the past 7 days for the dashboard carousel"
+    },
+    {
+      "name": "insights",
+      "type": "[GratitudeInsight]",
+      "description": "Computed insight cards: top category this week, streak milestone approaching, mood-gratitude correlation, consistency nudge, category diversity tip"
+    },
+    {
+      "name": "streakHistory",
+      "type": "[(startDate: Date, length: Int)]",
+      "description": "All historical streaks of 3+ days for the streak timeline visualization"
+    }
+  ],
+  "domainLogic": {
+    "dailyGoal": {
+      "description": "Number of gratitude entries to log per day. Research-backed default of 3 items per the Seligman three-good-things exercise.",
+      "defaultValue": "3"
+    },
+    "streakDefinition": "A day counts as 'complete' if the user logs at least 3 gratitude entries (meeting the daily goal). The streak increments for each consecutive calendar day that is complete. Today counts toward the streak if goal is met; if not yet met today, the streak is calculated from yesterday backward. Missing a single day resets the streak to 0.",
+    "trendAnalysis": "Primary trends: (1) Weekly completion rate vs previous week \u2014 are they building consistency? (2) Mood trend \u2014 7-day rolling average of mood mapped to 1-5 scale, plotted over 30 days. (3) Category shift \u2014 compare top-3 categories this week vs last week to surface changes in gratitude focus. (4) Intensity trend \u2014 are they feeling more deeply grateful over time? 14-day rolling average of intensity.",
+    "insights": [
+      "streak_milestone: When within 2 days of a milestone (7, 14, 30, 60, 100, 365), show encouragement with days remaining",
+      "category_concentration: If >60% of entries are one category, suggest exploring other areas of life",
+      "mood_correlation: When 2+ week data exists, compute correlation between daily entry count and mood; surface if positive correlation detected",
+      "consistency_pattern: Identify which days of the week have lowest completion rates and suggest setting reminders",
+      "gratitude_growth: Compare average intensity this month vs last month; celebrate if increasing",
+      "highlight_reflection: On weekends, surface 3 random highlights from the past month for re-reading",
+      "diversity_nudge: If categoryDiversityScore < 0.4 for 2+ weeks, suggest a specific under-represented category to try",
+      "longest_streak_beat: Celebrate immediately when current streak exceeds the previous longest streak"
+    ]
+  }
+}

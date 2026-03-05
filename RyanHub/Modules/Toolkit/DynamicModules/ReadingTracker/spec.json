@@ -1,0 +1,331 @@
+{
+  "moduleId": "readingTracker",
+  "moduleName": "ReadingTracker",
+  "displayName": "Reading Tracker",
+  "shortName": "Reading",
+  "subtitle": "Track books, reading sessions & insights",
+  "icon": "book.fill",
+  "iconColor": "hubPrimary",
+  "relevanceKeywords": [
+    "book",
+    "reading",
+    "pages",
+    "library",
+    "literature",
+    "novel",
+    "author",
+    "bookshelf",
+    "progress",
+    "notes"
+  ],
+  "dataFields": [
+    {
+      "name": "bookTitle",
+      "type": "String",
+      "label": "Book Title",
+      "control": "text"
+    },
+    {
+      "name": "author",
+      "type": "String",
+      "label": "Author",
+      "control": "text"
+    },
+    {
+      "name": "totalPages",
+      "type": "Int",
+      "label": "Total Pages",
+      "control": "stepper"
+    },
+    {
+      "name": "currentPage",
+      "type": "Int",
+      "label": "Current Page",
+      "control": "stepper"
+    },
+    {
+      "name": "pagesRead",
+      "type": "Int",
+      "label": "Pages Read (Session)",
+      "control": "stepper"
+    },
+    {
+      "name": "minutesRead",
+      "type": "Int",
+      "label": "Minutes Read",
+      "control": "stepper"
+    },
+    {
+      "name": "status",
+      "type": "ReadingStatus",
+      "label": "Status",
+      "control": "picker"
+    },
+    {
+      "name": "genre",
+      "type": "BookGenre",
+      "label": "Genre",
+      "control": "picker"
+    },
+    {
+      "name": "rating",
+      "type": "Double",
+      "label": "Rating",
+      "control": "slider"
+    },
+    {
+      "name": "notes",
+      "type": "String",
+      "label": "Session Notes",
+      "control": "text"
+    }
+  ],
+  "enums": [
+    {
+      "name": "ReadingStatus",
+      "cases": [
+        {
+          "name": "wantToRead",
+          "displayName": "Want to Read",
+          "icon": "bookmark"
+        },
+        {
+          "name": "currentlyReading",
+          "displayName": "Currently Reading",
+          "icon": "book.fill"
+        },
+        {
+          "name": "finished",
+          "displayName": "Finished",
+          "icon": "checkmark.circle.fill"
+        },
+        {
+          "name": "paused",
+          "displayName": "Paused",
+          "icon": "pause.circle.fill"
+        },
+        {
+          "name": "abandoned",
+          "displayName": "Abandoned",
+          "icon": "xmark.circle"
+        }
+      ]
+    },
+    {
+      "name": "BookGenre",
+      "cases": [
+        {
+          "name": "fiction",
+          "displayName": "Fiction",
+          "icon": "text.book.closed.fill"
+        },
+        {
+          "name": "nonFiction",
+          "displayName": "Non-Fiction",
+          "icon": "doc.text.fill"
+        },
+        {
+          "name": "sciFi",
+          "displayName": "Sci-Fi",
+          "icon": "sparkles"
+        },
+        {
+          "name": "fantasy",
+          "displayName": "Fantasy",
+          "icon": "wand.and.stars"
+        },
+        {
+          "name": "mystery",
+          "displayName": "Mystery",
+          "icon": "magnifyingglass"
+        },
+        {
+          "name": "biography",
+          "displayName": "Biography",
+          "icon": "person.fill"
+        },
+        {
+          "name": "selfHelp",
+          "displayName": "Self-Help",
+          "icon": "lightbulb.fill"
+        },
+        {
+          "name": "history",
+          "displayName": "History",
+          "icon": "clock.fill"
+        },
+        {
+          "name": "science",
+          "displayName": "Science",
+          "icon": "atom"
+        },
+        {
+          "name": "philosophy",
+          "displayName": "Philosophy",
+          "icon": "brain.head.profile"
+        },
+        {
+          "name": "business",
+          "displayName": "Business",
+          "icon": "briefcase.fill"
+        },
+        {
+          "name": "other",
+          "displayName": "Other",
+          "icon": "ellipsis.circle.fill"
+        }
+      ]
+    }
+  ],
+  "views": [
+    {
+      "name": "DashboardView",
+      "purpose": "Shows currently reading books with progress bars, today's reading stats (pages, minutes), reading streak, and annual book goal progress ring",
+      "components": [
+        "StatGrid",
+        "ProgressRingView",
+        "QuickEntryFAB",
+        "CurrentlyReadingList"
+      ]
+    },
+    {
+      "name": "EntrySheet",
+      "purpose": "Log a reading session: select book (or add new), enter pages read, time spent, update current page, and add session notes",
+      "components": [
+        "QuickEntrySheet",
+        "EntryFormSection",
+        "BookPickerSection"
+      ]
+    },
+    {
+      "name": "HistoryView",
+      "purpose": "Calendar heatmap of reading activity by day, date-grouped reading session list with book titles, pages read, and duration per session",
+      "components": [
+        "CalendarHeatmap",
+        "SessionLogList"
+      ]
+    },
+    {
+      "name": "AnalyticsView",
+      "purpose": "Weekly/monthly reading pace chart, genre distribution pie chart, books finished over time bar chart, reading speed trends, and personalized insights",
+      "components": [
+        "ModuleChartView",
+        "InsightsList",
+        "GenreDistributionChart"
+      ]
+    },
+    {
+      "name": "LibraryView",
+      "purpose": "All books organized by reading status tabs (Currently Reading, Finished, Want to Read, Paused) with progress indicators, ratings, and page counts",
+      "components": [
+        "StatusFilterTabs",
+        "BookGrid",
+        "BookDetailCard"
+      ]
+    }
+  ],
+  "viewModelComputedProperties": [
+    {
+      "name": "currentlyReadingBooks",
+      "type": "[(title: String, author: String, currentPage: Int, totalPages: Int, progressPercent: Double)]",
+      "description": "Unique books with status .currentlyReading, deduped by title, using latest entry's currentPage and totalPages to compute progress percentage"
+    },
+    {
+      "name": "totalPagesReadToday",
+      "type": "Int",
+      "description": "Sum of pagesRead for all entries with today's date"
+    },
+    {
+      "name": "totalMinutesReadToday",
+      "type": "Int",
+      "description": "Sum of minutesRead for all entries with today's date"
+    },
+    {
+      "name": "booksFinishedCount",
+      "type": "Int",
+      "description": "Count of unique book titles that have at least one entry with status .finished"
+    },
+    {
+      "name": "currentStreak",
+      "type": "Int",
+      "description": "Consecutive days (ending today or yesterday) with at least one reading session logged"
+    },
+    {
+      "name": "longestStreak",
+      "type": "Int",
+      "description": "Maximum consecutive days with reading activity across all history"
+    },
+    {
+      "name": "weeklyPagesRead",
+      "type": "Int",
+      "description": "Sum of pagesRead for entries in the current calendar week (Monday\u2013Sunday)"
+    },
+    {
+      "name": "weeklyReadingTrend",
+      "type": "[(day: String, pages: Int)]",
+      "description": "Daily pages read for the last 7 days, used for the weekly trend line chart"
+    },
+    {
+      "name": "monthlyBooksFinished",
+      "type": "[(month: String, count: Int)]",
+      "description": "Books finished per month for the last 6 months, used for bar chart"
+    },
+    {
+      "name": "averageReadingSpeed",
+      "type": "Double",
+      "description": "Average pages per hour across all sessions where both pagesRead > 0 and minutesRead > 0; formula: totalPages / (totalMinutes / 60)"
+    },
+    {
+      "name": "averageRating",
+      "type": "Double",
+      "description": "Mean rating across all finished books (entries with status .finished and rating > 0)"
+    },
+    {
+      "name": "genreDistribution",
+      "type": "[(genre: BookGenre, count: Int)]",
+      "description": "Count of unique book titles per genre, sorted descending, for pie/donut chart"
+    },
+    {
+      "name": "yearlyBookGoalProgress",
+      "type": "Double",
+      "description": "Fraction of annual reading goal achieved: booksFinishedThisYear / annualBookGoal"
+    },
+    {
+      "name": "averageSessionDuration",
+      "type": "Int",
+      "description": "Mean minutesRead across all sessions where minutesRead > 0"
+    },
+    {
+      "name": "weeklyPagesVsPreviousWeek",
+      "type": "Double",
+      "description": "Percentage change in total pages read this week vs last week; formula: (thisWeek - lastWeek) / lastWeek * 100"
+    },
+    {
+      "name": "insights",
+      "type": "[String]",
+      "description": "Array of human-readable insight strings generated from current data: streak status, pace changes, genre preferences, reading speed trends, goal progress alerts"
+    }
+  ],
+  "domainLogic": {
+    "dailyGoal": {
+      "description": "Target number of pages to read per day",
+      "defaultValue": "30"
+    },
+    "annualBookGoal": {
+      "description": "Target number of books to finish per year",
+      "defaultValue": "24"
+    },
+    "streakDefinition": "A day counts as active if at least one reading session with pagesRead > 0 is logged on that date. Streak is consecutive qualifying days ending at today or yesterday.",
+    "trendAnalysis": "Track weekly pages read vs previous week (percentage change), monthly books finished trend over 6 months, reading speed trend (pages/hour rolling 7-day average), and session frequency (sessions per week).",
+    "insights": [
+      "Streak milestone alerts: 'You've read 7 days in a row \u2014 your longest streak!'",
+      "Pace comparison: 'You read 40% more pages this week than last week'",
+      "Goal tracking: 'At your current pace, you'll finish 28 books this year (goal: 24)'",
+      "Speed insight: 'Your reading speed has increased to 35 pages/hour, up from 28 last month'",
+      "Genre diversity: 'You've read 5 different genres this month \u2014 your most diverse month yet'",
+      "Book completion: 'You're 85% through Dune \u2014 about 2 sessions away at your pace'",
+      "Inactive nudge: 'You haven't logged a session in 3 days \u2014 pick up where you left off?'",
+      "Top genre: 'Fiction is your most-read genre with 8 books this year'"
+    ]
+  }
+}
