@@ -794,7 +794,9 @@ final class BoboViewModel {
             print("[BoBo] HealthKit auth: success=\(success), error=\(error?.localizedDescription ?? "none")")
             if success {
                 Task { @MainActor in
-                    self?.fetchHealthKitEvents()
+                    self?.fetchHealthKitEvents {
+                        self?.pushTimelineToServer()
+                    }
                 }
             }
         }
@@ -1505,7 +1507,9 @@ final class BoboViewModel {
         stopHealthKitRefreshTimer()
         healthKitRefreshTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
             Task { @MainActor in
-                self?.fetchHealthKitEvents()
+                self?.fetchHealthKitEvents {
+                    self?.pushTimelineToServer()
+                }
             }
         }
     }
@@ -1626,10 +1630,10 @@ final class BoboViewModel {
 
     /// Refresh all health data when app becomes active.
     /// Loads food/activity entries from UserDefaults and queries HealthKit directly.
-    func refreshHealthData() {
+    func refreshHealthData(completion: (() -> Void)? = nil) {
         loadFoodEntries()
         loadActivityEntries()
-        fetchHealthKitEvents()
+        fetchHealthKitEvents(completion: completion)
     }
 
     // MARK: - Direct HealthKit Queries
@@ -1642,9 +1646,10 @@ final class BoboViewModel {
     /// Fetch all HealthKit data for the selected date directly from Apple Health.
     /// This is the simple, correct approach: HealthKit is the persistent store,
     /// just query it and display. No intermediate caching needed.
-    func fetchHealthKitEvents() {
+    func fetchHealthKitEvents(completion: (() -> Void)? = nil) {
         guard let store = Self.healthStore else {
             print("[BoBo] HealthKit not available")
+            completion?()
             return
         }
 
@@ -1855,6 +1860,7 @@ final class BoboViewModel {
             print("[BoBo] HealthKit direct query: fetched \(allEvents.count) events for \(self.selectedDate)")
             Task { @MainActor in
                 self.healthKitEvents = allEvents
+                completion?()
             }
         }
     }

@@ -51,20 +51,22 @@ struct BoboView: View {
         .background(AdaptiveColors.background(for: colorScheme))
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active {
-                viewModel.refreshHealthData()
+                viewModel.refreshHealthData {
+                    viewModel.pushTimelineToServer()
+                }
                 Task {
                     await viewModel.checkAndGenerateNudgesIfNeeded()
                     await viewModel.pullNarrationsFromServer()
                     await viewModel.pullNudgesFromServer()
                 }
-                viewModel.pushTimelineToServer()
                 viewModel.resumeAudioStreamIfNeeded()
                 viewModel.checkForNewPhotos()
             }
         }
         .onChange(of: viewModel.selectedDate) {
-            viewModel.fetchHealthKitEvents()
-            viewModel.pushTimelineToServer()
+            viewModel.fetchHealthKitEvents {
+                viewModel.pushTimelineToServer()
+            }
         }
     }
 
