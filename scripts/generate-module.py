@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
 """
-Dynamic Module Generator for RyanHub
+Dynamic Module Generator v2 for RyanHub — Agent-Driven Pipeline
 
-Takes a natural language description and generates a complete toolkit module:
-  1. Generates a module spec (JSON) via Claude
-  2. Generates Swift source files following exact RyanHub patterns
-  3. Updates the bootstrap file
-  4. Runs xcodegen + xcodebuild with auto-fix loop (max 3 retries)
+Generates sophisticated, multi-view toolkit modules using a phased agent pipeline:
+  Phase 1: Deep Planning (Opus) — analyze real needs, market apps, design architecture
+  Phase 2: Sequential Code Generation (Sonnet) — 8-12 files, cascading context
+  Phase 3: Build + Auto-Fix (max 3 retries)
+  Phase 4: Quality Gate — verify multi-view, rich ViewModel, proper controls
 
 Usage:
-  python3 scripts/generate-module.py --description "Track daily water intake"
+  python3 scripts/generate-module.py --description "Track daily water intake with goals"
   python3 scripts/generate-module.py --batch scenarios.json
-  python3 scripts/generate-module.py --list  # list all generated modules
+  python3 scripts/generate-module.py --list
 """
 
 import argparse
@@ -30,190 +30,512 @@ DYNAMIC_MODULES_DIR = os.path.join(
 BOOTSTRAP_FILE = os.path.join(DYNAMIC_MODULES_DIR, "DynamicModuleBootstrap.swift")
 CLAUDE_PATH = shutil.which("claude") or os.path.expanduser("~/.local/bin/claude")
 
-# Available icon colors matching DynamicModuleDescriptor.iconColor
-ICON_COLORS = [
-    "hubPrimary",
-    "hubPrimaryLight",
-    "hubAccentGreen",
-    "hubAccentRed",
-    "hubAccentYellow",
-]
+# Filter env to prevent Claude nesting error
+CLEAN_ENV = {k: v for k, v in os.environ.items() if k not in ("CLAUDE_CODE", "CLAUDECODE")}
+
+# Available icon colors
+ICON_COLORS = ["hubPrimary", "hubPrimaryLight", "hubAccentGreen", "hubAccentRed", "hubAccentYellow"]
+
+# ─────────────────────────────────────────────────────────────────────
+# Shared component signatures for prompts
+# ─────────────────────────────────────────────────────────────────────
+SHARED_COMPONENTS_DOC = """
+SHARED REUSABLE COMPONENTS (already exist, import SwiftUI + Charts to use):
+
+1. ModuleChartView — Line/area/bar chart via Swift Charts
+   ModuleChartView(
+       title: String,
+       subtitle: String? = nil,
+       dataPoints: [ChartDataPoint],   // ChartDataPoint(label: String, value: Double)
+       style: ChartStyle = .line,       // .line or .bar
+       color: Color = .hubPrimary,
+       showArea: Bool = true
+   )
+
+2. ProgressRingView — Circular goal progress indicator
+   ProgressRingView(
+       progress: Double,    // 0.0 to 1.0
+       current: String,     // center display value
+       unit: String = "",
+       goal: String? = nil, // "of 8 glasses"
+       color: Color = .hubPrimary,
+       size: CGFloat = 120,
+       lineWidth: CGFloat = 10
+   )
+   CompactProgressRing(progress: Double, color: Color = .hubPrimary, size: CGFloat = 24)
+
+3. StatCard — Metric + trend indicator in a card
+   StatCard(
+       title: String,
+       value: String,
+       icon: String = "chart.bar.fill",
+       trend: StatTrend? = nil,
+       color: Color = .hubPrimary
+   )
+   StatTrend.from(change: Double, format: String = "%.1f", invertPositive: Bool = false)
+   StatGrid { StatCard(...) StatCard(...) }  // 2-column grid layout
+
+4. StreakCounter — Current/longest streak with flame
+   StreakCounter(
+       currentStreak: Int,
+       longestStreak: Int,
+       unit: String = "days",
+       isActiveToday: Bool = false
+   )
+
+5. CalendarHeatmap — GitHub-style activity grid
+   CalendarHeatmap(
+       title: String = "Activity",
+       data: [Date: Double],   // date -> intensity value
+       color: Color = .hubPrimary,
+       weeks: Int = 12
+   )
+
+6. QuickEntrySheet — Modal sheet for data entry
+   QuickEntrySheet(
+       title: String,
+       icon: String = "plus.circle.fill",
+       saveLabel: String = "Save",
+       canSave: Bool = true,
+       onSave: @escaping () -> Void
+   ) { content views }
+   EntryFormSection(title: String) { content }
+   QuickEntryFAB(action: { ... })   // Floating action button
+
+7. InsightCard — AI/computed insight display
+   InsightCard(insight: ModuleInsight)
+   ModuleInsight(type: .trend/.achievement/.suggestion/.warning, title: String, message: String)
+   InsightsList(insights: [ModuleInsight])
+"""
+
+DESIGN_SYSTEM_DOC = """
+RYAN HUB DESIGN SYSTEM (must follow exactly):
+
+Colors:
+  - Color.hubPrimary (#6366F1 indigo), Color.hubPrimaryLight, Color.hubAccentGreen, Color.hubAccentRed, Color.hubAccentYellow
+  - AdaptiveColors.textPrimary(for: colorScheme), .textSecondary(for:), .background(for:), .surface(for:), .surfaceSecondary(for:), .border(for:)
+
+Typography:
+  - .hubTitle (28pt bold), .hubHeading (20pt semibold), .hubBody (16pt regular), .hubCaption (13pt medium)
+
+Layout:
+  - HubLayout.standardPadding (16), .sectionSpacing (24), .itemSpacing (12), .cardCornerRadius (16), .buttonCornerRadius (12), .buttonHeight (48)
+
+Components:
+  - HubCard { content }  — trailing closure ViewBuilder, no params
+  - HubButton("Label") { action }  — positional title
+  - HubTextField(placeholder: "Label", text: $binding)  — requires placeholder: label
+  - SectionHeader(title: "Label")  — requires title: label
+
+Patterns:
+  - @Environment(\\.colorScheme) private var colorScheme on every view
+  - @Observable @MainActor on ViewModels (NOT ObservableObject)
+  - async/await for all networking
+  - SwiftUI only, no UIKit
+"""
+
+VM_ARCHITECTURE_DOC = """
+VIEWMODEL ARCHITECTURE for dynamic modules:
+
+The ViewModel manages data via bridge server REST API:
+  - GET  /modules/<moduleId>/data — returns [Entry] array
+  - POST /modules/<moduleId>/data/add — add entry (JSON body)
+  - DELETE /modules/<moduleId>/data?id=<entryId> — delete entry
+
+Required structure:
+  @Observable @MainActor
+  final class <Name>ViewModel {
+      var entries: [<Name>Entry] = []
+      var isLoading = false
+      var errorMessage: String?
+
+      // Bridge server URL
+      private var bridgeBaseURL: String {
+          UserDefaults.standard.string(forKey: "ryanhub_server_url")
+              .flatMap { URL(string: $0)?.host }
+              .map { "http://\\($0):18790" }
+              ?? "http://localhost:18790"
+      }
+
+      init() { Task { await loadData() } }
+
+      func loadData() async { ... }      // GET entries
+      func addEntry(_ entry: ...) async { ... }  // POST entry
+      func deleteEntry(_ entry: ...) async { ... }  // DELETE entry
+
+      // RICH COMPUTED PROPERTIES — this is where sophistication lives:
+      // - todayEntries, weekEntries, monthEntries (date-filtered)
+      // - streak calculations (current streak, longest streak)
+      // - trend analysis (this week vs last week)
+      // - chart data (transform entries to [ChartDataPoint])
+      // - goal progress (progress toward daily/weekly targets)
+      // - insights (computed [ModuleInsight] array)
+      // - averages, totals, distributions
+  }
+
+After loading data, cache for DataProvider:
+  UserDefaults.standard.set(data, forKey: "dynamic_module_<moduleId>_cache")
+"""
 
 
-def call_claude(prompt: str, max_tokens: int = 4096) -> str:
-    """Call Claude CLI with a prompt and return the response."""
-    # Must unset CLAUDE_CODE/CLAUDECODE to avoid nesting error
-    env = {k: v for k, v in os.environ.items() if k not in ("CLAUDE_CODE", "CLAUDECODE")}
+# ─────────────────────────────────────────────────────────────────────
+# Claude API
+# ─────────────────────────────────────────────────────────────────────
+
+def call_claude(prompt: str, model: str = "sonnet", max_tokens: int = 16000, timeout: int = 300) -> str:
+    """Call Claude CLI. Returns response text."""
+    env = dict(CLEAN_ENV)
     env["CLAUDE_CODE_MAX_OUTPUT_TOKENS"] = str(max_tokens)
-    result = subprocess.run(
-        [CLAUDE_PATH, "--print", "--model", "sonnet", "-p", prompt],
-        capture_output=True,
-        text=True,
-        timeout=180,
-        env=env,
-    )
+    try:
+        result = subprocess.run(
+            [CLAUDE_PATH, "--print", "--model", model, "-p", prompt],
+            capture_output=True, text=True, timeout=timeout, env=env,
+        )
+    except subprocess.TimeoutExpired:
+        print(f"  [TIMEOUT] Claude call timed out after {timeout}s")
+        return ""
     if result.returncode != 0:
-        print(f"[ERROR] Claude call failed: {result.stderr[:500]}")
+        print(f"  [ERROR] Claude call failed: {result.stderr[:500]}")
         return ""
     return result.stdout.strip()
 
 
-def generate_spec(description: str) -> dict:
-    """Generate a module specification from a natural language description."""
-    prompt = f"""You are generating a module spec for a personal iOS toolkit app.
-Given this user need: "{description}"
+def extract_json(text: str) -> dict:
+    """Extract JSON object from text, handling markdown fences."""
+    # Try to find JSON block
+    json_match = re.search(r"```(?:json)?\s*\n([\s\S]*?)\n```", text)
+    if json_match:
+        return json.loads(json_match.group(1))
+    # Try raw JSON
+    json_match = re.search(r"\{[\s\S]*\}", text)
+    if json_match:
+        return json.loads(json_match.group())
+    raise ValueError(f"No JSON found in response:\n{text[:500]}")
 
-Generate a JSON object with these exact fields:
-- moduleId: camelCase identifier (e.g. "waterIntake"), no spaces, lowercase start
-- moduleName: PascalCase name (e.g. "WaterIntake"), used in Swift type names
-- displayName: human-readable (e.g. "Water Intake")
-- shortName: 1-2 words for menu bar (e.g. "Water")
-- subtitle: brief description for card (e.g. "Track daily hydration")
-- icon: an SF Symbol name (e.g. "drop.fill"). Must be a real SF Symbol.
-- iconColor: one of {ICON_COLORS}
-- relevanceKeywords: array of 5-10 lowercase keywords for AI context matching (include both English and Chinese if applicable)
-- dataFields: array of objects with:
-  - name: Swift property name (camelCase)
-  - type: Swift type ("String", "Double", "Int", "Bool", "String?", "Double?")
-  - label: human-readable label for the UI
 
-IMPORTANT: Return ONLY valid JSON, no markdown fences, no explanation.
-The dataFields should capture the core data model for tracking this need.
-Include a "note" field (String?) for optional user notes.
+def extract_swift(text: str) -> str:
+    """Extract Swift code from response, stripping markdown fences."""
+    code = re.sub(r"^```swift\s*\n?", "", text)
+    code = re.sub(r"\n?```\s*$", "", code)
+    if not code.strip().startswith("import"):
+        # Try to find import statement
+        idx = code.find("import ")
+        if idx >= 0:
+            code = code[idx:]
+    return code
+
+
+# ─────────────────────────────────────────────────────────────────────
+# Phase 1: Deep Planning (Opus)
+# ─────────────────────────────────────────────────────────────────────
+
+def phase1_deep_planning(description: str) -> dict:
+    """Use Opus to deeply analyze the need and design module architecture."""
+    print("[Phase 1] Deep planning with Opus...")
+
+    prompt = f"""You are an expert iOS app designer and Swift developer.
+
+A user wants a personal tracker module: "{description}"
+
+Your job is to DEEPLY THINK about this — not just the literal request, but:
+1. What does the user ACTUALLY need? What problems are they solving?
+2. What do premium apps in this category do? (Think: top-rated App Store apps)
+3. What analytics, insights, and visualizations would make this genuinely useful?
+4. What gamification elements drive retention? (Streaks, goals, achievements)
+
+Design a RICH, MULTI-VIEW module with sophisticated domain intelligence.
+
+Return a JSON object with this EXACT structure:
+
+{{
+  "moduleId": "camelCase identifier",
+  "moduleName": "PascalCase (for Swift types)",
+  "displayName": "Human-readable name",
+  "shortName": "1-2 word menu label",
+  "subtitle": "Brief tagline for card display",
+  "icon": "SF Symbol name (must be a real SF Symbol)",
+  "iconColor": "one of: {ICON_COLORS}",
+  "relevanceKeywords": ["5-10 lowercase keywords for AI context matching"],
+
+  "dataFields": [
+    {{"name": "fieldName", "type": "SwiftType", "label": "Human Label", "control": "stepper|slider|picker|toggle|text|datePicker"}},
+    ...
+  ],
+
+  "enums": [
+    {{"name": "EnumName", "cases": [{{"name": "caseName", "displayName": "Display", "icon": "sf.symbol"}}]}}
+  ],
+
+  "views": [
+    {{"name": "DashboardView", "purpose": "Main dashboard with stats, progress ring, and quick-add", "components": ["StatGrid", "ProgressRingView", "QuickEntryFAB"]}},
+    {{"name": "EntrySheet", "purpose": "Quick entry modal with domain-appropriate controls", "components": ["QuickEntrySheet", "EntryFormSection"]}},
+    {{"name": "HistoryView", "purpose": "Date-grouped entry list with filtering", "components": ["CalendarHeatmap"]}},
+    {{"name": "AnalyticsView", "purpose": "Charts, trends, and insights", "components": ["ModuleChartView", "InsightsList"]}}
+  ],
+
+  "viewModelComputedProperties": [
+    {{"name": "propertyName", "type": "ReturnType", "description": "What it computes"}},
+    ...
+  ],
+
+  "domainLogic": {{
+    "dailyGoal": {{"description": "...", "defaultValue": "..."}},
+    "streakDefinition": "What counts as an active day",
+    "trendAnalysis": "What trends to track (e.g., weekly average vs previous week)",
+    "insights": ["List of computed insight types"]
+  }}
+}}
+
+RULES:
+- dataFields: DO NOT include "id" or "date" — those are auto-added by the system
+- dataFields: Each field MUST have a "control" specifying the input type:
+  - "stepper" for integer counts (glasses, cups, sets)
+  - "slider" for ratings (1-10 scale, quality 1-5)
+  - "picker" for enums/categories (use with corresponding enum)
+  - "toggle" for booleans
+  - "text" ONLY for free-text fields (notes, descriptions, names)
+  - "datePicker" for time selection
+- NEVER use "text" control for numbers, booleans, dates, or enum categories
+- Include at least 3-4 views (dashboard, entry, history, analytics)
+- Include 8+ viewModelComputedProperties (today stats, weekly stats, streak, trend, chart data, goal progress, insights)
+- enums: Define proper Swift enums for any category/type fields (with displayName and icon)
+- domainLogic: Be specific — real formulas, real insight descriptions
+
+Return ONLY valid JSON. No markdown fences. No explanation.
 """
-    response = call_claude(prompt)
-    # Extract JSON from response (handle potential markdown fences)
-    json_match = re.search(r"\{[\s\S]*\}", response)
-    if not json_match:
-        raise ValueError(f"No JSON found in Claude response:\n{response[:500]}")
-    return json.loads(json_match.group())
+    response = call_claude(prompt, model="opus", max_tokens=8000, timeout=300)
+    spec = extract_json(response)
+
+    # Validate minimum quality
+    if len(spec.get("views", [])) < 3:
+        print("  [WARN] Opus returned fewer than 3 views, adding defaults")
+        if not any(v["name"].endswith("View") and "Dashboard" in v["name"] for v in spec.get("views", [])):
+            spec.setdefault("views", []).append({
+                "name": "DashboardView",
+                "purpose": "Main dashboard with key stats",
+                "components": ["StatGrid", "ProgressRingView"]
+            })
+
+    if len(spec.get("viewModelComputedProperties", [])) < 5:
+        print("  [WARN] Fewer than 5 computed properties, adding defaults")
+        defaults = [
+            {"name": "todayEntries", "type": "[Entry]", "description": "Entries from today"},
+            {"name": "currentStreak", "type": "Int", "description": "Current consecutive active days"},
+            {"name": "longestStreak", "type": "Int", "description": "Longest ever streak"},
+            {"name": "weeklyChartData", "type": "[ChartDataPoint]", "description": "Chart data for past 7 days"},
+            {"name": "insights", "type": "[ModuleInsight]", "description": "Computed insights array"},
+        ]
+        existing = {p["name"] for p in spec.get("viewModelComputedProperties", [])}
+        for d in defaults:
+            if d["name"] not in existing:
+                spec.setdefault("viewModelComputedProperties", []).append(d)
+
+    print(f"  Module: {spec['moduleName']} ({spec['moduleId']})")
+    print(f"  Views: {len(spec.get('views', []))}")
+    print(f"  Computed properties: {len(spec.get('viewModelComputedProperties', []))}")
+    print(f"  Enums: {len(spec.get('enums', []))}")
+    return spec
 
 
-def generate_data_provider(spec: dict) -> str:
-    """Generate the DataProvider Swift file."""
+# ─────────────────────────────────────────────────────────────────────
+# Phase 2: Sequential Code Generation (Sonnet)
+# ─────────────────────────────────────────────────────────────────────
+
+def phase2_generate_code(spec: dict) -> dict[str, str]:
+    """Generate all module files sequentially, each seeing prior code."""
     name = spec["moduleName"]
     module_id = spec["moduleId"]
-    display_name = spec["displayName"]
-    keywords = spec["relevanceKeywords"]
-    fields = spec["dataFields"]
+    print(f"\n[Phase 2] Generating code for {name}...")
 
-    # Filter out built-in fields
-    fields = [f for f in fields if f["name"] not in ("id", "date")]
+    generated_files: dict[str, str] = {}
 
-    # Build context summary showing recent entries
-    field_descriptions = ", ".join(f['label'] for f in fields if f['name'] != 'note')
+    # 2a. Models (template-generated, but rich)
+    print("  [2a] Generating Models...")
+    models_code = generate_models_v2(spec)
+    generated_files[f"{name}Models.swift"] = models_code
 
-    keywords_str = ", ".join(f'"{k}"' for k in keywords)
+    # 2b. ViewModel (agent-generated for richness)
+    print("  [2b] Generating ViewModel...")
+    vm_code = generate_viewmodel_v2(spec, generated_files)
+    generated_files[f"{name}ViewModel.swift"] = vm_code
 
-    return f'''import Foundation
+    # 2c. Views (agent-generated, each seeing prior code)
+    views = spec.get("views", [])
+    for i, view_spec in enumerate(views):
+        view_name = view_spec["name"]
+        print(f"  [2c.{i+1}] Generating {view_name}...")
+        view_code = generate_view_v2(spec, view_spec, generated_files)
+        generated_files[f"{name}{view_name}.swift"] = view_code
 
-// MARK: - {name} Data Provider
+    # 2d. Root View (ties all views together)
+    print("  [2d] Generating Root View...")
+    root_code = generate_root_view(spec, generated_files)
+    generated_files[f"{name}View.swift"] = root_code
 
-/// Provides {display_name.lower()} data for chat context injection.
-/// Reads from bridge server at /modules/{module_id}/data.
-enum {name}DataProvider: ToolkitDataProvider {{
+    # 2e. DataProvider (template)
+    print("  [2e] Generating DataProvider...")
+    dp_code = generate_data_provider(spec)
+    generated_files[f"{name}DataProvider.swift"] = dp_code
 
-    static let toolkitId = "{module_id}"
-    static let displayName = "{display_name}"
+    # 2f. Registration (template)
+    print("  [2f] Generating Registration...")
+    reg_code = generate_registration(spec)
+    generated_files[f"{name}Registration.swift"] = reg_code
 
-    static let relevanceKeywords: [String] = [
-        {keywords_str}
-    ]
-
-    private static var bridgeBaseURL: String {{
-        UserDefaults.standard.string(forKey: "ryanhub_server_url")
-            .flatMap {{ URL(string: $0)?.host }}
-            .map {{ "http://\\($0):18790" }}
-            ?? "http://localhost:18790"
-    }}
-
-    static func buildContextSummary() -> String? {{
-        // Read data synchronously from cached UserDefaults
-        guard let data = UserDefaults.standard.data(forKey: "dynamic_module_{module_id}_cache"),
-              let entries = try? JSONDecoder().decode([{name}Entry].self, from: data),
-              !entries.isEmpty else {{
-            return nil
-        }}
-
-        var lines: [String] = ["[\\(displayName)]"]
-        lines.append("Total entries: \\(entries.count)")
-
-        // Show last 5 entries
-        let recent = entries.suffix(5)
-        for entry in recent {{
-            lines.append("  - \\(entry.summaryLine)")
-        }}
-
-        // Action hints for the AI agent
-        lines.append("Actions:")
-        lines.append("  - Add entry: curl -X POST http://localhost:18790/modules/{module_id}/data/add -H 'Content-Type: application/json' -d '<json>'")
-        lines.append("  - View all: curl http://localhost:18790/modules/{module_id}/data")
-        lines.append("[End \\(displayName)]")
-        return lines.joined(separator: "\\n")
-    }}
-}}
-'''
+    print(f"  Total files: {len(generated_files)}")
+    return generated_files
 
 
-def generate_models(spec: dict) -> str:
-    """Generate the Models Swift file."""
+def generate_models_v2(spec: dict) -> str:
+    """Generate rich models with enums, computed properties, proper types."""
     name = spec["moduleName"]
-    fields = spec["dataFields"]
+    fields = [f for f in spec["dataFields"] if f["name"] not in ("id", "date")]
+    enums = spec.get("enums", [])
 
-    # Filter out fields that are already provided by the template (id, date)
-    fields = [f for f in fields if f["name"] not in ("id", "date")]
+    prompt = f"""Generate a Swift models file for a module called "{name}".
 
-    # Build struct fields
-    field_lines = []
+MODULE SPEC:
+{json.dumps(spec, indent=2)}
+
+REQUIREMENTS:
+1. Main entry struct: `{name}Entry: Codable, Identifiable`
+   - MUST have: `var id: String = UUID().uuidString`
+   - MUST have: `var date: String = {{ let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd HH:mm"; return f.string(from: Date()) }}()`
+   - Add all dataFields as properties (use proper Swift types)
+   - Add rich computed properties: formattedDate, summaryLine, and domain-specific ones
+
+2. Enums: Generate CaseIterable, Codable, Identifiable enums with:
+   - `var id: String {{ rawValue }}`
+   - `var displayName: String` (switch)
+   - `var icon: String` (SF Symbol, switch)
+   - Each enum from the spec
+
+3. Add any helper computed properties that views/ViewModel will need.
+
+{DESIGN_SYSTEM_DOC}
+
+Return ONLY Swift code. No markdown fences. Start with `import Foundation`.
+"""
+    code = call_claude(prompt, max_tokens=8000)
+    code = extract_swift(code)
+    if not code.strip().startswith("import"):
+        return generate_models_fallback(spec)
+    return code
+
+
+def generate_models_fallback(spec: dict) -> str:
+    """Fallback template for models if agent fails."""
+    name = spec["moduleName"]
+    fields = [f for f in spec["dataFields"] if f["name"] not in ("id", "date")]
+    enums = spec.get("enums", [])
+
+    lines = ["import Foundation", "", f"// MARK: - {name} Models", ""]
+
+    # Enums first
+    for enum_spec in enums:
+        ename = enum_spec["name"]
+        lines.append(f"enum {ename}: String, Codable, CaseIterable, Identifiable {{")
+        for case_spec in enum_spec["cases"]:
+            lines.append(f'    case {case_spec["name"]}')
+        lines.append(f"    var id: String {{ rawValue }}")
+        lines.append(f"    var displayName: String {{")
+        lines.append(f"        switch self {{")
+        for case_spec in enum_spec["cases"]:
+            lines.append(f'        case .{case_spec["name"]}: return "{case_spec["displayName"]}"')
+        lines.append(f"        }}")
+        lines.append(f"    }}")
+        lines.append(f"    var icon: String {{")
+        lines.append(f"        switch self {{")
+        for case_spec in enum_spec["cases"]:
+            icon = case_spec.get("icon", "circle.fill")
+            lines.append(f'        case .{case_spec["name"]}: return "{icon}"')
+        lines.append(f"        }}")
+        lines.append(f"    }}")
+        lines.append("}")
+        lines.append("")
+
+    # Main entry struct
+    lines.append(f"struct {name}Entry: Codable, Identifiable {{")
+    lines.append(f"    var id: String = UUID().uuidString")
+    lines.append(f"    var date: String = {{")
+    lines.append(f'        let f = DateFormatter()')
+    lines.append(f'        f.dateFormat = "yyyy-MM-dd HH:mm"')
+    lines.append(f'        return f.string(from: Date())')
+    lines.append(f"    }}()")
     for f in fields:
-        field_lines.append(f"    var {f['name']}: {f['type']}")
-
-    fields_str = "\n".join(field_lines)
-
-    # Build summary line (use first non-note, non-optional field)
-    summary_parts = []
+        lines.append(f"    var {f['name']}: {f['type']}")
+    lines.append("")
+    lines.append("    var summaryLine: String {")
+    lines.append("        var parts: [String] = [date]")
     for f in fields:
         if f["name"] == "note":
             continue
         if f["type"].endswith("?"):
-            summary_parts.append(
-                f'if let v = {f["name"]} {{ parts.append("\\(v)") }}'
-            )
-        elif f["type"] == "String":
-            summary_parts.append(f'parts.append({f["name"]})')
+            lines.append(f'        if let v = {f["name"]} {{ parts.append("\\(v)") }}')
         else:
-            summary_parts.append(f'parts.append("\\({f["name"]})")')
+            lines.append(f'        parts.append("\\({f["name"]})")')
+    lines.append('        return parts.joined(separator: " | ")')
+    lines.append("    }")
+    lines.append("}")
+    lines.append("")
 
-    summary_code = "\n            ".join(summary_parts) if summary_parts else 'parts.append("entry")'
-
-    return f'''import Foundation
-
-// MARK: - {name} Models
-
-struct {name}Entry: Codable, Identifiable {{
-    var id: String = UUID().uuidString
-    var date: String = {{
-        let f = DateFormatter()
-        f.dateFormat = "yyyy-MM-dd HH:mm"
-        return f.string(from: Date())
-    }}()
-{fields_str}
-
-    /// One-line summary for context injection.
-    var summaryLine: String {{
-        var parts: [String] = [date]
-        {summary_code}
-        return parts.joined(separator: " | ")
-    }}
-}}
-'''
+    return "\n".join(lines)
 
 
-def generate_view_model(spec: dict) -> str:
-    """Generate the ViewModel Swift file."""
+def generate_viewmodel_v2(spec: dict, prior_files: dict[str, str]) -> str:
+    """Generate a rich ViewModel with 8+ computed properties."""
     name = spec["moduleName"]
     module_id = spec["moduleId"]
 
+    # Include the models code so the agent knows exact types
+    models_code = list(prior_files.values())[0] if prior_files else ""
+
+    prompt = f"""Generate a Swift ViewModel for a module called "{name}".
+
+MODELS CODE (already generated — use these exact types):
+```swift
+{models_code}
+```
+
+MODULE SPEC:
+{json.dumps({k: spec[k] for k in ["moduleName", "moduleId", "displayName", "viewModelComputedProperties", "domainLogic", "dataFields"]}, indent=2)}
+
+{VM_ARCHITECTURE_DOC}
+
+REQUIRED COMPUTED PROPERTIES (implement ALL of these):
+{json.dumps(spec.get("viewModelComputedProperties", []), indent=2)}
+
+DOMAIN LOGIC:
+{json.dumps(spec.get("domainLogic", {}), indent=2)}
+
+ADDITIONAL REQUIREMENTS:
+1. Bridge server CRUD (loadData, addEntry, deleteEntry) — same pattern as docs above
+2. Implement EVERY computed property from the spec
+3. Streak calculation: count consecutive days with entries, working backwards from today
+4. Chart data: transform entries into [ChartDataPoint] for ModuleChartView
+5. Insights: return [ModuleInsight] based on patterns (trends, achievements, suggestions)
+6. Date helpers: todayEntries, weekEntries, use Calendar.current.isDate(_:inSameDayAs:)
+7. Cache data to UserDefaults for DataProvider context injection
+
+{DESIGN_SYSTEM_DOC}
+
+CRITICAL: The entry type is `{name}Entry` exactly as defined in the models code above.
+For ChartDataPoint: `ChartDataPoint(label: String, value: Double)` — label is a display string.
+For ModuleInsight: `ModuleInsight(type: .trend/.achievement/.suggestion/.warning, title: String, message: String)`
+
+Return ONLY Swift code. No markdown fences. Start with `import Foundation`.
+"""
+    code = call_claude(prompt, max_tokens=16000, timeout=300)
+    code = extract_swift(code)
+    if not code.strip().startswith("import"):
+        return generate_viewmodel_fallback(spec)
+    return code
+
+
+def generate_viewmodel_fallback(spec: dict) -> str:
+    """Minimal ViewModel fallback."""
+    name = spec["moduleName"]
+    module_id = spec["moduleId"]
     return f'''import Foundation
 import SwiftUI
 
@@ -233,20 +555,87 @@ final class {name}ViewModel {{
             ?? "http://localhost:18790"
     }}
 
-    init() {{
-        Task {{ await loadData() }}
+    init() {{ Task {{ await loadData() }} }}
+
+    // MARK: - Computed Properties
+
+    var todayEntries: [{name}Entry] {{
+        let today = DateFormatter()
+        today.dateFormat = "yyyy-MM-dd"
+        let todayStr = today.string(from: Date())
+        return entries.filter {{ $0.date.hasPrefix(todayStr) }}
     }}
+
+    var currentStreak: Int {{
+        let calendar = Calendar.current
+        let df = DateFormatter()
+        df.dateFormat = "yyyy-MM-dd"
+        let entryDates = Set(entries.compactMap {{ df.date(from: String($0.date.prefix(10))) }}.map {{ calendar.startOfDay(for: $0) }})
+        var streak = 0
+        var day = calendar.startOfDay(for: Date())
+        while entryDates.contains(day) {{
+            streak += 1
+            day = calendar.date(byAdding: .day, value: -1, to: day)!
+        }}
+        return streak
+    }}
+
+    var longestStreak: Int {{
+        let calendar = Calendar.current
+        let df = DateFormatter()
+        df.dateFormat = "yyyy-MM-dd"
+        let sortedDates = entries.compactMap {{ df.date(from: String($0.date.prefix(10))) }}
+            .map {{ calendar.startOfDay(for: $0) }}
+        let unique = Array(Set(sortedDates)).sorted()
+        guard !unique.isEmpty else {{ return 0 }}
+        var longest = 1, current = 1
+        for i in 1..<unique.count {{
+            if calendar.dateComponents([.day], from: unique[i-1], to: unique[i]).day == 1 {{
+                current += 1
+                longest = max(longest, current)
+            }} else {{
+                current = 1
+            }}
+        }}
+        return longest
+    }}
+
+    var weeklyChartData: [ChartDataPoint] {{
+        let calendar = Calendar.current
+        let df = DateFormatter()
+        df.dateFormat = "yyyy-MM-dd"
+        let displayFmt = DateFormatter()
+        displayFmt.dateFormat = "E"
+        var result: [ChartDataPoint] = []
+        for dayOffset in (0..<7).reversed() {{
+            let day = calendar.date(byAdding: .day, value: -dayOffset, to: Date())!
+            let dayStr = df.string(from: day)
+            let count = entries.filter {{ $0.date.hasPrefix(dayStr) }}.count
+            result.append(ChartDataPoint(label: displayFmt.string(from: day), value: Double(count)))
+        }}
+        return result
+    }}
+
+    var insights: [ModuleInsight] {{
+        var result: [ModuleInsight] = []
+        if currentStreak >= 3 {{
+            result.append(ModuleInsight(type: .achievement, title: "\\(currentStreak)-Day Streak!", message: "You've been consistent for \\(currentStreak) days. Keep it up!"))
+        }}
+        if todayEntries.isEmpty {{
+            result.append(ModuleInsight(type: .suggestion, title: "No entries today", message: "Don't forget to log your data for today."))
+        }}
+        return result
+    }}
+
+    // MARK: - CRUD
 
     func loadData() async {{
         isLoading = true
         defer {{ isLoading = false }}
-
         do {{
             let url = URL(string: "\\(bridgeBaseURL)/modules/{module_id}/data")!
             let (data, _) = try await URLSession.shared.data(from: url)
-            let decoder = JSONDecoder()
-            entries = try decoder.decode([{name}Entry].self, from: data)
-            // Cache for DataProvider context injection
+            entries = try JSONDecoder().decode([{name}Entry].self, from: data)
             UserDefaults.standard.set(data, forKey: "dynamic_module_{module_id}_cache")
         }} catch {{
             entries = []
@@ -260,7 +649,7 @@ final class {name}ViewModel {{
             request.httpMethod = "POST"
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             request.httpBody = try JSONEncoder().encode(entry)
-            let _ = try await URLSession.shared.data(for: request)
+            _ = try await URLSession.shared.data(for: request)
             await loadData()
         }} catch {{
             errorMessage = "Failed to add entry"
@@ -272,7 +661,7 @@ final class {name}ViewModel {{
             let url = URL(string: "\\(bridgeBaseURL)/modules/{module_id}/data?id=\\(entry.id)")!
             var request = URLRequest(url: url)
             request.httpMethod = "DELETE"
-            let _ = try await URLSession.shared.data(for: request)
+            _ = try await URLSession.shared.data(for: request)
             await loadData()
         }} catch {{
             errorMessage = "Failed to delete entry"
@@ -282,245 +671,264 @@ final class {name}ViewModel {{
 '''
 
 
-def generate_view(spec: dict) -> str:
-    """Generate the View Swift file using Claude for creative UI layout."""
+def generate_view_v2(spec: dict, view_spec: dict, prior_files: dict[str, str]) -> str:
+    """Generate a single view file, with full context of all prior generated code."""
     name = spec["moduleName"]
-    display_name = spec["displayName"]
-    fields = spec["dataFields"]
-    icon = spec["icon"]
+    view_name = view_spec["name"]
+    purpose = view_spec["purpose"]
+    components = view_spec.get("components", [])
 
-    # Build field descriptions for Claude
-    field_desc = "\n".join(
-        f"  - {f['name']}: {f['type']} ({f['label']})" for f in fields
-    )
+    # Build prior code context (summarize to avoid token overflow)
+    prior_context = ""
+    for fname, code in prior_files.items():
+        prior_context += f"\n// === {fname} ===\n{code}\n"
 
-    prompt = f"""Generate a SwiftUI View for a personal tracker module called "{display_name}".
+    prompt = f"""Generate a SwiftUI view called `{name}{view_name}` for a module called "{spec['displayName']}".
 
-Module name (for types): {name}
-SF Symbol icon: {icon}
-Data model fields:
-{field_desc}
+VIEW PURPOSE: {purpose}
+SHARED COMPONENTS TO USE: {', '.join(components)}
 
-The view must follow these EXACT patterns:
-1. Import SwiftUI only
+PREVIOUSLY GENERATED CODE (use these exact types and APIs):
+{prior_context}
+
+{SHARED_COMPONENTS_DOC}
+
+{DESIGN_SYSTEM_DOC}
+
+CRITICAL RULES:
+1. The struct MUST be named `{name}{view_name}` (e.g., `WaterIntakeDashboardView`)
 2. Use `@Environment(\\.colorScheme) private var colorScheme`
-3. Use `@State private var viewModel = {name}ViewModel()`
-4. Main body: ScrollView with VStack(spacing: HubLayout.sectionSpacing)
-5. Background: `.background(AdaptiveColors.background(for: colorScheme))`
-6. Load data: `.task {{ await viewModel.loadData() }}`
-7. Use these design system components:
-   - Colors: `Color.hubPrimary`, `AdaptiveColors.textPrimary(for: colorScheme)`, `AdaptiveColors.textSecondary(for: colorScheme)`, `AdaptiveColors.surface(for: colorScheme)`, `AdaptiveColors.border(for: colorScheme)`
-   - Layout: `HubLayout.standardPadding`, `HubLayout.sectionSpacing`, `HubLayout.itemSpacing`, `HubLayout.cardCornerRadius`
-   - Typography: `.hubTitle`, `.hubHeading`, `.hubBody`, `.hubCaption`
-8. Include:
-   - A header section with icon and title
-   - A summary card showing total entries count (use `HubCard {{ ... }}`)
-   - A list of recent entries (each in `HubCard {{ ... }}`)
-   - An "Add Entry" section with inputs and a submit button
-   - Swipe-to-delete on entries
-9. Use `@State` for input fields in the add form
-10. Entry model is `{name}Entry` with fields: id (String), date (String), {', '.join(f['name'] + ' (' + f['type'] + ')' for f in fields)}
-11. For optional fields (type ending with ?), use if-let to display
+3. Take `viewModel: {name}ViewModel` as a binding or use @State — but since the root view owns it, accept it as a parameter: `let viewModel: {name}ViewModel`
+4. Use the EXACT shared component APIs from the docs above — do NOT invent parameters
+5. Use proper input controls: Stepper for counts, Slider for ratings, Picker for enums, Toggle for bools, DatePicker for times
+6. NEVER use TextField for numbers, booleans, dates, or categories
+7. Background: `.background(AdaptiveColors.background(for: colorScheme))`
+8. Make it visually rich — this should look like a premium app, not a CRUD form
 
-CRITICAL API RULES — violations will cause compilation errors:
-- `SectionHeader(title: "Label")` — MUST use `title:` parameter label
-- `HubTextField(placeholder: "Label", text: $binding)` — MUST use `placeholder:` parameter label
-- `HubButton("Label") {{ action }}` — title is positional (no label)
-- `HubCard {{ content }}` — trailing closure ViewBuilder, no parameters
-- ViewModel has ONLY these methods: `loadData()`, `addEntry(_ entry: {name}Entry)`, `deleteEntry(_ entry: {name}Entry)`
-- To add: create a `{name}Entry(field1: val1, field2: val2, ...)` then call `await viewModel.addEntry(entry)`
-- To delete: call `await viewModel.deleteEntry(entry)` — pass the WHOLE entry, NOT just the id
-- Do NOT invent methods like `addEntry(field1:field2:...)` or `deleteEntry(id:)` — they don't exist
-
-Return ONLY the Swift code. No markdown fences. No explanation. Start with `import SwiftUI`.
+Return ONLY Swift code. No markdown fences. Start with `import SwiftUI`.
 """
-    try:
-        code = call_claude(prompt, max_tokens=8192)
-    except Exception as e:
-        print(f"  [WARN] Claude view generation failed ({e}), using template fallback")
-        return generate_minimal_view(spec)
-
-    # Strip markdown fences if present
-    code = re.sub(r"^```swift\s*\n?", "", code)
-    code = re.sub(r"\n?```\s*$", "", code)
-
-    # Validate it starts with import
+    code = call_claude(prompt, max_tokens=12000, timeout=240)
+    code = extract_swift(code)
     if not code.strip().startswith("import"):
-        # Fallback: generate a minimal view
-        return generate_minimal_view(spec)
+        # Minimal fallback
+        return f"""import SwiftUI
 
+struct {name}{view_name}: View {{
+    @Environment(\\.colorScheme) private var colorScheme
+    let viewModel: {name}ViewModel
+
+    var body: some View {{
+        ScrollView {{
+            VStack(spacing: HubLayout.sectionSpacing) {{
+                Text("{view_name}")
+                    .font(.hubHeading)
+                    .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+            }}
+            .padding(HubLayout.standardPadding)
+        }}
+        .background(AdaptiveColors.background(for: colorScheme))
+    }}
+}}
+"""
     return code
 
 
-def generate_minimal_view(spec: dict) -> str:
-    """Generate a minimal but functional view as fallback."""
+def generate_root_view(spec: dict, prior_files: dict[str, str]) -> str:
+    """Generate the root view that ties all sub-views together."""
     name = spec["moduleName"]
     display_name = spec["displayName"]
     icon = spec["icon"]
-    fields = [f for f in spec["dataFields"] if f["name"] not in ("id", "date")]
+    views = spec.get("views", [])
 
-    # Build input fields
-    input_states = []
-    input_fields_ui = []
-    entry_init_args = []
+    # Build view names
+    view_structs = [f"{name}{v['name']}" for v in views]
+    view_labels = [v["name"].replace("View", "").replace("Sheet", "") for v in views]
 
-    for f in fields:
-        fname = f["name"]
-        ftype = f["type"]
-        label = f["label"]
-        is_optional = ftype.endswith("?")
-        base_type = ftype.rstrip("?")
+    # Include prior code context (just the struct names and key APIs)
+    prior_summary = ""
+    for fname, code in prior_files.items():
+        # Extract struct/class declarations only for context
+        structs = re.findall(r"(struct|class|enum)\s+\w+", code)
+        prior_summary += f"\n// {fname}: {', '.join(structs)}"
 
-        input_states.append(f'    @State private var input{fname.capitalize()}: String = ""')
+    prompt = f"""Generate the ROOT SwiftUI view for a module called "{display_name}".
 
-        input_fields_ui.append(f'''                    TextField("{label}", text: $input{fname.capitalize()})
-                        .textFieldStyle(.roundedBorder)''')
+MODULE NAME: {name}
+ICON: {icon}
+SUB-VIEWS: {json.dumps([{"struct": s, "label": l, "purpose": v["purpose"]} for s, l, v in zip(view_structs, view_labels, views)], indent=2)}
 
-        if base_type == "Double":
-            val = f"Double(input{fname.capitalize()})" if is_optional else f"Double(input{fname.capitalize()}) ?? 0"
-        elif base_type == "Int":
-            val = f"Int(input{fname.capitalize()})" if is_optional else f"Int(input{fname.capitalize()}) ?? 0"
-        elif base_type == "Bool":
-            val = f"input{fname.capitalize()} == \"true\""
-        elif is_optional:
-            val = f"input{fname.capitalize()}.isEmpty ? nil : input{fname.capitalize()}"
-        else:
-            val = f"input{fname.capitalize()}"
+AVAILABLE TYPES (from prior generated files):
+{prior_summary}
 
-        entry_init_args.append(f"{fname}: {val}")
+The root view MUST:
+1. Be named `{name}View` (this is what gets registered in the module system)
+2. Own the ViewModel: `@State private var viewModel = {name}ViewModel()`
+3. Use a tab/segment control or NavigationStack to switch between sub-views
+4. Pass `viewModel` to each sub-view
+5. Include `.task {{ await viewModel.loadData() }}`
+6. Have an "Add" FAB (floating action button) or toolbar button that presents entry sheet
+7. If there's an entry sheet view, present it via `.sheet(isPresented:)`
 
-    input_states_str = "\n".join(input_states)
-    input_fields_str = "\n".join(input_fields_ui)
-    entry_args_str = ", ".join(entry_init_args)
+PATTERN — use a segmented picker for 2-4 tabs:
+```
+@State private var selectedTab = 0
+Picker("", selection: $selectedTab) {{
+    Text("Dashboard").tag(0)
+    Text("History").tag(1)
+    Text("Analytics").tag(2)
+}}
+.pickerStyle(.segmented)
+```
 
-    # Build entry display
-    display_fields = []
-    for f in fields:
-        fname = f["name"]
-        label = f["label"]
-        if f["type"].endswith("?"):
-            display_fields.append(
-                f'                                if let val = entry.{fname} {{ Text("{label}: \\(val)").font(.hubCaption).foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme)) }}'
-            )
-        else:
-            display_fields.append(
-                f'                                Text("{label}: \\(entry.{fname})").font(.hubCaption).foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))'
-            )
-    display_fields_str = "\n".join(display_fields)
+Then switch on selectedTab to show the right sub-view.
 
-    # Reset fields
-    reset_lines = []
-    for f in fields:
-        reset_lines.append(f'                            input{f["name"].capitalize()} = ""')
-    reset_str = "\n".join(reset_lines)
+{DESIGN_SYSTEM_DOC}
+
+CRITICAL:
+- SectionHeader(title: "Label") — requires title: label
+- HubCard {{ content }} — trailing closure
+- QuickEntryFAB(action: {{ }}) for the add button
+- All sub-views take `viewModel` as `let viewModel: {name}ViewModel`
+- Do NOT duplicate logic from sub-views — just compose them
+
+Return ONLY Swift code. No markdown fences. Start with `import SwiftUI`.
+"""
+    code = call_claude(prompt, max_tokens=8000, timeout=240)
+    code = extract_swift(code)
+    if not code.strip().startswith("import"):
+        return generate_root_view_fallback(spec, view_structs)
+    return code
+
+
+def generate_root_view_fallback(spec: dict, view_structs: list[str]) -> str:
+    """Minimal root view fallback."""
+    name = spec["moduleName"]
+    display_name = spec["displayName"]
+    icon = spec["icon"]
+
+    tab_cases = ""
+    tab_views = ""
+    for i, vs in enumerate(view_structs):
+        label = vs.replace(name, "").replace("View", "").replace("Sheet", "")
+        if "Sheet" in vs or "Entry" in vs:
+            continue  # Skip entry sheets from tabs
+        tab_cases += f'                Text("{label}").tag({i})\n'
+        tab_views += f"""
+                if selectedTab == {i} {{
+                    {vs}(viewModel: viewModel)
+                }}
+"""
 
     return f'''import SwiftUI
 
 struct {name}View: View {{
     @Environment(\\.colorScheme) private var colorScheme
     @State private var viewModel = {name}ViewModel()
-{input_states_str}
+    @State private var selectedTab = 0
+    @State private var showAddSheet = false
 
     var body: some View {{
-        ScrollView {{
-            VStack(spacing: HubLayout.sectionSpacing) {{
-                // Header
-                HStack(spacing: 12) {{
-                    ZStack {{
-                        Circle()
-                            .fill(Color.hubPrimary.opacity(0.12))
-                            .frame(width: 48, height: 48)
-                        Image(systemName: "{icon}")
-                            .font(.system(size: 22, weight: .medium))
-                            .foregroundStyle(Color.hubPrimary)
-                    }}
-                    VStack(alignment: .leading, spacing: 2) {{
-                        Text("{display_name}")
-                            .font(.hubHeading)
-                            .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
-                        Text("\\(viewModel.entries.count) entries")
-                            .font(.hubCaption)
-                            .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
-                    }}
-                    Spacer()
+        VStack(spacing: 0) {{
+            // Header
+            HStack(spacing: 12) {{
+                ZStack {{
+                    Circle()
+                        .fill(Color.hubPrimary.opacity(0.12))
+                        .frame(width: 40, height: 40)
+                    Image(systemName: "{icon}")
+                        .font(.system(size: 18, weight: .medium))
+                        .foregroundStyle(Color.hubPrimary)
                 }}
+                Text("{display_name}")
+                    .font(.hubHeading)
+                    .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                Spacer()
+            }}
+            .padding(.horizontal, HubLayout.standardPadding)
+            .padding(.bottom, 8)
 
-                // Add entry form
-                VStack(spacing: HubLayout.itemSpacing) {{
-                    SectionHeader(title: "Add Entry")
-{input_fields_str}
-                    Button {{
-                        Task {{
-                            let entry = {name}Entry({entry_args_str})
-                            await viewModel.addEntry(entry)
-{reset_str}
-                        }}
-                    }} label: {{
-                        Text("Add")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(.white)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: HubLayout.buttonHeight)
-                            .background(
-                                RoundedRectangle(cornerRadius: HubLayout.buttonCornerRadius)
-                                    .fill(Color.hubPrimary)
-                            )
-                    }}
+            // Tab picker
+            Picker("", selection: $selectedTab) {{
+{tab_cases}            }}
+            .pickerStyle(.segmented)
+            .padding(.horizontal, HubLayout.standardPadding)
+            .padding(.bottom, HubLayout.itemSpacing)
+
+            // Content
+            ZStack(alignment: .bottomTrailing) {{
+{tab_views}
+                QuickEntryFAB {{
+                    showAddSheet = true
                 }}
                 .padding(HubLayout.standardPadding)
-                .background(
-                    RoundedRectangle(cornerRadius: HubLayout.cardCornerRadius)
-                        .fill(AdaptiveColors.surface(for: colorScheme))
-                )
-
-                // Entries list
-                if !viewModel.entries.isEmpty {{
-                    VStack(spacing: HubLayout.itemSpacing) {{
-                        SectionHeader(title: "Recent Entries")
-                        ForEach(viewModel.entries.reversed()) {{ entry in
-                            HStack {{
-                                VStack(alignment: .leading, spacing: 4) {{
-                                    Text(entry.date)
-                                        .font(.hubBody)
-                                        .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
-{display_fields_str}
-                                }}
-                                Spacer()
-                                Button {{
-                                    Task {{ await viewModel.deleteEntry(entry) }}
-                                }} label: {{
-                                    Image(systemName: "trash")
-                                        .font(.system(size: 14))
-                                        .foregroundStyle(Color.hubAccentRed)
-                                }}
-                            }}
-                            .padding(12)
-                            .background(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .fill(AdaptiveColors.surface(for: colorScheme))
-                            )
-                        }}
-                    }}
-                }}
             }}
-            .padding(HubLayout.standardPadding)
         }}
         .background(AdaptiveColors.background(for: colorScheme))
         .task {{ await viewModel.loadData() }}
+        .sheet(isPresented: $showAddSheet) {{
+            Text("Add Entry")
+        }}
+    }}
+}}
+'''
+
+
+def generate_data_provider(spec: dict) -> str:
+    """Generate DataProvider (template, same as v1 but cleaner)."""
+    name = spec["moduleName"]
+    module_id = spec["moduleId"]
+    display_name = spec["displayName"]
+    keywords = spec.get("relevanceKeywords", [])
+    keywords_str = ", ".join(f'"{k}"' for k in keywords)
+
+    return f'''import Foundation
+
+// MARK: - {name} Data Provider
+
+enum {name}DataProvider: ToolkitDataProvider {{
+    static let toolkitId = "{module_id}"
+    static let displayName = "{display_name}"
+    static let relevanceKeywords: [String] = [{keywords_str}]
+
+    private static var bridgeBaseURL: String {{
+        UserDefaults.standard.string(forKey: "ryanhub_server_url")
+            .flatMap {{ URL(string: $0)?.host }}
+            .map {{ "http://\\($0):18790" }}
+            ?? "http://localhost:18790"
+    }}
+
+    static func buildContextSummary() -> String? {{
+        guard let data = UserDefaults.standard.data(forKey: "dynamic_module_{module_id}_cache"),
+              let entries = try? JSONDecoder().decode([{name}Entry].self, from: data),
+              !entries.isEmpty else {{
+            return nil
+        }}
+
+        var lines: [String] = ["[\\(displayName)]"]
+        lines.append("Total entries: \\(entries.count)")
+        let recent = entries.suffix(5)
+        for entry in recent {{
+            lines.append("  - \\(entry.summaryLine)")
+        }}
+        lines.append("Actions:")
+        lines.append("  - Add: POST http://localhost:18790/modules/{module_id}/data/add")
+        lines.append("  - View: GET http://localhost:18790/modules/{module_id}/data")
+        lines.append("[End \\(displayName)]")
+        return lines.joined(separator: "\\n")
     }}
 }}
 '''
 
 
 def generate_registration(spec: dict) -> str:
-    """Generate the Registration Swift file."""
+    """Generate Registration file (template)."""
     name = spec["moduleName"]
     module_id = spec["moduleId"]
     display_name = spec["displayName"]
     short_name = spec["shortName"]
     subtitle = spec["subtitle"]
     icon = spec["icon"]
-    icon_color = spec["iconColor"]
+    icon_color = spec.get("iconColor", "hubPrimary")
 
     return f'''import SwiftUI
 
@@ -544,9 +952,144 @@ extension DynamicModuleRegistry {{
 '''
 
 
+# ─────────────────────────────────────────────────────────────────────
+# Phase 3: Build + Auto-Fix
+# ─────────────────────────────────────────────────────────────────────
+
+def build_project() -> tuple[bool, str]:
+    """Run xcodegen + xcodebuild."""
+    print("  [BUILD] xcodegen generate...")
+    result = subprocess.run(
+        ["xcodegen", "generate"], cwd=RYANHUB_ROOT,
+        capture_output=True, text=True, timeout=30,
+    )
+    if result.returncode != 0:
+        return False, f"xcodegen failed:\n{result.stderr}"
+
+    print("  [BUILD] xcodebuild...")
+    result = subprocess.run(
+        ["xcodebuild", "-scheme", "RyanHub",
+         "-destination", "platform=iOS Simulator,name=iPhone 17 Pro",
+         "build"],
+        cwd=RYANHUB_ROOT, capture_output=True, text=True, timeout=300,
+    )
+    if result.returncode != 0:
+        errors = "\n".join(line for line in result.stdout.split("\n") if "error:" in line)
+        return False, errors or result.stderr[:2000]
+    return True, ""
+
+
+def fix_compilation_errors(spec: dict, module_dir: str, errors: str) -> bool:
+    """Use Claude to fix compilation errors."""
+    files_content = {}
+    for fname in sorted(os.listdir(module_dir)):
+        if fname.endswith(".swift"):
+            with open(os.path.join(module_dir, fname)) as f:
+                files_content[fname] = f.read()
+
+    files_str = "\n\n".join(f"--- {fn} ---\n{c}" for fn, c in files_content.items())
+
+    prompt = f"""Fix these Swift compilation errors in a RyanHub dynamic module.
+
+ERRORS:
+{errors[:3000]}
+
+CURRENT FILES:
+{files_str}
+
+{DESIGN_SYSTEM_DOC}
+
+{SHARED_COMPONENTS_DOC}
+
+CRITICAL API RULES:
+- SectionHeader(title: "Label") — requires `title:` label
+- HubTextField(placeholder: "Label", text: $binding) — requires `placeholder:` label
+- HubButton("Label") {{ action }} — positional title
+- HubCard {{ content }} — trailing closure, no params
+- ViewModel.addEntry(_ entry: {spec['moduleName']}Entry) — takes whole entry
+- ViewModel.deleteEntry(_ entry: {spec['moduleName']}Entry) — takes whole entry
+- ChartDataPoint(label: String, value: Double) — two params
+- ModuleInsight(type: InsightType, title: String, message: String) — three params
+- StatTrend.from(change: Double, format: String, invertPositive: Bool) — static method
+
+Return COMPLETE fixed file contents:
+--- FileName.swift ---
+<complete content>
+--- AnotherFile.swift ---
+<complete content>
+
+Only include files that need changes. No markdown fences. No explanation.
+"""
+    response = call_claude(prompt, max_tokens=16000, timeout=300)
+
+    file_pattern = r"---\s*(\w+\.swift)\s*---\n([\s\S]*?)(?=---\s*\w+\.swift\s*---|$)"
+    matches = re.findall(file_pattern, response)
+    if not matches:
+        print("  [FIX] Could not parse fix response")
+        return False
+
+    for fname, content in matches:
+        content = content.strip()
+        if content:
+            with open(os.path.join(module_dir, fname), "w") as f:
+                f.write(content)
+            print(f"  [FIX] Updated {fname}")
+    return True
+
+
+# ─────────────────────────────────────────────────────────────────────
+# Phase 4: Quality Gate
+# ─────────────────────────────────────────────────────────────────────
+
+def phase4_quality_gate(module_dir: str, spec: dict) -> list[str]:
+    """Check quality criteria. Returns list of issues (empty = pass)."""
+    issues = []
+    name = spec["moduleName"]
+
+    # Count view files
+    swift_files = [f for f in os.listdir(module_dir) if f.endswith(".swift")]
+    view_files = [f for f in swift_files
+                  if "View" in f and f != f"{name}View.swift"
+                  and "Registration" not in f and "DataProvider" not in f
+                  and "ViewModel" not in f and "Models" not in f]
+
+    if len(view_files) < 2:
+        issues.append(f"Only {len(view_files)} sub-view files (need at least 2)")
+
+    # Check ViewModel richness
+    vm_file = os.path.join(module_dir, f"{name}ViewModel.swift")
+    if os.path.exists(vm_file):
+        with open(vm_file) as f:
+            vm_code = f.read()
+        # Count computed properties (var ... { ... })
+        computed_count = len(re.findall(r"var \w+.*\{", vm_code))
+        # Subtract stored properties (var ... = ...)
+        stored_count = len(re.findall(r"var \w+.*=", vm_code))
+        net_computed = computed_count - stored_count
+        if net_computed < 4:
+            issues.append(f"ViewModel has only ~{net_computed} computed properties (need 4+)")
+
+    # Check for TextField misuse on non-text fields
+    for fname in swift_files:
+        if "View" not in fname:
+            continue
+        fpath = os.path.join(module_dir, fname)
+        with open(fpath) as f:
+            code = f.read()
+        # Check for TextField used for number/bool inputs
+        tf_count = code.count("TextField(")
+        if tf_count > 3:
+            issues.append(f"{fname}: {tf_count} TextFields (prefer Stepper/Slider/Picker)")
+
+    return issues
+
+
+# ─────────────────────────────────────────────────────────────────────
+# Main Pipeline
+# ─────────────────────────────────────────────────────────────────────
+
 def update_bootstrap():
-    """Regenerate DynamicModuleBootstrap.swift with all registered modules."""
-    # Scan for Registration files
+    """Regenerate DynamicModuleBootstrap.swift."""
     registrations = []
     for dirname in sorted(os.listdir(DYNAMIC_MODULES_DIR)):
         dirpath = os.path.join(DYNAMIC_MODULES_DIR, dirname)
@@ -556,8 +1099,7 @@ def update_bootstrap():
         if os.path.exists(reg_file):
             registrations.append(dirname)
 
-    # Generate bootstrap
-    calls = "\n".join(f"        register{name}()" for name in registrations)
+    calls = "\n".join(f"        register{n}()" for n in registrations)
     if not calls:
         calls = "        // No dynamic modules generated yet."
 
@@ -565,9 +1107,7 @@ def update_bootstrap():
 
 // MARK: - Dynamic Module Bootstrap
 
-/// Auto-generated file. Registers all dynamically generated modules at app startup.
-/// Re-generated by scripts/generate-module.py after each module creation.
-/// DO NOT EDIT MANUALLY.
+/// Auto-generated. Registers all dynamic modules at app startup.
 extension DynamicModuleRegistry {{
     static func bootstrapAll() {{
 {calls}
@@ -576,191 +1116,119 @@ extension DynamicModuleRegistry {{
 '''
     with open(BOOTSTRAP_FILE, "w") as f:
         f.write(content)
-    print(f"[OK] Updated bootstrap with {len(registrations)} module(s)")
+    print(f"[OK] Bootstrap: {len(registrations)} module(s)")
 
 
-def build_project() -> tuple[bool, str]:
-    """Run xcodegen + xcodebuild. Returns (success, error_output)."""
-    # xcodegen
-    print("[BUILD] Running xcodegen generate...")
-    result = subprocess.run(
-        ["xcodegen", "generate"],
-        cwd=RYANHUB_ROOT,
-        capture_output=True,
-        text=True,
-        timeout=30,
-    )
-    if result.returncode != 0:
-        return False, f"xcodegen failed:\n{result.stderr}"
-
-    # xcodebuild
-    print("[BUILD] Running xcodebuild...")
-    result = subprocess.run(
-        [
-            "xcodebuild",
-            "-scheme", "RyanHub",
-            "-destination", "platform=iOS Simulator,name=iPhone 17 Pro",
-            "build",
-        ],
-        cwd=RYANHUB_ROOT,
-        capture_output=True,
-        text=True,
-        timeout=300,
-    )
-    if result.returncode != 0:
-        # Extract error lines
-        errors = "\n".join(
-            line for line in result.stdout.split("\n")
-            if "error:" in line
-        )
-        return False, errors or result.stderr[:2000]
-
-    return True, ""
-
-
-def fix_compilation_errors(spec: dict, module_dir: str, errors: str) -> bool:
-    """Use Claude to fix compilation errors in generated files."""
-    # Read all files in the module directory
-    files_content = {}
-    for fname in os.listdir(module_dir):
-        if fname.endswith(".swift"):
-            fpath = os.path.join(module_dir, fname)
-            with open(fpath) as f:
-                files_content[fname] = f.read()
-
-    files_str = "\n\n".join(
-        f"--- {fname} ---\n{content}" for fname, content in files_content.items()
-    )
-
-    prompt = f"""Fix these Swift compilation errors in a dynamically generated RyanHub toolkit module.
-
-ERRORS:
-{errors}
-
-CURRENT FILES:
-{files_str}
-
-RULES:
-- The module uses: ToolkitDataProvider protocol, @Observable @MainActor ViewModel, SwiftUI View
-- Design system: Color.hubPrimary, AdaptiveColors.textPrimary(for: colorScheme), HubLayout.standardPadding, .hubTitle/.hubBody/.hubCaption fonts
-- Bridge server URL: http://localhost:18790/modules/{spec['moduleId']}/data
-- Models must be Codable and Identifiable with id: String and date: String
-- CRITICAL API signatures:
-  - SectionHeader(title: "Label") — requires `title:` label
-  - HubTextField(placeholder: "Label", text: $binding) — requires `placeholder:` label
-  - HubButton("Label") {{ action }} — positional title
-  - HubCard {{ content }} — trailing closure, no params
-  - ViewModel.addEntry(_ entry: {spec['moduleName']}Entry) — takes whole entry, NOT individual fields
-  - ViewModel.deleteEntry(_ entry: {spec['moduleName']}Entry) — takes whole entry, NOT id
-
-Return the COMPLETE fixed contents of each file that needs changes, in this format:
---- FileName.swift ---
-<complete file content>
---- AnotherFile.swift ---
-<complete file content>
-
-Only include files that need changes. Return ONLY the file contents, no markdown fences, no explanation.
-"""
-    response = call_claude(prompt, max_tokens=8192)
-
-    # Parse response into files
-    file_pattern = r"---\s*(\w+\.swift)\s*---\n([\s\S]*?)(?=---\s*\w+\.swift\s*---|$)"
-    matches = re.findall(file_pattern, response)
-
-    if not matches:
-        print("[FIX] Could not parse Claude fix response")
-        return False
-
-    for fname, content in matches:
-        content = content.strip()
-        if content:
-            fpath = os.path.join(module_dir, fname)
-            with open(fpath, "w") as f:
-                f.write(content)
-            print(f"[FIX] Updated {fname}")
-
-    return True
-
-
-def generate_module(description: str, skip_build: bool = False, use_template_views: bool = False) -> bool:
-    """Full pipeline: description → spec → code → build → fix."""
+def generate_module(description: str, skip_build: bool = False) -> bool:
+    """Full v2 pipeline: Deep Plan → Generate → Build → Quality Gate."""
     print(f"\n{'='*60}")
-    print(f"Generating module: {description}")
+    print(f"Module: {description}")
     print(f"{'='*60}\n")
 
-    # Step 1: Generate spec
-    print("[1/5] Generating module spec...")
+    # Phase 1: Deep Planning
     try:
-        spec = generate_spec(description)
+        spec = phase1_deep_planning(description)
     except Exception as e:
-        print(f"[ERROR] Spec generation failed: {e}")
+        print(f"[ERROR] Phase 1 failed: {e}")
         return False
 
     name = spec["moduleName"]
-    module_id = spec["moduleId"]
-    print(f"  Module: {name} ({module_id})")
-    print(f"  Icon: {spec['icon']} ({spec['iconColor']})")
-    print(f"  Fields: {len(spec['dataFields'])}")
-
-    # Step 2: Generate code
     module_dir = os.path.join(DYNAMIC_MODULES_DIR, name)
     os.makedirs(module_dir, exist_ok=True)
 
-    print("[2/5] Generating Swift files...")
-
-    files = {
-        f"{name}DataProvider.swift": generate_data_provider(spec),
-        f"{name}Models.swift": generate_models(spec),
-        f"{name}ViewModel.swift": generate_view_model(spec),
-        f"{name}View.swift": generate_minimal_view(spec) if use_template_views else generate_view(spec),
-        f"{name}Registration.swift": generate_registration(spec),
-    }
+    # Phase 2: Code Generation
+    try:
+        files = phase2_generate_code(spec)
+    except Exception as e:
+        print(f"[ERROR] Phase 2 failed: {e}")
+        return False
 
     for fname, content in files.items():
-        fpath = os.path.join(module_dir, fname)
-        with open(fpath, "w") as f:
+        with open(os.path.join(module_dir, fname), "w") as f:
             f.write(content)
         print(f"  Wrote {fname}")
 
-    # Save spec for reference
+    # Save spec
     with open(os.path.join(module_dir, "spec.json"), "w") as f:
         json.dump(spec, f, indent=2)
 
-    # Step 3: Update bootstrap
-    print("[3/5] Updating bootstrap...")
+    # Update bootstrap
     update_bootstrap()
 
+    # Phase 4: Quality Gate (pre-build)
+    print("\n[Phase 4] Quality gate...")
+    issues = phase4_quality_gate(module_dir, spec)
+    if issues:
+        print(f"  Warnings ({len(issues)}):")
+        for issue in issues:
+            print(f"    - {issue}")
+    else:
+        print("  All checks passed!")
+
     if skip_build:
-        print("[SKIP] Build skipped (--skip-build)")
+        print("[SKIP] Build skipped")
         return True
 
-    # Step 4: Build
-    print("[4/5] Building project...")
+    # Phase 3: Build + Fix
+    print("\n[Phase 3] Build...")
     for attempt in range(3):
         success, errors = build_project()
         if success:
-            print(f"[OK] Build succeeded (attempt {attempt + 1})")
+            print(f"  BUILD SUCCEEDED (attempt {attempt + 1})")
             return True
 
-        print(f"[FAIL] Build failed (attempt {attempt + 1}/3)")
+        print(f"  BUILD FAILED (attempt {attempt + 1}/3)")
         print(f"  Errors: {errors[:500]}")
 
         if attempt < 2:
-            # Step 5: Auto-fix
-            print(f"[5/5] Attempting auto-fix...")
+            print("  Attempting auto-fix...")
             fixed = fix_compilation_errors(spec, module_dir, errors)
             if not fixed:
-                print("[ERROR] Auto-fix failed, retrying build anyway...")
-        else:
-            print("[ERROR] All 3 build attempts failed")
-            return False
+                print("  Auto-fix parsing failed, retrying...")
 
+    print("[ERROR] All build attempts failed")
     return False
+
+
+def batch_generate(scenarios_file: str, skip_build: bool = False):
+    """Generate multiple modules, single build at end."""
+    with open(scenarios_file) as f:
+        scenarios = json.load(f)
+
+    results = []
+    for i, scenario in enumerate(scenarios, 1):
+        desc = scenario if isinstance(scenario, str) else scenario.get("description", "")
+        print(f"\n[{i}/{len(scenarios)}] {desc}")
+        success = generate_module(desc, skip_build=True)
+        results.append({"description": desc, "success": success})
+
+    if not skip_build:
+        print(f"\n{'='*60}")
+        print("Final build with all modules...")
+        print(f"{'='*60}")
+        for attempt in range(3):
+            success, errors = build_project()
+            if success:
+                print(f"BUILD SUCCEEDED (attempt {attempt + 1})")
+                break
+            print(f"BUILD FAILED (attempt {attempt + 1}/3): {errors[:500]}")
+        else:
+            print("[ERROR] Final build failed after 3 attempts")
+
+    # Summary
+    print(f"\n{'='*60}")
+    print("BATCH SUMMARY")
+    print(f"{'='*60}")
+    for r in results:
+        status = "OK" if r["success"] else "FAIL"
+        print(f"  [{status}] {r['description']}")
+    succeeded = sum(1 for r in results if r["success"])
+    print(f"\n{succeeded}/{len(results)} modules generated")
 
 
 def list_modules():
     """List all generated dynamic modules."""
-    print(f"\nDynamic Modules in {DYNAMIC_MODULES_DIR}:\n")
+    print(f"\nDynamic Modules:\n")
     count = 0
     for dirname in sorted(os.listdir(DYNAMIC_MODULES_DIR)):
         dirpath = os.path.join(DYNAMIC_MODULES_DIR, dirname)
@@ -770,72 +1238,50 @@ def list_modules():
         if os.path.exists(spec_path):
             with open(spec_path) as f:
                 spec = json.load(f)
+            swift_files = [f for f in os.listdir(dirpath) if f.endswith(".swift")]
+            view_files = [f for f in swift_files if "View" in f and "ViewModel" not in f]
             print(f"  {spec['moduleName']}: {spec['displayName']} ({spec['icon']})")
-            print(f"    {spec['subtitle']}")
+            print(f"    {spec.get('subtitle', '')}")
+            print(f"    Files: {len(swift_files)} swift, {len(view_files)} views")
             count += 1
     if count == 0:
-        print("  (no modules generated yet)")
-    print(f"\nTotal: {count} module(s)")
+        print("  (no modules)")
+    print(f"\nTotal: {count}")
 
 
-def batch_generate(scenarios_file: str, skip_build: bool = False, use_template_views: bool = False):
-    """Generate multiple modules from a JSON file."""
-    with open(scenarios_file) as f:
-        scenarios = json.load(f)
-
-    results = []
-    for i, scenario in enumerate(scenarios, 1):
-        desc = scenario if isinstance(scenario, str) else scenario.get("description", "")
-        print(f"\n[{i}/{len(scenarios)}] {desc}")
-        success = generate_module(desc, skip_build=True, use_template_views=use_template_views)  # skip per-module build
-        results.append({"description": desc, "success": success})
-
-    # Single build at the end
-    if not skip_build:
-        print("\n" + "=" * 60)
-        print("Final build with all modules...")
-        print("=" * 60)
-        success, errors = build_project()
-        if not success:
-            print(f"[FAIL] Final build failed: {errors[:1000]}")
-            # Try to fix errors
-            print("[FIX] Attempting batch fix...")
-            # Just rebuild — individual module fixes are complex in batch mode
-            for attempt in range(2):
-                success, errors = build_project()
-                if success:
-                    break
-                print(f"[FAIL] Rebuild attempt {attempt + 2} failed")
-
-    # Summary
-    print("\n" + "=" * 60)
-    print("BATCH GENERATION SUMMARY")
-    print("=" * 60)
-    for r in results:
-        status = "OK" if r["success"] else "FAIL"
-        print(f"  [{status}] {r['description']}")
-    succeeded = sum(1 for r in results if r["success"])
-    print(f"\n{succeeded}/{len(results)} modules generated successfully")
+def delete_all_modules():
+    """Delete all generated module directories."""
+    count = 0
+    for dirname in os.listdir(DYNAMIC_MODULES_DIR):
+        dirpath = os.path.join(DYNAMIC_MODULES_DIR, dirname)
+        if os.path.isdir(dirpath):
+            shutil.rmtree(dirpath)
+            print(f"  Deleted {dirname}")
+            count += 1
+    update_bootstrap()
+    print(f"Deleted {count} modules")
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Generate RyanHub dynamic modules")
+    parser = argparse.ArgumentParser(description="RyanHub Dynamic Module Generator v2")
     parser.add_argument("--description", "-d", help="Natural language module description")
     parser.add_argument("--batch", "-b", help="JSON file with batch scenarios")
-    parser.add_argument("--list", "-l", action="store_true", help="List generated modules")
-    parser.add_argument("--skip-build", action="store_true", help="Skip xcodebuild step")
-    parser.add_argument("--update-bootstrap", action="store_true", help="Only update bootstrap file")
-    parser.add_argument("--use-template-views", action="store_true", help="Use template views instead of Claude-generated")
+    parser.add_argument("--list", "-l", action="store_true", help="List modules")
+    parser.add_argument("--skip-build", action="store_true", help="Skip xcodebuild")
+    parser.add_argument("--update-bootstrap", action="store_true", help="Regenerate bootstrap")
+    parser.add_argument("--delete-all", action="store_true", help="Delete all generated modules")
     args = parser.parse_args()
 
     if args.list:
         list_modules()
     elif args.update_bootstrap:
         update_bootstrap()
+    elif args.delete_all:
+        delete_all_modules()
     elif args.batch:
-        batch_generate(args.batch, skip_build=args.skip_build, use_template_views=args.use_template_views)
+        batch_generate(args.batch, skip_build=args.skip_build)
     elif args.description:
-        success = generate_module(args.description, skip_build=args.skip_build, use_template_views=args.use_template_views)
+        success = generate_module(args.description, skip_build=args.skip_build)
         sys.exit(0 if success else 1)
     else:
         parser.print_help()
