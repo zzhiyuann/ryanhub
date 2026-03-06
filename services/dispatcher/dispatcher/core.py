@@ -433,6 +433,7 @@ class Dispatcher:
         model_override = model_from_prefix or self._sticky_model
 
         # Try to resume last session for continuity
+        start_fresh = self.sm.force_new  # Track if user requested /new
         if not self.sm.force_new:
             last = self.sm.last_session()
             active = self.sm.active()
@@ -463,8 +464,11 @@ class Dispatcher:
                 attachments=attachments,
             )
 
-        # Create new session
-        session = self.sm.create(synthetic_mid, content, cwd)
+        # Create new session — inherit conv_id from last same-project session
+        # so parallel sessions share conversation history (but keep separate
+        # Claude Code session IDs for tool-state isolation).
+        shared_conv_id = None if start_fresh else self.sm.last_conv_id_for_cwd(cwd)
+        session = self.sm.create(synthetic_mid, content, cwd, conv_id=shared_conv_id)
         session.is_task = is_project
         session.model_sticky = is_sticky
         session.model_override = model_override
@@ -495,9 +499,18 @@ class Dispatcher:
         session.model_override = model
         session.max_retries = self.cfg.max_retries
         session.record_stage("received")
-        self.transcript.append(session.conv_id, "user", text)
 
-        prompt = self._build_prompt(text, session.cwd, attachments=attachments)
+        # If this session shares a conv_id with prior sessions (parallel mode),
+        # hydrate from shared conversation history before appending the new message.
+        if self.transcript.has_history(session.conv_id):
+            prompt = self._build_prompt_with_history(
+                text, session.cwd, session.conv_id, attachments=attachments,
+            )
+            self.transcript.append(session.conv_id, "user", text)
+        else:
+            self.transcript.append(session.conv_id, "user", text)
+            prompt = self._build_prompt(text, session.cwd, attachments=attachments)
+
         max_turns = self.cfg.max_turns
         session.record_stage("prompt_built")
 
@@ -1795,6 +1808,7 @@ class Dispatcher:
         # 4. If nothing running, try to resume last session for continuity
         #    BUT only if the message targets the same project as the last session.
         #    This prevents answering from the wrong project's context.
+        start_fresh = self.sm.force_new  # Track if user requested /new
         if not self.sm.force_new:
             last = self.sm.last_session()
             if not active and last and last.status in ("done", "failed"):
@@ -1824,8 +1838,10 @@ class Dispatcher:
             self._spawn(self._do_queued_followup(mid, text, oldest, attachments, model=model_override, model_sticky=is_sticky))
             return
 
-        # 6. Create new session
-        session = self.sm.create(mid, text, cwd)
+        # 6. Create new session — inherit conv_id from last same-project session
+        #    so parallel sessions share conversation history.
+        shared_conv_id = None if start_fresh else self.sm.last_conv_id_for_cwd(cwd)
+        session = self.sm.create(mid, text, cwd, conv_id=shared_conv_id)
         session.is_task = is_project
         session.model_sticky = is_sticky
         self._spawn(self._do_session(
@@ -1844,10 +1860,17 @@ class Dispatcher:
         """Run a task with full Claude Code capability."""
         session.model_override = model
 
-        # Record user message to transcript
-        self.transcript.append(session.conv_id, "user", text)
+        # If this session shares a conv_id with prior sessions (parallel mode),
+        # hydrate from shared conversation history before appending the new message.
+        if self.transcript.has_history(session.conv_id):
+            prompt = self._build_prompt_with_history(
+                text, session.cwd, session.conv_id, attachments=attachments,
+            )
+            self.transcript.append(session.conv_id, "user", text)
+        else:
+            self.transcript.append(session.conv_id, "user", text)
+            prompt = self._build_prompt(text, session.cwd, attachments, bg_context)
 
-        prompt = self._build_prompt(text, session.cwd, attachments, bg_context)
         max_turns = self.cfg.max_turns
 
         runner = asyncio.create_task(

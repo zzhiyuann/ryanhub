@@ -48,6 +48,10 @@ class Transcript:
                         continue
         return msgs
 
+    def has_history(self, conv_id: str) -> bool:
+        """Check if any transcript exists for the given conversation."""
+        return self._path(conv_id).exists()
+
     def build_history(self, conv_id: str, max_chars: int = 80000) -> str:
         """Build conversation history string from transcript.
 

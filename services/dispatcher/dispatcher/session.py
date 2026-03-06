@@ -144,6 +144,18 @@ class SessionManager:
                 return s
         return None
 
+    def last_conv_id_for_cwd(self, cwd: str) -> str | None:
+        """Return the conv_id of the most recent session with the same working directory.
+
+        Used to share conversation context across parallel sessions
+        targeting the same project.
+        """
+        for mid in self.recent:
+            s = self.by_msg.get(mid)
+            if s and s.cwd == cwd:
+                return s.conv_id
+        return None
+
     def active(self) -> list[Session]:
         return [s for s in self.by_msg.values() if s.status == "running"]
 
