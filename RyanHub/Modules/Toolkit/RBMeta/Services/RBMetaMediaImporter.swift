@@ -161,6 +161,7 @@ final class RBMetaMediaImporter {
             mutableEvent.payload["imageFileId"] = event.id.uuidString
             mutableEvent.payload["source"] = "rb_meta"
             mutableEvent.payload["mediaType"] = mediaType
+            mutableEvent.payload["assetId"] = asset.localIdentifier
             if mediaType == "video" {
                 mutableEvent.payload["duration"] = String(format: "%.0f", asset.duration)
             }

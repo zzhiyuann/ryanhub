@@ -1,4 +1,6 @@
 import SwiftUI
+import AVKit
+import Photos
 
 // MARK: - Timeline Event Row
 
@@ -484,19 +486,22 @@ struct TimelineEventRow: View {
         }
     }
 
-    // MARK: - Photo Detail
+    // MARK: - Photo / Video Detail
 
-    /// Expanded detail for photo events — shows the captured image.
+    /// Expanded detail for photo/video events.
+    @ViewBuilder
     private func photoDetail(_ event: SensingEvent) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if let fileId = event.payload["imageFileId"],
-               let image = BoboViewModel.loadPhoto(for: fileId) {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(maxHeight: 300)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-            }
+        if event.payload["mediaType"] == "video", let assetId = event.payload["assetId"] {
+            InlineVideoPlayer(assetIdentifier: assetId)
+                .frame(maxHeight: 300)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+        } else if let fileId = event.payload["imageFileId"],
+                  let image = BoboViewModel.loadPhoto(for: fileId) {
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFit()
+                .frame(maxHeight: 300)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
         }
     }
 
@@ -1364,5 +1369,71 @@ extension String {
         }
         .trimmingCharacters(in: .whitespaces)
         .capitalized
+    }
+}
+
+// MARK: - Inline Video Player
+
+/// Plays a video from the Photo Library inline in the timeline.
+/// Shows thumbnail with play button; tapping loads and plays the video.
+struct InlineVideoPlayer: View {
+    let assetIdentifier: String
+    @State private var player: AVPlayer?
+    @State private var isPlaying = false
+    @State private var thumbnail: UIImage?
+
+    var body: some View {
+        ZStack {
+            if let player, isPlaying {
+                VideoPlayer(player: player)
+            } else if let thumbnail {
+                Image(uiImage: thumbnail)
+                    .resizable()
+                    .scaledToFit()
+                Button {
+                    loadAndPlay()
+                } label: {
+                    Image(systemName: "play.circle.fill")
+                        .font(.system(size: 48))
+                        .foregroundStyle(.white.opacity(0.9))
+                        .shadow(radius: 4)
+                }
+            } else {
+                Color.black
+                ProgressView().tint(.white)
+                    .onAppear { loadThumbnail() }
+            }
+        }
+    }
+
+    private func loadThumbnail() {
+        guard let asset = PHAsset.fetchAssets(withLocalIdentifiers: [assetIdentifier], options: nil).firstObject else { return }
+        let size = CGSize(width: 800, height: 800)
+        let opts = PHImageRequestOptions()
+        opts.deliveryMode = .highQualityFormat
+        opts.resizeMode = .exact
+        PHImageManager.default().requestImage(for: asset, targetSize: size, contentMode: .aspectFit, options: opts) { image, info in
+            let isDegraded = (info?[PHImageResultIsDegradedKey] as? Bool) ?? false
+            guard !isDegraded else { return }
+            Task { @MainActor in
+                thumbnail = image
+            }
+        }
+    }
+
+    private func loadAndPlay() {
+        guard let asset = PHAsset.fetchAssets(withLocalIdentifiers: [assetIdentifier], options: nil).firstObject else { return }
+        let opts = PHVideoRequestOptions()
+        opts.isNetworkAccessAllowed = true
+        opts.deliveryMode = .automatic
+        PHImageManager.default().requestPlayerItem(forVideo: asset, options: opts) { playerItem, _ in
+            guard let playerItem else { return }
+            Task { @MainActor in
+                let avPlayer = AVPlayer(playerItem: playerItem)
+                player = avPlayer
+                isPlaying = true
+                avPlayer.play()
+            }
+        }
     }
 }
