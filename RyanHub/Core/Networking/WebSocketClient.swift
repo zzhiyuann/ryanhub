@@ -479,6 +479,8 @@ struct DispatcherMessage: Codable {
     let connected: Bool?
     let activeSessions: Int?
     let message: String?
+    /// New text since the last streaming update (for efficient append rendering).
+    let delta: String?
     // Question fields (only present when type == "question")
     let sessionId: String?
     let question: String?
@@ -488,7 +490,7 @@ struct DispatcherMessage: Codable {
     let source: String?
 
     enum CodingKeys: String, CodingKey {
-        case type, id, content, streaming, connected, message, question, options, source
+        case type, id, content, streaming, connected, message, delta, question, options, source
         case activeSessions = "active_sessions"
         case sessionId = "session_id"
         case allowFreeText = "allow_free_text"

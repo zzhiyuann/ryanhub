@@ -499,19 +499,25 @@ class WebSocketServer:
         msg_id: str,
         content: str,
         streaming: bool = True,
+        delta: str | None = None,
     ) -> None:
         """Send a response message to a specific client.
 
         If the original websocket is dead, retarget to any active client.
+        ``delta`` contains only the new text since the last update, allowing
+        the client to append efficiently instead of replacing the full content.
         """
         target = self.get_active_client(websocket)
         if target:
-            await self._send(target, {
+            data: dict = {
                 "type": "response",
                 "id": msg_id,
                 "content": content,
                 "streaming": streaming,
-            })
+            }
+            if delta is not None:
+                data["delta"] = delta
+            await self._send(target, data)
         elif not streaming:
             # Only cache non-streaming (final) responses
             self._cache_if_important({

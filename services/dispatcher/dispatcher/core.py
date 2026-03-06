@@ -643,20 +643,27 @@ class Dispatcher:
     async def _ws_stream_loop(self, websocket, msg_id: str, session: Session) -> None:
         """Stream partial output to the WebSocket client as it's generated.
 
+        Polls every 200ms for smooth, near-word-level streaming updates.
+        Sends both full content and delta (new text since last update) so the
+        client can efficiently append without re-rendering the entire message.
+
         If the original websocket disconnects mid-stream, retargets to any
         active client so streaming continues on reconnect.
         """
         last_len = 0
         try:
             while session.status in ("pending", "running"):
-                await asyncio.sleep(1)
+                await asyncio.sleep(0.2)
                 partial = session.partial_output
                 if partial and len(partial) > last_len:
+                    delta = partial[last_len:]
                     last_len = len(partial)
-                    # Use active client — original ws may have disconnected
                     target = self._ws.get_active_client(websocket)
                     if target:
-                        await self._ws.send_response(target, msg_id, partial, streaming=True)
+                        await self._ws.send_response(
+                            target, msg_id, partial,
+                            streaming=True, delta=delta,
+                        )
         except asyncio.CancelledError:
             pass
 

@@ -852,17 +852,23 @@ final class ChatViewModel {
         let replyPreview = userMessage.map { Self.buildReplyPreview(for: $0) }
 
         if let existingIndex = messages.firstIndex(where: { $0.id == assistantId && $0.role == .assistant }) {
-            // Update existing streaming message in place
+            // Update existing streaming message — use delta for efficient append
+            // when available, fall back to full content replacement.
+            let updatedContent: String
+            if isStreaming, let delta = message.delta, !delta.isEmpty {
+                updatedContent = messages[existingIndex].content + delta
+            } else {
+                updatedContent = content
+            }
             messages[existingIndex] = ChatMessage(
                 id: assistantId,
-                content: content,
+                content: updatedContent,
                 role: .assistant,
                 timestamp: messages[existingIndex].timestamp,
                 isStreaming: isStreaming,
                 replyToId: id,
                 replyToPreview: replyPreview
             )
-            // Force view update for streaming content changes
             messageUpdateTrigger += 1
         } else {
             // New assistant message — always appended at the end
