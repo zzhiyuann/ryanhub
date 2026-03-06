@@ -177,14 +177,40 @@ struct ContentView: View {
         HStack(spacing: 0) {
             modeButton(icon: "bubble.left.and.bubble.right.fill", mode: .chat, statusColor: chatStatusColor)
             modeButton(icon: "terminal.fill", mode: .terminal, statusColor: terminalStatusColor)
+            rbMetaShortcut
         }
         .padding(3)
         .background(
             RoundedRectangle(cornerRadius: 10)
                 .fill(AdaptiveColors.surfaceSecondary(for: colorScheme))
         )
-        .padding(.horizontal, 100)
+        .padding(.horizontal, 80)
         .padding(.vertical, 6)
+    }
+
+    /// RB Meta quick-access button — green when glasses connected, red otherwise.
+    @ViewBuilder
+    private var rbMetaShortcut: some View {
+        Button {
+            selectedTab = .toolkit
+            // Signal toolkit to open RB Meta
+            appState.pendingDeepLink = .bobo // will navigate to toolkit
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                appState.toolkitOpenRBMeta = true
+            }
+        } label: {
+            Image(systemName: "eyeglasses")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(rbMetaStatusColor)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 6)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var rbMetaStatusColor: Color {
+        // Check if DAT SDK has an active device
+        appState.rbMetaConnected ? Color.hubAccentGreen : AdaptiveColors.textSecondary(for: colorScheme).opacity(0.5)
     }
 
     @ViewBuilder

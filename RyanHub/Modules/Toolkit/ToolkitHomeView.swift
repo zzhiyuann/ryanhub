@@ -83,6 +83,13 @@ struct ToolkitHomeView: View {
                 selectedDynamicModule = nil
             }
         }
+        .onChange(of: appState.toolkitOpenRBMeta) { _, open in
+            guard open else { return }
+            appState.toolkitOpenRBMeta = false
+            withAnimation(.easeInOut(duration: 0.25)) {
+                selectedPlugin = .rbMeta
+            }
+        }
     }
 
     // MARK: - Tool Content

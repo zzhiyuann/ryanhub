@@ -108,6 +108,12 @@ final class AppState {
     /// Used by ChatViewModel to decide whether to fire local notifications.
     var isAppInForeground: Bool = true
 
+    /// Signal to open RB Meta module from the home toggle.
+    var toolkitOpenRBMeta: Bool = false
+
+    /// Whether RB Meta glasses are connected (updated by RBMetaViewModel).
+    var rbMetaConnected: Bool = false
+
     // MARK: - Connection State
 
     var isConnected: Bool = false

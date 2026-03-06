@@ -4,6 +4,7 @@ import MWDATCore
 struct RBMetaView: View {
     @State private var viewModel = RBMetaViewModel()
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(AppState.self) private var appState
 
     var body: some View {
         ZStack {
@@ -25,6 +26,9 @@ struct RBMetaView: View {
             viewModel.setupDAT(wearables: Wearables.shared)
             // Import any RB Meta photos/videos from Photo Library
             RBMetaMediaImporter.shared.importNewMedia()
+        }
+        .onChange(of: viewModel.hasActiveDevice) { _, connected in
+            appState.rbMetaConnected = connected
         }
         .onOpenURL { url in
             guard
