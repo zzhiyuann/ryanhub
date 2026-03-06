@@ -479,6 +479,8 @@ struct DispatcherMessage: Codable {
     let connected: Bool?
     let activeSessions: Int?
     let message: String?
+    // Quote/reply-to enforcement: links response back to the originating message
+    let replyTo: String?
     // Question fields (only present when type == "question")
     let sessionId: String?
     let question: String?
@@ -490,6 +492,7 @@ struct DispatcherMessage: Codable {
     enum CodingKeys: String, CodingKey {
         case type, id, content, streaming, connected, message, question, options, source
         case activeSessions = "active_sessions"
+        case replyTo = "reply_to"
         case sessionId = "session_id"
         case allowFreeText = "allow_free_text"
     }

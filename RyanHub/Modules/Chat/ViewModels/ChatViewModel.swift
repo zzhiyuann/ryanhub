@@ -94,6 +94,12 @@ final class ChatViewModel {
     /// Maps user message ID -> when the message was sent (for progress phases).
     private var messageSendTimes: [String: Date] = [:]
 
+    /// Per-message timeout tasks — auto-fail messages that never get a response.
+    private var messageTimeoutTasks: [String: Task<Void, Never>] = [:]
+
+    /// Per-message timeout interval (matches dispatcher's message_timeout config).
+    private let messageTimeoutInterval: TimeInterval = 600
+
     /// Background task identifier for keeping the app alive while awaiting a response.
     @ObservationIgnored private var backgroundTaskID: UIBackgroundTaskIdentifier = .invalid
 
@@ -222,6 +228,8 @@ final class ChatViewModel {
         Task {
             do {
                 try await webSocket.sendMessage(id: messageId, content: contentToSend, language: languageCode)
+                // Start per-message timeout — auto-fail if no response within limit
+                self.startMessageTimeout(for: messageId)
             } catch {
                 self.messageStatuses[messageId] = .failed(error.localizedDescription)
                 self.updateGlobalTypingState()
@@ -271,6 +279,7 @@ final class ChatViewModel {
                     caption: wireCaption,
                     language: languageCode
                 )
+                self.startMessageTimeout(for: messageId)
             } catch {
                 self.messageStatuses[messageId] = .failed(error.localizedDescription)
                 self.updateGlobalTypingState()
@@ -396,6 +405,7 @@ final class ChatViewModel {
                     duration: duration,
                     language: languageCode
                 )
+                self.startMessageTimeout(for: messageId)
             } catch {
                 self.messageStatuses[messageId] = .failed(error.localizedDescription)
                 self.updateGlobalTypingState()
@@ -818,6 +828,7 @@ final class ChatViewModel {
             if let id = message.id {
                 let errText = message.message ?? "Unknown error"
                 messageStatuses[id] = .failed(errText)
+                cancelMessageTimeout(for: id)
             }
             // Only clear global typing if no messages are still processing
             updateGlobalTypingState()
@@ -880,6 +891,8 @@ final class ChatViewModel {
 
         if !isStreaming {
             currentStreamingMessageId = nil
+            // Single-send: cancel the per-message timeout now that final response arrived
+            cancelMessageTimeout(for: id)
             saveMessages()
             // Fire a local notification if the app is in background
             // or the user is not on the chat tab.
@@ -1037,9 +1050,46 @@ final class ChatViewModel {
         }
     }
 
+    // MARK: - Per-Message Timeout
+
+    /// Start a timeout that auto-fails a message if no final response arrives.
+    private func startMessageTimeout(for messageId: String) {
+        messageTimeoutTasks[messageId]?.cancel()
+        messageTimeoutTasks[messageId] = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(self?.messageTimeoutInterval ?? 600))
+            guard !Task.isCancelled, let self else { return }
+            // Only timeout if still waiting (not already done/failed)
+            let status = self.messageStatuses[messageId]
+            if status == .sending || status == .acknowledged || status == .processing {
+                self.messageStatuses[messageId] = .failed("Response timed out")
+                self.messageSendTimes.removeValue(forKey: messageId)
+                let errorMsg = ChatMessage.assistant(
+                    "Request timed out — no response within \(Int(self.messageTimeoutInterval / 60)) minutes.",
+                    id: "resp-\(messageId)"
+                )
+                self.appendMessage(errorMsg)
+                self.saveMessages()
+                self.updateGlobalTypingState()
+            }
+            self.messageTimeoutTasks.removeValue(forKey: messageId)
+        }
+    }
+
+    /// Cancel a running timeout for a message (called when response arrives).
+    private func cancelMessageTimeout(for messageId: String) {
+        messageTimeoutTasks[messageId]?.cancel()
+        messageTimeoutTasks.removeValue(forKey: messageId)
+    }
+
     /// Clear all in-flight streaming state. Called on disconnect and reconnect
     /// to prevent the typing indicator from getting permanently stuck.
     private func clearStaleStreamingState() {
+        // Cancel all per-message timeouts on disconnect
+        for (_, task) in messageTimeoutTasks {
+            task.cancel()
+        }
+        messageTimeoutTasks.removeAll()
+
         var changed = false
         for (id, status) in messageStatuses {
             if status == .sending || status == .acknowledged || status == .processing {

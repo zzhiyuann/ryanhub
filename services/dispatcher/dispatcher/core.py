@@ -343,6 +343,7 @@ class Dispatcher:
                     img_prefix += "]"
                 content = img_prefix
 
+        _ws_receive_ts = time.time()
         log.info("[ws:%s] '%s' project=%s", msg_id[:8], content[:80], project)
 
         # Intercept slash commands sent as regular messages (the iOS client
@@ -484,39 +485,31 @@ class Dispatcher:
         model: str | None = None,
         attachments: list[dict] | None = None,
     ) -> str:
-        """Run a WebSocket-originated task through the agent pipeline."""
+        """Run a WebSocket-originated task through the agent pipeline.
+
+        Includes: observability stages, retry with backoff, single-send contract.
+        """
         # Store WS client reference for question routing
         session.ws_client = websocket
         session.ws_msg_id = ws_msg_id
         session.model_override = model
+        session.max_retries = self.cfg.max_retries
+        session.record_stage("received")
         self.transcript.append(session.conv_id, "user", text)
 
         prompt = self._build_prompt(text, session.cwd, attachments=attachments)
         max_turns = self.cfg.max_turns
+        session.record_stage("prompt_built")
 
         # Update WS session count
         self._update_ws_sessions()
 
-        # Start streaming loop concurrently
-        stream_task = None
-        if websocket and self._ws:
-            stream_task = asyncio.create_task(
-                self._ws_stream_loop(websocket, ws_msg_id, session)
-            )
-
-        result = await self.runner.invoke(
-            session, prompt, resume=False, max_turns=max_turns,
-            model=model, stream=True,
-            on_question=self._surface_question,
+        result = await self._invoke_with_retry(
+            session, prompt, ws_msg_id, websocket,
+            resume=False, max_turns=max_turns, model=model,
         )
 
-        # Cancel streaming loop
-        if stream_task:
-            stream_task.cancel()
-            try:
-                await stream_task
-            except asyncio.CancelledError:
-                pass
+        session.record_stage("agent_done")
 
         # Phase 2: summarization if needed
         if session.used_partial_fallback:
@@ -531,9 +524,16 @@ class Dispatcher:
 
         # Update WS session count
         self._update_ws_sessions()
+        session.record_stage("completed")
 
-        if result and result.strip() and self._ws and self._ws.client_count > 0:
-            log.info("[ws:%s] result: %d chars", ws_msg_id[:8], len(result))
+        # Log pipeline observability
+        durations = session.stage_durations()
+        if durations:
+            log.info(
+                "[ws:%s] pipeline stages: %s | total=%.1fs | result=%d chars",
+                ws_msg_id[:8], durations,
+                session.elapsed(), len(result or ""),
+            )
 
         # Capture memory in background — non-blocking
         if HAS_MEMORY and result and result.strip() and session.status == "done":
@@ -542,6 +542,86 @@ class Dispatcher:
                 self._capture_memory(conversation, session.project_name)
             )
 
+        return result or ""
+
+    async def _invoke_with_retry(
+        self,
+        session: Session,
+        prompt: str,
+        ws_msg_id: str,
+        websocket,
+        resume: bool = False,
+        max_turns: int = 50,
+        model: str | None = None,
+    ) -> str:
+        """Invoke agent with retry on transient failures and streaming.
+
+        Retries up to session.max_retries with exponential backoff (2s, 4s, 8s).
+        Respects cooperative cancellation via session.cancel_event.
+        """
+        last_error = ""
+        for attempt in range(session.max_retries + 1):
+            if session.is_cancelled:
+                log.info("[ws:%s] cancelled before attempt %d", ws_msg_id[:8], attempt)
+                session.status = "cancelled"
+                session.finished = time.time()
+                return ""
+
+            session.retry_count = attempt
+            if attempt > 0:
+                delay = 2 ** attempt
+                log.info(
+                    "[ws:%s] retry %d/%d after %.0fs (last error: %s)",
+                    ws_msg_id[:8], attempt, session.max_retries,
+                    delay, last_error[:100],
+                )
+                session.record_stage(f"retry_{attempt}_wait")
+                await asyncio.sleep(delay)
+                # Reset session state for retry
+                session.status = "pending"
+                session.partial_output = ""
+                session.used_partial_fallback = False
+
+            session.record_stage(f"agent_start_{attempt}")
+
+            # Start streaming loop concurrently
+            stream_task = None
+            if websocket and self._ws:
+                stream_task = asyncio.create_task(
+                    self._ws_stream_loop(websocket, ws_msg_id, session)
+                )
+
+            try:
+                result = await self.runner.invoke(
+                    session, prompt, resume=resume, max_turns=max_turns,
+                    model=model, stream=True,
+                    on_question=self._surface_question,
+                )
+            except Exception as exc:
+                last_error = str(exc)
+                log.warning("[ws:%s] agent error attempt %d: %s", ws_msg_id[:8], attempt, last_error[:200])
+                result = ""
+            finally:
+                if stream_task:
+                    stream_task.cancel()
+                    try:
+                        await stream_task
+                    except asyncio.CancelledError:
+                        pass
+
+            # Success: got a non-empty result
+            if result and result.strip():
+                if attempt > 0:
+                    log.info("[ws:%s] succeeded on retry %d", ws_msg_id[:8], attempt)
+                return result
+
+            # Only retry on transient failures (empty result, agent error)
+            # Don't retry on cancellation or timeout
+            if session.status == "cancelled":
+                return result or ""
+            last_error = last_error or "empty result"
+
+        log.warning("[ws:%s] exhausted %d retries", ws_msg_id[:8], session.max_retries)
         return result or ""
 
     async def _do_ws_followup(
@@ -570,54 +650,41 @@ class Dispatcher:
         session.is_task = prev.is_task
         session.model_override = effective_model
         session.model_sticky = effective_sticky
+        session.max_retries = self.cfg.max_retries
         # Store WS client reference for question routing
         session.ws_client = websocket
         session.ws_msg_id = ws_msg_id
+        session.record_stage("received")
 
         prompt = self._build_prompt_with_history(
             text, session.cwd, session.conv_id, attachments=attachments,
         )
         self.transcript.append(session.conv_id, "user", text)
+        session.record_stage("prompt_built")
 
         max_turns = self.cfg.max_turns_followup
 
         self._update_ws_sessions()
 
-        # Start streaming loop concurrently
-        stream_task = None
-        if websocket and self._ws:
-            stream_task = asyncio.create_task(
-                self._ws_stream_loop(websocket, ws_msg_id, session)
-            )
-
-        result = await self.runner.invoke(
-            session, prompt, resume=resume,
-            max_turns=max_turns, model=effective_model,
-            stream=True,
-            on_question=self._surface_question,
+        result = await self._invoke_with_retry(
+            session, prompt, ws_msg_id, websocket,
+            resume=resume, max_turns=max_turns, model=effective_model,
         )
 
-        # Retry as fresh session if resume returned empty
+        # Retry as fresh session if resume returned empty (before retries exhausted)
         if resume and (not result or not result.strip()):
             log.info("ws resume returned empty for mid=%d, retrying as fresh session", mid)
             session = self.sm.create(mid, text, prev.cwd, conv_id=prev.conv_id)
             session.is_task = prev.is_task
             session.model_override = effective_model
             session.model_sticky = effective_sticky
-            result = await self.runner.invoke(
-                session, prompt, resume=False,
-                max_turns=max_turns, model=effective_model,
-                stream=True,
-                on_question=self._surface_question,
+            session.record_stage("fresh_retry")
+            result = await self._invoke_with_retry(
+                session, prompt, ws_msg_id, websocket,
+                resume=False, max_turns=max_turns, model=effective_model,
             )
 
-        # Cancel streaming loop
-        if stream_task:
-            stream_task.cancel()
-            try:
-                await stream_task
-            except asyncio.CancelledError:
-                pass
+        session.record_stage("agent_done")
 
         # Phase 2: summarization if needed
         if session.used_partial_fallback:
@@ -630,6 +697,15 @@ class Dispatcher:
             self.transcript.append(session.conv_id, "assistant", result)
 
         self._update_ws_sessions()
+        session.record_stage("completed")
+
+        # Log pipeline observability
+        durations = session.stage_durations()
+        if durations:
+            log.info(
+                "[ws:%s] followup pipeline: %s | total=%.1fs",
+                ws_msg_id[:8], durations, session.elapsed(),
+            )
 
         # Capture memory in background — non-blocking
         if HAS_MEMORY and result and result.strip() and session.status == "done":
@@ -767,6 +843,8 @@ class Dispatcher:
             # Cancel the most recent (last started)
             target = active[-1]
 
+        # Cooperative cancellation signal (for retry loops to check)
+        target.request_cancel()
         if target.proc:
             target.proc.kill()
         target.status = "cancelled"
@@ -1092,6 +1170,7 @@ class Dispatcher:
                     question=q_text,
                     options=option_labels,
                     allow_free_text=True,
+                    reply_to=session.ws_msg_id,
                 )
                 log.info(
                     "F7: question surfaced to WS client, sid=%s",
