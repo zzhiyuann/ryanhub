@@ -1,115 +1,311 @@
-Generate ONE SwiftUI view file for a RyanHub module.
+Generate RecipeBoxCookbookStatsView.swift — a SwiftUI view for a RyanHub module.
 
-Generate CaffeineTrackerAnalyticsView.swift — an analytics view.
-- ModuleChartView with the ACTUAL chart data property from ViewModel (check the summary: chartData? weeklyChartData? weeklyData?)
-- If ViewModel has insights as [String], use ForEach with Text in HubCard
-- If ViewModel has insights as [ModuleInsight], use InsightsList(insights: viewModel.insights)
-- Domain-specific summary stats in HubCard — highlight what makes this Caffeine Tracker tracker unique
-- Show total count, current streak, best streak etc using ACTUAL ViewModel property names
+PURPOSE: Presented as sheet from nav bar button on collection view. Shows collection summary: total recipes, favorites count, total times cooked across all recipes in a horizontal stat card row. Most cooked top-3 recipes list with cook counts. Category breakdown as colored horizontal bars showing recipe count per MealCategory. Cuisine distribution as a simple ranked list. Average difficulty and average rating displays.
 
-VIEWMODEL PUBLIC API (only use these properties and methods):
 
+AVAILABLE SHARED COMPONENTS:
+- StatCard(title: String, value: String, icon: String, color: Color); StatGrid { content } wraps them in 2x2 grid
+
+VIEWMODEL PUBLIC API CONTRACT — Views MUST ONLY use these exact names:
+
+PROPERTIES:
+  var entries: [RecipeBoxEntry]  // stored
+  var todayEntries: [RecipeBoxEntry]  // computed
+  var currentStreak: Int  // computed
+  var longestStreak: Int  // computed
+  var weeklyChartData: [ChartDataPoint]  // computed
+  var result: [ChartDataPoint]  // stored
+  var insights: [ModuleInsight]  // computed
+  var result: [ModuleInsight]  // stored
+
+METHODS (async methods MUST be wrapped in Task { await ... }):
+  func loadData() async
+  func addEntry(_ entry: RecipeBoxEntry) async
+  func deleteEntry(_ entry: RecipeBoxEntry) async
+
+RULES:
+- If a property is not listed above, it does NOT exist — do not invent names
+- Use exact property names as shown (e.g., if it says 'currentStreak', do NOT use 'streak')
+- All async methods (addEntry, deleteEntry, loadData) MUST be called inside Task { await ... }
+
+
+FULL VIEWMODEL CODE (reference for exact property names and types):
+```swift
+import Foundation
+import SwiftUI
+
+// MARK: - RecipeBox View Model
+
+@Observable
+@MainActor
+final class RecipeBoxViewModel {
+    var entries: [RecipeBoxEntry] = []
+    var isLoading = false
+    var errorMessage: String?
+
+    private var bridgeBaseURL: String {
+        UserDefaults.standard.string(forKey: "ryanhub_server_url")
+            .flatMap { URL(string: $0)?.host }
+            .map { "http://\($0):18790" }
+            ?? "http://localhost:18790"
+    }
+
+    init() { Task { await loadData() } }
+
+    // MARK: - Computed Properties
+
+    var todayEntries: [RecipeBoxEntry] {
+        let today = DateFormatter()
+        today.dateFormat = "yyyy-MM-dd"
+        let todayStr = today.string(from: Date())
+        return entries.filter { $0.date.hasPrefix(todayStr) }
+    }
+
+    var currentStreak: Int {
+        let calendar = Calendar.current
+        let df = DateFormatter()
+        df.dateFormat = "yyyy-MM-dd"
+        let entryDates = Set(entries.compactMap { df.date(from: String($0.date.prefix(10))) }.map { calendar.startOfDay(for: $0) })
+        var streak = 0
+        var day = calendar.startOfDay(for: Date())
+        while entryDates.contains(day) {
+            streak += 1
+            day = calendar.date(byAdding: .day, value: -1, to: day)!
+        }
+        return streak
+    }
+
+    var longestStreak: Int {
+        let calendar = Calendar.current
+        let df = DateFormatter()
+        df.dateFormat = "yyyy-MM-dd"
+        let sortedDates = entries.compactMap { df.date(from: String($0.date.prefix(10))) }
+            .map { calendar.startOfDay(for: $0) }
+        let unique = Array(Set(sortedDates)).sorted()
+        guard !unique.isEmpty else { return 0 }
+        var longest = 1, current = 1
+        for i in 1..<unique.count {
+            if calendar.dateComponents([.day], from: unique[i-1], to: unique[i]).day == 1 {
+                current += 1
+                longest = max(longest, current)
+            } else {
+                current = 1
+            }
+        }
+        return longest
+    }
+
+    var weeklyChartData: [ChartDataPoint] {
+        let calendar = Calendar.current
+        let df = DateFormatter()
+        df.dateFormat = "yyyy-MM-dd"
+        let displayFmt = DateFormatter()
+        displayFmt.dateFormat = "E"
+        var result: [ChartDataPoint] = []
+        for dayOffset in (0..<7).reversed() {
+            let day = calendar.date(byAdding: .day, value: -dayOffset, to: Date())!
+            let dayStr = df.string(from: day)
+            let count = entries.filter { $0.date.hasPrefix(dayStr) }.count
+            result.append(ChartDataPoint(label: displayFmt.string(from: day), value: Double(count)))
+        }
+        return result
+    }
+
+    var insights: [ModuleInsight] {
+        var result: [ModuleInsight] = []
+        if currentStreak >= 3 {
+            result.append(ModuleInsight(type: .achievement, title: "\(currentStreak)-Day Streak!", message: "You've been consistent for \(currentStreak) days. Keep it up!"))
+        }
+        if todayEntries.isEmpty {
+            result.append(ModuleInsight(type: .suggestion, title: "No entries today", message: "Don't forget to log your data for today."))
+        }
+        return result
+    }
+
+    // MARK: - CRUD
+
+    func loadData() async {
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            let url = URL(string: "\(bridgeBaseURL)/modules/recipeBox/data")!
+            let (data, _) = try await URLSession.shared.data(from: url)
+            entries = try JSONDecoder().decode([RecipeBoxEntry].self, from: data)
+            UserDefaults.standard.set(data, forKey: "dynamic_module_recipeBox_cache")
+        } catch {
+            entries = []
+        }
+    }
+
+    func addEntry(_ entry: RecipeBoxEntry) async {
+        do {
+            let url = URL(string: "\(bridgeBaseURL)/modules/recipeBox/data/add")!
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = try JSONEncoder().encode(entry)
+            _ = try await URLSession.shared.data(for: request)
+            await loadData()
+        } catch {
+            errorMessage = "Failed to add entry"
+        }
+    }
+
+    func deleteEntry(_ entry: RecipeBoxEntry) async {
+        do {
+            let url = URL(string: "\(bridgeBaseURL)/modules/recipeBox/data?id=\(entry.id)")!
+            var request = URLRequest(url: url)
+            request.httpMethod = "DELETE"
+            _ = try await URLSession.shared.data(for: request)
+            await loadData()
+        } catch {
+            errorMessage = "Failed to delete entry"
+        }
+    }
+}
+
+```
 
 MODELS (use these exact types):
 ```swift
 import Foundation
 
-// MARK: - CaffeineTracker Models
+// MARK: - RecipeBox Models
 
-enum CoffeeDrinkType: String, Codable, CaseIterable, Identifiable {
-    case espresso
-    case drip
-    case pourOver
-    case coldBrew
-    case latte
-    case cappuccino
-    case americano
-    case instantCoffee
-    case matcha
-    case tea
-    case energyDrink
-    case decaf
+enum MealCategory: String, Codable, CaseIterable, Identifiable {
+    case breakfast
+    case lunch
+    case dinner
+    case snack
+    case dessert
+    case drink
     var id: String { rawValue }
     var displayName: String {
         switch self {
-        case .espresso: return "Espresso"
-        case .drip: return "Drip Coffee"
-        case .pourOver: return "Pour Over"
-        case .coldBrew: return "Cold Brew"
-        case .latte: return "Latte"
-        case .cappuccino: return "Cappuccino"
-        case .americano: return "Americano"
-        case .instantCoffee: return "Instant"
-        case .matcha: return "Matcha"
-        case .tea: return "Tea"
-        case .energyDrink: return "Energy Drink"
-        case .decaf: return "Decaf"
+        case .breakfast: return "Breakfast"
+        case .lunch: return "Lunch"
+        case .dinner: return "Dinner"
+        case .snack: return "Snack"
+        case .dessert: return "Dessert"
+        case .drink: return "Drink"
         }
     }
     var icon: String {
         switch self {
-        case .espresso: return "cup.and.saucer.fill"
-        case .drip: return "mug.fill"
-        case .pourOver: return "drop.fill"
-        case .coldBrew: return "snowflake"
-        case .latte: return "cup.and.saucer"
-        case .cappuccino: return "cloud.fill"
-        case .americano: return "drop.triangle.fill"
-        case .instantCoffee: return "bolt.fill"
-        case .matcha: return "leaf.fill"
-        case .tea: return "leaf"
-        case .energyDrink: return "battery.100.bolt"
-        case .decaf: return "moon.fill"
+        case .breakfast: return "sun.horizon"
+        case .lunch: return "sun.max"
+        case .dinner: return "moon.stars"
+        case .snack: return "carrot"
+        case .dessert: return "birthday.cake"
+        case .drink: return "cup.and.saucer"
         }
     }
 }
 
-enum DrinkSize: String, Codable, CaseIterable, Identifiable {
-    case small
+enum CuisineType: String, Codable, CaseIterable, Identifiable {
+    case italian
+    case mexican
+    case chinese
+    case japanese
+    case indian
+    case thai
+    case american
+    case mediterranean
+    case korean
+    case french
+    case other
+    var id: String { rawValue }
+    var displayName: String {
+        switch self {
+        case .italian: return "Italian"
+        case .mexican: return "Mexican"
+        case .chinese: return "Chinese"
+        case .japanese: return "Japanese"
+        case .indian: return "Indian"
+        case .thai: return "Thai"
+        case .american: return "American"
+        case .mediterranean: return "Mediterranean"
+        case .korean: return "Korean"
+        case .french: return "French"
+        case .other: return "Other"
+        }
+    }
+    var icon: String {
+        switch self {
+        case .italian: return "fork.knife"
+        case .mexican: return "fork.knife"
+        case .chinese: return "fork.knife"
+        case .japanese: return "fork.knife"
+        case .indian: return "fork.knife"
+        case .thai: return "fork.knife"
+        case .american: return "fork.knife"
+        case .mediterranean: return "fork.knife"
+        case .korean: return "fork.knife"
+        case .french: return "fork.knife"
+        case .other: return "ellipsis.circle"
+        }
+    }
+}
+
+enum DifficultyLevel: String, Codable, CaseIterable, Identifiable {
+    case easy
     case medium
-    case large
-    case extraLarge
+    case hard
     var id: String { rawValue }
     var displayName: String {
         switch self {
-        case .small: return "Small (8oz)"
-        case .medium: return "Medium (12oz)"
-        case .large: return "Large (16oz)"
-        case .extraLarge: return "XL (20oz)"
+        case .easy: return "Easy"
+        case .medium: return "Medium"
+        case .hard: return "Hard"
         }
     }
     var icon: String {
         switch self {
-        case .small: return "s.circle.fill"
-        case .medium: return "m.circle.fill"
-        case .large: return "l.circle.fill"
-        case .extraLarge: return "xmark.circle.fill"
+        case .easy: return "leaf"
+        case .medium: return "flame"
+        case .hard: return "flame.fill"
         }
     }
 }
 
-struct CaffeineTrackerEntry: Codable, Identifiable {
+struct RecipeBoxEntry: Codable, Identifiable {
     var id: String = UUID().uuidString
     var date: String = {
         let f = DateFormatter()
         f.dateFormat = "yyyy-MM-dd HH:mm"
         return f.string(from: Date())
     }()
-    var drinkType: CoffeeDrinkType
-    var size: DrinkSize
-    var caffeineMg: Int
-    var time: Date
+    var title: String
+    var category: MealCategory
+    var cuisine: CuisineType
+    var difficulty: DifficultyLevel
+    var prepTimeMinutes: Int
+    var cookTimeMinutes: Int
+    var servings: Int
+    var ingredients: [String]
+    var steps: [String]
     var rating: Int
+    var isFavorite: Bool
+    var cookCount: Int
     var notes: String
+    var sourceURL: String
 
     var summaryLine: String {
         var parts: [String] = [date]
-        parts.append("\(drinkType)")
-        parts.append("\(size)")
-        parts.append("\(caffeineMg)")
-        parts.append("\(time)")
+        parts.append("\(title)")
+        parts.append("\(category)")
+        parts.append("\(cuisine)")
+        parts.append("\(difficulty)")
+        parts.append("\(prepTimeMinutes)")
+        parts.append("\(cookTimeMinutes)")
+        parts.append("\(servings)")
+        parts.append("\(ingredients)")
+        parts.append("\(steps)")
         parts.append("\(rating)")
+        parts.append("\(isFavorite)")
+        parts.append("\(cookCount)")
         parts.append("\(notes)")
+        parts.append("\(sourceURL)")
         return parts.joined(separator: " | ")
     }
 }
@@ -187,17 +383,17 @@ SHARED REUSABLE COMPONENTS (already exist, import SwiftUI + Charts to use):
 
 DESIGN RULES:
 - @Environment(\.colorScheme) private var colorScheme
-- `let viewModel: CaffeineTrackerViewModel` (not @State, not @Bindable — it's passed from parent)
-- Use Color.hubPrimary, Color.hubAccentGreen, Color.hubAccentRed, Color.hubAccentYellow
+- `let viewModel: RecipeBoxViewModel` (not @State, not @Bindable — it's passed from parent)
+- Use Color.hubPrimary, Color.hubAccentGreen, Color.hubAccentRed, Color.hubAccentYellow (always prefix with Color.)
 - Use AdaptiveColors.textPrimary(for: colorScheme), AdaptiveColors.textSecondary(for: colorScheme)
 - Use AdaptiveColors.background(for: colorScheme) for ScrollView background
 - Use .hubTitle, .hubHeading, .hubBody, .hubCaption for fonts
 - Use HubLayout.standardPadding, HubLayout.sectionSpacing, HubLayout.itemSpacing
 - Use HubCard { content } for card containers
 - Do NOT import Charts (ModuleChartView handles it internally)
-- StatCard(title: String, value: String, icon: String, color: Color)
-- StatGrid { content } wraps StatCards in a 2x2 grid
-- SectionHeader(title: String) for section labels
+- SectionHeader(title: "Label") — requires title: argument label
+- HubTextField(placeholder: "Label", text: $binding) — requires placeholder: argument label
+- Button actions that call async methods: Button { Task { await viewModel.deleteEntry(entry) } } label: { ... }
 
 IMPORTANT: Your entire output will be saved directly as a .swift file.
 Do NOT write any explanation, description, or commentary.

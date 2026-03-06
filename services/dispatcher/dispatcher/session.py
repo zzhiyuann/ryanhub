@@ -22,14 +22,6 @@ class Session:
         "used_partial_fallback",
         # WebSocket client reference (for question routing)
         "ws_client", "ws_msg_id",
-        # Single-send contract: prevents duplicate final responses
-        "final_sent",
-        # Observability: pipeline stage timestamps
-        "stage_times",
-        # Retry tracking
-        "retry_count", "max_retries",
-        # Cancellation token
-        "cancel_event",
     )
 
     def __init__(
@@ -62,15 +54,6 @@ class Session:
         # WebSocket client reference — set when session originates from WS
         self.ws_client = None   # ServerConnection or None
         self.ws_msg_id: str | None = None  # Original WS message ID
-        # Single-send contract: set to True after final response is sent
-        self.final_sent: bool = False
-        # Observability: record timestamps for each pipeline stage
-        self.stage_times: dict[str, float] = {}
-        # Retry: track attempts for automatic retry on transient failures
-        self.retry_count: int = 0
-        self.max_retries: int = 2
-        # Cancellation: cooperative cancel via asyncio.Event
-        self.cancel_event: asyncio.Event = asyncio.Event()
 
     def elapsed(self) -> float:
         end = self.finished or time.time()
@@ -79,29 +62,6 @@ class Session:
     @property
     def project_name(self) -> str:
         return Path(self.cwd).name
-
-    def record_stage(self, stage: str) -> None:
-        """Record a pipeline stage timestamp for observability."""
-        self.stage_times[stage] = time.time()
-
-    @property
-    def is_cancelled(self) -> bool:
-        """Check if this session has been cooperatively cancelled."""
-        return self.cancel_event.is_set()
-
-    def request_cancel(self) -> None:
-        """Request cooperative cancellation of this session."""
-        self.cancel_event.set()
-
-    def stage_durations(self) -> dict[str, float]:
-        """Compute durations between consecutive pipeline stages."""
-        stages = sorted(self.stage_times.items(), key=lambda x: x[1])
-        durations = {}
-        for i in range(1, len(stages)):
-            prev_name, prev_ts = stages[i - 1]
-            cur_name, cur_ts = stages[i]
-            durations[f"{prev_name}->{cur_name}"] = round(cur_ts - prev_ts, 3)
-        return durations
 
 
 class SessionManager:
@@ -142,18 +102,6 @@ class SessionManager:
             s = self.by_msg.get(mid)
             if s:
                 return s
-        return None
-
-    def last_conv_id_for_cwd(self, cwd: str) -> str | None:
-        """Return the conv_id of the most recent session with the same working directory.
-
-        Used to share conversation context across parallel sessions
-        targeting the same project.
-        """
-        for mid in self.recent:
-            s = self.by_msg.get(mid)
-            if s and s.cwd == cwd:
-                return s.conv_id
         return None
 
     def active(self) -> list[Session]:

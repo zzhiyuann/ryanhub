@@ -81,9 +81,6 @@ class WebSocketServer:
         # List of dicts: {"type": "response", "id": msg_id, "content": ..., "streaming": False, "ts": ...}
         # Replayed to the next client that connects. Single-user app so no keying needed.
         self._pending_deliveries: list[dict] = []
-        # Single-send contract: track message IDs that have received a final response.
-        # Prevents duplicate final responses from racing streams and _process_message.
-        self._final_sent: set[str] = set()
 
     async def start(self) -> None:
         """Start the WebSocket server."""
@@ -311,11 +308,19 @@ class WebSocketServer:
                     content, project, msg_id, websocket,
                     image_base64, audio_base64, audio_duration, language,
                 )
-                # Single-send contract: send_response guards against duplicates
-                await self.send_response(
-                    websocket, msg_id, result or "",
-                    streaming=False, reply_to=msg_id,
-                )
+                # Pick best target: original ws if still connected, else any active client
+                response_data = {
+                    "type": "response",
+                    "id": msg_id,
+                    "content": result or "",
+                    "streaming": False,
+                }
+                target = self.get_active_client(websocket)
+                if target:
+                    await self._send(target, response_data)
+                else:
+                    # No client connected — cache for later replay
+                    self._cache_if_important(response_data)
             except Exception as exc:
                 log.exception("ws message handler error for msg %s", msg_id[:8])
                 error_data = {
@@ -494,42 +499,27 @@ class WebSocketServer:
         msg_id: str,
         content: str,
         streaming: bool = True,
-        reply_to: str | None = None,
-    ) -> bool:
+    ) -> None:
         """Send a response message to a specific client.
 
         If the original websocket is dead, retarget to any active client.
-        Returns False if the final response was already sent (single-send contract).
         """
-        # Single-send contract: prevent duplicate final responses
-        if not streaming:
-            if msg_id in self._final_sent:
-                log.debug("single-send: suppressed duplicate final for %s", msg_id[:8])
-                return False
-            self._final_sent.add(msg_id)
-            # Evict old entries to prevent unbounded growth
-            if len(self._final_sent) > 500:
-                # Remove oldest half (set is unordered, but this is sufficient)
-                to_remove = list(self._final_sent)[:250]
-                self._final_sent -= set(to_remove)
-
-        data: dict = {
-            "type": "response",
-            "id": msg_id,
-            "content": content,
-            "streaming": streaming,
-        }
-        if reply_to:
-            data["reply_to"] = reply_to
         target = self.get_active_client(websocket)
         if target:
-            await self._send(target, data)
-            return True
+            await self._send(target, {
+                "type": "response",
+                "id": msg_id,
+                "content": content,
+                "streaming": streaming,
+            })
         elif not streaming:
             # Only cache non-streaming (final) responses
-            self._cache_if_important(data)
-            return True
-        return False
+            self._cache_if_important({
+                "type": "response",
+                "id": msg_id,
+                "content": content,
+                "streaming": streaming,
+            })
 
     async def send_status(self, websocket: ServerConnection) -> None:
         """Send current status to a specific client."""
@@ -547,24 +537,28 @@ class WebSocketServer:
         question: str,
         options: list[str],
         allow_free_text: bool = True,
-        reply_to: str | None = None,
     ) -> None:
         """Send an AskUserQuestion to a specific WebSocket client."""
-        data: dict = {
+        target = self.get_active_client(websocket)
+        if not target:
+            # Cache for replay — question is important
+            self._cache_if_important({
+                "type": "question",
+                "id": msg_id,
+                "session_id": session_id,
+                "question": question,
+                "options": options,
+                "allow_free_text": allow_free_text,
+            })
+            return
+        await self._send(target, {
             "type": "question",
             "id": msg_id,
             "session_id": session_id,
             "question": question,
             "options": options,
             "allow_free_text": allow_free_text,
-        }
-        if reply_to:
-            data["reply_to"] = reply_to
-        target = self.get_active_client(websocket)
-        if not target:
-            self._cache_if_important(data)
-            return
-        await self._send(target, data)
+        })
 
     async def broadcast(self, data: dict) -> None:
         """Send a message to all connected clients."""
@@ -591,19 +585,15 @@ class WebSocketServer:
             dead.append(ws)
 
     async def broadcast_response(
-        self, msg_id: str, content: str, streaming: bool = True,
-        reply_to: str | None = None,
+        self, msg_id: str, content: str, streaming: bool = True
     ) -> None:
         """Broadcast a response to all connected clients."""
-        data: dict = {
+        await self.broadcast({
             "type": "response",
             "id": msg_id,
             "content": content,
             "streaming": streaming,
-        }
-        if reply_to:
-            data["reply_to"] = reply_to
-        await self.broadcast(data)
+        })
 
     async def broadcast_status(self) -> None:
         """Broadcast current status to all connected clients."""

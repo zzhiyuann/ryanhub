@@ -14,8 +14,6 @@ agent:
   max_turns: 50                        # Max agent turns for project tasks
   max_turns_chat: 10                   # Max turns for casual chat
   max_turns_followup: 20               # Max turns for follow-up messages
-  message_timeout: 600                 # Per-message timeout in seconds (10 min)
-  max_retries: 2                       # Auto-retry on transient agent failures
 
 behavior:
   poll_timeout: 30                     # Telegram long-poll seconds
