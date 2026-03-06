@@ -55,88 +55,87 @@ struct RBMetaView: View {
     // MARK: - Idle View
 
     private var idleView: some View {
-        ScrollView {
-            VStack(spacing: HubLayout.sectionSpacing) {
-                // Header
-                VStack(spacing: 8) {
-                    Image(systemName: "eyeglasses")
-                        .font(.system(size: 48))
-                        .foregroundStyle(Color.hubPrimary)
-                    Text("RB Meta")
-                        .font(.hubTitle)
-                        .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
-                    Text("AI-powered smart glasses assistant")
-                        .font(.hubCaption)
-                        .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
-                }
-                .padding(.top, 32)
+        VStack(spacing: 0) {
+            Spacer()
 
-                // Status cards
-                VStack(spacing: HubLayout.itemSpacing) {
-                    statusCard(
-                        title: "Gemini Live",
-                        status: RBMetaConfig.isConfigured ? "Configured" : "No API Key",
-                        color: RBMetaConfig.isConfigured ? .hubAccentGreen : .hubAccentRed,
-                        icon: "sparkles"
-                    )
-
-                    statusCard(
-                        title: "OpenClaw",
-                        status: RBMetaConfig.isOpenClawConfigured ? "Configured" : "Not Configured",
-                        color: RBMetaConfig.isOpenClawConfigured ? .hubAccentGreen : .gray,
-                        icon: "arrow.triangle.branch"
-                    )
-
-                    statusCard(
-                        title: "Ray-Ban Meta",
-                        status: glassesStatusText,
-                        color: glassesStatusColor,
-                        icon: "eyeglasses"
-                    )
-                }
-                .padding(.horizontal, HubLayout.standardPadding)
-
-                // Action buttons
-                VStack(spacing: HubLayout.itemSpacing) {
-                    HubButton("Start with iPhone Camera", isLoading: false) {
-                        Task {
-                            await viewModel.startIPhoneCamera()
-                        }
-                    }
-
-                    if viewModel.hasActiveDevice {
-                        HubButton("Start with Glasses", isLoading: false) {
-                            Task {
-                                await viewModel.startGlassesStreaming()
-                            }
-                        }
-                    } else if viewModel.isRegistered {
-                        HubSecondaryButton("Waiting for Glasses...") {}
-                    } else {
-                        HubSecondaryButton(viewModel.isRegistering ? "Connecting..." : "Connect Glasses") {
-                            viewModel.connectGlasses()
-                        }
-                    }
-                }
-                .padding(.horizontal, HubLayout.standardPadding)
-
-                // Info
-                HubCard {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("How to use")
-                            .font(.hubHeading)
-                            .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
-
-                        infoRow(icon: "1.circle.fill", text: "Start a camera session (iPhone or glasses)")
-                        infoRow(icon: "2.circle.fill", text: "Tap the AI button to connect Gemini")
-                        infoRow(icon: "3.circle.fill", text: "Talk naturally — it sees what you see")
-                        infoRow(icon: "4.circle.fill", text: "Ask it to do things via OpenClaw")
-                    }
-                    .padding(HubLayout.standardPadding)
-                }
-                .padding(.horizontal, HubLayout.standardPadding)
+            // Header
+            VStack(spacing: 6) {
+                Image(systemName: "eyeglasses")
+                    .font(.system(size: 40))
+                    .foregroundStyle(Color.hubPrimary)
+                Text("RB Meta")
+                    .font(.hubTitle)
+                    .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
             }
-            .padding(.bottom, 32)
+
+            Spacer().frame(height: 20)
+
+            // Status row — compact horizontal badges
+            HStack(spacing: 10) {
+                statusBadge(
+                    icon: "sparkles",
+                    label: "Gemini",
+                    color: RBMetaConfig.isConfigured ? .hubAccentGreen : .hubAccentRed
+                )
+                statusBadge(
+                    icon: "arrow.triangle.branch",
+                    label: "OpenClaw",
+                    color: RBMetaConfig.isOpenClawConfigured ? .hubAccentGreen : .gray
+                )
+                statusBadge(
+                    icon: "eyeglasses",
+                    label: glassesStatusText,
+                    color: glassesStatusColor
+                )
+            }
+            .padding(.horizontal, HubLayout.standardPadding)
+
+            Spacer().frame(height: 24)
+
+            // Resolution picker
+            VStack(spacing: 8) {
+                Text("Stream Resolution")
+                    .font(.hubCaption)
+                    .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                Picker("Resolution", selection: $viewModel.selectedResolution) {
+                    ForEach(0..<3, id: \.self) { i in
+                        Text(RBMetaViewModel.resolutionLabels[i]).tag(i)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .onChange(of: viewModel.selectedResolution) {
+                    viewModel.rebuildStreamSession()
+                }
+            }
+            .padding(.horizontal, HubLayout.standardPadding)
+
+            Spacer().frame(height: 24)
+
+            // Action buttons
+            VStack(spacing: HubLayout.itemSpacing) {
+                HubButton("Start with iPhone Camera", isLoading: false) {
+                    Task {
+                        await viewModel.startIPhoneCamera()
+                    }
+                }
+
+                if viewModel.hasActiveDevice {
+                    HubButton("Start with Glasses", isLoading: false) {
+                        Task {
+                            await viewModel.startGlassesStreaming()
+                        }
+                    }
+                } else if viewModel.isRegistered {
+                    HubSecondaryButton("Waiting for Glasses...") {}
+                } else {
+                    HubSecondaryButton(viewModel.isRegistering ? "Connecting..." : "Connect Glasses") {
+                        viewModel.connectGlasses()
+                    }
+                }
+            }
+            .padding(.horizontal, HubLayout.standardPadding)
+
+            Spacer()
         }
     }
 
@@ -234,43 +233,25 @@ struct RBMetaView: View {
 
     // MARK: - Components
 
-    private func statusCard(title: String, status: String, color: Color, icon: String) -> some View {
-        HubCard {
-            HStack {
-                Image(systemName: icon)
-                    .font(.system(size: 20))
-                    .foregroundStyle(color)
-                    .frame(width: 36)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                        .font(.hubBody)
-                        .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
-                    Text(status)
-                        .font(.hubCaption)
-                        .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
-                }
-
-                Spacer()
-
-                Circle()
-                    .fill(color)
-                    .frame(width: 10, height: 10)
-            }
-            .padding(HubLayout.standardPadding)
-        }
-    }
-
-    private func infoRow(icon: String, text: String) -> some View {
-        HStack(spacing: 10) {
+    private func statusBadge(icon: String, label: String, color: Color) -> some View {
+        HStack(spacing: 6) {
+            Circle()
+                .fill(color)
+                .frame(width: 8, height: 8)
             Image(systemName: icon)
-                .font(.system(size: 16))
-                .foregroundStyle(Color.hubPrimary)
-                .frame(width: 24)
-            Text(text)
-                .font(.hubCaption)
+                .font(.system(size: 12))
                 .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+            Text(label)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                .lineLimit(1)
         }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(AdaptiveColors.surfaceSecondary(for: colorScheme))
+        )
     }
 
     private var geminiPill: some View {

@@ -39,6 +39,7 @@ final class RBMetaViewModel {
     var streamingStatus: RBMetaStreamingStatus = .stopped
     var streamingMode: RBMetaStreamingMode = .glasses
     var hasActiveDevice: Bool = false
+    var selectedResolution: Int = 0  // 0=low, 1=medium, 2=high
 
     // DAT Registration
     var isRegistering: Bool = false
@@ -83,12 +84,7 @@ final class RBMetaViewModel {
 
         let selector = AutoDeviceSelector(wearables: wearables)
         self.deviceSelector = selector
-        let config = StreamSessionConfig(
-            videoCodec: VideoCodec.raw,
-            resolution: StreamingResolution.low,
-            frameRate: 24
-        )
-        self.streamSession = StreamSession(streamSessionConfig: config, deviceSelector: selector)
+        rebuildStreamSession()
 
         deviceMonitorTask = Task { @MainActor in
             for await device in selector.activeDeviceStream() {
@@ -102,7 +98,30 @@ final class RBMetaViewModel {
                 self.isRegistering = state == .registering
             }
         }
+    }
 
+    /// Map selectedResolution index to DAT SDK enum.
+    private var datResolution: StreamingResolution {
+        switch selectedResolution {
+        case 1: return .medium
+        case 2: return .high
+        default: return .low
+        }
+    }
+
+    /// Resolution display label.
+    static let resolutionLabels = ["Low (360p)", "Med (504p)", "High (720p)"]
+
+    /// Rebuild the stream session with the current resolution setting.
+    /// Safe to call before streaming starts; no-op effect on active stream.
+    func rebuildStreamSession() {
+        guard let deviceSelector else { return }
+        let config = StreamSessionConfig(
+            videoCodec: VideoCodec.raw,
+            resolution: datResolution,
+            frameRate: 24
+        )
+        streamSession = StreamSession(streamSessionConfig: config, deviceSelector: deviceSelector)
         attachDATListeners()
     }
 
