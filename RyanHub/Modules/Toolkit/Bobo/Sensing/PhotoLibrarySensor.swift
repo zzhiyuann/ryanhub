@@ -78,6 +78,17 @@ final class PhotoLibrarySensor: NSObject {
 
     // MARK: - Fetch & Process
 
+    /// Asset IDs already processed — shared with RBMetaMediaImporter to avoid duplicates.
+    private static let processedIDsKey = "rbmeta_imported_asset_ids"
+
+    private var processedAssetIDs: Set<String> {
+        get { Set(UserDefaults.standard.stringArray(forKey: Self.processedIDsKey) ?? []) }
+        set {
+            let trimmed = Array(newValue.suffix(1000))
+            UserDefaults.standard.set(trimmed, forKey: Self.processedIDsKey)
+        }
+    }
+
     private func fetchNewAssets() {
         guard let cutoff = lastKnownAssetDate else { return }
 
@@ -85,10 +96,18 @@ final class PhotoLibrarySensor: NSObject {
         options.predicate = NSPredicate(format: "creationDate > %@", cutoff as NSDate)
         options.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: true)]
 
-        // Fetch images
+        // Fetch new images by creation date
         let imageResult = PHAsset.fetchAssets(with: .image, options: options)
-        // Fetch videos
-        let videoResult = PHAsset.fetchAssets(with: .video, options: options)
+
+        // Fetch videos with broader window — synced videos have creationDate
+        // from capture time (could be hours/days ago), so also check modificationDate
+        let videoOptions = PHFetchOptions()
+        videoOptions.predicate = NSPredicate(
+            format: "creationDate > %@ OR modificationDate > %@",
+            cutoff as NSDate, cutoff as NSDate
+        )
+        videoOptions.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: true)]
+        let videoResult = PHAsset.fetchAssets(with: .video, options: videoOptions)
 
         let totalCount = imageResult.count + videoResult.count
         guard totalCount > 0 else { return }
@@ -110,6 +129,13 @@ final class PhotoLibrarySensor: NSObject {
         result.enumerateObjects { [weak self] asset, _, _ in
             guard let self else { return }
 
+            // Skip already-processed assets (dedup with RBMetaMediaImporter)
+            let assetID = asset.localIdentifier
+            guard !self.processedAssetIDs.contains(assetID) else {
+                self.updateHighWaterMark(asset)
+                return
+            }
+
             // Skip screenshots
             if asset.mediaSubtypes.contains(.photoScreenshot) {
                 self.updateHighWaterMark(asset)
@@ -118,6 +144,9 @@ final class PhotoLibrarySensor: NSObject {
 
             let source = Self.classifySource(asset)
             Self.logAssetDetails(asset, mediaType: "photo", classified: source)
+
+            // Mark as processed
+            self.processedAssetIDs.insert(assetID)
 
             imageManager.requestImage(
                 for: asset,
@@ -152,6 +181,13 @@ final class PhotoLibrarySensor: NSObject {
         result.enumerateObjects { [weak self] asset, _, _ in
             guard let self else { return }
 
+            // Skip already-processed assets (dedup with RBMetaMediaImporter)
+            let assetID = asset.localIdentifier
+            guard !self.processedAssetIDs.contains(assetID) else {
+                self.updateHighWaterMark(asset)
+                return
+            }
+
             let source = Self.classifySource(asset)
             Self.logAssetDetails(asset, mediaType: "video", classified: source)
 
@@ -160,6 +196,9 @@ final class PhotoLibrarySensor: NSObject {
                 self.updateHighWaterMark(asset)
                 return
             }
+
+            // Mark as processed
+            self.processedAssetIDs.insert(assetID)
 
             // Get video thumbnail
             imageManager.requestImage(

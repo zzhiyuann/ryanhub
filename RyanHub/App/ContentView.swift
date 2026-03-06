@@ -25,10 +25,11 @@ enum MainTab: String, CaseIterable {
     }
 }
 
-/// Sub-mode within the Chat tab: Chat or Terminal.
-enum ChatMode: String {
+/// Sub-mode within the Chat tab: Chat, Terminal, or RB Meta.
+enum HomeMode: String {
     case chat
     case terminal
+    case rbMeta
 }
 
 // MARK: - Content View
@@ -39,7 +40,7 @@ struct ContentView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.scenePhase) private var scenePhase
     @State private var selectedTab: MainTab = .chat
-    @State private var chatMode: ChatMode = .chat
+    @State private var homeMode: HomeMode = .chat
     /// ChatViewModel is owned here so it survives tab switches.
     @State private var chatViewModel = ChatViewModel()
     /// TerminalViewModel is owned here so it survives tab/mode switches.
@@ -141,21 +142,27 @@ struct ContentView: View {
     @ViewBuilder
     private var chatOrTerminalContent: some View {
         VStack(spacing: 0) {
-            // Mode toggle bubble
-            chatModeToggle
+            // Mode toggle bubble (hidden during active RB Meta streaming)
+            if !(homeMode == .rbMeta) {
+                homeModeToggle
+            }
 
             // Content
             ZStack {
-                if chatMode == .chat {
+                switch homeMode {
+                case .chat:
                     ChatView(viewModel: chatViewModel)
                         .transition(.opacity)
-                } else {
+                case .terminal:
                     SSHTerminalView(viewModel: terminalViewModel)
+                        .transition(.opacity)
+                case .rbMeta:
+                    RBMetaView()
                         .transition(.opacity)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .animation(.easeInOut(duration: 0.2), value: chatMode)
+            .animation(.easeInOut(duration: 0.2), value: homeMode)
         }
     }
 
@@ -173,11 +180,11 @@ struct ContentView: View {
     }
 
     @ViewBuilder
-    private var chatModeToggle: some View {
+    private var homeModeToggle: some View {
         HStack(spacing: 0) {
             modeButton(icon: "bubble.left.and.bubble.right.fill", mode: .chat, statusColor: chatStatusColor)
             modeButton(icon: "terminal.fill", mode: .terminal, statusColor: terminalStatusColor)
-            rbMetaShortcut
+            modeButton(icon: "eyeglasses", mode: .rbMeta, statusColor: rbMetaStatusColor)
         }
         .padding(3)
         .background(
@@ -188,37 +195,16 @@ struct ContentView: View {
         .padding(.vertical, 6)
     }
 
-    /// RB Meta quick-access button — green when glasses connected, red otherwise.
-    @ViewBuilder
-    private var rbMetaShortcut: some View {
-        Button {
-            selectedTab = .toolkit
-            // Signal toolkit to open RB Meta
-            appState.pendingDeepLink = .bobo // will navigate to toolkit
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                appState.toolkitOpenRBMeta = true
-            }
-        } label: {
-            Image(systemName: "eyeglasses")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(rbMetaStatusColor)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 6)
-        }
-        .buttonStyle(.plain)
-    }
-
     private var rbMetaStatusColor: Color {
-        // Check if DAT SDK has an active device
         appState.rbMetaConnected ? Color.hubAccentGreen : AdaptiveColors.textSecondary(for: colorScheme).opacity(0.5)
     }
 
     @ViewBuilder
-    private func modeButton(icon: String, mode: ChatMode, statusColor: Color) -> some View {
-        let isSelected = chatMode == mode
+    private func modeButton(icon: String, mode: HomeMode, statusColor: Color) -> some View {
+        let isSelected = homeMode == mode
         Button {
             withAnimation(.easeInOut(duration: 0.2)) {
-                chatMode = mode
+                homeMode = mode
             }
         } label: {
             Image(systemName: icon)
@@ -232,7 +218,6 @@ struct ContentView: View {
                 )
         }
         .buttonStyle(.plain)
-        .accessibilityIdentifier(mode == .chat ? AccessibilityID.modeChatButton : AccessibilityID.modeTerminalButton)
     }
 
     // MARK: - Deep Linking
@@ -242,7 +227,7 @@ struct ContentView: View {
         switch deepLink {
         case .chat:
             selectedTab = .chat
-            chatMode = .chat
+            homeMode = .chat
             notificationManager.clearChatBadge()
         case .bobo:
             selectedTab = .toolkit
