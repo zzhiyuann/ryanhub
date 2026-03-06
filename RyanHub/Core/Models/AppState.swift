@@ -186,12 +186,4 @@ enum AppLanguage: String, CaseIterable {
         }
     }
 
-    /// Instruction prefix to prepend to outgoing chat messages so the AI
-    /// responds in the user's chosen language.
-    var responseLanguageInstruction: String {
-        switch self {
-        case .english: return "[System: Respond in English]"
-        case .chinese: return "[System: 请用中文回复]"
-        }
-    }
 }

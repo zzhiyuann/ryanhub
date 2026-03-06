@@ -213,11 +213,8 @@ final class ChatViewModel {
         // relevant context so the AI can answer personal questions.
         var contentToSend = Self.buildContentWithContext(userText: text)
 
-        // Prepend language instruction so the AI responds in the user's chosen language.
-        let language = appState?.language ?? .english
-        contentToSend = "\(language.responseLanguageInstruction)\n\n\(contentToSend)"
-
-        let languageCode = language.rawValue
+        // Language code sent as metadata — dispatcher handles language matching.
+        let languageCode = (appState?.language ?? .english).rawValue
 
         Task {
             do {
@@ -254,14 +251,7 @@ final class ChatViewModel {
         let language = appState?.language ?? .english
         let languageCode = language.rawValue
 
-        // Build the wire caption: user caption (if any) + language instruction.
-        var wireCaption = caption
-        let langInstruction = language.responseLanguageInstruction
-        if wireCaption.isEmpty {
-            wireCaption = langInstruction
-        } else {
-            wireCaption = "\(langInstruction)\n\n\(wireCaption)"
-        }
+        let wireCaption = caption
 
         Task {
             do {
@@ -466,15 +456,8 @@ final class ChatViewModel {
         switch message.messageType {
         case .image:
             // Re-send image message
-            let language = appState?.language ?? .english
-            let languageCode = language.rawValue
-            var wireCaption = message.content
-            let langInstruction = language.responseLanguageInstruction
-            if wireCaption.isEmpty {
-                wireCaption = langInstruction
-            } else {
-                wireCaption = "\(langInstruction)\n\n\(wireCaption)"
-            }
+            let languageCode = (appState?.language ?? .english).rawValue
+            let wireCaption = message.content
             let messageId = message.id
             Task {
                 do {
@@ -511,10 +494,8 @@ final class ChatViewModel {
             return
         case .text:
             contentToSend = Self.buildContentWithContext(userText: message.content)
-            let language = appState?.language ?? .english
-            contentToSend = "\(language.responseLanguageInstruction)\n\n\(contentToSend)"
             let messageId = message.id
-            let languageCode = language.rawValue
+            let languageCode = (appState?.language ?? .english).rawValue
             Task {
                 do {
                     try await webSocket.sendMessage(id: messageId, content: contentToSend, language: languageCode)
@@ -569,10 +550,8 @@ final class ChatViewModel {
         startProgressTimer()
 
         // Send as a regular new message
-        var contentToSend = Self.buildContentWithContext(userText: trimmed)
-        let language = appState?.language ?? .english
-        contentToSend = "\(language.responseLanguageInstruction)\n\n\(contentToSend)"
-        let languageCode = language.rawValue
+        let contentToSend = Self.buildContentWithContext(userText: trimmed)
+        let languageCode = (appState?.language ?? .english).rawValue
 
         Task {
             do {

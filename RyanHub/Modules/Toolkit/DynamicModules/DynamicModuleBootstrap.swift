@@ -8,6 +8,7 @@ extension DynamicModuleRegistry {
         registerHydrationTracker()
         // TODO: Fix broken code-gen artifacts in these modules
         // registerMedicationTracker()
+        // registerReadingTracker()
         // registerSpendingTracker()
     }
 }
