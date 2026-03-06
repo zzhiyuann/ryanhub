@@ -199,8 +199,8 @@ final class ChatViewModel {
             replyToId: replyingTo?.id,
             replyToPreview: replyPreview
         )
-        appendMessage(userMessage)
         inputText = ""
+        appendMessage(userMessage)
 
         let messageId = userMessage.id
         messageStatuses[messageId] = .sending
@@ -852,29 +852,40 @@ final class ChatViewModel {
         let replyPreview = userMessage.map { Self.buildReplyPreview(for: $0) }
 
         if let existingIndex = messages.firstIndex(where: { $0.id == assistantId && $0.role == .assistant }) {
+            let existing = messages[existingIndex]
+
+            // Dedup: if message is already finalized (not streaming) and content
+            // matches, skip the redundant update to avoid visual duplicates.
+            if !existing.isStreaming, !isStreaming {
+                return
+            }
+
             // Update existing streaming message — use delta for efficient append
             // when available, fall back to full content replacement.
             let updatedContent: String
             if isStreaming, let delta = message.delta, !delta.isEmpty {
-                updatedContent = messages[existingIndex].content + delta
+                let currentContent = existing.content
+                // Strip leading whitespace from the very first delta
+                let effectiveDelta = currentContent.isEmpty ? delta.drop(while: { $0.isNewline }) : delta[...]
+                updatedContent = currentContent + effectiveDelta
             } else {
-                updatedContent = content
+                updatedContent = content.trimmingLeadingNewlines()
             }
             messages[existingIndex] = ChatMessage(
                 id: assistantId,
                 content: updatedContent,
                 role: .assistant,
-                timestamp: messages[existingIndex].timestamp,
+                timestamp: existing.timestamp,
                 isStreaming: isStreaming,
                 replyToId: id,
                 replyToPreview: replyPreview
             )
             messageUpdateTrigger += 1
         } else {
-            // New assistant message — always appended at the end
+            // New assistant message — strip leading newlines from initial content
             let assistantMessage = ChatMessage(
                 id: assistantId,
-                content: content,
+                content: content.trimmingLeadingNewlines(),
                 role: .assistant,
                 isStreaming: isStreaming,
                 replyToId: id,
@@ -1126,5 +1137,18 @@ final class ChatViewModel {
 
     private func saveMessages() {
         ChatMessage.save(messages)
+    }
+}
+
+// MARK: - Helpers
+
+private extension String {
+    /// Remove leading newlines (but not spaces) from the start of a string.
+    func trimmingLeadingNewlines() -> String {
+        var idx = startIndex
+        while idx < endIndex, self[idx] == "\n" || self[idx] == "\r" {
+            idx = index(after: idx)
+        }
+        return String(self[idx...])
     }
 }

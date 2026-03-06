@@ -215,12 +215,15 @@ struct ChatView: View {
                         .frame(height: 1)
                         .id("bottom-anchor")
                         .onAppear {
-                            // Bottom anchor became visible — user is at the bottom
                             userScrolledUp = false
                         }
                         .onDisappear {
-                            // Bottom anchor scrolled out of view — user scrolled up
-                            userScrolledUp = true
+                            // Only mark as scrolled up if NOT actively streaming —
+                            // during streaming, new content naturally pushes the
+                            // anchor off screen without user action.
+                            if viewModel.currentStreamingMessageId == nil {
+                                userScrolledUp = true
+                            }
                         }
                 }
                 .padding(.horizontal, HubLayout.standardPadding)
@@ -236,12 +239,11 @@ struct ChatView: View {
             .accessibilityIdentifier(AccessibilityID.chatMessagesArea)
             .scrollDismissesKeyboard(.interactively)
             .defaultScrollAnchor(.bottom)
-            // React to ALL message mutations via the trigger counter.
-            // This covers: new messages, streaming content updates, and deletions.
-            // Only auto-scroll if the user hasn't manually scrolled up.
+            // When streaming content updates come in, scroll to bottom
+            // unless the user has deliberately scrolled up.
             .onChange(of: viewModel.messageUpdateTrigger) {
                 if !userScrolledUp {
-                    scrollToBottom(proxy: proxy)
+                    scrollToBottom(proxy: proxy, animated: false)
                 }
             }
             .onChange(of: viewModel.isTyping) {
@@ -249,12 +251,10 @@ struct ChatView: View {
                     scrollToBottom(proxy: proxy)
                 }
             }
-            // When a new user message is sent (message count increases with a user message
-            // at the end), always scroll to bottom and reset the flag.
+            // When a new message appears (user or assistant), always scroll
+            // to the bottom and reset the scroll flag.
             .onChange(of: viewModel.messages.count) { oldCount, newCount in
-                if newCount > oldCount,
-                   let lastMessage = viewModel.messages.last,
-                   lastMessage.role == .user {
+                if newCount > oldCount {
                     userScrolledUp = false
                     scrollToBottom(proxy: proxy)
                 }
