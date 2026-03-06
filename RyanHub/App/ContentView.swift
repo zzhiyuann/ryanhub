@@ -61,12 +61,13 @@ struct ContentView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            // Separator
-            AdaptiveColors.border(for: colorScheme)
-                .frame(height: 0.5)
+            // Separator + tab bar — hidden during RB Meta streaming (fullscreen)
+            if !appState.rbMetaStreaming {
+                AdaptiveColors.border(for: colorScheme)
+                    .frame(height: 0.5)
 
-            // Tab bar — fixed at bottom
-            tabBar
+                tabBar
+            }
         }
         .background(AdaptiveColors.background(for: colorScheme))
         .ignoresSafeArea(.keyboard)
@@ -142,8 +143,8 @@ struct ContentView: View {
     @ViewBuilder
     private var chatOrTerminalContent: some View {
         VStack(spacing: 0) {
-            // Mode toggle bubble (hidden during active RB Meta streaming)
-            if !(homeMode == .rbMeta) {
+            // Mode toggle — hidden only during active RB Meta streaming (fullscreen)
+            if !appState.rbMetaStreaming {
                 homeModeToggle
             }
 

@@ -30,6 +30,9 @@ struct RBMetaView: View {
         .onChange(of: viewModel.hasActiveDevice) { _, connected in
             appState.rbMetaConnected = connected
         }
+        .onChange(of: viewModel.isStreaming) { _, streaming in
+            appState.rbMetaStreaming = streaming
+        }
         .onOpenURL { url in
             guard
                 let components = URLComponents(url: url, resolvingAgainstBaseURL: false),

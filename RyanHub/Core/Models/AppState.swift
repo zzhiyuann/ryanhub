@@ -111,6 +111,9 @@ final class AppState {
     /// Whether RB Meta glasses are connected (updated by RBMetaViewModel).
     var rbMetaConnected: Bool = false
 
+    /// Whether an RB Meta camera stream is actively running (fullscreen mode).
+    var rbMetaStreaming: Bool = false
+
     // MARK: - Connection State
 
     var isConnected: Bool = false
