@@ -185,7 +185,7 @@ final class RBMetaMediaImporter {
 
     /// Check if a PHAsset was captured by Ray-Ban Meta glasses.
     /// Uses EXIF metadata (camera maker/model) from the asset's resources.
-    static func isRBMetaAsset(_ asset: PHAsset) -> Bool {
+    nonisolated static func isRBMetaAsset(_ asset: PHAsset) -> Bool {
         let width = asset.pixelWidth
         let height = asset.pixelHeight
         let isRBMetaResolution = (width == 4032 && height == 3024) ||

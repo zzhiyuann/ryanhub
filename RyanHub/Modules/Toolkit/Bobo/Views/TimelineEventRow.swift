@@ -1384,22 +1384,28 @@ struct InlineVideoPlayer: View {
 
     var body: some View {
         ZStack {
-            if let player, isPlaying {
-                VideoPlayer(player: player)
-            } else if let thumbnail {
+            if let thumbnail {
+                // Thumbnail always rendered to provide intrinsic size
                 Image(uiImage: thumbnail)
                     .resizable()
                     .scaledToFit()
-                Button {
-                    loadAndPlay()
-                } label: {
-                    Image(systemName: "play.circle.fill")
-                        .font(.system(size: 48))
-                        .foregroundStyle(.white.opacity(0.9))
-                        .shadow(radius: 4)
+                    .opacity(isPlaying ? 0 : 1)
+
+                if let player, isPlaying {
+                    VideoPlayer(player: player)
+                } else {
+                    Button {
+                        loadAndPlay()
+                    } label: {
+                        Image(systemName: "play.circle.fill")
+                            .font(.system(size: 48))
+                            .foregroundStyle(.white.opacity(0.9))
+                            .shadow(radius: 4)
+                    }
                 }
             } else {
                 Color.black
+                    .aspectRatio(16/9, contentMode: .fit)
                 ProgressView().tint(.white)
                     .onAppear { loadThumbnail() }
             }

@@ -160,7 +160,10 @@ final class PhotoLibrarySensor: NSObject {
                 return
             }
 
-            let source = Self.classifySource(asset)
+            var source = Self.classifySource(asset)
+            if source != "rb_meta" && RBMetaMediaImporter.isRBMetaAsset(asset) {
+                source = "rb_meta"
+            }
             Self.logAssetDetails(asset, mediaType: "photo", classified: source)
 
             // Mark as processed
@@ -204,7 +207,10 @@ final class PhotoLibrarySensor: NSObject {
                 continue
             }
 
-            let source = Self.classifySource(asset)
+            var source = Self.classifySource(asset)
+            if source != "rb_meta" && RBMetaMediaImporter.isRBMetaAsset(asset) {
+                source = "rb_meta"
+            }
             Self.logAssetDetails(asset, mediaType: "video", classified: source)
 
             // Mark as processed
