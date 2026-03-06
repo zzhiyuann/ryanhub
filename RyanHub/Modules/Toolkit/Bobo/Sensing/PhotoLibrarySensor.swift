@@ -162,10 +162,14 @@ final class PhotoLibrarySensor: NSObject {
                 return
             }
 
-            var source = Self.classifySource(asset)
-            if source != "rb_meta" && RBMetaMediaImporter.isRBMetaAsset(asset) {
-                source = "rb_meta"
+            // Skip RB Meta assets — RBMetaMediaImporter handles them exclusively
+            // to avoid duplicate timeline events from concurrent processing.
+            if RBMetaMediaImporter.isRBMetaAsset(asset) {
+                self.updateHighWaterMark(asset)
+                return
             }
+
+            let source = Self.classifySource(asset)
             Self.logAssetDetails(asset, mediaType: "photo", classified: source)
 
             // Mark as processed
@@ -211,10 +215,13 @@ final class PhotoLibrarySensor: NSObject {
                 continue
             }
 
-            var source = Self.classifySource(asset)
-            if source != "rb_meta" && RBMetaMediaImporter.isRBMetaAsset(asset) {
-                source = "rb_meta"
+            // Skip RB Meta assets — RBMetaMediaImporter handles them exclusively
+            if RBMetaMediaImporter.isRBMetaAsset(asset) {
+                updateHighWaterMark(asset)
+                continue
             }
+
+            let source = Self.classifySource(asset)
             Self.logAssetDetails(asset, mediaType: "video", classified: source)
 
             // Mark as processed
