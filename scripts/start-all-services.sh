@@ -26,35 +26,36 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(dirname "$SCRIPT_DIR")"
 
-MASTER_LOG="/tmp/ryanhub-services.log"
-PID_DIR="/tmp/ryanhub-pids"
+LOG_DIR="$HOME/.ryanhub/logs"
+MASTER_LOG="$LOG_DIR/services.log"
+PID_DIR="$HOME/.ryanhub/pids"
 
 # Service definitions: name, port, start command, working directory, log file
 # Dispatcher
 DISPATCHER_NAME="dispatcher"
 DISPATCHER_PORT=8765
 DISPATCHER_BIN="$REPO_ROOT/services/dispatcher/.venv/bin/dispatcher"
-DISPATCHER_LOG="/tmp/ryanhub-dispatcher.log"
+DISPATCHER_LOG="$LOG_DIR/dispatcher.log"
 
 # Bridge Server
 FOOD_NAME="food-analysis"
 FOOD_PORT=18790
 FOOD_SCRIPT="$REPO_ROOT/scripts/bridge-server.py"
-FOOD_LOG="/tmp/ryanhub-food-analysis.log"
+FOOD_LOG="$LOG_DIR/food-analysis.log"
 
 # Calendar Sync Server
 CALENDAR_NAME="calendar-sync"
 CALENDAR_PORT=18791
 CALENDAR_SCRIPT="$REPO_ROOT/scripts/calendar-sync-server.py"
 CALENDAR_PYTHON="/Users/zwang/Documents/gcal-mcp-server/.venv/bin/python3"
-CALENDAR_LOG="/tmp/ryanhub-calendar-sync.log"
+CALENDAR_LOG="$LOG_DIR/calendar-sync.log"
 
 # Book Factory Server
 BOOKFACTORY_NAME="bookfactory"
 BOOKFACTORY_PORT=3443
 BOOKFACTORY_HTTP_PORT=3000
 BOOKFACTORY_DIR="$REPO_ROOT/services/bookfactory"
-BOOKFACTORY_LOG="/tmp/ryanhub-bookfactory.log"
+BOOKFACTORY_LOG="$LOG_DIR/bookfactory.log"
 
 # Diarization Server
 DIARIZATION_NAME="diarization"
@@ -62,7 +63,7 @@ DIARIZATION_PORT=18793
 DIARIZATION_WS_PORT=18794
 DIARIZATION_SCRIPT="$REPO_ROOT/scripts/diarization-server.py"
 DIARIZATION_PYTHON="$REPO_ROOT/scripts/diarization-env/bin/python3"
-DIARIZATION_LOG="/tmp/ryanhub-diarization.log"
+DIARIZATION_LOG="$LOG_DIR/diarization.log"
 
 # Data directories (within the monorepo, gitignored)
 export BOOKFACTORY_DATA_DIR="$REPO_ROOT/services/bookfactory/data"
@@ -84,6 +85,8 @@ unset CLAUDECODE 2>/dev/null || true
 timestamp() {
     date "+%Y-%m-%d %H:%M:%S"
 }
+
+mkdir -p "$LOG_DIR" "$PID_DIR"
 
 log() {
     echo "[$(timestamp)] $*" | tee -a "$MASTER_LOG"
@@ -244,7 +247,9 @@ start_food() {
     disown "$pid" 2>/dev/null || true
     save_pid "$FOOD_NAME" "$pid"
 
-    if wait_for_port "$FOOD_PORT" 10; then
+    # bridge-server.py may need extra warm-up time (imports/model checks),
+    # so use a longer timeout to avoid false negatives.
+    if wait_for_port "$FOOD_PORT" 40; then
         log "$FOOD_NAME: Started successfully (PID $pid)"
     else
         log_error "$FOOD_NAME: Failed to start within timeout"

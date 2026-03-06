@@ -146,7 +146,7 @@ final class RBMetaMediaImporter {
         }
 
         let event = SensingEvent(
-            timestamp: asset.creationDate ?? Date(),
+            timestamp: Self.eventTimestamp(for: asset),
             modality: .photo,
             payload: [:]
         )
@@ -260,5 +260,9 @@ final class RBMetaMediaImporter {
         }
 
         return false
+    }
+
+    nonisolated private static func eventTimestamp(for asset: PHAsset) -> Date {
+        asset.modificationDate ?? asset.creationDate ?? Date()
     }
 }

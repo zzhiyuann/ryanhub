@@ -312,8 +312,11 @@ final class SensingEngine {
 
     /// Check for new photos taken while the app was in the background.
     func checkForNewPhotos() {
-        guard isRunning else { return }
-        photoLibrarySensor.checkNow()
+        // Always trigger RB Meta importer, even when sensing is toggled off.
+        // Users may import media while BOBO sensing is paused.
+        if isRunning {
+            photoLibrarySensor.checkNow()
+        }
         RBMetaMediaImporter.shared.importNewMedia()
     }
 

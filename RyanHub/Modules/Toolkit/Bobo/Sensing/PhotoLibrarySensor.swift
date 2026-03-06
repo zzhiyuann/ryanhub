@@ -183,7 +183,7 @@ final class PhotoLibrarySensor: NSObject {
 
                 var event = self.saveAndCreateEvent(
                     jpegData: jpegData,
-                    timestamp: asset.creationDate ?? Date()
+                    timestamp: Self.eventTimestamp(for: asset)
                 )
                 event.payload["source"] = source
                 event.payload["mediaType"] = "photo"
@@ -234,7 +234,7 @@ final class PhotoLibrarySensor: NSObject {
                 guard let self else { return }
                 var event = self.saveAndCreateEvent(
                     jpegData: jpegData,
-                    timestamp: asset.creationDate ?? Date()
+                    timestamp: Self.eventTimestamp(for: asset)
                 )
                 event.payload["source"] = source
                 event.payload["mediaType"] = "video"
@@ -328,6 +328,12 @@ final class PhotoLibrarySensor: NSObject {
         if let date = asset.creationDate, date > (lastKnownAssetDate ?? .distantPast) {
             lastKnownAssetDate = date
         }
+    }
+
+    /// Timeline timestamp for media events.
+    /// Prefer modificationDate so recently synced imports show up immediately.
+    private static func eventTimestamp(for asset: PHAsset) -> Date {
+        asset.modificationDate ?? asset.creationDate ?? Date()
     }
 }
 
