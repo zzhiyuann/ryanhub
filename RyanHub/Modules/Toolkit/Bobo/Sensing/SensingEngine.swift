@@ -110,6 +110,11 @@ final class SensingEngine {
         photoLibrarySensor.onEvent = { [weak self] event in
             Task { @MainActor in self?.recordEvent(event) }
         }
+        photoLibrarySensor.onLibraryChange = {
+            Task { @MainActor in
+                RBMetaMediaImporter.shared.importNewMedia()
+            }
+        }
 
         // Start all sensors
         motionSensor.start()
@@ -136,6 +141,9 @@ final class SensingEngine {
         startSyncTimer()
 
         print("[SensingEngine] Started all sensors — loaded \(recentEvents.count) events for today, \(pendingEventCount) pending sync")
+
+        // Import any RB Meta media from the last 7 days that hasn't been processed yet
+        RBMetaMediaImporter.shared.importNewMedia()
 
         // Backfill motion data from CoreMotion to recover any gaps
         // (e.g., events lost to decode failure, or app was killed for a while)
@@ -306,6 +314,7 @@ final class SensingEngine {
     func checkForNewPhotos() {
         guard isRunning else { return }
         photoLibrarySensor.checkNow()
+        RBMetaMediaImporter.shared.importNewMedia()
     }
 
     // MARK: - Event Recording

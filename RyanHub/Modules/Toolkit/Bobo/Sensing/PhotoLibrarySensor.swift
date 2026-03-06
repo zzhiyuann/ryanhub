@@ -15,6 +15,10 @@ final class PhotoLibrarySensor: NSObject {
     /// Callback invoked when a new media asset is detected.
     var onEvent: ((SensingEvent) -> Void)?
 
+    /// Callback invoked whenever the photo library changes (regardless of whether
+    /// new assets matched our criteria). Used to trigger RBMetaMediaImporter scans.
+    var onLibraryChange: (() -> Void)?
+
     /// Tracks the most recent asset creation date we've processed.
     private var lastKnownAssetDate: Date?
 
@@ -329,6 +333,7 @@ extension PhotoLibrarySensor: PHPhotoLibraryChangeObserver {
     func photoLibraryDidChange(_ changeInstance: PHChange) {
         DispatchQueue.main.async { [weak self] in
             self?.fetchNewAssets()
+            self?.onLibraryChange?()
         }
     }
 }

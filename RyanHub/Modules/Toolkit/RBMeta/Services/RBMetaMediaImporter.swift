@@ -1,6 +1,9 @@
 import Foundation
 import Photos
 import UIKit
+import os.log
+
+private let logger = Logger(subsystem: "com.zwang.ryanhub", category: "RBMetaMediaImporter")
 
 // MARK: - RB Meta Media Importer
 
@@ -83,6 +86,8 @@ final class RBMetaMediaImporter {
 
         let imageAssets = PHAsset.fetchAssets(with: .image, options: options)
         let videoAssets = PHAsset.fetchAssets(with: .video, options: options)
+
+        logger.info("Scanning \(imageAssets.count) photos, \(videoAssets.count) videos from last \(Self.maxLookbackDays) days")
 
         var knownIDs = importedAssetIDs
         var newCount = 0
@@ -180,64 +185,60 @@ final class RBMetaMediaImporter {
     /// Check if a PHAsset was captured by Ray-Ban Meta glasses.
     /// Uses EXIF metadata (camera maker/model) from the asset's resources.
     static func isRBMetaAsset(_ asset: PHAsset) -> Bool {
-        // Quick heuristic checks first:
-        // Ray-Ban Meta Gen 2 has a 12MP ultra-wide camera (4032x3024 or similar)
-        // and photos are synced from Meta AI app (not captured by iPhone directly)
-
-        // Check pixel dimensions — RB Meta photos are typically 4032x3024 or 3024x4032
         let width = asset.pixelWidth
         let height = asset.pixelHeight
         let isRBMetaResolution = (width == 4032 && height == 3024) ||
                                   (width == 3024 && height == 4032) ||
                                   (width == 4000 && height == 3000) ||
-                                  (width == 3000 && height == 4000)
+                                  (width == 3000 && height == 4000) ||
+                                  (width == 2992 && height == 2992) ||
+                                  (width == 3024 && height == 3024)
 
-        // For videos: RB Meta records at specific resolutions
         let isRBMetaVideoRes = (width == 1920 && height == 1080) ||
                                 (width == 1080 && height == 1920) ||
                                 (width == 1280 && height == 720) ||
                                 (width == 720 && height == 1280)
 
-        // Check EXIF via PHAssetResource for more definitive identification
         let resources = PHAssetResource.assetResources(for: asset)
+        let filenames = resources.map { $0.originalFilename }
+
+        // Log all video assets for debugging
+        if asset.mediaType == .video {
+            let syncDelay: String
+            if let c = asset.creationDate, let m = asset.modificationDate {
+                syncDelay = String(format: "%.0fs", m.timeIntervalSince(c))
+            } else {
+                syncDelay = "n/a"
+            }
+            logger.info("""
+                [isRBMetaAsset] video: \(width)x\(height), \
+                sourceType=\(asset.sourceType.rawValue), \
+                syncDelay=\(syncDelay), \
+                files=\(filenames), \
+                isRBVideoRes=\(isRBMetaVideoRes)
+                """)
+        }
+
+        // 1. Filename check (most reliable)
         for resource in resources {
             let filename = resource.originalFilename.lowercased()
-            // Meta glasses photos often have specific filename patterns
             if filename.contains("meta") || filename.contains("ray-ban") || filename.contains("rayban") {
                 return true
             }
         }
 
-        // If the photo has RB Meta resolution AND was not captured on this device
-        // (creation date != modification date suggests sync from external source),
-        // we consider it likely from RB Meta.
-        // Note: This is a heuristic — may need tuning based on actual device behavior.
-        if asset.mediaType == .image && isRBMetaResolution {
-            // Photos from RB Meta are synced via Meta AI app, so they appear as
-            // "added" rather than "captured" photos. Check sourceType.
-            if asset.sourceType != .typeUserLibrary {
-                return true
-            }
-            // Additional check: if creation date is significantly before the asset
-            // was added to the library, it was likely synced from an external device.
-            // Unfortunately PHAsset doesn't expose "added date" directly, but
-            // modificationDate can serve as a proxy.
-            if let created = asset.creationDate, let modified = asset.modificationDate {
-                let syncDelay = modified.timeIntervalSince(created)
-                // If there's more than 30 seconds between capture and library addition,
-                // it was likely synced from an external device
-                if syncDelay > 30 && isRBMetaResolution {
-                    return true
-                }
-            }
+        // 2. External source + known resolution
+        if asset.sourceType != .typeUserLibrary {
+            if asset.mediaType == .image && isRBMetaResolution { return true }
+            if asset.mediaType == .video && isRBMetaVideoRes { return true }
         }
 
-        if asset.mediaType == .video && isRBMetaVideoRes {
-            if let created = asset.creationDate, let modified = asset.modificationDate {
-                let syncDelay = modified.timeIntervalSince(created)
-                if syncDelay > 30 {
-                    return true
-                }
+        // 3. Sync delay heuristic
+        if let created = asset.creationDate, let modified = asset.modificationDate {
+            let syncDelay = modified.timeIntervalSince(created)
+            if syncDelay > 30 {
+                if asset.mediaType == .image && isRBMetaResolution { return true }
+                if asset.mediaType == .video && isRBMetaVideoRes { return true }
             }
         }
 
