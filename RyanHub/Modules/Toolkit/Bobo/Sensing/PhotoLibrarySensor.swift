@@ -99,23 +99,37 @@ final class PhotoLibrarySensor: NSObject {
         // Fetch new images by creation date
         let imageResult = PHAsset.fetchAssets(with: .image, options: options)
 
-        // Fetch videos with broader window — synced videos have creationDate
-        // from capture time (could be hours/days ago), so also check modificationDate
-        let videoOptions = PHFetchOptions()
-        videoOptions.predicate = NSPredicate(
-            format: "creationDate > %@ OR modificationDate > %@",
-            cutoff as NSDate, cutoff as NSDate
-        )
-        videoOptions.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: true)]
-        let videoResult = PHAsset.fetchAssets(with: .video, options: videoOptions)
+        // Fetch videos — PHFetchOptions does NOT support OR predicates,
+        // so we do two fetches and merge the results.
+        let videoByCreation = PHFetchOptions()
+        videoByCreation.predicate = NSPredicate(format: "creationDate > %@", cutoff as NSDate)
+        videoByCreation.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: true)]
+        let videoResult1 = PHAsset.fetchAssets(with: .video, options: videoByCreation)
 
-        let totalCount = imageResult.count + videoResult.count
+        // Synced videos may have old creationDate but recent modificationDate
+        let videoByModification = PHFetchOptions()
+        videoByModification.predicate = NSPredicate(format: "modificationDate > %@", cutoff as NSDate)
+        videoByModification.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: true)]
+        let videoResult2 = PHAsset.fetchAssets(with: .video, options: videoByModification)
+
+        // Merge both video fetches into a unique set
+        var videoAssets: [PHAsset] = []
+        var seenVideoIDs = Set<String>()
+        for result in [videoResult1, videoResult2] {
+            result.enumerateObjects { asset, _, _ in
+                if seenVideoIDs.insert(asset.localIdentifier).inserted {
+                    videoAssets.append(asset)
+                }
+            }
+        }
+
+        let totalCount = imageResult.count + videoAssets.count
         guard totalCount > 0 else { return }
 
-        logger.info("Found \(imageResult.count) new photo(s), \(videoResult.count) new video(s)")
+        logger.info("Found \(imageResult.count) new photo(s), \(videoAssets.count) new video(s)")
 
         processImageAssets(imageResult)
-        processVideoAssets(videoResult)
+        processVideoAssetList(videoAssets)
     }
 
     private func processImageAssets(_ result: PHFetchResult<PHAsset>) {
@@ -170,7 +184,7 @@ final class PhotoLibrarySensor: NSObject {
         }
     }
 
-    private func processVideoAssets(_ result: PHFetchResult<PHAsset>) {
+    private func processVideoAssetList(_ assets: [PHAsset]) {
         let imageManager = PHImageManager.default()
         let thumbnailSize = CGSize(width: 800, height: 800)
         let requestOptions = PHImageRequestOptions()
@@ -178,14 +192,12 @@ final class PhotoLibrarySensor: NSObject {
         requestOptions.deliveryMode = .highQualityFormat
         requestOptions.resizeMode = .exact
 
-        result.enumerateObjects { [weak self] asset, _, _ in
-            guard let self else { return }
-
+        for asset in assets {
             // Skip already-processed assets (dedup with RBMetaMediaImporter)
             let assetID = asset.localIdentifier
-            guard !self.processedAssetIDs.contains(assetID) else {
-                self.updateHighWaterMark(asset)
-                return
+            guard !processedAssetIDs.contains(assetID) else {
+                updateHighWaterMark(asset)
+                continue
             }
 
             let source = Self.classifySource(asset)
@@ -193,12 +205,12 @@ final class PhotoLibrarySensor: NSObject {
 
             // Only import RB Meta videos — skip iPhone camera recordings
             guard source == "rb_meta" else {
-                self.updateHighWaterMark(asset)
-                return
+                updateHighWaterMark(asset)
+                continue
             }
 
             // Mark as processed
-            self.processedAssetIDs.insert(assetID)
+            processedAssetIDs.insert(assetID)
 
             // Get video thumbnail
             imageManager.requestImage(
@@ -206,11 +218,12 @@ final class PhotoLibrarySensor: NSObject {
                 targetSize: thumbnailSize,
                 contentMode: .aspectFit,
                 options: requestOptions
-            ) { image, info in
+            ) { [weak self] image, info in
                 let isDegraded = (info?[PHImageResultIsDegradedKey] as? Bool) ?? false
                 guard !isDegraded, let image else { return }
                 guard let jpegData = image.jpegData(compressionQuality: 0.7) else { return }
 
+                guard let self else { return }
                 var event = self.saveAndCreateEvent(
                     jpegData: jpegData,
                     timestamp: asset.creationDate ?? Date()
@@ -222,7 +235,7 @@ final class PhotoLibrarySensor: NSObject {
                 self.onEvent?(event)
             }
 
-            self.updateHighWaterMark(asset)
+            updateHighWaterMark(asset)
         }
     }
 
