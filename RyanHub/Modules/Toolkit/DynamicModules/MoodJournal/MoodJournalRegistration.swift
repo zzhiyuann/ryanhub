@@ -9,8 +9,8 @@ extension DynamicModuleRegistry {
             toolkitId: "moodJournal",
             displayName: "Mood Journal",
             shortName: "Mood",
-            subtitle: "Track your emotional wellbeing",
-            icon: "face.smiling.inverse",
+            subtitle: "Track your emotional well-being",
+            icon: "face.smiling",
             iconColorName: "hubPrimaryLight",
             viewBuilder: { AnyView(MoodJournalView()) },
             dataProviderType: MoodJournalDataProvider.self

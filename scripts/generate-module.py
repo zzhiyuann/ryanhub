@@ -13,6 +13,7 @@ Usage:
   python3 scripts/generate-module.py --batch scenarios.json
   python3 scripts/generate-module.py --list
 """
+from __future__ import annotations
 
 import argparse
 import json
@@ -370,10 +371,11 @@ A user wants a personal tracker module: "{description}"
 Your job is to DEEPLY THINK about this — not just the literal request, but:
 1. What does the user ACTUALLY need? What problems are they solving?
 2. What do premium apps in this category do? (Think: top-rated App Store apps)
-3. What analytics, insights, and visualizations would make this genuinely useful?
+3. What is the RIGHT navigation pattern for THIS specific module?
 4. What gamification elements drive retention? (Streaks, goals, achievements)
 
-Design a RICH, MULTI-VIEW module with sophisticated domain intelligence.
+IMPORTANT: Every module should have its OWN unique UI design appropriate to its domain.
+Do NOT default to Dashboard+History+Analytics for everything.
 
 Return a JSON object with this EXACT structure:
 
@@ -387,6 +389,9 @@ Return a JSON object with this EXACT structure:
   "iconColor": "one of: {ICON_COLORS}",
   "relevanceKeywords": ["5-10 lowercase keywords for AI context matching"],
 
+  "navigationPattern": "singleScroll|tabbedSegmented|tabbedBottom|navigationStack",
+  "entryPattern": "fab+sheet|inline|sheet|none",
+
   "dataFields": [
     {{"name": "fieldName", "type": "SwiftType", "label": "Human Label", "control": "stepper|slider|picker|toggle|text|datePicker"}},
     ...
@@ -397,11 +402,10 @@ Return a JSON object with this EXACT structure:
   ],
 
   "views": [
-    {{"name": "DashboardView", "purpose": "Main dashboard with stats, progress ring, and quick-add", "components": ["StatGrid", "ProgressRingView", "QuickEntryFAB"]}},
-    {{"name": "EntrySheet", "purpose": "Quick entry modal with domain-appropriate controls", "components": ["QuickEntrySheet", "EntryFormSection"]}},
-    {{"name": "HistoryView", "purpose": "Date-grouped entry list with filtering", "components": ["CalendarHeatmap"]}},
-    {{"name": "AnalyticsView", "purpose": "Charts, trends, and insights", "components": ["ModuleChartView", "InsightsList"]}}
+    {{"name": "ChecklistView", "purpose": "Detailed description of what this view shows", "components": ["ComponentName"], "isTab": true, "tabLabel": "Label", "tabIcon": "sf.symbol.name"}}
   ],
+  // IMPORTANT: View names must NOT include the module name prefix. Use "ChecklistView" not "GroceryListChecklistView".
+  // The system will automatically prefix the module name when generating files.
 
   "viewModelComputedProperties": [
     {{"name": "propertyName", "type": "ReturnType", "description": "What it computes"}},
@@ -416,6 +420,27 @@ Return a JSON object with this EXACT structure:
   }}
 }}
 
+NAVIGATION PATTERNS — choose the ONE that best fits:
+- "singleScroll": One ScrollView with sections. Best for action-focused or single-purpose modules.
+  Examples: grocery checklist, focus timer, water intake (big +1 button), daily affirmations
+- "tabbedSegmented": Segmented picker at top (2-3 tabs). Best for modules with genuinely distinct modes.
+  Examples: mood journal (Entry|Calendar|Trends), sleep tracker (Log|History|Analytics)
+- "tabbedBottom": Bottom tab bar with icons. Best for 3+ distinct workflows.
+  Examples: learning tracker (Courses|Progress|Notes), recipe box (Browse|Favorites|Add)
+- "navigationStack": List/grid → detail push. Best for collection/catalog browsing.
+  Examples: recipe box (grid → recipe detail), people journal (list → person detail)
+
+ENTRY PATTERNS — how users add new data:
+- "fab+sheet": Floating action button opens modal entry sheet. Default for most trackers.
+- "inline": Input controls directly in the primary view. Best for quick-add (grocery list add row, water +1 button).
+- "sheet": Nav bar button opens entry sheet. No floating button.
+- "none": Display-only module (affirmations viewer, status dashboard).
+
+REFERENCE DESIGNS from existing handcrafted modules in this app:
+1. PARKING (singleScroll, none): Single ScrollView. Countdown ring for active parking, inline calendar picker, skip/purchase buttons. No tabs, no entry form.
+2. FLUENT (tabbedBottom, none): Bottom tab bar (Home|Vocab|Review) + Settings sheet. Flashcard review with card-flip animation. Daily goal tracking on Home.
+3. HEALTH (tabbedSegmented, inline): Inline tab selector (Weight|Food|Activity). Camera for food photos. Inline text entry + analysis. No FAB.
+
 RULES:
 - dataFields: DO NOT include "id" or "date" — those are auto-added by the system
 - dataFields: Each field MUST have a "control" specifying the input type:
@@ -426,8 +451,14 @@ RULES:
   - "text" ONLY for free-text fields (notes, descriptions, names)
   - "datePicker" for time selection
 - NEVER use "text" control for numbers, booleans, dates, or enum categories
-- Include at least 3-4 views (dashboard, entry, history, analytics)
-- Include 8+ viewModelComputedProperties (today stats, weekly stats, streak, trend, chart data, goal progress, insights)
+- views: Design the RIGHT number of views for this domain — NOT a fixed template:
+  - A grocery checklist needs 1 checklist view. NOT Dashboard/History/Analytics.
+  - A focus timer needs 1 timer view + 1 session history. NOT a dashboard.
+  - A mood journal needs emotion entry + calendar heatmap + trend chart (3 views).
+  - Minimum: 1 view. Maximum: 5. Only add views that serve a genuine purpose.
+  - Each view MUST have isTab (whether it's a tab in navigation), tabLabel, tabIcon
+  - Entry sheets (role=entry, opened as .sheet()) should have isTab: false
+- viewModelComputedProperties: Include properties that the views actually need
 - enums: Define proper Swift enums for any category/type fields (with displayName and icon)
 - domainLogic: Be specific — real formulas, real insight descriptions
 
@@ -436,14 +467,44 @@ Return ONLY valid JSON. No markdown fences. No explanation.
     response = call_claude(prompt, model="opus", max_tokens=8000, timeout=300, disable_tools=True)
     spec = extract_json(response)
 
-    # Validate minimum quality
-    if len(spec.get("views", [])) < 3:
-        print("  [WARN] Opus returned fewer than 3 views, adding defaults")
-        if not any(v["name"].endswith("View") and "Dashboard" in v["name"] for v in spec.get("views", [])):
-            spec.setdefault("views", []).append({
-                "name": "DashboardView",
-                "purpose": "Main dashboard with key stats",
-                "components": ["StatGrid", "ProgressRingView"]
+    # Validate spec
+    valid_nav = {"singleScroll", "tabbedSegmented", "tabbedBottom", "navigationStack"}
+    if spec.get("navigationPattern") not in valid_nav:
+        print(f"  [WARN] Invalid/missing navigationPattern '{spec.get('navigationPattern')}', defaulting to tabbedSegmented")
+        spec["navigationPattern"] = "tabbedSegmented"
+
+    valid_entry = {"fab+sheet", "inline", "sheet", "none"}
+    if spec.get("entryPattern") not in valid_entry:
+        spec["entryPattern"] = "fab+sheet"
+
+    # Strip module name prefix from view names if Opus included them
+    mod_name = spec.get("moduleName", "")
+    for v in spec.get("views", []):
+        vn = v.get("name", "")
+        if vn.startswith(mod_name) and vn != mod_name and len(vn) > len(mod_name):
+            v["name"] = vn[len(mod_name):]
+            print(f"  [NORMALIZE] Stripped module prefix from view name: {vn} -> {v['name']}")
+
+    # Ensure at least 1 view exists
+    if not spec.get("views"):
+        print("  [WARN] No views returned, adding minimal primary view")
+        spec["views"] = [{"name": "MainView", "purpose": "Primary view", "components": [],
+                          "isTab": True, "tabLabel": "Home", "tabIcon": "house.fill"}]
+
+    # Ensure at least 1 tab view exists
+    if not any(v.get("isTab") for v in spec.get("views", [])):
+        spec["views"][0]["isTab"] = True
+        spec["views"][0].setdefault("tabLabel", "Home")
+        spec["views"][0].setdefault("tabIcon", "house.fill")
+
+    # Ensure entry view exists if entryPattern requires one
+    if spec.get("entryPattern") in ("fab+sheet", "sheet"):
+        has_entry = any("Sheet" in v["name"] or "Entry" in v["name"] for v in spec["views"])
+        if not has_entry:
+            spec["views"].append({
+                "name": "EntrySheet", "purpose": "Quick entry form for new data",
+                "components": ["QuickEntrySheet", "EntryFormSection"],
+                "isTab": False, "tabLabel": "", "tabIcon": ""
             })
 
     if len(spec.get("viewModelComputedProperties", [])) < 5:
@@ -616,6 +677,14 @@ def generate_viewmodel_v2(spec: dict, prior_files: dict[str, str]) -> str:
     # Include the models code so the agent knows exact types
     models_code = list(prior_files.values())[0] if prior_files else ""
 
+    # Include navigation pattern and view purposes for pattern-appropriate properties
+    nav_pattern = spec.get("navigationPattern", "tabbedSegmented")
+    entry_pattern = spec.get("entryPattern", "fab+sheet")
+    views_summary = []
+    for v in spec.get("views", []):
+        views_summary.append(f"  - {v['name']}: {v.get('purpose', 'View')}")
+    views_info = "\n".join(views_summary) if views_summary else "  - Standard views"
+
     prompt = f"""Generate a Swift ViewModel for a module called "{name}".
 
 MODELS CODE (already generated — use these exact types):
@@ -625,6 +694,18 @@ MODELS CODE (already generated — use these exact types):
 
 MODULE SPEC:
 {json.dumps({k: spec[k] for k in ["moduleName", "moduleId", "displayName", "viewModelComputedProperties", "domainLogic", "dataFields"]}, indent=2)}
+
+NAVIGATION PATTERN: {nav_pattern}
+ENTRY PATTERN: {entry_pattern}
+VIEWS:
+{views_info}
+
+The ViewModel must support the navigation pattern and views above. For example:
+- singleScroll modules may need section-specific computed properties (e.g., checklist completion %, filtered lists)
+- tabbedBottom modules may need tab-specific state (e.g., selected tab enum)
+- navigationStack modules need list filtering/sorting and detail-view support
+- Timer/countdown modules need timer state, start/pause/reset methods
+- Checklist modules need checked/unchecked counts, toggle methods
 
 {VM_ARCHITECTURE_DOC}
 
@@ -797,47 +878,52 @@ final class {name}ViewModel {{
 '''
 
 
-def _generate_single_view(name: str, display_name: str, view_role: str, view_name: str,
-                           models_code: str, vm_code: str, spec: dict,
-                           extra_context: str = "") -> str:
-    """Generate a single view file via Claude. Returns Swift code or empty string on failure."""
+def _generate_view_from_spec(name: str, display_name: str, view_spec: dict,
+                              models_code: str, vm_code: str, spec: dict) -> str:
+    """Generate a single view file from its spec definition via Claude.
+    Returns Swift code or empty string on failure."""
     vm_api_contract = extract_vm_public_api(vm_code)
+    view_name = view_spec["name"]
+    purpose = view_spec.get("purpose", "Primary view")
+    components = view_spec.get("components", [])
+    is_entry = "Sheet" in view_name or "Entry" in view_name
 
-    role_instructions = {
-        "dashboard": f"""Generate {name}{view_name}.swift — a rich Dashboard view.
-- StatGrid with 4 StatCards using REAL ViewModel computed properties (scan the ViewModel summary below!)
-- ProgressRingView if ViewModel has progress/goal properties
-- StreakCounter if ViewModel has streak properties (use ACTUAL property names from ViewModel!)
-- Recent entries section showing todayEntries (or equivalent) with summaryLine, date, and delete button
-- Make the layout feel unique to {display_name} — what would a premium {display_name} app show on its home screen?""",
+    # Build component hints
+    component_hints = ""
+    for c in components:
+        if c in ("StatGrid", "StatCard"):
+            component_hints += "\n- StatCard(title: String, value: String, icon: String, color: Color); StatGrid { content } wraps them in 2x2 grid"
+        elif c in ("ProgressRingView",):
+            component_hints += "\n- ProgressRingView(progress: Double, label: String, color: Color = .hubPrimary)"
+        elif c in ("CalendarHeatmap",):
+            component_hints += "\n- CalendarHeatmap(title: String, data: [Date: Double], color: Color)"
+        elif c in ("ModuleChartView",):
+            component_hints += "\n- ModuleChartView(title: String, subtitle: String? = nil, dataPoints: [ChartDataPoint], style: ChartStyle = .line, color: Color = .hubPrimary)"
+        elif c in ("InsightsList",):
+            component_hints += "\n- InsightsList(insights: [ModuleInsight]) — renders insight cards"
+        elif c in ("StreakCounter",):
+            component_hints += "\n- StreakCounter(current: Int, longest: Int, label: String = \"Day Streak\")"
+        elif c in ("QuickEntrySheet", "EntryFormSection"):
+            component_hints += "\n- QuickEntrySheet(title:, icon:, canSave:, onSave:) { content }; EntryFormSection(title:) { controls }"
 
-        "entry": f"""Generate {name}{view_name}.swift — a data entry sheet.
+    entry_instructions = ""
+    if is_entry:
+        entry_instructions = f"""
+This is an ENTRY SHEET view (presented as .sheet from parent).
 - Use QuickEntrySheet(title: "Add {display_name}", icon: "plus.circle.fill", canSave: true, onSave: {{ }}) {{ content }}
 - Use EntryFormSection(title:) for each field group
-- Check the ViewModel's addEntry() method signature — does it take an Entry struct or individual params? Match it EXACTLY.
+- Match the ViewModel's addEntry() method signature EXACTLY
 - Use Stepper for Int counts, Slider for 1-10 ratings, Picker for enums, Toggle for bools, DatePicker for dates
 - NEVER use TextField for numbers, booleans, or enum categories
-- Include `var onSave: (() -> Void)?` property, call onSave?() after save""",
+- Include `var onSave: (() -> Void)?` property, call onSave?() after save"""
 
-        "history": f"""Generate {name}{view_name}.swift — a history/log view.
-- CalendarHeatmap(title: "Activity", data: viewModel.calendarData, color: .hubPrimary) at top if ViewModel has calendarData
-- Entries grouped by date sections, newest first, each in HubCard with delete button
-- Show entry.summaryLine and entry.date (or formattedDate)
-- Empty state when no entries: VStack with icon and "No entries yet" text""",
+    struct_name = _view_struct_name(name, view_name)
+    prompt = f"""Generate {struct_name}.swift — a SwiftUI view for a RyanHub module.
 
-        "analytics": f"""Generate {name}{view_name}.swift — an analytics view.
-- ModuleChartView with the ACTUAL chart data property from ViewModel (check the summary: chartData? weeklyChartData? weeklyData?)
-- If ViewModel has insights as [String], use ForEach with Text in HubCard
-- If ViewModel has insights as [ModuleInsight], use InsightsList(insights: viewModel.insights)
-- Domain-specific summary stats in HubCard — highlight what makes this {display_name} tracker unique
-- Show total count, current streak, best streak etc using ACTUAL ViewModel property names""",
-    }
+PURPOSE: {purpose}
+{entry_instructions}
 
-    instruction = role_instructions.get(view_role, role_instructions["dashboard"])
-
-    prompt = f"""Generate ONE SwiftUI view file for a RyanHub module.
-
-{instruction}
+AVAILABLE SHARED COMPONENTS:{component_hints}
 
 {vm_api_contract}
 
@@ -851,7 +937,7 @@ MODELS (use these exact types):
 {models_code}
 ```
 
-{extra_context}
+{SHARED_COMPONENTS_DOC}
 
 DESIGN RULES:
 - @Environment(\\.colorScheme) private var colorScheme
@@ -863,8 +949,6 @@ DESIGN RULES:
 - Use HubLayout.standardPadding, HubLayout.sectionSpacing, HubLayout.itemSpacing
 - Use HubCard {{ content }} for card containers
 - Do NOT import Charts (ModuleChartView handles it internally)
-- StatCard(title: String, value: String, icon: String, color: Color)
-- StatGrid {{ content }} wraps StatCards in a 2x2 grid
 - SectionHeader(title: "Label") — requires title: argument label
 - HubTextField(placeholder: "Label", text: $binding) — requires placeholder: argument label
 - Button actions that call async methods: Button {{ Task {{ await viewModel.deleteEntry(entry) }} }} label: {{ ... }}
@@ -876,78 +960,119 @@ Your very first line of output must be: import SwiftUI
 """
     for attempt in range(3):
         if attempt > 0:
-            print(f"      Retry {attempt} for {view_role}...")
+            print(f"      Retry {attempt} for {view_name}...")
         response = call_claude(prompt, model="sonnet", max_tokens=8000, timeout=300, disable_tools=True)
         if not response:
-            print(f"      Claude returned empty for {view_role} (attempt {attempt+1})")
+            print(f"      Claude returned empty for {view_name} (attempt {attempt+1})")
             continue
         code = extract_swift(response)
         if code and code.strip().startswith("import"):
             return code
         print(f"      Claude returned {len(response)} chars but no Swift code (attempt {attempt+1})")
-        # Save debug
         debug_dir = os.path.join(RYANHUB_ROOT, "scripts", "debug")
         os.makedirs(debug_dir, exist_ok=True)
-        with open(os.path.join(debug_dir, f"{name}_{view_role}_fail_{attempt}.txt"), "w") as f:
+        with open(os.path.join(debug_dir, f"{name}_{view_name}_fail_{attempt}.txt"), "w") as f:
             f.write(response)
     return ""
 
 
 def generate_all_views(spec: dict, prior_files: dict[str, str]) -> dict[str, str]:
-    """Generate all views via individual Claude calls with template fallback."""
+    """Generate all views from the spec's views array — no hardcoded view roles."""
     name = spec["moduleName"]
     display_name = spec["displayName"]
-    icon = spec["icon"]
     views = spec.get("views", [])
-    fields = [f for f in spec.get("dataFields", []) if f["name"] not in ("id", "date")]
-    enums = spec.get("enums", [])
-    domain = spec.get("domainLogic", {})
+    nav_pattern = spec.get("navigationPattern", "tabbedSegmented")
+    entry_pattern = spec.get("entryPattern", "fab+sheet")
 
     models_code = prior_files.get(f"{name}Models.swift", "")
     vm_code = prior_files.get(f"{name}ViewModel.swift", "")
 
-    # Classify views by role
-    sheet_view_name = None
-    for v in views:
-        if "Sheet" in v["name"] or "Entry" in v["name"]:
-            sheet_view_name = v["name"]
-    if not sheet_view_name:
-        sheet_view_name = "EntrySheet"
+    fields = [f for f in spec.get("dataFields", []) if f["name"] not in ("id", "date")]
+    enums = spec.get("enums", [])
 
-    dashboard_name = next((v["name"] for v in views if "Dashboard" in v["name"]), "DashboardView")
-    history_name = next((v["name"] for v in views if "History" in v["name"] or "Log" in v["name"]), "HistoryView")
-    analytics_name = next((v["name"] for v in views if "Analytics" in v["name"] or "Stats" in v["name"]), "AnalyticsView")
-
-    # Shared components doc for extra context
-    extra_ctx = SHARED_COMPONENTS_DOC
+    # Identify entry view(s) and tab view(s)
+    entry_views = [v for v in views if "Sheet" in v["name"] or "Entry" in v["name"]]
+    tab_views = [v for v in views if v.get("isTab", True) and v not in entry_views]
 
     result = {}
-    view_tasks = [
-        (dashboard_name, "dashboard", _gen_dashboard_view, (spec, fields, enums, domain)),
-        (sheet_view_name, "entry", _gen_entry_sheet, (spec, fields, enums)),
-        (history_name, "history", _gen_history_view, (spec, fields)),
-        (analytics_name, "analytics", _gen_analytics_view, (spec,)),
-    ]
 
-    for view_name, role, fallback_fn, fallback_args in view_tasks:
-        fname = f"{name}{view_name}.swift"
+    # Generate each view from its spec
+    for view_spec in views:
+        view_name = view_spec["name"]
+        # Avoid double-prefix: if view name already starts with module name, don't prepend again
+        if view_name.startswith(name):
+            fname = f"{view_name}.swift"
+        else:
+            fname = f"{name}{view_name}.swift"
         print(f"    Generating {fname} via Claude...")
-        code = _generate_single_view(name, display_name, role, view_name,
-                                     models_code, vm_code, spec, extra_ctx)
+        code = _generate_view_from_spec(name, display_name, view_spec,
+                                         models_code, vm_code, spec)
         if code:
             n_lines = code.count("\n") + 1
             print(f"    OK: {fname} ({n_lines} lines, Claude-generated)")
             result[fname] = code
         else:
-            print(f"    [FALLBACK] {fname} — using template")
-            result[fname] = fallback_fn(*fallback_args)
+            # Minimal fallback
+            is_entry = "Sheet" in view_name or "Entry" in view_name
+            if is_entry:
+                print(f"    [FALLBACK] {fname} — using entry template")
+                result[fname] = _gen_entry_sheet(spec, fields, enums)
+            else:
+                print(f"    [FALLBACK] {fname} — using minimal template")
+                result[fname] = _gen_minimal_view_fallback(spec, view_spec)
 
-    # Root view (always template — it's mechanical)
-    tab_labels = [dashboard_name, history_name, analytics_name]
-    result[f"{name}View.swift"] = _gen_root_view(spec, tab_labels, sheet_view_name)
-    print(f"    Generated {name}View.swift (root, template)")
+    # Generate root view based on navigation pattern
+    entry_view_name = entry_views[0]["name"] if entry_views else None
+    result[f"{name}View.swift"] = _gen_root_view_dynamic(spec, tab_views, entry_view_name, nav_pattern, entry_pattern)
+    print(f"    Generated {name}View.swift (root, {nav_pattern})")
 
     return result
+
+
+def _gen_minimal_view_fallback(spec: dict, view_spec: dict) -> str:
+    """Generate a minimal compilable view as fallback."""
+    name = spec["moduleName"]
+    view_name = view_spec["name"]
+    struct_name = _view_struct_name(name, view_name)
+    purpose = view_spec.get("purpose", "View")
+    return f'''import SwiftUI
+
+struct {struct_name}: View {{
+    @Environment(\\.colorScheme) private var colorScheme
+    let viewModel: {name}ViewModel
+
+    var body: some View {{
+        ScrollView {{
+            VStack(spacing: HubLayout.sectionSpacing) {{
+                HubCard {{
+                    VStack(alignment: .leading, spacing: 8) {{
+                        Text("{purpose}")
+                            .font(.hubBody)
+                            .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                    }}
+                }}
+                ForEach(viewModel.entries) {{ entry in
+                    HubCard {{
+                        HStack {{
+                            VStack(alignment: .leading, spacing: 4) {{
+                                Text(entry.summaryLine)
+                                    .font(.hubBody)
+                                    .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                                Text(entry.date)
+                                    .font(.hubCaption)
+                                    .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
+                            }}
+                            Spacer()
+                        }}
+                    }}
+                }}
+            }}
+            .padding(HubLayout.standardPadding)
+        }}
+        .background(AdaptiveColors.background(for: colorScheme))
+    }}
+}}
+'''
 
 
 def _build_view_generation_prompt(spec, name, display_name, icon, models_code, vm_code,
@@ -1484,8 +1609,284 @@ struct {name}{analytics_name}: View {{
 '''
 
 
+def _gen_root_view_dynamic(spec: dict, tab_views: list[dict], entry_view_name: str | None,
+                           nav_pattern: str, entry_pattern: str) -> str:
+    """Generate root view dispatching on navigationPattern."""
+    name = spec["moduleName"]
+    display_name = spec["displayName"]
+    icon = spec["icon"]
+
+    # Build common header block (reused across patterns)
+    header = f'''            // Header
+            HStack(spacing: 12) {{
+                ZStack {{
+                    Circle()
+                        .fill(Color.hubPrimary.opacity(0.12))
+                        .frame(width: 40, height: 40)
+                    Image(systemName: "{icon}")
+                        .font(.system(size: 18, weight: .medium))
+                        .foregroundStyle(Color.hubPrimary)
+                }}
+                Text("{display_name}")
+                    .font(.hubHeading)
+                    .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                Spacer()
+            }}
+            .padding(.horizontal, HubLayout.standardPadding)
+            .padding(.bottom, 8)'''
+
+    # Entry sheet block
+    entry_sheet_state = ""
+    entry_sheet_modifier = ""
+    fab_block = ""
+    if entry_view_name and entry_pattern in ("fab+sheet", "sheet"):
+        entry_struct = _view_struct_name(name, entry_view_name)
+        entry_sheet_state = "    @State private var showAddSheet = false\n"
+        entry_sheet_modifier = f'''
+        .sheet(isPresented: $showAddSheet) {{
+            {entry_struct}(viewModel: viewModel) {{
+                showAddSheet = false
+            }}
+        }}'''
+        if entry_pattern == "fab+sheet":
+            fab_block = '''
+                // FAB
+                QuickEntryFAB {
+                    showAddSheet = true
+                }
+                .padding(HubLayout.standardPadding)'''
+
+    if nav_pattern == "singleScroll":
+        return _gen_root_single_scroll(name, display_name, icon, header, tab_views,
+                                        entry_sheet_state, entry_sheet_modifier,
+                                        fab_block, entry_pattern)
+    elif nav_pattern == "tabbedBottom":
+        return _gen_root_tabbed_bottom(name, display_name, icon, header, tab_views,
+                                        entry_sheet_state, entry_sheet_modifier,
+                                        fab_block)
+    elif nav_pattern == "navigationStack":
+        return _gen_root_navigation_stack(name, display_name, icon, header, tab_views,
+                                           entry_sheet_state, entry_sheet_modifier)
+    else:
+        # Default: tabbedSegmented
+        return _gen_root_tabbed_segmented(name, display_name, icon, header, tab_views,
+                                           entry_sheet_state, entry_sheet_modifier,
+                                           fab_block)
+
+
+def _gen_root_single_scroll(name, display_name, icon, header, tab_views,
+                             entry_sheet_state, entry_sheet_modifier, fab_block,
+                             entry_pattern):
+    """singleScroll: Single ScrollView with all sections stacked. No tabs."""
+    # Each tab view becomes a section in the scroll
+    sections = ""
+    for v in tab_views:
+        vn = _view_struct_name(name, v["name"])
+        sections += f"                {vn}(viewModel: viewModel)\n"
+
+    # For inline entry, no FAB/sheet needed — the entry UI is embedded in a view
+    overlay = ""
+    if fab_block:
+        overlay = f'''
+        .overlay(alignment: .bottomTrailing) {{
+            QuickEntryFAB {{
+                showAddSheet = true
+            }}
+            .padding(HubLayout.standardPadding)
+        }}'''
+
+    return f'''import SwiftUI
+
+struct {name}View: View {{
+    @Environment(\\.colorScheme) private var colorScheme
+    @State private var viewModel = {name}ViewModel()
+{entry_sheet_state}
+    var body: some View {{
+        ScrollView {{
+            VStack(spacing: HubLayout.sectionSpacing) {{
+{header}
+
+{sections}            }}
+            .padding(.bottom, HubLayout.standardPadding)
+        }}
+        .background(AdaptiveColors.background(for: colorScheme))
+        .task {{ await viewModel.loadData() }}{overlay}{entry_sheet_modifier}
+    }}
+}}
+'''
+
+
+def _gen_root_tabbed_segmented(name, display_name, icon, header, tab_views,
+                                entry_sheet_state, entry_sheet_modifier, fab_block):
+    """tabbedSegmented: Header + segmented Picker + content switch. Dynamic tab count."""
+    # Build tab enum
+    tab_picker_items = ""
+    tab_switch_cases = ""
+    for i, v in enumerate(tab_views):
+        struct_name = _view_struct_name(name, v["name"])
+        label = v.get("tabLabel", v["name"].replace("View", "").replace(name, ""))
+        tab_picker_items += f'                    Text("{label}").tag({i})\n'
+        tab_switch_cases += f'''                    if selectedTab == {i} {{
+                        {struct_name}(viewModel: viewModel)
+                    }}
+'''
+
+    return f'''import SwiftUI
+
+struct {name}View: View {{
+    @Environment(\\.colorScheme) private var colorScheme
+    @State private var viewModel = {name}ViewModel()
+    @State private var selectedTab = 0
+{entry_sheet_state}
+    var body: some View {{
+        VStack(spacing: 0) {{
+{header}
+
+            // Tab picker
+            Picker("", selection: $selectedTab) {{
+{tab_picker_items}            }}
+            .pickerStyle(.segmented)
+            .padding(.horizontal, HubLayout.standardPadding)
+            .padding(.bottom, HubLayout.itemSpacing)
+
+            // Content
+            ZStack(alignment: .bottomTrailing) {{
+{tab_switch_cases}{fab_block}
+            }}
+        }}
+        .background(AdaptiveColors.background(for: colorScheme))
+        .task {{ await viewModel.loadData() }}{entry_sheet_modifier}
+    }}
+}}
+'''
+
+
+def _gen_root_tabbed_bottom(name, display_name, icon, header, tab_views,
+                             entry_sheet_state, entry_sheet_modifier, fab_block):
+    """tabbedBottom: Content area + bottom tab bar with icons (Fluent-style)."""
+    # Build tab enum cases
+    tab_enum_cases = ", ".join(f"case {_camel(v['name'])}" for v in tab_views)
+    first_tab = _camel(tab_views[0]["name"]) if tab_views else "home"
+
+    # Build content switch
+    content_switch = ""
+    for v in tab_views:
+        struct_name = _view_struct_name(name, v["name"])
+        case_name = _camel(v["name"])
+        content_switch += f"""            case .{case_name}:
+                {struct_name}(viewModel: viewModel)
+"""
+
+    # Build tab buttons
+    tab_buttons = ""
+    for v in tab_views:
+        case_name = _camel(v["name"])
+        tab_icon = v.get("tabIcon", "circle")
+        tab_label = v.get("tabLabel", v["name"].replace("View", "").replace(name, ""))
+        tab_buttons += f'            tabButton(.{case_name}, icon: "{tab_icon}", label: "{tab_label}")\n'
+
+    return f'''import SwiftUI
+
+private enum {name}Tab {{
+    {tab_enum_cases}
+}}
+
+struct {name}View: View {{
+    @Environment(\\.colorScheme) private var colorScheme
+    @State private var viewModel = {name}ViewModel()
+    @State private var selectedTab: {name}Tab = .{first_tab}
+{entry_sheet_state}
+    var body: some View {{
+        VStack(spacing: 0) {{
+            // Content
+            switch selectedTab {{
+{content_switch}            }}
+
+            // Bottom tab bar
+            HStack(spacing: 0) {{
+{tab_buttons}            }}
+            .padding(.top, 8)
+            .padding(.bottom, 4)
+            .background(
+                AdaptiveColors.surface(for: colorScheme)
+                    .shadow(
+                        color: colorScheme == .dark
+                            ? Color.black.opacity(0.3)
+                            : Color.black.opacity(0.06),
+                        radius: 8, x: 0, y: -2
+                    )
+            )
+        }}
+        .background(AdaptiveColors.background(for: colorScheme))
+        .task {{ await viewModel.loadData() }}{entry_sheet_modifier}
+    }}
+
+    private func tabButton(_ tab: {name}Tab, icon: String, label: String) -> some View {{
+        let isSelected = selectedTab == tab
+        return Button {{
+            withAnimation(.easeInOut(duration: 0.2)) {{
+                selectedTab = tab
+            }}
+        }} label: {{
+            VStack(spacing: 4) {{
+                Image(systemName: icon)
+                    .font(.system(size: 20, weight: .medium))
+                Text(label)
+                    .font(.system(size: 10, weight: .medium))
+            }}
+            .foregroundStyle(isSelected ? Color.hubPrimary : AdaptiveColors.textSecondary(for: colorScheme))
+            .frame(maxWidth: .infinity)
+        }}
+    }}
+}}
+'''
+
+
+def _gen_root_navigation_stack(name, display_name, icon, header, tab_views,
+                                entry_sheet_state, entry_sheet_modifier):
+    """navigationStack: NavigationStack with primary list view. Detail views via NavigationLink."""
+    # First tab view is the main list/grid, rest are detail or auxiliary views
+    primary_struct = _view_struct_name(name, tab_views[0]["name"]) if tab_views else f"{name}ListView"
+
+    return f'''import SwiftUI
+
+struct {name}View: View {{
+    @Environment(\\.colorScheme) private var colorScheme
+    @State private var viewModel = {name}ViewModel()
+{entry_sheet_state}
+    var body: some View {{
+        NavigationStack {{
+            VStack(spacing: 0) {{
+{header}
+
+                {primary_struct}(viewModel: viewModel)
+            }}
+            .background(AdaptiveColors.background(for: colorScheme))
+            .task {{ await viewModel.loadData() }}{entry_sheet_modifier}
+        }}
+    }}
+}}
+'''
+
+
+def _view_struct_name(module_name: str, view_name: str) -> str:
+    """Get the Swift struct name for a view, avoiding double-prefix."""
+    if view_name.startswith(module_name):
+        return view_name
+    return f"{module_name}{view_name}"
+
+
+def _camel(view_name: str) -> str:
+    """Convert view name like 'ChecklistView' to camelCase 'checklistView'."""
+    # Remove trailing 'View' if present for cleaner enum cases
+    s = view_name.replace("View", "") if view_name.endswith("View") else view_name
+    if not s:
+        s = view_name
+    return s[0].lower() + s[1:]
+
+
 def _gen_root_view(spec: dict, tab_view_names: list[str], sheet_view_name: str) -> str:
-    """Generate the root view with tab switching and entry sheet."""
+    """Generate the root view with tab switching and entry sheet. (LEGACY — kept as fallback)"""
     name = spec["moduleName"]
     display_name = spec["displayName"]
     icon = spec["icon"]
@@ -1856,37 +2257,45 @@ def deterministic_fixes(module_dir: str, vm_code: str) -> int:
                             f.write(new_code)
                         fix_count += 1
 
-    # Fix 7: Int/Double type mismatches in entry sheets
+    # Fix 7: Int/Double type mismatches in entry sheets (any file with Sheet/Entry in name)
     # Model declares field as Double, but entry sheet @State var uses Int
     model_file = os.path.join(module_dir, f"{module_name}Models.swift")
-    entry_file = os.path.join(module_dir, f"{module_name}EntrySheet.swift")
-    if os.path.exists(model_file) and os.path.exists(entry_file):
+    if os.path.exists(model_file):
         with open(model_file) as f:
             model_code = f.read()
         double_fields = set(re.findall(r'var\s+(\w+)\s*:\s*Double', model_code))
-        with open(entry_file) as f:
-            entry_code = f.read()
-        for match in re.finditer(r'@State\s+private\s+var\s+(\w+)\s*:\s*Int\s*=\s*\d+', entry_code):
-            var_name = match.group(1)
-            clean = var_name.replace('input', '').replace('Input', '').lower()
-            for df in double_fields:
-                if df.lower() == clean:
-                    old_decl = match.group(0)
-                    new_decl = re.sub(r':\s*Int\s*=\s*\d+', ': Double = 0.0', old_decl)
-                    entry_code = entry_code.replace(old_decl, new_decl)
-                    fix_count += 1
-                    print(f"    [AUTOFIX] {module_name}EntrySheet: {var_name} Int -> Double")
-                    break
-        with open(entry_file, "w") as f:
-            f.write(entry_code)
+        # Find all entry-like files (Sheet or Entry in name)
+        entry_files = [f for f in os.listdir(module_dir)
+                       if f.endswith(".swift") and ("Sheet" in f or "Entry" in f)]
+        for ef in entry_files:
+            entry_path = os.path.join(module_dir, ef)
+            with open(entry_path) as f:
+                entry_code = f.read()
+            modified = False
+            for match in re.finditer(r'@State\s+private\s+var\s+(\w+)\s*:\s*Int\s*=\s*\d+', entry_code):
+                var_name = match.group(1)
+                clean = var_name.replace('input', '').replace('Input', '').lower()
+                for df in double_fields:
+                    if df.lower() == clean:
+                        old_decl = match.group(0)
+                        new_decl = re.sub(r':\s*Int\s*=\s*\d+', ': Double = 0.0', old_decl)
+                        entry_code = entry_code.replace(old_decl, new_decl)
+                        fix_count += 1
+                        modified = True
+                        print(f"    [AUTOFIX] {ef}: {var_name} Int -> Double")
+                        break
+            if modified:
+                with open(entry_path, "w") as f:
+                    f.write(entry_code)
 
     # Fix 8: Swift reserved keywords used as enum cases
-    reserved_keywords = {"class", "struct", "enum", "protocol", "func", "var", "let",
-                         "import", "return", "if", "else", "for", "while", "switch",
-                         "case", "break", "continue", "default", "do", "try", "catch",
-                         "throw", "throws", "as", "is", "in", "where", "self", "Self",
-                         "super", "init", "deinit", "extension", "subscript", "typealias",
-                         "operator", "associatedtype", "static", "true", "false", "nil"}
+    # Only fix keywords that are genuinely problematic as enum case names.
+    # Excludes self/Self/super/init/true/false/nil/default which have valid uses.
+    enum_reserved = {"class", "struct", "enum", "protocol", "func", "var", "let",
+                     "import", "return", "if", "else", "for", "while", "switch",
+                     "break", "continue", "do", "try", "catch", "throw", "throws",
+                     "as", "is", "in", "where", "extension", "subscript", "typealias",
+                     "operator", "associatedtype", "static"}
     for fname in os.listdir(module_dir):
         if not fname.endswith(".swift"):
             continue
@@ -1894,10 +2303,18 @@ def deterministic_fixes(module_dir: str, vm_code: str) -> int:
         with open(fpath) as f:
             code = f.read()
         original = code
-        for kw in reserved_keywords:
-            # case keyword -> case keywordItem
-            code = re.sub(rf'(\bcase\s+){kw}\b(?!\w)', rf'\1{kw}Item', code)
-            code = re.sub(rf'(\.){kw}\b(?!\w)', rf'\1{kw}Item', code)
+        for kw in enum_reserved:
+            # Only fix `case keyword` in enum declarations (not switch cases)
+            code = re.sub(rf'(\bcase\s+){kw}\b(?!\w)(?!\s*[=:])', rf'\1{kw}Item', code)
+        # Fix enum member access (.keyword) only for known enum patterns
+        # First, find all enum case names that were renamed in this module
+        renamed_cases = set()
+        for kw in enum_reserved:
+            if re.search(rf'\bcase\s+{kw}Item\b', code):
+                renamed_cases.add(kw)
+        for kw in renamed_cases:
+            # Fix .keyword -> .keywordItem only when NOT preceded by type name (avoid .self, .init etc.)
+            code = re.sub(rf'(?<!\w)(\.){kw}\b(?!\w)', rf'\1{kw}Item', code)
         if code != original:
             with open(fpath, "w") as f:
                 f.write(code)
@@ -2098,8 +2515,20 @@ def phase4_quality_gate(module_dir: str, spec: dict) -> list[str]:
                   and "Registration" not in f and "DataProvider" not in f
                   and "ViewModel" not in f and "Models" not in f]
 
-    if len(view_files) < 2:
-        issues.append(f"Only {len(view_files)} sub-view files (need at least 2)")
+    # Validate every spec view has a corresponding .swift file
+    spec_views = spec.get("views", [])
+    if spec_views:
+        for v in spec_views:
+            # Handle view names that may or may not include module prefix
+            vn = v["name"]
+            if vn.startswith(name):
+                expected_file = f"{vn}.swift"
+            else:
+                expected_file = f"{name}{vn}.swift"
+            if expected_file not in swift_files:
+                issues.append(f"Missing view file: {expected_file} (defined in spec)")
+    elif len(view_files) < 1:
+        issues.append(f"No sub-view files found")
 
     # Check ViewModel richness
     vm_file = os.path.join(module_dir, f"{name}ViewModel.swift")
@@ -2405,9 +2834,11 @@ def list_modules():
                 spec = json.load(f)
             swift_files = [f for f in os.listdir(dirpath) if f.endswith(".swift")]
             view_files = [f for f in swift_files if "View" in f and "ViewModel" not in f]
+            nav = spec.get('navigationPattern', 'tabbedSegmented')
+            entry = spec.get('entryPattern', 'fab+sheet')
             print(f"  {spec['moduleName']}: {spec['displayName']} ({spec['icon']})")
             print(f"    {spec.get('subtitle', '')}")
-            print(f"    Files: {len(swift_files)} swift, {len(view_files)} views")
+            print(f"    Nav: {nav} | Entry: {entry} | Files: {len(swift_files)} swift, {len(view_files)} views")
             count += 1
     if count == 0:
         print("  (no modules)")

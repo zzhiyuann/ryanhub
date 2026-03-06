@@ -5,7 +5,7 @@ import Foundation
 enum GroceryListDataProvider: ToolkitDataProvider {
     static let toolkitId = "groceryList"
     static let displayName = "Grocery List"
-    static let relevanceKeywords: [String] = ["grocery", "shopping", "list", "food", "budget", "store", "cart", "meal", "ingredients", "spending"]
+    static let relevanceKeywords: [String] = ["grocery", "shopping", "list", "food", "buy", "store", "supermarket", "checklist", "cart", "items"]
 
     private static var bridgeBaseURL: String {
         UserDefaults.standard.string(forKey: "ryanhub_server_url")

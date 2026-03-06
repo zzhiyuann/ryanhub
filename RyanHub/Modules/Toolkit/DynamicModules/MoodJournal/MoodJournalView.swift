@@ -4,7 +4,6 @@ struct MoodJournalView: View {
     @Environment(\.colorScheme) private var colorScheme
     @State private var viewModel = MoodJournalViewModel()
     @State private var selectedTab = 0
-    @State private var showAddSheet = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -14,7 +13,7 @@ struct MoodJournalView: View {
                     Circle()
                         .fill(Color.hubPrimary.opacity(0.12))
                         .frame(width: 40, height: 40)
-                    Image(systemName: "face.smiling.inverse")
+                    Image(systemName: "face.smiling")
                         .font(.system(size: 18, weight: .medium))
                         .foregroundStyle(Color.hubPrimary)
                 }
@@ -28,9 +27,9 @@ struct MoodJournalView: View {
 
             // Tab picker
             Picker("", selection: $selectedTab) {
-                    Text("Home").tag(0)
-                    Text("History").tag(1)
-                    Text("Analytics").tag(2)
+                    Text("Check In").tag(0)
+                    Text("Calendar").tag(1)
+                    Text("Trends").tag(2)
             }
             .pickerStyle(.segmented)
             .padding(.horizontal, HubLayout.standardPadding)
@@ -39,28 +38,18 @@ struct MoodJournalView: View {
             // Content
             ZStack(alignment: .bottomTrailing) {
                     if selectedTab == 0 {
-                        MoodJournalDashboardView(viewModel: viewModel)
+                        MoodJournalMoodJournalCheckInView(viewModel: viewModel)
                     }
                     if selectedTab == 1 {
-                        MoodJournalHistoryView(viewModel: viewModel)
+                        MoodJournalMoodJournalCalendarView(viewModel: viewModel)
                     }
                     if selectedTab == 2 {
-                        MoodJournalAnalyticsView(viewModel: viewModel)
+                        MoodJournalMoodJournalTrendsView(viewModel: viewModel)
                     }
 
-                // FAB
-                QuickEntryFAB {
-                    showAddSheet = true
-                }
-                .padding(HubLayout.standardPadding)
             }
         }
         .background(AdaptiveColors.background(for: colorScheme))
         .task { await viewModel.loadData() }
-        .sheet(isPresented: $showAddSheet) {
-            MoodJournalEntrySheet(viewModel: viewModel) {
-                showAddSheet = false
-            }
-        }
     }
 }

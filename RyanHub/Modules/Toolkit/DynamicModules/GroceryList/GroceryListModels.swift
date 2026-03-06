@@ -2,17 +2,54 @@ import Foundation
 
 // MARK: - GroceryList Models
 
+enum GroceryUnit: String, Codable, CaseIterable, Identifiable {
+    case pieces
+    case lbs
+    case oz
+    case kg
+    case grams
+    case liters
+    case gallons
+    case dozen
+    case pack
+    var id: String { rawValue }
+    var displayName: String {
+        switch self {
+        case .pieces: return "pcs"
+        case .lbs: return "lbs"
+        case .oz: return "oz"
+        case .kg: return "kg"
+        case .grams: return "g"
+        case .liters: return "L"
+        case .gallons: return "gal"
+        case .dozen: return "doz"
+        case .pack: return "pack"
+        }
+    }
+    var icon: String {
+        switch self {
+        case .pieces: return "number"
+        case .lbs: return "scalemass"
+        case .oz: return "scalemass"
+        case .kg: return "scalemass"
+        case .grams: return "scalemass"
+        case .liters: return "drop.fill"
+        case .gallons: return "drop.fill"
+        case .dozen: return "circle.grid.3x3"
+        case .pack: return "shippingbox"
+        }
+    }
+}
+
 enum GroceryCategory: String, Codable, CaseIterable, Identifiable {
     case produce
     case dairy
-    case meat
-    case seafood
+    case meatSeafood
     case bakery
     case frozen
+    case pantry
     case beverages
     case snacks
-    case condiments
-    case grains
     case household
     case personalCare
     case other
@@ -21,14 +58,12 @@ enum GroceryCategory: String, Codable, CaseIterable, Identifiable {
         switch self {
         case .produce: return "Produce"
         case .dairy: return "Dairy & Eggs"
-        case .meat: return "Meat & Poultry"
-        case .seafood: return "Seafood"
-        case .bakery: return "Bakery & Bread"
-        case .frozen: return "Frozen Foods"
+        case .meatSeafood: return "Meat & Seafood"
+        case .bakery: return "Bakery"
+        case .frozen: return "Frozen"
+        case .pantry: return "Pantry & Dry Goods"
         case .beverages: return "Beverages"
-        case .snacks: return "Snacks & Sweets"
-        case .condiments: return "Condiments & Sauces"
-        case .grains: return "Grains & Pasta"
+        case .snacks: return "Snacks"
         case .household: return "Household"
         case .personalCare: return "Personal Care"
         case .other: return "Other"
@@ -38,83 +73,15 @@ enum GroceryCategory: String, Codable, CaseIterable, Identifiable {
         switch self {
         case .produce: return "leaf.fill"
         case .dairy: return "cup.and.saucer.fill"
-        case .meat: return "fork.knife"
-        case .seafood: return "fish.fill"
-        case .bakery: return "birthday.cake.fill"
+        case .meatSeafood: return "fork.knife"
+        case .bakery: return "birthday.cake"
         case .frozen: return "snowflake"
-        case .beverages: return "waterbottle.fill"
-        case .snacks: return "popcorn.fill"
-        case .condiments: return "takeoutbag.and.cup.and.straw.fill"
-        case .grains: return "grain"
+        case .pantry: return "archivebox.fill"
+        case .beverages: return "wineglass.fill"
+        case .snacks: return "bag.fill"
         case .household: return "house.fill"
-        case .personalCare: return "heart.fill"
-        case .other: return "ellipsis.circle.fill"
-        }
-    }
-}
-
-enum MeasurementUnit: String, Codable, CaseIterable, Identifiable {
-    case pieces
-    case lbs
-    case oz
-    case kg
-    case liters
-    case gallons
-    case packs
-    case bags
-    case boxes
-    case cans
-    case bottles
-    var id: String { rawValue }
-    var displayName: String {
-        switch self {
-        case .pieces: return "Pieces"
-        case .lbs: return "Pounds"
-        case .oz: return "Ounces"
-        case .kg: return "Kilograms"
-        case .liters: return "Liters"
-        case .gallons: return "Gallons"
-        case .packs: return "Packs"
-        case .bags: return "Bags"
-        case .boxes: return "Boxes"
-        case .cans: return "Cans"
-        case .bottles: return "Bottles"
-        }
-    }
-    var icon: String {
-        switch self {
-        case .pieces: return "number"
-        case .lbs: return "scalemass.fill"
-        case .oz: return "scalemass"
-        case .kg: return "scalemass.fill"
-        case .liters: return "drop.fill"
-        case .gallons: return "drop.fill"
-        case .packs: return "shippingbox.fill"
-        case .bags: return "bag.fill"
-        case .boxes: return "archivebox.fill"
-        case .cans: return "cylinder.fill"
-        case .bottles: return "waterbottle.fill"
-        }
-    }
-}
-
-enum ItemPriority: String, Codable, CaseIterable, Identifiable {
-    case essential
-    case preferred
-    case optional
-    var id: String { rawValue }
-    var displayName: String {
-        switch self {
-        case .essential: return "Essential"
-        case .preferred: return "Preferred"
-        case .optional: return "Optional"
-        }
-    }
-    var icon: String {
-        switch self {
-        case .essential: return "exclamationmark.circle.fill"
-        case .preferred: return "star.fill"
-        case .optional: return "questionmark.circle.fill"
+        case .personalCare: return "sparkles"
+        case .other: return "ellipsis.circle"
         }
     }
 }
@@ -126,24 +93,20 @@ struct GroceryListEntry: Codable, Identifiable {
         f.dateFormat = "yyyy-MM-dd HH:mm"
         return f.string(from: Date())
     }()
-    var itemName: String
-    var category: GroceryCategory
+    var name: String
     var quantity: Int
-    var unit: MeasurementUnit
-    var estimatedPrice: Double
+    var unit: GroceryUnit
+    var category: GroceryCategory
     var isChecked: Bool
-    var priority: ItemPriority
     var notes: String
 
     var summaryLine: String {
         var parts: [String] = [date]
-        parts.append("\(itemName)")
-        parts.append("\(category)")
+        parts.append("\(name)")
         parts.append("\(quantity)")
         parts.append("\(unit)")
-        parts.append("\(estimatedPrice)")
+        parts.append("\(category)")
         parts.append("\(isChecked)")
-        parts.append("\(priority)")
         parts.append("\(notes)")
         return parts.joined(separator: " | ")
     }

@@ -1,21 +1,23 @@
 import SwiftUI
 
-struct RecipeBoxEntrySheet: View {
+struct RecipeBoxRecipeEntrySheet: View {
     @Environment(\.colorScheme) private var colorScheme
     let viewModel: RecipeBoxViewModel
     var onSave: (() -> Void)?
-    @State private var inputName: String = ""
+    @State private var inputTitle: String = ""
     @State private var selectedCategory: MealCategory = .breakfast
     @State private var selectedCuisine: CuisineType = .italian
-    @State private var inputIngredients: String = ""
-    @State private var inputServings: Int = 1
+    @State private var selectedDifficulty: DifficultyLevel = .easy
     @State private var inputPreptimeminutes: Int = 1
     @State private var inputCooktimeminutes: Int = 1
-    @State private var selectedDifficulty: DifficultyLevel = .beginner
+    @State private var inputServings: Int = 1
+    @State private var inputIngredients: String = ""
+    @State private var inputSteps: String = ""
     @State private var inputRating: Double = 5
-    @State private var inputNotes: String = ""
     @State private var inputIsfavorite: Bool = false
-    @State private var inputTimescooked: Int = 1
+    @State private var inputCookcount: Int = 1
+    @State private var inputNotes: String = ""
+    @State private var inputSourceurl: String = ""
 
     var body: some View {
         QuickEntrySheet(
@@ -23,14 +25,16 @@ struct RecipeBoxEntrySheet: View {
             icon: "plus.circle.fill",
             canSave: true,
             onSave: {
-                let entry = RecipeBoxEntry(name: inputName, category: selectedCategory, cuisine: selectedCuisine, ingredients: inputIngredients, servings: inputServings, prepTimeMinutes: inputPreptimeminutes, cookTimeMinutes: inputCooktimeminutes, difficulty: selectedDifficulty, rating: Int(inputRating), notes: inputNotes, isFavorite: inputIsfavorite, timesCooked: inputTimescooked)
+                let ingredientsList = inputIngredients.split(separator: ",").map { String($0).trimmingCharacters(in: .whitespaces) }
+                let stepsList = inputSteps.split(separator: ",").map { String($0).trimmingCharacters(in: .whitespaces) }
+                let entry = RecipeBoxEntry(title: inputTitle, category: selectedCategory, cuisine: selectedCuisine, difficulty: selectedDifficulty, prepTimeMinutes: inputPreptimeminutes, cookTimeMinutes: inputCooktimeminutes, servings: inputServings, ingredients: ingredientsList, steps: stepsList, rating: Int(inputRating), isFavorite: inputIsfavorite, cookCount: inputCookcount, notes: inputNotes, sourceURL: inputSourceurl)
                 Task { await viewModel.addEntry(entry) }
                 onSave?()
             }
         ) {
 
                 EntryFormSection(title: "Recipe Name") {
-                    HubTextField(placeholder: "Recipe Name", text: $inputName)
+                    HubTextField(placeholder: "Recipe Name", text: $inputTitle)
                 }
 
                 EntryFormSection(title: "Meal Category") {
@@ -51,12 +55,13 @@ struct RecipeBoxEntrySheet: View {
                     .pickerStyle(.menu)
                 }
 
-                EntryFormSection(title: "Ingredients") {
-                    HubTextField(placeholder: "Ingredients", text: $inputIngredients)
-                }
-
-                EntryFormSection(title: "Servings") {
-                    Stepper("\(inputServings) servings", value: $inputServings, in: 0...9999)
+                EntryFormSection(title: "Difficulty") {
+                    Picker("Difficulty", selection: $selectedDifficulty) {
+                        ForEach(DifficultyLevel.allCases) { item in
+                            Label(item.displayName, systemImage: item.icon).tag(item)
+                        }
+                    }
+                    .pickerStyle(.menu)
                 }
 
                 EntryFormSection(title: "Prep Time (min)") {
@@ -67,16 +72,19 @@ struct RecipeBoxEntrySheet: View {
                     Stepper("\(inputCooktimeminutes) cook time (min)", value: $inputCooktimeminutes, in: 0...9999)
                 }
 
-                EntryFormSection(title: "Difficulty") {
-                    Picker("Difficulty", selection: $selectedDifficulty) {
-                        ForEach(DifficultyLevel.allCases) { item in
-                            Label(item.displayName, systemImage: item.icon).tag(item)
-                        }
-                    }
-                    .pickerStyle(.menu)
+                EntryFormSection(title: "Servings") {
+                    Stepper("\(inputServings) servings", value: $inputServings, in: 0...9999)
                 }
 
-                EntryFormSection(title: "Rating") {
+                EntryFormSection(title: "Ingredients") {
+                    HubTextField(placeholder: "Ingredients", text: $inputIngredients)
+                }
+
+                EntryFormSection(title: "Instructions") {
+                    HubTextField(placeholder: "Instructions", text: $inputSteps)
+                }
+
+                EntryFormSection(title: "Rating (1-5)") {
                     VStack {
                         HStack {
                             Text("\(Int(inputRating))")
@@ -89,17 +97,21 @@ struct RecipeBoxEntrySheet: View {
                     }
                 }
 
-                EntryFormSection(title: "Notes") {
-                    HubTextField(placeholder: "Notes", text: $inputNotes)
-                }
-
                 EntryFormSection(title: "Favorite") {
                     Toggle("Favorite", isOn: $inputIsfavorite)
                         .tint(Color.hubPrimary)
                 }
 
                 EntryFormSection(title: "Times Cooked") {
-                    Stepper("\(inputTimescooked) times cooked", value: $inputTimescooked, in: 0...9999)
+                    Stepper("\(inputCookcount) times cooked", value: $inputCookcount, in: 0...9999)
+                }
+
+                EntryFormSection(title: "Notes") {
+                    HubTextField(placeholder: "Notes", text: $inputNotes)
+                }
+
+                EntryFormSection(title: "Source URL") {
+                    HubTextField(placeholder: "Source URL", text: $inputSourceurl)
                 }
         }
     }

@@ -6,22 +6,18 @@ enum MealCategory: String, Codable, CaseIterable, Identifiable {
     case breakfast
     case lunch
     case dinner
-    case appetizer
-    case dessert
     case snack
+    case dessert
     case drink
-    case side
     var id: String { rawValue }
     var displayName: String {
         switch self {
         case .breakfast: return "Breakfast"
         case .lunch: return "Lunch"
         case .dinner: return "Dinner"
-        case .appetizer: return "Appetizer"
-        case .dessert: return "Dessert"
         case .snack: return "Snack"
+        case .dessert: return "Dessert"
         case .drink: return "Drink"
-        case .side: return "Side Dish"
         }
     }
     var icon: String {
@@ -29,11 +25,9 @@ enum MealCategory: String, Codable, CaseIterable, Identifiable {
         case .breakfast: return "sun.horizon"
         case .lunch: return "sun.max"
         case .dinner: return "moon.stars"
-        case .appetizer: return "fork.knife"
-        case .dessert: return "birthday.cake"
         case .snack: return "carrot"
+        case .dessert: return "birthday.cake"
         case .drink: return "cup.and.saucer"
-        case .side: return "leaf"
         }
     }
 }
@@ -45,11 +39,10 @@ enum CuisineType: String, Codable, CaseIterable, Identifiable {
     case japanese
     case indian
     case thai
-    case french
+    case american
     case mediterranean
     case korean
-    case american
-    case middleEastern
+    case french
     case other
     var id: String { rawValue }
     var displayName: String {
@@ -60,55 +53,47 @@ enum CuisineType: String, Codable, CaseIterable, Identifiable {
         case .japanese: return "Japanese"
         case .indian: return "Indian"
         case .thai: return "Thai"
-        case .french: return "French"
+        case .american: return "American"
         case .mediterranean: return "Mediterranean"
         case .korean: return "Korean"
-        case .american: return "American"
-        case .middleEastern: return "Middle Eastern"
+        case .french: return "French"
         case .other: return "Other"
         }
     }
     var icon: String {
         switch self {
-        case .italian: return "globe.europe.africa"
-        case .mexican: return "globe.americas"
-        case .chinese: return "globe.asia.australia"
-        case .japanese: return "globe.asia.australia"
-        case .indian: return "globe.asia.australia"
-        case .thai: return "globe.asia.australia"
-        case .french: return "globe.europe.africa"
-        case .mediterranean: return "globe.europe.africa"
-        case .korean: return "globe.asia.australia"
-        case .american: return "globe.americas"
-        case .middleEastern: return "globe.europe.africa"
-        case .other: return "globe"
+        case .italian: return "fork.knife"
+        case .mexican: return "fork.knife"
+        case .chinese: return "fork.knife"
+        case .japanese: return "fork.knife"
+        case .indian: return "fork.knife"
+        case .thai: return "fork.knife"
+        case .american: return "fork.knife"
+        case .mediterranean: return "fork.knife"
+        case .korean: return "fork.knife"
+        case .french: return "fork.knife"
+        case .other: return "ellipsis.circle"
         }
     }
 }
 
 enum DifficultyLevel: String, Codable, CaseIterable, Identifiable {
-    case beginner
     case easy
     case medium
     case hard
-    case expert
     var id: String { rawValue }
     var displayName: String {
         switch self {
-        case .beginner: return "Beginner"
         case .easy: return "Easy"
         case .medium: return "Medium"
         case .hard: return "Hard"
-        case .expert: return "Expert"
         }
     }
     var icon: String {
         switch self {
-        case .beginner: return "1.circle"
-        case .easy: return "2.circle"
-        case .medium: return "3.circle"
-        case .hard: return "4.circle"
-        case .expert: return "star.circle"
+        case .easy: return "leaf"
+        case .medium: return "flame"
+        case .hard: return "flame.fill"
         }
     }
 }
@@ -120,33 +105,37 @@ struct RecipeBoxEntry: Codable, Identifiable {
         f.dateFormat = "yyyy-MM-dd HH:mm"
         return f.string(from: Date())
     }()
-    var name: String
+    var title: String
     var category: MealCategory
     var cuisine: CuisineType
-    var ingredients: String
-    var servings: Int
+    var difficulty: DifficultyLevel
     var prepTimeMinutes: Int
     var cookTimeMinutes: Int
-    var difficulty: DifficultyLevel
+    var servings: Int
+    var ingredients: [String]
+    var steps: [String]
     var rating: Int
-    var notes: String
     var isFavorite: Bool
-    var timesCooked: Int
+    var cookCount: Int
+    var notes: String
+    var sourceURL: String
 
     var summaryLine: String {
         var parts: [String] = [date]
-        parts.append("\(name)")
+        parts.append("\(title)")
         parts.append("\(category)")
         parts.append("\(cuisine)")
-        parts.append("\(ingredients)")
-        parts.append("\(servings)")
+        parts.append("\(difficulty)")
         parts.append("\(prepTimeMinutes)")
         parts.append("\(cookTimeMinutes)")
-        parts.append("\(difficulty)")
+        parts.append("\(servings)")
+        parts.append("\(ingredients)")
+        parts.append("\(steps)")
         parts.append("\(rating)")
-        parts.append("\(notes)")
         parts.append("\(isFavorite)")
-        parts.append("\(timesCooked)")
+        parts.append("\(cookCount)")
+        parts.append("\(notes)")
+        parts.append("\(sourceURL)")
         return parts.joined(separator: " | ")
     }
 }
