@@ -14,7 +14,7 @@ struct HabitTrackerView: View {
                     Circle()
                         .fill(Color.hubPrimary.opacity(0.12))
                         .frame(width: 40, height: 40)
-                    Image(systemName: "checklist")
+                    Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 18, weight: .medium))
                         .foregroundStyle(Color.hubPrimary)
                 }
@@ -28,9 +28,9 @@ struct HabitTrackerView: View {
 
             // Tab picker
             Picker("", selection: $selectedTab) {
-                    Text("Home").tag(0)
-                    Text("History").tag(1)
-                    Text("Analytics").tag(2)
+                    Text("Today").tag(0)
+                    Text("Streaks").tag(1)
+                    Text("Stats").tag(2)
             }
             .pickerStyle(.segmented)
             .padding(.horizontal, HubLayout.standardPadding)
@@ -39,26 +39,21 @@ struct HabitTrackerView: View {
             // Content
             ZStack(alignment: .bottomTrailing) {
                     if selectedTab == 0 {
-                        HabitTrackerDashboardView(viewModel: viewModel)
+                        HabitTrackerTodayView(viewModel: viewModel)
                     }
                     if selectedTab == 1 {
-                        HabitTrackerHistoryView(viewModel: viewModel)
+                        HabitTrackerStreaksView(viewModel: viewModel)
                     }
                     if selectedTab == 2 {
-                        HabitTrackerAnalyticsView(viewModel: viewModel)
+                        HabitTrackerStatsView(viewModel: viewModel)
                     }
 
-                // FAB
-                QuickEntryFAB {
-                    showAddSheet = true
-                }
-                .padding(HubLayout.standardPadding)
             }
         }
         .background(AdaptiveColors.background(for: colorScheme))
         .task { await viewModel.loadData() }
         .sheet(isPresented: $showAddSheet) {
-            HabitTrackerEntrySheet(viewModel: viewModel) {
+            HabitTrackerHabitEntrySheet(viewModel: viewModel) {
                 showAddSheet = false
             }
         }

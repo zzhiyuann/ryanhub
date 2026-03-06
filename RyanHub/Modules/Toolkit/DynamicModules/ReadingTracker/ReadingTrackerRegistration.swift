@@ -9,7 +9,7 @@ extension DynamicModuleRegistry {
             toolkitId: "readingTracker",
             displayName: "Reading Tracker",
             shortName: "Reading",
-            subtitle: "Track books, build your reading habit",
+            subtitle: "Track your reading journey",
             icon: "book.fill",
             iconColorName: "hubPrimary",
             viewBuilder: { AnyView(ReadingTrackerView()) },

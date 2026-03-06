@@ -889,6 +889,87 @@ class TestSessionRouting:
 
 
 # ========================================================================
+# 5b. WebSocket session continuity
+# ========================================================================
+
+class TestWebSocketSessionContinuity:
+    """Verify WS parallel routing keeps transcript context without resume races."""
+
+    @pytest.mark.asyncio
+    async def test_ws_parallel_followup_keeps_conv_id_without_resume(self, tmp_path):
+        d = make_dispatcher(tmp_path)
+        ws = object()
+
+        prev = d.sm.create(1, "first task", "/tmp/proj")
+        prev.status = "running"
+        prev.started = time.time()
+        prev.ws_client = ws
+        prev.ws_msg_id = "msg-1"
+
+        d.transcript.append(prev.conv_id, "user", "first task")
+        d.transcript.append(prev.conv_id, "assistant", "working on it")
+
+        invocations = []
+        async def mock_invoke(session, prompt, resume=False, max_turns=10,
+                              model=None, stream=True, on_question=None):
+            invocations.append({
+                "resume": resume,
+                "conv_id": session.conv_id,
+                "prompt": prompt,
+            })
+            session.status = "done"
+            session.started = time.time()
+            session.finished = time.time()
+            return "second done"
+
+        d.runner.invoke = mock_invoke
+        out = await d._handle_ws_message("second task", None, "msg-2", websocket=ws)
+
+        assert out == "second done"
+        assert len(invocations) == 1
+        assert invocations[0]["resume"] is False
+        assert invocations[0]["conv_id"] == prev.conv_id
+        assert "Conversation History" in invocations[0]["prompt"]
+        assert "first task" in invocations[0]["prompt"]
+
+    @pytest.mark.asyncio
+    async def test_ws_different_client_does_not_reuse_other_context(self, tmp_path):
+        d = make_dispatcher(tmp_path)
+        ws1 = object()
+        ws2 = object()
+
+        prev = d.sm.create(1, "first task", "/tmp/proj")
+        prev.status = "done"
+        prev.finished = time.time()
+        prev.ws_client = ws1
+        prev.ws_msg_id = "msg-1"
+
+        d.transcript.append(prev.conv_id, "user", "first task")
+        d.transcript.append(prev.conv_id, "assistant", "done")
+
+        prompts = []
+        async def mock_invoke(session, prompt, resume=False, max_turns=10,
+                              model=None, stream=True, on_question=None):
+            prompts.append(prompt)
+            session.status = "done"
+            session.started = time.time()
+            session.finished = time.time()
+            return "fresh"
+
+        d.runner.invoke = mock_invoke
+        out = await d._handle_ws_message("new client task", None, "msg-2", websocket=ws2)
+
+        assert out == "fresh"
+        assert len(prompts) == 1
+        assert "Conversation History" not in prompts[0]
+
+        latest = d.sm.last_session()
+        assert latest is not None
+        assert latest.conv_id != prev.conv_id
+        assert latest.ws_client is ws2
+
+
+# ========================================================================
 # 6. Edited Message Handling
 # ========================================================================
 

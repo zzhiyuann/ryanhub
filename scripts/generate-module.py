@@ -183,7 +183,7 @@ After loading data, cache for DataProvider:
 # Claude API
 # ─────────────────────────────────────────────────────────────────────
 
-def call_claude(prompt: str, model: str = "sonnet", max_tokens: int = 16000,
+def call_claude(prompt: str, model: str = "opus", max_tokens: int = 16000,
                 timeout: int = 300, disable_tools: bool = False) -> str:
     """Call Claude CLI. Returns response text.
     Set disable_tools=True for pure code generation (prevents Claude from using
@@ -961,7 +961,7 @@ Your very first line of output must be: import SwiftUI
     for attempt in range(3):
         if attempt > 0:
             print(f"      Retry {attempt} for {view_name}...")
-        response = call_claude(prompt, model="sonnet", max_tokens=8000, timeout=300, disable_tools=True)
+        response = call_claude(prompt, max_tokens=8000, timeout=300, disable_tools=True)
         if not response:
             print(f"      Claude returned empty for {view_name} (attempt {attempt+1})")
             continue

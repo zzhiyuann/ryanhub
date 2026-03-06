@@ -26,7 +26,10 @@ final class SpendingTrackerViewModel {
 
     // Budget
     var dailyBudget: Double {
-        get { UserDefaults.standard.double(forKey: "spendingTracker_dailyBudget").nonZero ?? 50.0 }
+        get {
+            let v = UserDefaults.standard.double(forKey: "spendingTracker_dailyBudget")
+            return v > 0 ? v : 50.0
+        }
         set { UserDefaults.standard.set(newValue, forKey: "spendingTracker_dailyBudget") }
     }
 

@@ -136,9 +136,24 @@ class Dispatcher:
         self.runner = AgentRunner(
             command=config.agent_command,
             args=config.agent_args,
+            prompt_mode=config.agent_prompt_mode,
             timeout=config.timeout,
             question_timeout=config.question_timeout,
         )
+        self._target_runners: dict[str, AgentRunner] = {}
+        for key, target_cfg in config.agent_targets.items():
+            command = str(target_cfg.get("command", "")).strip()
+            if not command:
+                continue
+            args = target_cfg.get("args", [])
+            prompt_mode = str(target_cfg.get("prompt_mode", "stdin"))
+            self._target_runners[key.lower()] = AgentRunner(
+                command=command,
+                args=list(args) if isinstance(args, list) else None,
+                prompt_mode=prompt_mode,
+                timeout=config.timeout,
+                question_timeout=config.question_timeout,
+            )
         self.mem = Memory(config.memory_file)
         self.transcript = Transcript(config.data_dir)
         self.sm = SessionManager(recent_window=config.recent_window)
@@ -295,6 +310,7 @@ class Dispatcher:
         audio_base64: str | None = None,
         audio_duration: float | None = None,
         language: str | None = None,
+        target_agent: str | None = None,
     ) -> str:
         """Handle a message received from a WebSocket client.
 
@@ -390,7 +406,8 @@ class Dispatcher:
                         "  /new — Start a new session\n"
                         "  /peek — Preview current output\n"
                         "  /q <question> — Quick Q&A\n"
-                        "  @haiku/@sonnet/@opus — Switch model"
+                        "  @haiku/@sonnet/@opus — Switch model\n"
+                        "  @x / @claw — Route to Codex / OpenClaw"
                     )
                 elif effective_cmd == "peek":
                     active = self.sm.active()
@@ -425,27 +442,34 @@ class Dispatcher:
 
         is_project = cwd != str(Path.home())
 
-        # Extract model prefix
+        # Extract target agent + model prefix
+        content, target_from_prefix = self._extract_target_agent(content)
+        normalized_target = self._normalize_target_agent(target_agent or target_from_prefix)
+        resolved_runner = self._resolve_runner(normalized_target)
+        log.info(
+            "[ws:%s] route target=%s cmd=%s",
+            msg_id[:8],
+            normalized_target or "default",
+            getattr(resolved_runner, "command", "?"),
+        )
         content, model_from_prefix, is_sticky = self._extract_model_prefix(content)
         if is_sticky and model_from_prefix:
             self._sticky_model = model_from_prefix
         model_override = model_from_prefix or self._sticky_model
 
-        # Try to resume last session for continuity
+        # Try to continue most recent WS session from this client for continuity.
+        # This also applies when another turn is still running: we can preserve
+        # transcript/conv_id context without sharing the same CLI session id.
         if not self.sm.force_new:
-            last = self.sm.last_session()
-            active = self.sm.active()
-            if not active and last and last.status in ("done", "failed"):
-                last_cwd = last.cwd
-                detected_cwd = cwd if is_project else None
-                same_project = detected_cwd is None or detected_cwd == last_cwd
-                if same_project:
-                    return await self._do_ws_followup(
-                        synthetic_mid, content, last, msg_id,
-                        websocket=websocket,
-                        model=model_override, model_sticky=is_sticky,
-                        attachments=attachments,
-                    )
+            prev = self._find_ws_followup_session(websocket, cwd, is_project)
+            if prev:
+                return await self._do_ws_followup(
+                    synthetic_mid, content, prev, msg_id,
+                    websocket=websocket,
+                    target_agent=normalized_target,
+                    model=model_override, model_sticky=is_sticky,
+                    attachments=attachments,
+                )
         self.sm.force_new = False
 
         # Enforce concurrency limit
@@ -458,6 +482,7 @@ class Dispatcher:
             return await self._do_ws_followup(
                 synthetic_mid, content, oldest, msg_id,
                 websocket=websocket,
+                target_agent=normalized_target,
                 model=model_override, model_sticky=is_sticky,
                 attachments=attachments,
             )
@@ -467,12 +492,44 @@ class Dispatcher:
         session.is_task = is_project
         session.model_sticky = is_sticky
         session.model_override = model_override
+        session.target_agent = normalized_target
 
         return await self._do_ws_session(
             synthetic_mid, session, content, msg_id,
             websocket=websocket, model=model_override,
             attachments=attachments,
         )
+
+    def _find_ws_followup_session(
+        self,
+        websocket,
+        cwd: str,
+        is_project: bool,
+    ) -> Session | None:
+        """Find the newest WS session to follow up from this client."""
+        detected_cwd = cwd if is_project else None
+
+        for mid in self.sm.recent:
+            s = self.sm.by_msg.get(mid)
+            if not s:
+                continue
+            if s.ws_client is not websocket:
+                continue
+            if s.status not in ("pending", "running", "done", "failed"):
+                continue
+            if detected_cwd is not None and s.cwd != detected_cwd:
+                continue
+            return s
+
+        # Fallback when no websocket handle is available (tests/legacy callers).
+        if websocket is None:
+            last = self.sm.last_session()
+            if not last or last.status not in ("done", "failed"):
+                return None
+            if detected_cwd is not None and last.cwd != detected_cwd:
+                return None
+            return last
+        return None
 
     async def _do_ws_session(
         self,
@@ -491,7 +548,15 @@ class Dispatcher:
         session.model_override = model
         self.transcript.append(session.conv_id, "user", text)
 
-        prompt = self._build_prompt(text, session.cwd, attachments=attachments)
+        require_delivery_summary = self._requires_delivery_summary(
+            text=text,
+            is_project_task=session.is_task,
+            attachments=attachments,
+        )
+        prompt = self._build_prompt(
+            text, session.cwd, attachments=attachments,
+            require_delivery_summary=require_delivery_summary,
+        )
         max_turns = self.cfg.max_turns
 
         # Update WS session count
@@ -504,7 +569,8 @@ class Dispatcher:
                 self._ws_stream_loop(websocket, ws_msg_id, session)
             )
 
-        result = await self.runner.invoke(
+        runner = self._resolve_runner(session.target_agent)
+        result = await runner.invoke(
             session, prompt, resume=False, max_turns=max_turns,
             model=model, stream=True,
             on_question=self._surface_question,
@@ -551,6 +617,7 @@ class Dispatcher:
         prev: Session,
         ws_msg_id: str,
         websocket=None,
+        target_agent: str | None = None,
         model: str | None = None,
         model_sticky: bool = False,
         attachments: list[dict] | None = None,
@@ -559,8 +626,13 @@ class Dispatcher:
         effective_model = model or self._sticky_model
         effective_sticky = model_sticky or (prev.model_sticky if not model else False)
 
+        target_changed = (
+            target_agent is not None
+            and self._normalize_target_agent(target_agent) != self._normalize_target_agent(prev.target_agent)
+        )
         model_changed = effective_model and prev.model_override != effective_model
-        if model_changed:
+        prev_running = prev.status in ("pending", "running")
+        if model_changed or target_changed or prev_running:
             session = self.sm.create(mid, text, prev.cwd, conv_id=prev.conv_id)
             resume = False
         else:
@@ -570,12 +642,19 @@ class Dispatcher:
         session.is_task = prev.is_task
         session.model_override = effective_model
         session.model_sticky = effective_sticky
+        session.target_agent = target_agent or prev.target_agent
         # Store WS client reference for question routing
         session.ws_client = websocket
         session.ws_msg_id = ws_msg_id
 
+        require_delivery_summary = self._requires_delivery_summary(
+            text=text,
+            is_project_task=session.is_task,
+            attachments=attachments,
+        )
         prompt = self._build_prompt_with_history(
             text, session.cwd, session.conv_id, attachments=attachments,
+            require_delivery_summary=require_delivery_summary,
         )
         self.transcript.append(session.conv_id, "user", text)
 
@@ -590,7 +669,8 @@ class Dispatcher:
                 self._ws_stream_loop(websocket, ws_msg_id, session)
             )
 
-        result = await self.runner.invoke(
+        runner = self._resolve_runner(session.target_agent)
+        result = await runner.invoke(
             session, prompt, resume=resume,
             max_turns=max_turns, model=effective_model,
             stream=True,
@@ -604,7 +684,9 @@ class Dispatcher:
             session.is_task = prev.is_task
             session.model_override = effective_model
             session.model_sticky = effective_sticky
-            result = await self.runner.invoke(
+            session.target_agent = target_agent or prev.target_agent
+            runner = self._resolve_runner(session.target_agent)
+            result = await runner.invoke(
                 session, prompt, resume=False,
                 max_turns=max_turns, model=effective_model,
                 stream=True,
@@ -705,6 +787,7 @@ class Dispatcher:
         # Re-dispatch with new text (fire-and-forget task so we can return immediately)
         asyncio.create_task(self._handle_ws_message(
             new_content, None, msg_id, websocket,
+            target_agent=session.target_agent,
         ))
         return {"ok": True}
 
@@ -1498,6 +1581,7 @@ class Dispatcher:
             "\U0001f6d1 <b>Cancel</b>: /cancel or just say stop\n"
             "\U0001f441 <b>Peek output</b>: /peek\n"
             "\u26a1 <b>Quick question</b>: /q your question (non-blocking)\n"
+            "\U0001f9ed <b>Agent routing</b>: @x (Codex), @claw (OpenClaw)\n"
             "\U0001f4cb <b>History</b>: /history\n"
             "\u2753 <b>Help</b>: /help\n\n"
             "\U0001f4a1 While tasks are running, natural language is auto-classified "
@@ -1651,6 +1735,63 @@ class Dispatcher:
         "#Haiku": "haiku", "#Sonnet": "sonnet", "#Opus": "opus",
         "@Haiku": "haiku", "@Sonnet": "sonnet", "@Opus": "opus",
     }
+    _TARGET_AGENT_ALIASES = {
+        "x": "x",
+        "codex": "x",
+        "claw": "claw",
+        "openclaw": "claw",
+    }
+    _TARGET_PREFIXES = ("@x", "@claw")
+
+    def _normalize_target_agent(self, value: str | None) -> str | None:
+        if not value:
+            return None
+        key = value.strip().lstrip("@#").lower()
+        return self._TARGET_AGENT_ALIASES.get(key)
+
+    def _extract_target_agent_prefix(self, text: str) -> tuple[str, str | None]:
+        lowered = text.lower()
+        for prefix in self._TARGET_PREFIXES:
+            if not lowered.startswith(prefix):
+                continue
+            rest = text[len(prefix):]
+            if rest and not rest[0].isspace():
+                continue
+            clean = rest.lstrip()
+            if clean:
+                return clean, prefix.lstrip("@")
+        return text, None
+
+    def _extract_target_agent(self, text: str) -> tuple[str, str | None]:
+        """Extract target agent from direct prefix or wrapped personal-context text."""
+        clean, target = self._extract_target_agent_prefix(text)
+        if target:
+            return clean, target
+
+        # Backward compatibility for older app payloads:
+        # [Personal Context] ... [End Personal Context]\n\n@x ...
+        start_marker = "[Personal Context]"
+        end_marker = "[End Personal Context]"
+        if start_marker not in text or end_marker not in text:
+            return text, None
+
+        end_idx = text.rfind(end_marker)
+        suffix = text[end_idx + len(end_marker):].lstrip()
+        if not suffix:
+            return text, None
+
+        suffix_clean, suffix_target = self._extract_target_agent_prefix(suffix)
+        if not suffix_target:
+            return text, None
+
+        head = text[: end_idx + len(end_marker)].rstrip()
+        rebuilt = f"{head}\n\n{suffix_clean}" if suffix_clean else head
+        return rebuilt, suffix_target
+
+    def _resolve_runner(self, target_agent: str | None) -> AgentRunner:
+        if not target_agent:
+            return self.runner
+        return self._target_runners.get(target_agent, self.runner)
 
     def _extract_model_prefix(self, text: str) -> tuple[str, str | None, bool]:
         """Extract #model prefix from message. Returns (clean_text, model_or_none, sticky).
@@ -1681,6 +1822,7 @@ class Dispatcher:
     async def _handle_task(
         self, mid: int, text: str, reply_to: int | None,
         attachments: list[dict] | None = None, model: str | None = None,
+        target_agent: str | None = None,
     ):
         """Route a task message. NEVER blocks — always processes immediately.
 
@@ -1688,7 +1830,9 @@ class Dispatcher:
         full prompt). Sessions run in parallel via asyncio tasks.
         Only explicit reply to a *running* task queues as follow-up.
         """
-        # 0. Extract model preference from #haiku/#opus/#sonnet prefix
+        # 0. Extract target agent + model prefix
+        text, target_from_prefix = self._extract_target_agent_prefix(text)
+        normalized_target = self._normalize_target_agent(target_agent or target_from_prefix)
         text, model_from_prefix, is_sticky = self._extract_model_prefix(text)
         if is_sticky and model_from_prefix:
             self._sticky_model = model_from_prefix
@@ -1700,10 +1844,10 @@ class Dispatcher:
             prev = self.sm.find_by_reply(reply_to)
             if prev and prev.status == "running":
                 self._reply(mid, "\u23f3 Queued, will continue after current task.")
-                self._spawn(self._do_queued_followup(mid, text, prev, attachments, model=model_override, model_sticky=is_sticky))
+                self._spawn(self._do_queued_followup(mid, text, prev, attachments, model=model_override, model_sticky=is_sticky, target_agent=normalized_target))
                 return
             if prev:
-                self._spawn(self._do_followup(mid, text, prev, attachments, model=model_override, model_sticky=is_sticky))
+                self._spawn(self._do_followup(mid, text, prev, attachments, model=model_override, model_sticky=is_sticky, target_agent=normalized_target))
                 return
 
         # 2. Build background context — all sessions know what else is running
@@ -1735,7 +1879,7 @@ class Dispatcher:
                     or detected_cwd == last_cwd  # same project
                 )
                 if same_project:
-                    self._spawn(self._do_followup(mid, text, last, attachments, model=model_override, model_sticky=is_sticky))
+                    self._spawn(self._do_followup(mid, text, last, attachments, model=model_override, model_sticky=is_sticky, target_agent=normalized_target))
                     return
                 else:
                     log.info(
@@ -1749,13 +1893,14 @@ class Dispatcher:
             self._reply(mid, f"\u23f3 {len(active)} tasks running, queued until one finishes.")
             # Queue behind the oldest active session
             oldest = active[0]
-            self._spawn(self._do_queued_followup(mid, text, oldest, attachments, model=model_override, model_sticky=is_sticky))
+            self._spawn(self._do_queued_followup(mid, text, oldest, attachments, model=model_override, model_sticky=is_sticky, target_agent=normalized_target))
             return
 
         # 6. Create new session
         session = self.sm.create(mid, text, cwd)
         session.is_task = is_project
         session.model_sticky = is_sticky
+        session.target_agent = normalized_target
         self._spawn(self._do_session(
             mid, session, text, attachments, bg_context=bg_context,
             model=model_override,
@@ -1775,11 +1920,19 @@ class Dispatcher:
         # Record user message to transcript
         self.transcript.append(session.conv_id, "user", text)
 
-        prompt = self._build_prompt(text, session.cwd, attachments, bg_context)
+        require_delivery_summary = self._requires_delivery_summary(
+            text=text,
+            is_project_task=session.is_task,
+            attachments=attachments,
+        )
+        prompt = self._build_prompt(
+            text, session.cwd, attachments, bg_context,
+            require_delivery_summary=require_delivery_summary,
+        )
         max_turns = self.cfg.max_turns
 
         runner = asyncio.create_task(
-            self.runner.invoke(
+            self._resolve_runner(session.target_agent).invoke(
                 session, prompt, resume=False, max_turns=max_turns,
                 model=model, stream=True,
                 on_question=self._surface_question,
@@ -1816,17 +1969,19 @@ class Dispatcher:
         attachments: list[dict] | None = None,
         model: str | None = None,
         model_sticky: bool = False,
+        target_agent: str | None = None,
     ):
         """Wait for a running session to finish, then resume with the new message."""
         while target.status in ("pending", "running"):
             await asyncio.sleep(1)
-        await self._do_followup(mid, text, target, attachments, model=model, model_sticky=model_sticky)
+        await self._do_followup(mid, text, target, attachments, model=model, model_sticky=model_sticky, target_agent=target_agent)
 
     async def _do_followup(
         self, mid: int, text: str, prev: Session,
         attachments: list[dict] | None = None,
         model: str | None = None,
         model_sticky: bool = False,
+        target_agent: str | None = None,
     ):
         """Resume a conversation with full history context.
 
@@ -1839,11 +1994,15 @@ class Dispatcher:
 
         # If model changed, start a fresh Claude Code session.
         # Otherwise, resume the existing one.
+        target_changed = (
+            target_agent is not None
+            and self._normalize_target_agent(target_agent) != self._normalize_target_agent(prev.target_agent)
+        )
         model_changed = (
             effective_model
             and prev.model_override != effective_model
         )
-        if model_changed:
+        if model_changed or target_changed:
             session = self.sm.create(
                 mid, text, prev.cwd, conv_id=prev.conv_id,
             )
@@ -1857,6 +2016,7 @@ class Dispatcher:
         session.is_task = prev.is_task
         session.model_override = effective_model
         session.model_sticky = effective_sticky
+        session.target_agent = target_agent or prev.target_agent
 
         # Build the follow-up prompt with full conversation history.
         # IMPORTANT: build history BEFORE appending the new message,
@@ -1871,8 +2031,14 @@ class Dispatcher:
                 )
             follow_text = "".join(parts)
 
+        require_delivery_summary = self._requires_delivery_summary(
+            text=text,
+            is_project_task=session.is_task,
+            attachments=attachments,
+        )
         prompt = self._build_prompt_with_history(
             follow_text, session.cwd, session.conv_id, attachments=None,
+            require_delivery_summary=require_delivery_summary,
         )
 
         # Record user message to transcript (after building prompt)
@@ -1881,7 +2047,7 @@ class Dispatcher:
         max_turns = self.cfg.max_turns_followup
 
         runner = asyncio.create_task(
-            self.runner.invoke(
+            self._resolve_runner(session.target_agent).invoke(
                 session, prompt, resume=resume,
                 max_turns=max_turns, model=effective_model,
                 stream=True,
@@ -1900,8 +2066,9 @@ class Dispatcher:
             session.is_task = prev.is_task
             session.model_override = effective_model
             session.model_sticky = effective_sticky
+            session.target_agent = target_agent or prev.target_agent
             runner = asyncio.create_task(
-                self.runner.invoke(
+                self._resolve_runner(session.target_agent).invoke(
                     session, prompt, resume=False,
                     max_turns=max_turns, model=effective_model,
                     stream=True,
@@ -1949,7 +2116,7 @@ class Dispatcher:
         )
         try:
             summary = await asyncio.wait_for(
-                self.runner.invoke(
+                self._resolve_runner(session.target_agent).invoke(
                     session, prompt, resume=True, max_turns=3,
                     model=session.model_override, stream=True,
                     on_question=None,
@@ -2067,6 +2234,7 @@ class Dispatcher:
         self, text: str, cwd: str,
         attachments: list[dict] | None = None,
         bg_context: str = "",
+        require_delivery_summary: bool = False,
     ) -> str:
         project = Path(cwd).name
         prompt = (
@@ -2088,12 +2256,13 @@ class Dispatcher:
         if bg_context:
             prompt += f"\n{bg_context}\n\n"
 
-        prompt += self._prompt_footer()
+        prompt += self._prompt_footer(require_delivery_summary=require_delivery_summary)
         return prompt
 
     def _build_prompt_with_history(
         self, text: str, cwd: str, conv_id: str,
         attachments: list[dict] | None = None,
+        require_delivery_summary: bool = False,
     ) -> str:
         """Build a prompt with full conversation history injected.
 
@@ -2101,7 +2270,9 @@ class Dispatcher:
         so the LLM has complete multi-turn context.
         """
         project = Path(cwd).name
-        history = self.transcript.build_history(conv_id)
+        history = self.transcript.build_history(
+            conv_id, max_chars=self.cfg.followup_history_max_chars,
+        )
 
         prompt = f"Working directory: {cwd}  (project: {project})\n\n"
         prompt += f"User context:\n{self.mem.text}\n\n"
@@ -2126,17 +2297,50 @@ class Dispatcher:
                 )
             prompt += "\n"
 
-        prompt += self._prompt_footer()
+        prompt += self._prompt_footer(require_delivery_summary=require_delivery_summary)
         return prompt
 
+    def _requires_delivery_summary(
+        self,
+        text: str,
+        is_project_task: bool,
+        attachments: list[dict] | None,
+    ) -> bool:
+        """Heuristic: enable delivery-summary style only for likely long tasks."""
+        if is_project_task:
+            return True
+        if attachments:
+            return True
+
+        normalized = text.strip().lower()
+        if not normalized:
+            return False
+
+        if len(normalized) >= 160:
+            return True
+        if "\n" in normalized:
+            return True
+
+        long_task_signals = (
+            "debug", "fix", "investigate", "implement", "refactor",
+            "run", "experiment", "analyze", "research", "trace",
+            "调试", "修复", "排查", "实现", "重构", "运行", "实验", "分析", "研究",
+        )
+        return any(token in normalized for token in long_task_signals)
+
     @staticmethod
-    def _prompt_footer() -> str:
+    def _prompt_footer(require_delivery_summary: bool = False) -> str:
+        summary_rule = (
+            "When this is a long-running execution task, end with a concise final "
+            "delivery summary (outcome, key changes/findings, and next action). "
+            if require_delivery_summary else
+            "For short Q&A, reply naturally and do not append a templated "
+            "delivery summary block. "
+        )
         return (
             "Do what the user asks. "
-            "CRITICAL: You MUST end your response with a direct, user-facing summary "
-            "of what you did and what the outcome was. Never exit without addressing "
-            "the user — even if you ran out of turns mid-task, write a brief status "
-            "update as your final output.\n"
+            + summary_rule +
+            "Never exit without addressing the user.\n"
             "IMPORTANT: Do NOT send any Telegram messages yourself (no curl to "
             "Telegram API). Your stdout will be relayed to the user automatically.\n"
             "LANGUAGE: Match the user's language. If they write in English, respond "

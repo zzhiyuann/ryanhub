@@ -9,11 +9,22 @@ telegram:
 agent:
   command: "claude"                    # AI agent CLI command (claude, aider, etc.)
   args: ["-p", "--dangerously-skip-permissions"]
+  prompt_mode: "stdin"                 # stdin | arg
   max_concurrent: 3                    # Max parallel agent sessions
   timeout: 1800                        # Task timeout in seconds (30 min)
   max_turns: 50                        # Max agent turns for project tasks
   max_turns_chat: 10                   # Max turns for casual chat
   max_turns_followup: 20               # Max turns for follow-up messages
+  followup_history_max_chars: 18000    # Prompt history cap for follow-ups (latency guard)
+  targets:
+    x:
+      command: "codex"
+      args: ["exec", "--skip-git-repo-check"]
+      prompt_mode: "arg"
+    claw:
+      command: "openclaw"
+      args: ["agent", "--local", "--json", "--agent", "main", "--message"]
+      prompt_mode: "arg"
 
 behavior:
   poll_timeout: 30                     # Telegram long-poll seconds

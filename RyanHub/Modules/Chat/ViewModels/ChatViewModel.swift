@@ -211,14 +211,20 @@ final class ChatViewModel {
         // Build the content to send over the wire. If the message matches any
         // personal toolkit (health, parking, vocab, calendar, books), prepend
         // relevant context so the AI can answer personal questions.
-        var contentToSend = Self.buildContentWithContext(userText: text)
+        let mentionRouting = Self.parseAgentMentionPrefix(from: text)
+        let contentToSend = Self.buildContentWithContext(userText: mentionRouting.cleanText)
 
         // Language code sent as metadata — dispatcher handles language matching.
         let languageCode = (appState?.language ?? .english).rawValue
 
         Task {
             do {
-                try await webSocket.sendMessage(id: messageId, content: contentToSend, language: languageCode)
+                try await webSocket.sendMessage(
+                    id: messageId,
+                    content: contentToSend,
+                    language: languageCode,
+                    targetAgent: mentionRouting.targetAgent
+                )
             } catch {
                 self.messageStatuses[messageId] = .failed(error.localizedDescription)
                 self.updateGlobalTypingState()
@@ -232,6 +238,7 @@ final class ChatViewModel {
     /// Send an image message from photo picker data, with an optional user caption.
     func sendImageMessage(data: Data, caption: String = "", replyingTo: ChatMessage? = nil) {
         let base64 = data.base64EncodedString()
+        let mentionRouting = Self.parseAgentMentionPrefix(from: caption)
         let replyPreview = replyingTo.map { Self.buildReplyPreview(for: $0) }
         let userMessage = ChatMessage(
             content: caption,
@@ -251,7 +258,7 @@ final class ChatViewModel {
         let language = appState?.language ?? .english
         let languageCode = language.rawValue
 
-        let wireCaption = caption
+        let wireCaption = mentionRouting.cleanText
 
         Task {
             do {
@@ -259,7 +266,8 @@ final class ChatViewModel {
                     id: messageId,
                     imageBase64: base64,
                     caption: wireCaption,
-                    language: languageCode
+                    language: languageCode,
+                    targetAgent: mentionRouting.targetAgent
                 )
             } catch {
                 self.messageStatuses[messageId] = .failed(error.localizedDescription)
@@ -493,12 +501,18 @@ final class ChatViewModel {
             }
             return
         case .text:
-            contentToSend = Self.buildContentWithContext(userText: message.content)
+            let mentionRouting = Self.parseAgentMentionPrefix(from: message.content)
+            contentToSend = Self.buildContentWithContext(userText: mentionRouting.cleanText)
             let messageId = message.id
             let languageCode = (appState?.language ?? .english).rawValue
             Task {
                 do {
-                    try await webSocket.sendMessage(id: messageId, content: contentToSend, language: languageCode)
+                    try await webSocket.sendMessage(
+                        id: messageId,
+                        content: contentToSend,
+                        language: languageCode,
+                        targetAgent: mentionRouting.targetAgent
+                    )
                 } catch {
                     self.messageStatuses[messageId] = .failed(error.localizedDescription)
                     self.updateGlobalTypingState()
@@ -550,12 +564,18 @@ final class ChatViewModel {
         startProgressTimer()
 
         // Send as a regular new message
-        let contentToSend = Self.buildContentWithContext(userText: trimmed)
+        let mentionRouting = Self.parseAgentMentionPrefix(from: trimmed)
+        let contentToSend = Self.buildContentWithContext(userText: mentionRouting.cleanText)
         let languageCode = (appState?.language ?? .english).rawValue
 
         Task {
             do {
-                try await webSocket.sendMessage(id: newId, content: contentToSend, language: languageCode)
+                try await webSocket.sendMessage(
+                    id: newId,
+                    content: contentToSend,
+                    language: languageCode,
+                    targetAgent: mentionRouting.targetAgent
+                )
             } catch {
                 self.messageStatuses[newId] = .failed(error.localizedDescription)
                 self.updateGlobalTypingState()
@@ -644,6 +664,7 @@ final class ChatViewModel {
             Unknown command: \(baseCommand)
             Available: /status, /cancel, /history, /new, /peek, /help, /q <question>
             Model switch: @haiku, @sonnet, @opus (prefix your message)
+            Agent route: @x (Codex), @claw (OpenClaw)
             """
         let systemMsg = ChatMessage.assistant(helpText)
         appendMessage(systemMsg)
@@ -683,6 +704,29 @@ final class ChatViewModel {
     /// stored in the UI always shows the original user text.
     static func buildContentWithContext(userText: String) -> String {
         PersonalContext.buildContext(for: userText)
+    }
+
+    /// Parse leading agent mention prefixes used for explicit routing.
+    /// `@x` routes to Codex, `@claw` routes to OpenClaw.
+    /// Returns cleaned text with the prefix removed when a valid target is found.
+    static func parseAgentMentionPrefix(from text: String) -> (cleanText: String, targetAgent: String?) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            return (text, nil)
+        }
+        let lowered = trimmed.lowercased()
+        let prefixes: [(String, String)] = [("@claw", "claw"), ("@x", "x")]
+        for (prefix, target) in prefixes {
+            guard lowered.hasPrefix(prefix) else { continue }
+            let suffixIndex = trimmed.index(trimmed.startIndex, offsetBy: prefix.count)
+            let suffix = String(trimmed[suffixIndex...])
+            if !suffix.isEmpty, let first = suffix.first, !first.isWhitespace {
+                continue
+            }
+            let clean = suffix.trimmingCharacters(in: .whitespacesAndNewlines)
+            return clean.isEmpty ? (text, nil) : (clean, target)
+        }
+        return (text, nil)
     }
 
     // MARK: - Private

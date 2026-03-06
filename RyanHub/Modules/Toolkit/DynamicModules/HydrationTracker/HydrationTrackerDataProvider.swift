@@ -5,7 +5,7 @@ import Foundation
 enum HydrationTrackerDataProvider: ToolkitDataProvider {
     static let toolkitId = "hydrationTracker"
     static let displayName = "Hydration Tracker"
-    static let relevanceKeywords: [String] = ["water", "hydration", "drink", "glasses", "fluid", "intake", "dehydration", "health", "wellness", "daily goal"]
+    static let relevanceKeywords: [String] = ["water", "hydration", "drink", "glasses", "fluid", "intake", "daily goal", "health", "wellness"]
 
     private static var bridgeBaseURL: String {
         UserDefaults.standard.string(forKey: "ryanhub_server_url")

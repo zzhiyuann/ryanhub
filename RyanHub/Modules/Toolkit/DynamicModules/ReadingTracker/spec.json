@@ -3,7 +3,7 @@
   "moduleName": "ReadingTracker",
   "displayName": "Reading Tracker",
   "shortName": "Reading",
-  "subtitle": "Track books, build your reading habit",
+  "subtitle": "Track your reading journey",
   "icon": "book.fill",
   "iconColor": "hubPrimary",
   "relevanceKeywords": [
@@ -11,18 +11,20 @@
     "books",
     "pages",
     "library",
-    "bookshelf",
-    "literature",
+    "progress",
     "novel",
     "author",
-    "genre",
-    "bookmark"
+    "bookmark",
+    "literature",
+    "bookshelf"
   ],
+  "navigationPattern": "tabbedSegmented",
+  "entryPattern": "fab+sheet",
   "dataFields": [
     {
-      "name": "bookTitle",
+      "name": "title",
       "type": "String",
-      "label": "Book Title",
+      "label": "Title",
       "control": "text"
     },
     {
@@ -30,18 +32,6 @@
       "type": "String",
       "label": "Author",
       "control": "text"
-    },
-    {
-      "name": "genre",
-      "type": "BookGenre",
-      "label": "Genre",
-      "control": "picker"
-    },
-    {
-      "name": "status",
-      "type": "ReadingStatus",
-      "label": "Status",
-      "control": "picker"
     },
     {
       "name": "totalPages",
@@ -56,22 +46,46 @@
       "control": "stepper"
     },
     {
-      "name": "minutesRead",
-      "type": "Int",
-      "label": "Minutes Read",
-      "control": "stepper"
+      "name": "status",
+      "type": "ReadingStatus",
+      "label": "Status",
+      "control": "picker"
+    },
+    {
+      "name": "genre",
+      "type": "BookGenre",
+      "label": "Genre",
+      "control": "picker"
     },
     {
       "name": "rating",
       "type": "Int",
-      "label": "Rating (1-5)",
+      "label": "Rating",
       "control": "slider"
     },
     {
       "name": "notes",
       "type": "String",
-      "label": "Notes & Highlights",
+      "label": "Notes",
       "control": "text"
+    },
+    {
+      "name": "startedReading",
+      "type": "Date",
+      "label": "Started",
+      "control": "datePicker"
+    },
+    {
+      "name": "finishedReading",
+      "type": "Date?",
+      "label": "Finished",
+      "control": "datePicker"
+    },
+    {
+      "name": "lastReadDate",
+      "type": "Date",
+      "label": "Last Read",
+      "control": "datePicker"
     }
   ],
   "enums": [
@@ -81,11 +95,11 @@
         {
           "name": "wantToRead",
           "displayName": "Want to Read",
-          "icon": "bookmark"
+          "icon": "star"
         },
         {
-          "name": "currentlyReading",
-          "displayName": "Currently Reading",
+          "name": "reading",
+          "displayName": "Reading",
           "icon": "book.fill"
         },
         {
@@ -111,10 +125,10 @@
         {
           "name": "nonFiction",
           "displayName": "Non-Fiction",
-          "icon": "newspaper"
+          "icon": "doc.text"
         },
         {
-          "name": "sciFi",
+          "name": "scienceFiction",
           "displayName": "Sci-Fi",
           "icon": "sparkles"
         },
@@ -149,11 +163,6 @@
           "icon": "atom"
         },
         {
-          "name": "business",
-          "displayName": "Business",
-          "icon": "chart.line.uptrend.xyaxis"
-        },
-        {
           "name": "philosophy",
           "displayName": "Philosophy",
           "icon": "brain.head.profile"
@@ -168,153 +177,151 @@
   ],
   "views": [
     {
-      "name": "DashboardView",
-      "purpose": "Main hub showing currently reading books with progress bars, today's reading stats (minutes and pages), streak counter with flame icon, and yearly book goal progress ring. Cards for each in-progress book show cover color by genre, title, author, page progress bar, and estimated finish date.",
+      "name": "NowReadingView",
+      "purpose": "Primary view showing currently-reading books as cards with visual progress bars (circular or linear). Each card shows cover color placeholder, title, author, page progress (e.g. 142/380), and a percentage ring. Tapping a card opens BookDetailView. A quick-update stepper on each card lets users bump currentPage without leaving the view. If no books are being read, shows an inviting empty state prompting to add one. Also shows today's reading streak badge and daily page goal progress at the top.",
       "components": [
-        "StatGrid",
-        "ProgressRingView",
-        "CurrentlyReadingCards",
-        "QuickEntryFAB"
-      ]
+        "ProgressRing",
+        "BookCard",
+        "StreakBadge",
+        "QuickPageStepper"
+      ],
+      "isTab": true,
+      "tabLabel": "Reading",
+      "tabIcon": "book.fill"
     },
     {
-      "name": "EntrySheet",
-      "purpose": "Log a reading session \u2014 select existing book from picker or add a new book inline with title/author/genre/totalPages. Update current page with stepper, log session duration in minutes, optionally change status (mark finished/abandoned), set rating if finishing, and add notes or quotes.",
+      "name": "LibraryView",
+      "purpose": "All books organized into horizontal shelf rows grouped by status: Currently Reading, Want to Read, Finished, Abandoned. Each shelf scrolls horizontally showing book spines/cards. A search bar at top filters across all shelves. Tapping any book opens BookDetailView. Finished books show star rating below the card. Long-press allows quick status change. Count badges on each shelf header.",
       "components": [
-        "BookPicker",
-        "NewBookForm",
-        "PageStepper",
-        "TimeStepper",
+        "BookShelfRow",
+        "SearchBar",
+        "BookMiniCard",
+        "StatusBadge"
+      ],
+      "isTab": true,
+      "tabLabel": "Library",
+      "tabIcon": "books.vertical.fill"
+    },
+    {
+      "name": "StatsView",
+      "purpose": "Reading statistics dashboard. Top section: yearly goal ring (e.g. 8/24 books) with motivational label. Middle section: key metrics in a grid \u2014 total books finished this year, total pages read, average rating, reading streak days. Bottom section: genre breakdown as a horizontal bar chart showing distribution of books read by genre. Monthly books-finished bar chart showing reading pace over the year.",
+      "components": [
+        "YearlyGoalRing",
+        "MetricCard",
+        "GenreBarChart",
+        "MonthlyChart"
+      ],
+      "isTab": true,
+      "tabLabel": "Stats",
+      "tabIcon": "chart.bar.fill"
+    },
+    {
+      "name": "BookDetailView",
+      "purpose": "Full detail view for a single book, pushed as a sheet or navigation destination. Shows large genre-colored header with title and author. Progress section with page stepper and visual bar. Notes section as a scrollable text editor for quotes, thoughts, chapter notes \u2014 the core note-taking area the user requested. Status picker to change reading status. Rating stars (visible when status is finished). Start/finish date display. Edit and delete actions.",
+      "components": [
+        "ProgressBar",
+        "NoteEditor",
+        "RatingStars",
         "StatusPicker",
-        "RatingSlider",
-        "NotesField"
-      ]
+        "DateDisplay"
+      ],
+      "isTab": false,
+      "tabLabel": "",
+      "tabIcon": ""
     },
     {
-      "name": "HistoryView",
-      "purpose": "Chronological reading sessions grouped by date with calendar heatmap at top showing reading activity intensity. Each session row shows book title, pages read in session, duration, and any notes. Filter by book or genre. Swipe to delete.",
+      "name": "BookEntrySheet",
+      "purpose": "Modal sheet for adding a new book. Title and author text fields at top. Total pages stepper. Genre picker as a scrollable chip row with icons. Status defaults to 'Want to Read' with option to set 'Reading' immediately. If 'Reading' is selected, startedReading auto-fills to today. Optional notes field. Clean, focused form \u2014 get the book into the library fast.",
       "components": [
-        "CalendarHeatmap",
-        "DateGroupedSessionList",
-        "BookFilterBar"
-      ]
-    },
-    {
-      "name": "AnalyticsView",
-      "purpose": "Rich analytics: weekly reading minutes line chart, monthly books-finished bar chart, genre distribution pie chart, reading pace trend (pages/min over time), best reading days heatmap by weekday, personal records section (fastest book, longest streak, most pages in a day), and dynamic AI-style insights.",
-      "components": [
-        "WeeklyMinutesChart",
-        "MonthlyBooksBarChart",
-        "GenrePieChart",
-        "ReadingPaceTrendLine",
-        "WeekdayHeatmap",
-        "PersonalRecords",
-        "InsightsList"
-      ]
+        "GenreChipPicker",
+        "PageStepper",
+        "StatusSelector"
+      ],
+      "isTab": false,
+      "tabLabel": "",
+      "tabIcon": ""
     }
   ],
   "viewModelComputedProperties": [
     {
-      "name": "todayMinutesRead",
-      "type": "Int",
-      "description": "Sum of minutesRead for all entries dated today"
+      "name": "currentlyReading",
+      "type": "[Entry]",
+      "description": "All entries with status == .reading, sorted by lastReadDate descending"
     },
     {
-      "name": "todayPagesRead",
-      "type": "Int",
-      "description": "Sum of page increments for today's sessions (each session's currentPage minus prior session's currentPage for same book)"
+      "name": "wantToReadBooks",
+      "type": "[Entry]",
+      "description": "All entries with status == .wantToRead, sorted by date added"
     },
     {
-      "name": "currentStreak",
-      "type": "Int",
-      "description": "Count of consecutive days ending today (or yesterday) with at least one reading session of 5+ minutes"
+      "name": "finishedBooks",
+      "type": "[Entry]",
+      "description": "All entries with status == .finished, sorted by finishedReading descending"
     },
     {
-      "name": "longestStreak",
-      "type": "Int",
-      "description": "Maximum consecutive-day reading streak across all history"
+      "name": "abandonedBooks",
+      "type": "[Entry]",
+      "description": "All entries with status == .abandoned"
     },
     {
       "name": "booksFinishedThisYear",
       "type": "Int",
-      "description": "Count of unique bookTitles with at least one entry with status == .finished in current calendar year"
+      "description": "Count of finished books where finishedReading falls in current calendar year"
     },
     {
-      "name": "totalPagesThisYear",
+      "name": "totalPagesReadThisYear",
       "type": "Int",
-      "description": "Sum of all page increments across all sessions in the current calendar year"
-    },
-    {
-      "name": "currentlyReadingBooks",
-      "type": "[(title: String, author: String, genre: BookGenre, currentPage: Int, totalPages: Int, progressPercent: Double)]",
-      "description": "Unique books whose latest entry has status .currentlyReading, with most recent currentPage and totalPages to compute progress percentage"
+      "description": "Sum of totalPages for all books finished this year, plus currentPage for books currently reading"
     },
     {
       "name": "yearlyGoalProgress",
       "type": "Double",
-      "description": "booksFinishedThisYear / yearlyBookGoal (default 24), clamped to 0...1 for the progress ring"
+      "description": "booksFinishedThisYear / yearlyGoal as 0.0-1.0 fraction"
     },
     {
-      "name": "weeklyReadingTrend",
-      "type": "[(date: Date, minutes: Int, pages: Int)]",
-      "description": "Last 7 days with daily totals of minutes read and pages read, for sparkline/bar chart"
-    },
-    {
-      "name": "averagePagesPerDay",
-      "type": "Double",
-      "description": "Mean pages read per day over last 30 days that had at least one session"
-    },
-    {
-      "name": "readingPace",
-      "type": "Double",
-      "description": "Weighted average of (pages read / minutes read) across all sessions where minutesRead > 0, representing pages per minute"
-    },
-    {
-      "name": "genreDistribution",
-      "type": "[(genre: BookGenre, count: Int, percentage: Double)]",
-      "description": "Count of unique books per genre with percentage of total library for pie chart"
-    },
-    {
-      "name": "monthlyBooksChart",
-      "type": "[(month: Date, count: Int)]",
-      "description": "Number of books finished per month for the last 12 months, for bar chart"
+      "name": "readingStreak",
+      "type": "Int",
+      "description": "Count consecutive days backwards from today where at least one book has lastReadDate on that day"
     },
     {
       "name": "averageRating",
       "type": "Double",
-      "description": "Mean rating across all entries where status == .finished and rating > 0"
+      "description": "Mean rating of all finished books that have a rating > 0"
     },
     {
-      "name": "estimatedFinishDates",
-      "type": "[(title: String, estimatedDate: Date, daysRemaining: Int)]",
-      "description": "For each currently-reading book: remaining pages / average daily pages for that book = estimated days to finish"
+      "name": "genreBreakdown",
+      "type": "[(BookGenre, Int)]",
+      "description": "Count of finished books per genre, sorted by count descending"
     },
     {
-      "name": "insights",
-      "type": "[String]",
-      "description": "Dynamic insight strings: streak milestones, pace changes, genre diversity, best reading day, completion rate, monthly comparisons"
+      "name": "monthlyFinished",
+      "type": "[Int]",
+      "description": "Array of 12 integers representing books finished in each month of the current year"
+    },
+    {
+      "name": "progressPercent",
+      "type": "(Entry) -> Double",
+      "description": "Returns currentPage / totalPages as percentage for a given book entry, clamped 0-100"
     }
   ],
   "domainLogic": {
     "dailyGoal": {
-      "description": "Daily reading time target in minutes \u2014 shown as progress bar on dashboard",
+      "description": "Target number of pages to read per day",
       "defaultValue": "30"
     },
-    "yearlyBookGoal": {
-      "description": "Number of books to finish this calendar year \u2014 shown as hero progress ring",
+    "yearlyGoal": {
+      "description": "Target number of books to finish per year",
       "defaultValue": "24"
     },
-    "streakDefinition": "A day counts toward the streak if the user logged at least one reading session with minutesRead >= 5. Gap days break the streak. Streak counts backward from today (or yesterday if no session yet today).",
-    "trendAnalysis": "Compare this week's total reading minutes to last week's total. Compute 7-day rolling average of pages/day vs 30-day average. If 7-day > 30-day by 20%+, show 'Reading pace accelerating' insight. If 7-day < 30-day by 20%+, show 'Reading pace slowing down'. Track pages-per-minute across sessions to detect speed improvements over time.",
+    "streakDefinition": "A day counts toward the streak if at least one book's lastReadDate matches that calendar day. Streak counts consecutive qualifying days backwards from today. Missing a day resets the streak to 0.",
+    "trendAnalysis": "Monthly books-finished rate compared to pace needed for yearly goal. If user has finished 8 books by June, pace = 8/6 = 1.33/month vs needed 24/12 = 2/month \u2192 'Behind pace' indicator. Also track pages-per-day rolling 7-day average.",
     "insights": [
-      "Reading pace trend: compare average pages/minute of last 5 sessions vs previous 5 \u2014 report speeding up, steady, or slowing down",
-      "Genre diversity score: count distinct genres read in last 90 days / total genres available \u2014 suggest exploring new genres if < 30%",
-      "Estimated finish date for each in-progress book based on that book's specific average daily page rate",
-      "Monthly volume comparison: this month's pages vs personal best month \u2014 celebrate if approaching or exceeding record",
-      "Streak milestone celebrations at 7, 14, 21, 30, 50, 100, 200, 365 consecutive days",
-      "Completion rate: finished / (finished + abandoned) as percentage \u2014 'You finish 85% of books you start'",
-      "Best reading day: weekday with highest average minutesRead \u2014 'Sundays are your power reading day (avg 45 min)'",
-      "Reading consistency: standard deviation of daily minutes over last 30 days \u2014 lower = more consistent, surface as encouragement"
+      "On-track / behind-pace indicator for yearly reading goal with projected finish count",
+      "Average time to finish a book (mean days between startedReading and finishedReading)",
+      "Most-read genre with percentage of total library",
+      "Current reading velocity: rolling 7-day pages-per-day average",
+      "Longest reading streak achieved (all-time best vs current)",
+      "Books abandoned rate as percentage of total started books"
     ]
   }
 }

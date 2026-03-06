@@ -28,9 +28,9 @@ struct MedicationTrackerView: View {
 
             // Tab picker
             Picker("", selection: $selectedTab) {
-                    Text("Home").tag(0)
-                    Text("History").tag(1)
-                    Text("Analytics").tag(2)
+                    Text("Today").tag(0)
+                    Text("My Meds").tag(1)
+                    Text("Adherence").tag(2)
             }
             .pickerStyle(.segmented)
             .padding(.horizontal, HubLayout.standardPadding)
@@ -39,26 +39,21 @@ struct MedicationTrackerView: View {
             // Content
             ZStack(alignment: .bottomTrailing) {
                     if selectedTab == 0 {
-                        MedicationTrackerDashboardView(viewModel: viewModel)
+                        MedicationTrackerTodayView(viewModel: viewModel)
                     }
                     if selectedTab == 1 {
-                        MedicationTrackerHistoryView(viewModel: viewModel)
+                        MedicationTrackerMedicationsView(viewModel: viewModel)
                     }
                     if selectedTab == 2 {
-                        MedicationTrackerAnalyticsView(viewModel: viewModel)
+                        MedicationTrackerAdherenceView(viewModel: viewModel)
                     }
 
-                // FAB
-                QuickEntryFAB {
-                    showAddSheet = true
-                }
-                .padding(HubLayout.standardPadding)
             }
         }
         .background(AdaptiveColors.background(for: colorScheme))
         .task { await viewModel.loadData() }
         .sheet(isPresented: $showAddSheet) {
-            MedicationTrackerEntrySheet(viewModel: viewModel) {
+            MedicationTrackerMedicationEntrySheet(viewModel: viewModel) {
                 showAddSheet = false
             }
         }

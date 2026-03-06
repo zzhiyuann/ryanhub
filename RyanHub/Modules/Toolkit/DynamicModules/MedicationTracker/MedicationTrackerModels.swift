@@ -2,7 +2,7 @@ import SwiftUI
 
 // MARK: - Main Entry
 
-struct MedicationTrackerEntry: Codable, Identifiable {
+struct MedicationTrackerEntry: Codable, Identifiable, Equatable {
     var id: String = UUID().uuidString
     var date: String = {
         let f = DateFormatter()

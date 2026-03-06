@@ -28,9 +28,9 @@ struct ReadingTrackerView: View {
 
             // Tab picker
             Picker("", selection: $selectedTab) {
-                    Text("Home").tag(0)
-                    Text("History").tag(1)
-                    Text("Analytics").tag(2)
+                    Text("Reading").tag(0)
+                    Text("Library").tag(1)
+                    Text("Stats").tag(2)
             }
             .pickerStyle(.segmented)
             .padding(.horizontal, HubLayout.standardPadding)
@@ -39,13 +39,13 @@ struct ReadingTrackerView: View {
             // Content
             ZStack(alignment: .bottomTrailing) {
                     if selectedTab == 0 {
-                        ReadingTrackerDashboardView(viewModel: viewModel)
+                        ReadingTrackerNowReadingView(viewModel: viewModel)
                     }
                     if selectedTab == 1 {
-                        ReadingTrackerHistoryView(viewModel: viewModel)
+                        ReadingTrackerLibraryView(viewModel: viewModel)
                     }
                     if selectedTab == 2 {
-                        ReadingTrackerAnalyticsView(viewModel: viewModel)
+                        ReadingTrackerStatsView(viewModel: viewModel)
                     }
 
                 // FAB
@@ -58,7 +58,7 @@ struct ReadingTrackerView: View {
         .background(AdaptiveColors.background(for: colorScheme))
         .task { await viewModel.loadData() }
         .sheet(isPresented: $showAddSheet) {
-            ReadingTrackerEntrySheet(viewModel: viewModel) {
+            ReadingTrackerBookEntrySheet(viewModel: viewModel) {
                 showAddSheet = false
             }
         }

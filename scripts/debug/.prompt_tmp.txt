@@ -1,27 +1,43 @@
-Generate RecipeBoxCookbookStatsView.swift — a SwiftUI view for a RyanHub module.
+Generate CaffeineTrackerTrendsView.swift — a SwiftUI view for a RyanHub module.
 
-PURPOSE: Presented as sheet from nav bar button on collection view. Shows collection summary: total recipes, favorites count, total times cooked across all recipes in a horizontal stat card row. Most cooked top-3 recipes list with cook counts. Category breakdown as colored horizontal bars showing recipe count per MealCategory. Cuisine distribution as a simple ranked list. Average difficulty and average rating displays.
+PURPOSE: Analytics view with a 7-day bar chart showing daily caffeine totals with a horizontal 400mg limit line drawn across. Below: a comparison card showing this week's daily average vs last week with percentage change and directional arrow. A streak badge showing consecutive days under the daily limit. An 'Average last caffeine' card showing the mean time-of-day of the last drink across the past week to help users track cutoff discipline. At the bottom, a monthly calendar heatmap where each day's cell color intensity represents intake level (green under limit, yellow near limit, red over limit).
 
 
 AVAILABLE SHARED COMPONENTS:
-- StatCard(title: String, value: String, icon: String, color: Color); StatGrid { content } wraps them in 2x2 grid
 
 VIEWMODEL PUBLIC API CONTRACT — Views MUST ONLY use these exact names:
 
 PROPERTIES:
-  var entries: [RecipeBoxEntry]  // stored
-  var todayEntries: [RecipeBoxEntry]  // computed
-  var currentStreak: Int  // computed
-  var longestStreak: Int  // computed
+  var entries: [CaffeineTrackerEntry]  // stored
+  var selectedTab: CaffeineTrackerTab  // stored
+  var dailyGoal: Int  // stored
+  var id: String  // computed
+  var currentCaffeineInSystem: Double  // computed
+  var todayTotalMg: Int  // computed
+  var todayDrinkCount: Int  // computed
+  var dailyLimitProgress: Double  // computed
+  var isOverLimit: Bool  // computed
+  var safeToSleepTime: Date?  // computed
+  var lastCaffeineTime: Date?  // computed
+  var todayDrinks: [CaffeineTrackerEntry]  // computed
+  var weeklyDailyTotals: [(Date, Int)]  // computed
+  var weeklyAverage: Double  // computed
+  var previousWeekAverage: Double  // computed
+  var weekOverWeekChange: Double  // computed
+  var streakDaysUnderLimit: Int  // computed
+  var averageLastCaffeineHour: Double?  // computed
+  var lastHours: [Double]  // stored
+  var monthlyIntensityMap: [Date: Double]  // computed
+  var map: [Date: Double]  // stored
   var weeklyChartData: [ChartDataPoint]  // computed
-  var result: [ChartDataPoint]  // stored
   var insights: [ModuleInsight]  // computed
   var result: [ModuleInsight]  // stored
 
 METHODS (async methods MUST be wrapped in Task { await ... }):
   func loadData() async
-  func addEntry(_ entry: RecipeBoxEntry) async
-  func deleteEntry(_ entry: RecipeBoxEntry) async
+  func addEntry(_ entry: CaffeineTrackerEntry) async
+  func deleteEntry(_ entry: CaffeineTrackerEntry) async
+  func quickAdd(drinkType: DrinkType) async
 
 RULES:
 - If a property is not listed above, it does NOT exist — do not invent names
@@ -32,16 +48,35 @@ RULES:
 FULL VIEWMODEL CODE (reference for exact property names and types):
 ```swift
 import Foundation
-import SwiftUI
 
-// MARK: - RecipeBox View Model
+// MARK: - CaffeineTrackerViewModel
 
 @Observable
 @MainActor
-final class RecipeBoxViewModel {
-    var entries: [RecipeBoxEntry] = []
+final class CaffeineTrackerViewModel {
+
+    // MARK: - State
+
+    var entries: [CaffeineTrackerEntry] = []
     var isLoading = false
     var errorMessage: String?
+    var selectedTab: CaffeineTrackerTab = .today
+    var dailyGoal: Int = 400
+    var showingDrinkEntry = false
+
+    // Updated every 60s to force decay recomputation
+    private(set) var decayTick = Date()
+    private var decayTimer: Timer?
+
+    // MARK: - Tab
+
+    enum CaffeineTrackerTab: String, CaseIterable, Identifiable {
+        case today = "Today"
+        case trends = "Trends"
+        var id: String { rawValue }
+    }
+
+    // MARK: - Bridge URL
 
     private var bridgeBaseURL: String {
         UserDefaults.standard.string(forKey: "ryanhub_server_url")
@@ -50,262 +85,475 @@ final class RecipeBoxViewModel {
             ?? "http://localhost:18790"
     }
 
-    init() { Task { await loadData() } }
+    // MARK: - Init / Deinit
 
-    // MARK: - Computed Properties
-
-    var todayEntries: [RecipeBoxEntry] {
-        let today = DateFormatter()
-        today.dateFormat = "yyyy-MM-dd"
-        let todayStr = today.string(from: Date())
-        return entries.filter { $0.date.hasPrefix(todayStr) }
+    init() {
+        Task { await loadData() }
+        startDecayTimer()
     }
 
-    var currentStreak: Int {
-        let calendar = Calendar.current
-        let df = DateFormatter()
-        df.dateFormat = "yyyy-MM-dd"
-        let entryDates = Set(entries.compactMap { df.date(from: String($0.date.prefix(10))) }.map { calendar.startOfDay(for: $0) })
-        var streak = 0
-        var day = calendar.startOfDay(for: Date())
-        while entryDates.contains(day) {
-            streak += 1
-            day = calendar.date(byAdding: .day, value: -1, to: day)!
-        }
-        return streak
+    deinit {
+        decayTimer?.invalidate()
     }
 
-    var longestStreak: Int {
-        let calendar = Calendar.current
-        let df = DateFormatter()
-        df.dateFormat = "yyyy-MM-dd"
-        let sortedDates = entries.compactMap { df.date(from: String($0.date.prefix(10))) }
-            .map { calendar.startOfDay(for: $0) }
-        let unique = Array(Set(sortedDates)).sorted()
-        guard !unique.isEmpty else { return 0 }
-        var longest = 1, current = 1
-        for i in 1..<unique.count {
-            if calendar.dateComponents([.day], from: unique[i-1], to: unique[i]).day == 1 {
-                current += 1
-                longest = max(longest, current)
-            } else {
-                current = 1
+    private func startDecayTimer() {
+        decayTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.decayTick = Date()
             }
         }
-        return longest
     }
 
-    var weeklyChartData: [ChartDataPoint] {
-        let calendar = Calendar.current
-        let df = DateFormatter()
-        df.dateFormat = "yyyy-MM-dd"
-        let displayFmt = DateFormatter()
-        displayFmt.dateFormat = "E"
-        var result: [ChartDataPoint] = []
-        for dayOffset in (0..<7).reversed() {
-            let day = calendar.date(byAdding: .day, value: -dayOffset, to: Date())!
-            let dayStr = df.string(from: day)
-            let count = entries.filter { $0.date.hasPrefix(dayStr) }.count
-            result.append(ChartDataPoint(label: displayFmt.string(from: day), value: Double(count)))
+    // MARK: - Base Caffeine (mg) Per Drink Type
+
+    static func baseMg(for drinkType: DrinkType) -> Int {
+        switch drinkType {
+        case .espresso: return 63
+        case .dripCoffee: return 95
+        case .latte: return 63
+        case .coldBrew: return 200
+        case .cappuccino: return 63
+        case .americano: return 63
+        case .greenTea: return 28
+        case .blackTea: return 47
+        case .energyDrink: return 80
+        case .decaf: return 2
+        case .custom: return 100
         }
-        return result
     }
 
-    var insights: [ModuleInsight] {
-        var result: [ModuleInsight] = []
-        if currentStreak >= 3 {
-            result.append(ModuleInsight(type: .achievement, title: "\(currentStreak)-Day Streak!", message: "You've been consistent for \(currentStreak) days. Keep it up!"))
+    static func sizeMultiplier(for size: DrinkSize) -> Double {
+        switch size {
+        case .small: return 1.0
+        case .medium: return 1.5
+        case .large: return 2.0
         }
-        if todayEntries.isEmpty {
-            result.append(ModuleInsight(type: .suggestion, title: "No entries today", message: "Don't forget to log your data for today."))
-        }
-        return result
+    }
+
+    static func defaultCaffeineMg(drinkType: DrinkType, size: DrinkSize) -> Int {
+        Int(Double(baseMg(for: drinkType)) * sizeMultiplier(for: size))
     }
 
     // MARK: - CRUD
 
     func loadData() async {
         isLoading = true
+        errorMessage = nil
         defer { isLoading = false }
+
+        guard let url = URL(string: "\(bridgeBaseURL)/modules/caffeineTracker/data") else {
+            errorMessage = "Invalid URL"
+            return
+        }
+
         do {
-            let url = URL(string: "\(bridgeBaseURL)/modules/recipeBox/data")!
             let (data, _) = try await URLSession.shared.data(from: url)
-            entries = try JSONDecoder().decode([RecipeBoxEntry].self, from: data)
-            UserDefaults.standard.set(data, forKey: "dynamic_module_recipeBox_cache")
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            entries = try decoder.decode([CaffeineTrackerEntry].self, from: data)
+            cacheData()
         } catch {
-            entries = []
+            errorMessage = error.localizedDescription
         }
     }
 
-    func addEntry(_ entry: RecipeBoxEntry) async {
+    func addEntry(_ entry: CaffeineTrackerEntry) async {
+        guard let url = URL(string: "\(bridgeBaseURL)/modules/caffeineTracker/data/add") else { return }
+
         do {
-            let url = URL(string: "\(bridgeBaseURL)/modules/recipeBox/data/add")!
             var request = URLRequest(url: url)
             request.httpMethod = "POST"
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            request.httpBody = try JSONEncoder().encode(entry)
-            _ = try await URLSession.shared.data(for: request)
-            await loadData()
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            request.httpBody = try encoder.encode(entry)
+            let (_, _) = try await URLSession.shared.data(for: request)
+            entries.append(entry)
+            cacheData()
         } catch {
-            errorMessage = "Failed to add entry"
+            errorMessage = error.localizedDescription
         }
     }
 
-    func deleteEntry(_ entry: RecipeBoxEntry) async {
+    func deleteEntry(_ entry: CaffeineTrackerEntry) async {
+        guard let url = URL(string: "\(bridgeBaseURL)/modules/caffeineTracker/data?id=\(entry.id)") else { return }
+
         do {
-            let url = URL(string: "\(bridgeBaseURL)/modules/recipeBox/data?id=\(entry.id)")!
             var request = URLRequest(url: url)
             request.httpMethod = "DELETE"
-            _ = try await URLSession.shared.data(for: request)
-            await loadData()
+            let (_, _) = try await URLSession.shared.data(for: request)
+            entries.removeAll { $0.id == entry.id }
+            cacheData()
         } catch {
-            errorMessage = "Failed to delete entry"
+            errorMessage = error.localizedDescription
         }
     }
-}
 
+    // MARK: - Quick Add
+
+    func quickAdd(drinkType: DrinkType) async {
+        let caffeine = Self.defaultCaffeineMg(drinkType: drinkType, size: .medium)
+        let entry = CaffeineTrackerEntry(
+            drinkType: drinkType,
+            drinkSize: .medium,
+            caffeineAmount: caffeine,
+            loggedAt: Date()
+        )
+        await addEntry(entry)
+    }
+
+    // MARK: - Cache
+
+    private func cacheData() {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        if let data = try? encoder.encode(entries) {
+            UserDefaults.standard.set(data, forKey: "dynamic_module_caffeineTracker_cache")
+        }
+    }
+
+    // MARK: - Date Helpers
+
+    private var calendar: Calendar { Calendar.current }
+
+    private func isToday(_ date: Date) -> Bool {
+        calendar.isDateInToday(date)
+    }
+
+    private func startOfDay(_ date: Date) -> Date {
+        calendar.startOfDay(for: date)
+    }
+
+    private func entriesForDay(_ date: Date) -> [CaffeineTrackerEntry] {
+        entries.filter { calendar.isDate($0.loggedAt, inSameDayAs: date) }
+    }
+
+    private func totalMgForDay(_ date: Date) -> Int {
+        entriesForDay(date).reduce(0) { $0 + $1.caffeineAmount }
+    }
+
+    // MARK: - Computed Properties: Today
+
+    var currentCaffeineInSystem: Double {
+        let now = decayTick
+        return entries.reduce(0.0) { total, entry in
+            let elapsedHours = now.timeIntervalSince(entry.loggedAt) / 3600.0
+            guard elapsedHours >= 0 else { return total }
+            return total + Double(entry.caffeineAmount) * pow(0.5, elapsedHours / 5.0)
+        }
+    }
+
+    var todayTotalMg: Int {
+        entries.filter { isToday($0.loggedAt) }
+            .reduce(0) { $0 + $1.caffeineAmount }
+    }
+
+    var todayDrinkCount: Int {
+        entries.filter { isToday($0.loggedAt) }.count
+    }
+
+    var dailyLimitProgress: Double {
+        Double(todayTotalMg) / Double(dailyGoal)
+    }
+
+    var isOverLimit: Bool {
+        todayTotalMg > dailyGoal
+    }
+
+    var safeToSleepTime: Date? {
+        let now = decayTick
+        let threshold = 50.0
+        guard currentCaffeineInSystem > threshold else { return nil }
+
+        // Binary search for the hour offset when caffeine drops below threshold
+        var low = 0.0
+        var high = 48.0
+
+        for _ in 0..<50 {
+            let mid = (low + high) / 2.0
+            let futureTime = now.addingTimeInterval(mid * 3600)
+            let caffeineAtTime = entries.reduce(0.0) { total, entry in
+                let elapsed = futureTime.timeIntervalSince(entry.loggedAt) / 3600.0
+                guard elapsed >= 0 else { return total }
+                return total + Double(entry.caffeineAmount) * pow(0.5, elapsed / 5.0)
+            }
+            if caffeineAtTime > threshold {
+                low = mid
+            } else {
+                high = mid
+            }
+        }
+
+        return now.addingTimeInterval(high * 3600)
+    }
+
+    var lastCaffeineTime: Date? {
+        entries.filter { isToday($0.loggedAt) }
+            .max(by: { $0.loggedAt < $1.loggedAt })?
+            .loggedAt
+    }
+
+    var todayDrinks: [CaffeineTrackerEntry] {
+        entries.filter { isToday($0.loggedAt) }
+            .sorted { $0.loggedAt < $1.loggedAt }
+    }
+
+    // MARK: - Computed Properties: Trends
+
+    var weeklyDailyTotals: [(Date, Int)] {
+        let today = startOfDay(Date())
+        return (0..<7).reversed().map { daysAgo in
+            let date = calendar.date(byAdding: .day, value: -daysAgo, to: today)!
+            return (date, totalMgForDay(date))
+        }
+    }
+
+    var weeklyAverage: Double {
+        let totals = weeklyDailyTotals.map(\.1)
+        guard !totals.isEmpty else { return 0 }
+        return Double(totals.reduce(0, +)) / Double(totals.count)
+    }
+
+    var previousWeekAverage: Double {
+        let today = startOfDay(Date())
+        let totals = (7..<14).map { daysAgo -> Int in
+            let date = calendar.date(byAdding: .day, value: -daysAgo, to: today)!
+            return totalMgForDay(date)
+        }
+        guard !totals.isEmpty else { return 0 }
+        return Double(totals.reduce(0, +)) / Double(totals.count)
+    }
+
+    var weekOverWeekChange: Double {
+        guard previousWeekAverage > 0 else { return 0 }
+        return ((weeklyAverage - previousWeekAverage) / previousWeekAverage) * 100.0
+    }
+
+    var streakDaysUnderLimit: Int {
+        let today = startOfDay(Date())
+        var streak = 0
+        let startOffset = isOverLimit ? 1 : 0
+
+        for daysAgo in startOffset..<365 {
+            guard let date = calendar.date(byAdding: .day, value: -daysAgo, to: today) else { break }
+            if totalMgForDay(date) <= dailyGoal {
+                streak += 1
+            } else {
+                break
+            }
+        }
+
+        return streak
+    }
+
+    var averageLastCaffeineHour: Double? {
+        let today = startOfDay(Date())
+        var lastHours: [Double] = []
+
+        for daysAgo in 0..<7 {
+            guard let date = calendar.date(byAdding: .day, value: -daysAgo, to: today) else { continue }
+            let dayEntries = entriesForDay(date)
+            if let lastEntry = dayEntries.max(by: { $0.loggedAt < $1.loggedAt }) {
+                let components = calendar.dateComponents([.hour, .minute], from: lastEntry.loggedAt)
+                if let hour = components.hour, let minute = components.minute {
+                    lastHours.append(Double(hour) + Double(minute) / 60.0)
+                }
+            }
+        }
+
+        guard lastHours.count >= 2 else { return nil }
+        return lastHours.reduce(0, +) / Double(lastHours.count)
+    }
+
+    var monthlyIntensityMap: [Date: Double] {
+        let today = Date()
+        guard let range = calendar.range(of: .day, in: .month, for: today),
+              let monthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: today)) else {
+            return [:]
+        }
+
+        var map: [Date: Double] = [:]
+        for day in range {
+            guard let date = calendar.date(byAdding: .day, value: day - 1, to: monthStart) else { continue }
+            let dayStart = startOfDay(date)
+            let total = totalMgForDay(dayStart)
+            let intensity = min(Double(total) / Double(dailyGoal), 1.0)
+            map[dayStart] = intensity
+        }
+        return map
+    }
+
+    // MARK: - Chart Data
+
+    var weeklyChartData: [ChartDataPoint] {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "EEE"
+        return weeklyDailyTotals.map { date, total in
+            ChartDataPoint(label: formatter.string(from: date), value: Double(total))
+        }
+    }
+
+    // MARK: - Insights
+
+    var insights: [ModuleInsight] {
+        var result: [ModuleInsight] = []
+
+        if isOverLimit {
+            result.append(ModuleInsight(
+                type: .warning,
+                title: "Over Daily Limit",
+                message: "You've consumed \(todayTotalMg)mg today, exceeding the \(dailyGoal)mg limit."
+            ))
+        }
+
+        if previousWeekAverage > 0 {
+            let change = weekOverWeekChange
+            if change > 10 {
+                result.append(ModuleInsight(
+                    type: .trend,
+                    title: "Intake Increasing",
+                    message: String(format: "Weekly average is up %.0f%% compared to last week.", change)
+                ))
+            } else if change < -10 {
+                result.append(ModuleInsight(
+                    type: .trend,
+                    title: "Intake Decreasing",
+                    message: String(format: "Weekly average is down %.0f%% from last week. Nice!", abs(change))
+                ))
+            }
+        }
+
+        if streakDaysUnderLimit >= 7 {
+            result.append(ModuleInsight(
+                type: .achievement,
+                title: "\(streakDaysUnderLimit)-Day Streak!",
+                message: "You've stayed under the daily limit for \(streakDaysUnderLimit) consecutive days."
+            ))
+        } else if streakDaysUnderLimit >= 3 {
+            result.append(ModuleInsight(
+                type: .achievement,
+                title: "\(streakDaysUnderLimit)-Day Streak",
+                message: "Keep going! \(7 - streakDaysUnderLimit) more days for a full week."
+            ))
+        }
+
+        if let avgHour = averageLastCaffeineHour, avgHour >= 16 {
+            let hour = Int(avgHour)
+            let minute = Int((avgHour - Double(hour)) * 60)
+            result.append(ModuleInsight(
+                type: .suggestion,
+                title: "Late Caffeine Intake",
+                message: String(format: "Average last caffeine at %d:%02d. Try cutting off by 2 PM for better sleep.", hour, minute)
+            ))
+        }
+
+        if let sleepTime = safeToSleepTime {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "h:mm a"
+            result.append(ModuleInsight(
+                type: .suggestion,
+                title: "Safe to Sleep",
+                message: "Caffeine drops below 50mg around \(formatter.string(from: sleepTime))."
+            ))
+        }
+
+        return result
+    }
+}
 ```
 
 MODELS (use these exact types):
 ```swift
 import Foundation
 
-// MARK: - RecipeBox Models
+// MARK: - CaffeineTracker Models
 
-enum MealCategory: String, Codable, CaseIterable, Identifiable {
-    case breakfast
-    case lunch
-    case dinner
-    case snack
-    case dessert
-    case drink
+enum DrinkType: String, Codable, CaseIterable, Identifiable {
+    case espresso
+    case dripCoffee
+    case latte
+    case coldBrew
+    case cappuccino
+    case americano
+    case greenTea
+    case blackTea
+    case energyDrink
+    case decaf
+    case custom
     var id: String { rawValue }
     var displayName: String {
         switch self {
-        case .breakfast: return "Breakfast"
-        case .lunch: return "Lunch"
-        case .dinner: return "Dinner"
-        case .snack: return "Snack"
-        case .dessert: return "Dessert"
-        case .drink: return "Drink"
+        case .espresso: return "Espresso"
+        case .dripCoffee: return "Drip Coffee"
+        case .latte: return "Latte"
+        case .coldBrew: return "Cold Brew"
+        case .cappuccino: return "Cappuccino"
+        case .americano: return "Americano"
+        case .greenTea: return "Green Tea"
+        case .blackTea: return "Black Tea"
+        case .energyDrink: return "Energy Drink"
+        case .decaf: return "Decaf"
+        case .custom: return "Custom"
         }
     }
     var icon: String {
         switch self {
-        case .breakfast: return "sun.horizon"
-        case .lunch: return "sun.max"
-        case .dinner: return "moon.stars"
-        case .snack: return "carrot"
-        case .dessert: return "birthday.cake"
-        case .drink: return "cup.and.saucer"
+        case .espresso: return "cup.and.saucer.fill"
+        case .dripCoffee: return "mug.fill"
+        case .latte: return "cup.and.saucer"
+        case .coldBrew: return "snowflake"
+        case .cappuccino: return "cloud.fill"
+        case .americano: return "drop.fill"
+        case .greenTea: return "leaf.fill"
+        case .blackTea: return "leaf"
+        case .energyDrink: return "bolt.fill"
+        case .decaf: return "moon.fill"
+        case .custom: return "plus.circle.fill"
         }
     }
 }
 
-enum CuisineType: String, Codable, CaseIterable, Identifiable {
-    case italian
-    case mexican
-    case chinese
-    case japanese
-    case indian
-    case thai
-    case american
-    case mediterranean
-    case korean
-    case french
-    case other
-    var id: String { rawValue }
-    var displayName: String {
-        switch self {
-        case .italian: return "Italian"
-        case .mexican: return "Mexican"
-        case .chinese: return "Chinese"
-        case .japanese: return "Japanese"
-        case .indian: return "Indian"
-        case .thai: return "Thai"
-        case .american: return "American"
-        case .mediterranean: return "Mediterranean"
-        case .korean: return "Korean"
-        case .french: return "French"
-        case .other: return "Other"
-        }
-    }
-    var icon: String {
-        switch self {
-        case .italian: return "fork.knife"
-        case .mexican: return "fork.knife"
-        case .chinese: return "fork.knife"
-        case .japanese: return "fork.knife"
-        case .indian: return "fork.knife"
-        case .thai: return "fork.knife"
-        case .american: return "fork.knife"
-        case .mediterranean: return "fork.knife"
-        case .korean: return "fork.knife"
-        case .french: return "fork.knife"
-        case .other: return "ellipsis.circle"
-        }
-    }
-}
-
-enum DifficultyLevel: String, Codable, CaseIterable, Identifiable {
-    case easy
+enum DrinkSize: String, Codable, CaseIterable, Identifiable {
+    case small
     case medium
-    case hard
+    case large
     var id: String { rawValue }
     var displayName: String {
         switch self {
-        case .easy: return "Easy"
-        case .medium: return "Medium"
-        case .hard: return "Hard"
+        case .small: return "Small (8 oz)"
+        case .medium: return "Medium (12 oz)"
+        case .large: return "Large (16 oz)"
         }
     }
     var icon: String {
         switch self {
-        case .easy: return "leaf"
-        case .medium: return "flame"
-        case .hard: return "flame.fill"
+        case .small: return "s.circle.fill"
+        case .medium: return "m.circle.fill"
+        case .large: return "l.circle.fill"
         }
     }
 }
 
-struct RecipeBoxEntry: Codable, Identifiable {
+struct CaffeineTrackerEntry: Codable, Identifiable {
     var id: String = UUID().uuidString
     var date: String = {
         let f = DateFormatter()
         f.dateFormat = "yyyy-MM-dd HH:mm"
         return f.string(from: Date())
     }()
-    var title: String
-    var category: MealCategory
-    var cuisine: CuisineType
-    var difficulty: DifficultyLevel
-    var prepTimeMinutes: Int
-    var cookTimeMinutes: Int
-    var servings: Int
-    var ingredients: [String]
-    var steps: [String]
-    var rating: Int
-    var isFavorite: Bool
-    var cookCount: Int
-    var notes: String
-    var sourceURL: String
+    var drinkType: DrinkType
+    var drinkSize: DrinkSize
+    var caffeineAmount: Int
+    var loggedAt: Date
+    var notes: String?
 
     var summaryLine: String {
         var parts: [String] = [date]
-        parts.append("\(title)")
-        parts.append("\(category)")
-        parts.append("\(cuisine)")
-        parts.append("\(difficulty)")
-        parts.append("\(prepTimeMinutes)")
-        parts.append("\(cookTimeMinutes)")
-        parts.append("\(servings)")
-        parts.append("\(ingredients)")
-        parts.append("\(steps)")
-        parts.append("\(rating)")
-        parts.append("\(isFavorite)")
-        parts.append("\(cookCount)")
-        parts.append("\(notes)")
-        parts.append("\(sourceURL)")
+        parts.append("\(drinkType)")
+        parts.append("\(drinkSize)")
+        parts.append("\(caffeineAmount)")
+        parts.append("\(loggedAt)")
+        if let v = notes { parts.append("\(v)") }
         return parts.joined(separator: " | ")
     }
 }
@@ -383,7 +631,7 @@ SHARED REUSABLE COMPONENTS (already exist, import SwiftUI + Charts to use):
 
 DESIGN RULES:
 - @Environment(\.colorScheme) private var colorScheme
-- `let viewModel: RecipeBoxViewModel` (not @State, not @Bindable — it's passed from parent)
+- `let viewModel: CaffeineTrackerViewModel` (not @State, not @Bindable — it's passed from parent)
 - Use Color.hubPrimary, Color.hubAccentGreen, Color.hubAccentRed, Color.hubAccentYellow (always prefix with Color.)
 - Use AdaptiveColors.textPrimary(for: colorScheme), AdaptiveColors.textSecondary(for: colorScheme)
 - Use AdaptiveColors.background(for: colorScheme) for ScrollView background

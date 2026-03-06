@@ -9,7 +9,7 @@ extension DynamicModuleRegistry {
             toolkitId: "spendingTracker",
             displayName: "Spending Tracker",
             shortName: "Spending",
-            subtitle: "Track daily expenses & stay on budget",
+            subtitle: "Track daily spending by category",
             icon: "creditcard.fill",
             iconColorName: "hubAccentGreen",
             viewBuilder: { AnyView(SpendingTrackerView()) },

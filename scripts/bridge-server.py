@@ -1439,6 +1439,18 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
 
     def _merge_and_write(self, filepath, incoming, path):
         """Internal helper: merge incoming data with existing file and write."""
+        # Chat history is a full-snapshot sync from the app.
+        # Use overwrite semantics so deletions propagate to server storage.
+        if path == "/chat/messages":
+            data = incoming
+            try:
+                with open(filepath, "w") as f:
+                    json.dump(data, f, ensure_ascii=False)
+                self._send_json(200, {"ok": True, "count": len(data) if isinstance(data, list) else 1})
+            except IOError as e:
+                self._send_json(500, {"error": f"Failed to write: {e}"})
+            return
+
         # Load existing data for merge
         existing = []
         if os.path.exists(filepath):

@@ -28,9 +28,9 @@ struct SpendingTrackerView: View {
 
             // Tab picker
             Picker("", selection: $selectedTab) {
-                    Text("Home").tag(0)
-                    Text("History").tag(1)
-                    Text("Analytics").tag(2)
+                    Text("Today").tag(0)
+                    Text("Breakdown").tag(1)
+                    Text("Trends").tag(2)
             }
             .pickerStyle(.segmented)
             .padding(.horizontal, HubLayout.standardPadding)
@@ -39,13 +39,13 @@ struct SpendingTrackerView: View {
             // Content
             ZStack(alignment: .bottomTrailing) {
                     if selectedTab == 0 {
-                        SpendingTrackerDashboardView(viewModel: viewModel)
+                        SpendingTrackerTodayView(viewModel: viewModel)
                     }
                     if selectedTab == 1 {
-                        SpendingTrackerHistoryView(viewModel: viewModel)
+                        SpendingTrackerBreakdownView(viewModel: viewModel)
                     }
                     if selectedTab == 2 {
-                        SpendingTrackerAnalyticsView(viewModel: viewModel)
+                        SpendingTrackerTrendsView(viewModel: viewModel)
                     }
 
                 // FAB
@@ -58,7 +58,7 @@ struct SpendingTrackerView: View {
         .background(AdaptiveColors.background(for: colorScheme))
         .task { await viewModel.loadData() }
         .sheet(isPresented: $showAddSheet) {
-            SpendingTrackerEntrySheet(viewModel: viewModel) {
+            SpendingTrackerExpenseEntrySheet(viewModel: viewModel) {
                 showAddSheet = false
             }
         }

@@ -21,11 +21,25 @@ DEFAULTS: dict[str, Any] = {
     "agent": {
         "command": "claude",
         "args": ["-p", "--dangerously-skip-permissions"],
+        "prompt_mode": "stdin",
         "max_concurrent": 3,
         "timeout": 1800,
         "max_turns": 50,
         "max_turns_followup": 50,
+        "followup_history_max_chars": 18000,
         "question_timeout": 600,  # F7: auto-timeout unanswered agent questions (10 min)
+        "targets": {
+            "x": {
+                "command": "codex",
+                "args": ["exec", "--skip-git-repo-check"],
+                "prompt_mode": "arg",
+            },
+            "claw": {
+                "command": "openclaw",
+                "args": ["agent", "--local", "--json", "--agent", "main", "--message"],
+                "prompt_mode": "arg",
+            },
+        },
     },
     "behavior": {
         "poll_timeout": 30,
@@ -101,6 +115,14 @@ class Config:
         return list(self._data["agent"]["args"])
 
     @property
+    def agent_prompt_mode(self) -> str:
+        return str(self._data["agent"].get("prompt_mode", "stdin"))
+
+    @property
+    def agent_targets(self) -> dict[str, dict]:
+        return dict(self._data["agent"].get("targets", {}))
+
+    @property
     def max_concurrent(self) -> int:
         return int(self._data["agent"]["max_concurrent"])
 
@@ -115,6 +137,10 @@ class Config:
     @property
     def max_turns_followup(self) -> int:
         return int(self._data["agent"]["max_turns_followup"])
+
+    @property
+    def followup_history_max_chars(self) -> int:
+        return int(self._data["agent"].get("followup_history_max_chars", 18000))
 
     @property
     def question_timeout(self) -> int:

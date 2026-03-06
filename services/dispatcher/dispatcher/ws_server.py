@@ -19,9 +19,9 @@ from websockets.asyncio.server import Server, ServerConnection
 log = logging.getLogger("dispatcher")
 
 # Type for the message handler callback provided by core.py
-# Args: content, project, msg_id, websocket, image_base64, audio_base64, audio_duration, language
+# Args: content, project, msg_id, websocket, image_base64, audio_base64, audio_duration, language, target_agent
 MessageHandler = Callable[
-    [str, str | None, str, "ServerConnection", str | None, str | None, float | None, str | None],
+    [str, str | None, str, "ServerConnection", str | None, str | None, float | None, str | None, str | None],
     Awaitable[str],
 ]
 
@@ -251,6 +251,7 @@ class WebSocketServer:
             audio_base64 = data.get("audio_base64")
             audio_duration = data.get("duration")
             language = data.get("language")
+            target_agent = data.get("target_agent")
 
             # Allow empty content if there's an image or audio
             if not content and not image_base64 and not audio_base64:
@@ -275,7 +276,7 @@ class WebSocketServer:
             asyncio.create_task(
                 self._process_message(
                     websocket, msg_id, content, project,
-                    image_base64, audio_base64, audio_duration, language,
+                    image_base64, audio_base64, audio_duration, language, target_agent,
                 )
             )
             return
@@ -297,6 +298,7 @@ class WebSocketServer:
         audio_base64: str | None,
         audio_duration: float | None,
         language: str | None,
+        target_agent: str | None,
     ) -> None:
         """Process a single message through the dispatcher pipeline.
 
@@ -306,7 +308,7 @@ class WebSocketServer:
             try:
                 result = await self.on_message(
                     content, project, msg_id, websocket,
-                    image_base64, audio_base64, audio_duration, language,
+                    image_base64, audio_base64, audio_duration, language, target_agent,
                 )
                 # Pick best target: original ws if still connected, else any active client
                 response_data = {

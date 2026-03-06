@@ -3,321 +3,356 @@
   "moduleName": "MedicationTracker",
   "displayName": "Medication Tracker",
   "shortName": "Meds",
-  "subtitle": "Track doses, schedules & adherence",
+  "subtitle": "Track daily medications, doses & schedules",
   "icon": "pills.fill",
-  "iconColor": "hubAccentRed",
+  "iconColor": "hubAccentGreen",
   "relevanceKeywords": [
     "medication",
     "medicine",
     "pill",
     "dose",
     "prescription",
-    "adherence",
     "pharmacy",
-    "supplement",
-    "vitamin",
+    "refill",
+    "adherence",
+    "schedule",
     "health"
   ],
+  "navigationPattern": "tabbedSegmented",
+  "entryPattern": "sheet",
   "dataFields": [
     {
-      "name": "medicationName",
+      "name": "name",
       "type": "String",
-      "label": "Medication",
+      "label": "Medication Name",
       "control": "text"
     },
     {
-      "name": "dosageAmount",
-      "type": "Double",
-      "label": "Dosage Amount",
+      "name": "dosage",
+      "type": "String",
+      "label": "Dosage",
+      "control": "text"
+    },
+    {
+      "name": "form",
+      "type": "MedicationForm",
+      "label": "Form",
+      "control": "picker"
+    },
+    {
+      "name": "frequency",
+      "type": "DoseFrequency",
+      "label": "Frequency",
+      "control": "picker"
+    },
+    {
+      "name": "primaryTime",
+      "type": "Date",
+      "label": "Scheduled Time",
+      "control": "datePicker"
+    },
+    {
+      "name": "color",
+      "type": "MedicationColor",
+      "label": "Color Label",
+      "control": "picker"
+    },
+    {
+      "name": "instructions",
+      "type": "String",
+      "label": "Special Instructions",
+      "control": "text"
+    },
+    {
+      "name": "supplyCount",
+      "type": "Int",
+      "label": "Supply Remaining",
       "control": "stepper"
     },
     {
-      "name": "dosageUnit",
-      "type": "DosageUnit",
-      "label": "Unit",
-      "control": "picker"
-    },
-    {
-      "name": "timeSlot",
-      "type": "TimeSlot",
-      "label": "Time of Day",
-      "control": "picker"
-    },
-    {
-      "name": "taken",
+      "name": "isActive",
       "type": "Bool",
-      "label": "Taken",
+      "label": "Currently Taking",
       "control": "toggle"
-    },
-    {
-      "name": "feeling",
-      "type": "PostDoseFeeling",
-      "label": "How You Feel",
-      "control": "picker"
-    },
-    {
-      "name": "notes",
-      "type": "String",
-      "label": "Notes / Side Effects",
-      "control": "text"
     }
   ],
   "enums": [
     {
-      "name": "DosageUnit",
+      "name": "MedicationForm",
       "cases": [
         {
-          "name": "mg",
-          "displayName": "mg",
-          "icon": "scalemass"
+          "name": "pill",
+          "displayName": "Pill",
+          "icon": "pill.fill"
         },
         {
-          "name": "mcg",
-          "displayName": "mcg",
-          "icon": "scalemass"
-        },
-        {
-          "name": "g",
-          "displayName": "g",
-          "icon": "scalemass.fill"
-        },
-        {
-          "name": "mL",
-          "displayName": "mL",
-          "icon": "drop.fill"
-        },
-        {
-          "name": "tablets",
-          "displayName": "Tablets",
-          "icon": "pills.fill"
-        },
-        {
-          "name": "capsules",
-          "displayName": "Capsules",
+          "name": "capsule",
+          "displayName": "Capsule",
           "icon": "capsule.fill"
         },
         {
-          "name": "drops",
-          "displayName": "Drops",
-          "icon": "drop"
+          "name": "liquid",
+          "displayName": "Liquid",
+          "icon": "drop.fill"
         },
         {
-          "name": "puffs",
-          "displayName": "Puffs",
-          "icon": "wind"
-        },
-        {
-          "name": "units",
-          "displayName": "Units",
+          "name": "injection",
+          "displayName": "Injection",
           "icon": "syringe.fill"
         },
         {
-          "name": "patches",
-          "displayName": "Patches",
+          "name": "inhaler",
+          "displayName": "Inhaler",
+          "icon": "lungs.fill"
+        },
+        {
+          "name": "topical",
+          "displayName": "Topical",
+          "icon": "hand.raised.fill"
+        },
+        {
+          "name": "patch",
+          "displayName": "Patch",
           "icon": "bandage.fill"
         }
       ]
     },
     {
-      "name": "TimeSlot",
+      "name": "DoseFrequency",
       "cases": [
         {
-          "name": "morning",
-          "displayName": "Morning",
-          "icon": "sunrise.fill"
+          "name": "onceDaily",
+          "displayName": "Once Daily",
+          "icon": "1.circle.fill"
         },
         {
-          "name": "midday",
-          "displayName": "Midday",
-          "icon": "sun.max.fill"
+          "name": "twiceDaily",
+          "displayName": "Twice Daily",
+          "icon": "2.circle.fill"
         },
         {
-          "name": "afternoon",
-          "displayName": "Afternoon",
-          "icon": "sun.haze.fill"
+          "name": "threeTimesDaily",
+          "displayName": "3 Times Daily",
+          "icon": "3.circle.fill"
         },
         {
-          "name": "evening",
-          "displayName": "Evening",
-          "icon": "sunset.fill"
+          "name": "fourTimesDaily",
+          "displayName": "4 Times Daily",
+          "icon": "4.circle.fill"
         },
         {
-          "name": "bedtime",
-          "displayName": "Bedtime",
-          "icon": "moon.fill"
+          "name": "everyOtherDay",
+          "displayName": "Every Other Day",
+          "icon": "arrow.2.squarepath"
+        },
+        {
+          "name": "weekly",
+          "displayName": "Weekly",
+          "icon": "calendar.circle.fill"
         },
         {
           "name": "asNeeded",
           "displayName": "As Needed",
-          "icon": "clock.badge.questionmark"
+          "icon": "questionmark.circle.fill"
         }
       ]
     },
     {
-      "name": "PostDoseFeeling",
+      "name": "MedicationColor",
       "cases": [
         {
-          "name": "great",
-          "displayName": "Great",
-          "icon": "face.smiling.inverse"
+          "name": "blue",
+          "displayName": "Blue",
+          "icon": "circle.fill"
         },
         {
-          "name": "good",
-          "displayName": "Good",
-          "icon": "face.smiling"
+          "name": "green",
+          "displayName": "Green",
+          "icon": "circle.fill"
         },
         {
-          "name": "neutral",
-          "displayName": "Neutral",
-          "icon": "minus.circle"
+          "name": "orange",
+          "displayName": "Orange",
+          "icon": "circle.fill"
         },
         {
-          "name": "unwell",
-          "displayName": "Unwell",
-          "icon": "face.dashed"
+          "name": "red",
+          "displayName": "Red",
+          "icon": "circle.fill"
         },
         {
-          "name": "bad",
-          "displayName": "Bad",
-          "icon": "exclamationmark.triangle.fill"
+          "name": "purple",
+          "displayName": "Purple",
+          "icon": "circle.fill"
+        },
+        {
+          "name": "teal",
+          "displayName": "Teal",
+          "icon": "circle.fill"
+        },
+        {
+          "name": "pink",
+          "displayName": "Pink",
+          "icon": "circle.fill"
+        }
+      ]
+    },
+    {
+      "name": "DoseStatus",
+      "cases": [
+        {
+          "name": "upcoming",
+          "displayName": "Upcoming",
+          "icon": "clock.fill"
+        },
+        {
+          "name": "due",
+          "displayName": "Due Now",
+          "icon": "exclamationmark.circle.fill"
+        },
+        {
+          "name": "taken",
+          "displayName": "Taken",
+          "icon": "checkmark.circle.fill"
+        },
+        {
+          "name": "skipped",
+          "displayName": "Skipped",
+          "icon": "forward.fill"
+        },
+        {
+          "name": "missed",
+          "displayName": "Missed",
+          "icon": "xmark.circle.fill"
         }
       ]
     }
   ],
   "views": [
     {
-      "name": "DashboardView",
-      "purpose": "Today's medication schedule as a timeline, overall adherence ring, current streak badge, and quick-add FAB. Shows each time slot with taken/pending/missed status.",
+      "name": "TodayView",
+      "purpose": "Daily medication timeline grouped by time slots (Morning, Afternoon, Evening, Bedtime). Top section shows progress ring with X/Y doses taken and current streak badge. Each dose card displays color dot, medication name, dosage, form icon, and scheduled time. Tap a card to mark as taken (stamps actual time) or long-press for skip. Overdue unmarked doses auto-mark as missed at midnight. Due-now cards pulse with yellow accent border.",
       "components": [
-        "ProgressRingView",
-        "StatGrid",
-        "TimeSlotTimeline",
-        "QuickEntryFAB",
+        "ProgressRing",
+        "DoseCard",
+        "TimeSlotGroup",
         "StreakBadge"
-      ]
+      ],
+      "isTab": true,
+      "tabLabel": "Today",
+      "tabIcon": "calendar.day.timeline.left"
     },
     {
-      "name": "EntrySheet",
-      "purpose": "Quick-log a dose with medication name (autocomplete from history), dosage amount+unit, time slot, taken toggle, optional feeling and notes.",
+      "name": "MedicationsView",
+      "purpose": "Catalog of all configured medications split into Active and Inactive sections. Each row shows color dot, name, dosage, form icon, frequency badge, and supply gauge. Low supply (under 7 days) shows red warning. Nav bar plus button opens MedicationEntrySheet. Tap row to edit. Swipe left to deactivate or delete.",
       "components": [
-        "QuickEntrySheet",
-        "EntryFormSection",
-        "AutocompleteField"
-      ]
+        "MedicationRow",
+        "SupplyGauge",
+        "FrequencyBadge"
+      ],
+      "isTab": true,
+      "tabLabel": "My Meds",
+      "tabIcon": "pills.fill"
     },
     {
-      "name": "HistoryView",
-      "purpose": "Calendar heatmap colored by daily adherence rate (green=100%, yellow=partial, red=missed). Tap a day to see dose-by-dose breakdown. Filter by medication name.",
+      "name": "AdherenceView",
+      "purpose": "Three-section analytics: (1) Streak display with current and best streak. (2) Calendar heatmap for past 30 days \u2014 green for 100%, yellow for partial, red for missed days, gray for no data. Tap day for breakdown. (3) Per-medication adherence bars ranked lowest to highest, highlighting problem medications. Weekly trend comparison at bottom.",
       "components": [
         "CalendarHeatmap",
-        "DateGroupedList",
-        "MedicationFilterChips"
-      ]
+        "StreakDisplay",
+        "MedicationAdherenceBar",
+        "WeeklyTrendChart"
+      ],
+      "isTab": true,
+      "tabLabel": "Adherence",
+      "tabIcon": "chart.line.uptrend.xyaxis"
     },
     {
-      "name": "AnalyticsView",
-      "purpose": "Weekly/monthly adherence line chart, per-medication adherence bar chart, time-slot reliability breakdown, feeling correlation analysis, and actionable insights.",
+      "name": "MedicationEntrySheet",
+      "purpose": "Modal form to add or edit a medication. Name and dosage text fields with suggestion chips (5mg, 10mg, 25mg, 50mg, 100mg, 500mg). Visual form picker with icons. Frequency picker that dynamically shows multiple time pickers for multi-dose frequencies. Color dot selector as horizontal scroll of tappable circles. Optional instructions field. Supply stepper with quick-add buttons (+30, +60, +90). Active toggle defaults to true. Validates name and dosage are non-empty before save.",
       "components": [
-        "ModuleChartView",
-        "PerMedicationBarChart",
-        "TimeSlotBreakdown",
-        "InsightsList",
-        "FeelingCorrelation"
-      ]
+        "DosageSuggestionChips",
+        "ColorDotPicker",
+        "SupplyQuickAdd",
+        "MultiTimePicker"
+      ],
+      "isTab": false,
+      "tabLabel": "",
+      "tabIcon": ""
     }
   ],
   "viewModelComputedProperties": [
     {
-      "name": "todayEntries",
-      "type": "[MedicationTrackerEntry]",
-      "description": "All dose entries logged today, sorted by time slot order"
+      "name": "todaySchedule",
+      "type": "[ScheduledDose]",
+      "description": "All doses for today derived from active medications and their frequencies, sorted by scheduled time. Each ScheduledDose has medication reference, time, and DoseStatus."
     },
     {
-      "name": "todayAdherenceRate",
-      "type": "Double",
-      "description": "Percentage of today's logged doses where taken==true (0.0\u20131.0)"
-    },
-    {
-      "name": "todayTakenCount",
-      "type": "Int",
-      "description": "Number of doses marked as taken today"
-    },
-    {
-      "name": "todayMissedCount",
-      "type": "Int",
-      "description": "Number of doses marked as not taken today"
-    },
-    {
-      "name": "weeklyAdherenceRate",
-      "type": "Double",
-      "description": "Average daily adherence rate over the past 7 days"
+      "name": "todayProgress",
+      "type": "(taken: Int, total: Int)",
+      "description": "Doses taken vs total scheduled today, driving the progress ring."
     },
     {
       "name": "currentStreak",
       "type": "Int",
-      "description": "Consecutive days ending today where all logged doses were taken (100% adherence)"
+      "description": "Consecutive days with 100% adherence ending today or yesterday. Resets on any day with missed doses."
     },
     {
-      "name": "longestStreak",
+      "name": "bestStreak",
       "type": "Int",
-      "description": "Best-ever consecutive 100%-adherence day streak across all history"
+      "description": "Longest perfect adherence streak ever recorded."
     },
     {
-      "name": "weeklyTrend",
+      "name": "overallAdherenceRate",
       "type": "Double",
-      "description": "Difference between this week's adherence and last week's adherence (-1.0 to 1.0)"
+      "description": "All-time taken doses / total scheduled doses (0.0-1.0), excluding as-needed."
     },
     {
-      "name": "uniqueMedications",
-      "type": "[String]",
-      "description": "Distinct medication names across all entries, sorted by frequency descending"
+      "name": "weeklyAdherence",
+      "type": "[DayAdherence]",
+      "description": "Last 7 days of daily adherence rates for the trend chart."
     },
     {
       "name": "perMedicationAdherence",
-      "type": "[(String, Double)]",
-      "description": "Adherence rate (taken/total) grouped by medication name for bar chart"
+      "type": "[(medication: Entry, rate: Double)]",
+      "description": "30-day adherence per active medication, sorted ascending by rate."
     },
     {
-      "name": "timeSlotReliability",
-      "type": "[(TimeSlot, Double)]",
-      "description": "Adherence rate grouped by time slot \u2014 reveals which time of day is most/least reliable"
+      "name": "lowSupplyMedications",
+      "type": "[Entry]",
+      "description": "Active medications where remaining supply covers fewer than 7 days of doses."
     },
     {
-      "name": "monthlyChartData",
-      "type": "[(Date, Double)]",
-      "description": "Daily adherence rate for the past 30 days for line chart rendering"
+      "name": "activeMedications",
+      "type": "[Entry]",
+      "description": "Entries where isActive is true, sorted by name."
     },
     {
-      "name": "feelingDistribution",
-      "type": "[(PostDoseFeeling, Int)]",
-      "description": "Count of each feeling type across all entries for correlation analysis"
+      "name": "dosesDueNow",
+      "type": "[ScheduledDose]",
+      "description": "Doses within 30 minutes of scheduled time not yet acted on."
     },
     {
-      "name": "totalDosesLogged",
-      "type": "Int",
-      "description": "Lifetime count of all dose entries"
-    },
-    {
-      "name": "insights",
-      "type": "[String]",
-      "description": "Array of human-readable insight strings generated from trend analysis, missed patterns, and feeling correlations"
+      "name": "monthlyHeatmapData",
+      "type": "[DayAdherence]",
+      "description": "Last 30 days of daily adherence for the calendar heatmap."
     }
   ],
   "domainLogic": {
     "dailyGoal": {
-      "description": "Target number of medication doses to take per day. Derived from the user's typical daily entry count (mode of last 14 days). Adherence ring fills based on taken/expected ratio.",
-      "defaultValue": "4"
+      "description": "Take all scheduled medications at their designated times with 100% daily adherence.",
+      "defaultValue": "100"
     },
-    "streakDefinition": "A day counts toward the streak if every dose entry for that day has taken==true. Days with zero entries do not break the streak (no medications scheduled). A single missed dose (taken==false) breaks the streak.",
-    "trendAnalysis": "Compare this week's average daily adherence rate to the previous week. Calculate per-medication adherence over 30 days to flag medications with declining compliance. Identify the time slot with the lowest adherence rate as an improvement target.",
+    "streakDefinition": "All scheduled doses (excluding as-needed) marked taken by midnight. Skipped or missed doses break the streak.",
+    "trendAnalysis": "Weekly adherence rate vs previous week. Per-medication 30-day rolling compliance. Time-of-day miss patterns (morning vs evening). Supply burn-rate projecting refill dates.",
     "insights": [
-      "Streak milestone celebrations (7-day, 30-day, 90-day, 365-day perfect adherence)",
-      "Time-slot vulnerability: 'You miss evening doses 3x more than morning doses \u2014 consider setting a reminder'",
-      "Medication-specific adherence: 'Your adherence for [med] dropped 20% this week vs last week'",
-      "Feeling correlation: 'You report feeling unwell more often after [med] \u2014 consider discussing with your doctor'",
-      "Weekend vs weekday pattern: 'Your adherence drops to X% on weekends vs Y% on weekdays'",
-      "Consistency score: rolling 7-day standard deviation of daily adherence \u2014 lower is better",
-      "Refill estimate: 'At your current rate, you'll need to refill [med] in approximately N days' based on dosage frequency"
+      "Streak milestones at 7, 14, 30, 60, 90 days",
+      "Most consistent medication by highest adherence rate",
+      "Most missed medication by lowest adherence rate",
+      "Weakest time slot analysis (e.g. evening doses missed 3x more)",
+      "Refill prediction based on supply burn rate",
+      "Week-over-week adherence comparison",
+      "Perfect day recognition when all doses taken on time"
     ]
   }
 }

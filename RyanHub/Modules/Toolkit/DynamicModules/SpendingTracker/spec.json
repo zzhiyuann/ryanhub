@@ -3,51 +3,35 @@
   "moduleName": "SpendingTracker",
   "displayName": "Spending Tracker",
   "shortName": "Spending",
-  "subtitle": "Track daily expenses & stay on budget",
+  "subtitle": "Track daily spending by category",
   "icon": "creditcard.fill",
   "iconColor": "hubAccentGreen",
   "relevanceKeywords": [
     "spending",
-    "expense",
-    "budget",
     "money",
+    "budget",
+    "expense",
     "finance",
-    "purchase",
-    "payment",
     "category",
+    "daily",
     "cost",
+    "purchase",
     "wallet"
   ],
+  "navigationPattern": "tabbedSegmented",
+  "entryPattern": "fab+sheet",
   "dataFields": [
     {
       "name": "amount",
       "type": "Double",
-      "label": "Amount ($)",
-      "control": "stepper"
+      "label": "Amount",
+      "control": "text"
     },
     {
       "name": "category",
       "type": "SpendingCategory",
       "label": "Category",
       "control": "picker"
-    },
-    {
-      "name": "paymentMethod",
-      "type": "PaymentMethod",
-      "label": "Payment Method",
-      "control": "picker"
-    },
-    {
-      "name": "merchant",
-      "type": "String",
-      "label": "Merchant / Description",
-      "control": "text"
-    },
-    {
-      "name": "isRecurring",
-      "type": "Bool",
-      "label": "Recurring Expense",
-      "control": "toggle"
     },
     {
       "name": "note",
@@ -62,7 +46,7 @@
       "cases": [
         {
           "name": "food",
-          "displayName": "Food & Dining",
+          "displayName": "Food & Drink",
           "icon": "fork.knife"
         },
         {
@@ -76,18 +60,18 @@
           "icon": "car.fill"
         },
         {
-          "name": "entertainment",
-          "displayName": "Entertainment",
-          "icon": "film.fill"
-        },
-        {
           "name": "shopping",
           "displayName": "Shopping",
           "icon": "bag.fill"
         },
         {
+          "name": "entertainment",
+          "displayName": "Entertainment",
+          "icon": "tv.fill"
+        },
+        {
           "name": "health",
-          "displayName": "Health & Fitness",
+          "displayName": "Health",
           "icon": "heart.fill"
         },
         {
@@ -101,199 +85,163 @@
           "icon": "book.fill"
         },
         {
-          "name": "coffee",
-          "displayName": "Coffee & Drinks",
-          "icon": "cup.and.saucer.fill"
-        },
-        {
-          "name": "subscriptions",
-          "displayName": "Subscriptions",
-          "icon": "arrow.triangle.2.circlepath"
-        },
-        {
-          "name": "gifts",
-          "displayName": "Gifts & Donations",
-          "icon": "gift.fill"
-        },
-        {
           "name": "other",
           "displayName": "Other",
           "icon": "ellipsis.circle.fill"
-        }
-      ]
-    },
-    {
-      "name": "PaymentMethod",
-      "cases": [
-        {
-          "name": "cash",
-          "displayName": "Cash",
-          "icon": "banknote.fill"
-        },
-        {
-          "name": "creditCard",
-          "displayName": "Credit Card",
-          "icon": "creditcard.fill"
-        },
-        {
-          "name": "debitCard",
-          "displayName": "Debit Card",
-          "icon": "creditcard"
-        },
-        {
-          "name": "applePay",
-          "displayName": "Apple Pay",
-          "icon": "apple.logo"
-        },
-        {
-          "name": "venmo",
-          "displayName": "Venmo / Zelle",
-          "icon": "arrow.left.arrow.right"
-        },
-        {
-          "name": "other",
-          "displayName": "Other",
-          "icon": "ellipsis.circle"
         }
       ]
     }
   ],
   "views": [
     {
-      "name": "DashboardView",
-      "purpose": "Main hub showing today's total spend vs daily budget as a progress ring, top 3 categories for the day, recent transactions list, and a floating quick-add button",
+      "name": "TodayView",
+      "purpose": "Primary daily view. At the top, a large circular budget ring showing remaining daily budget \u2014 green when under 60%, yellow 60-90%, red above 90%. Below it, today's total and remaining amount as prominent text. Then a chronological list of today's expenses, each row showing category icon, note, and amount. Empty state shows a friendly illustration encouraging the first entry of the day.",
       "components": [
-        "ProgressRingView",
-        "StatGrid",
-        "CategoryBreakdownBar",
-        "RecentTransactionsList",
-        "QuickEntryFAB"
-      ]
+        "BudgetRing",
+        "ExpenseRow",
+        "DailySummaryCard"
+      ],
+      "isTab": true,
+      "tabLabel": "Today",
+      "tabIcon": "calendar.circle.fill"
     },
     {
-      "name": "EntrySheet",
-      "purpose": "Quick-entry modal with large amount stepper (increment by $0.50), category picker grid with icons, payment method selector, optional merchant text field, and recurring toggle",
+      "name": "BreakdownView",
+      "purpose": "Monthly category breakdown. A month picker at top for navigation. Below it, horizontal bar chart showing each category's spending as a proportional bar with the category icon, name, total amount, and percentage. Bars are colored by category. Sorted by amount descending. At the bottom, monthly total and average daily spend for that month. Tapping a category could expand to show individual transactions.",
       "components": [
-        "QuickEntrySheet",
-        "AmountStepper",
-        "CategoryGridPicker",
-        "EntryFormSection"
-      ]
+        "MonthPicker",
+        "CategoryBarChart",
+        "CategoryRow",
+        "MonthlySummary"
+      ],
+      "isTab": true,
+      "tabLabel": "Breakdown",
+      "tabIcon": "chart.pie.fill"
     },
     {
-      "name": "HistoryView",
-      "purpose": "Date-grouped transaction list with category filter chips at top, swipe-to-delete, daily subtotals per section header, and a mini calendar heatmap showing spend intensity by day",
+      "name": "TrendsView",
+      "purpose": "Weekly and long-term spending trends. A 7-day bar chart showing daily spending for the current week with the daily budget as a dashed reference line. Below it, week-over-week comparison (e.g., '12% less than last week' in green or '8% more' in red). Then a streak badge showing current under-budget streak with flame icon. Finally, a list of 2-3 auto-generated insight cards (top category, biggest expense, no-spend days).",
       "components": [
-        "CalendarHeatmap",
-        "FilterChipRow",
-        "GroupedEntryList",
-        "DailySubtotalHeader"
-      ]
+        "WeeklyBarChart",
+        "WeekComparisonCard",
+        "StreakBadge",
+        "InsightCard"
+      ],
+      "isTab": true,
+      "tabLabel": "Trends",
+      "tabIcon": "chart.line.uptrend.xyaxis"
     },
     {
-      "name": "AnalyticsView",
-      "purpose": "Rich analytics with category pie chart, daily spend bar chart for the current month, week-over-week trend comparison, top merchants ranking, budget adherence percentage, and AI-style spending insights",
+      "name": "ExpenseEntrySheet",
+      "purpose": "Quick expense entry modal optimized for speed. Large amount input at top with prominent font and currency symbol, auto-focused on appear. Below it, a 3x3 grid of category buttons (icon + label) for single-tap selection with the selected one highlighted in hubPrimary. Optional note field at the bottom. Save button is large and prominent. Entire flow should take under 5 seconds for a typical entry.",
       "components": [
-        "ModuleChartView",
-        "CategoryPieChart",
-        "DailyBarChart",
-        "TrendComparisonCard",
-        "TopMerchantsList",
-        "InsightsList"
-      ]
+        "AmountInput",
+        "CategoryGrid",
+        "NoteField",
+        "SaveButton"
+      ],
+      "isTab": false,
+      "tabLabel": "",
+      "tabIcon": ""
     }
   ],
   "viewModelComputedProperties": [
     {
+      "name": "todayEntries",
+      "type": "[SpendingEntry]",
+      "description": "All entries from today sorted by most recent first"
+    },
+    {
       "name": "todayTotal",
       "type": "Double",
-      "description": "Sum of all spending entries logged today"
+      "description": "Sum of all amounts spent today"
     },
     {
-      "name": "todayByCategory",
-      "type": "[(SpendingCategory, Double)]",
-      "description": "Today's spending broken down by category, sorted descending by amount"
-    },
-    {
-      "name": "weekTotal",
+      "name": "dailyBudgetRemaining",
       "type": "Double",
-      "description": "Sum of all spending in the current Mon-Sun week"
-    },
-    {
-      "name": "monthTotal",
-      "type": "Double",
-      "description": "Sum of all spending in the current calendar month"
+      "description": "Daily budget minus today's total, floored at 0"
     },
     {
       "name": "dailyBudgetProgress",
       "type": "Double",
-      "description": "Ratio of todayTotal to dailyBudget goal (0.0 to 1.0+, can exceed 1.0 if over budget)"
+      "description": "todayTotal / dailyBudget capped at 1.0 \u2014 drives the budget ring fill"
     },
     {
-      "name": "underBudgetStreak",
-      "type": "Int",
-      "description": "Consecutive days where total daily spend was at or below the daily budget, counting backwards from yesterday"
+      "name": "isOverBudget",
+      "type": "Bool",
+      "description": "True when todayTotal exceeds dailyBudget"
+    },
+    {
+      "name": "currentMonthTotal",
+      "type": "Double",
+      "description": "Sum of all spending in the selected month"
+    },
+    {
+      "name": "categoryBreakdown",
+      "type": "[(category: SpendingCategory, total: Double, percentage: Double)]",
+      "description": "Selected month's spending grouped by category, sorted descending by total, with percentage of month total"
+    },
+    {
+      "name": "thisWeekDailyTotals",
+      "type": "[Double]",
+      "description": "Array of 7 daily totals for current week Mon-Sun, 0 for future days"
+    },
+    {
+      "name": "thisWeekTotal",
+      "type": "Double",
+      "description": "Sum of spending for Mon through today"
+    },
+    {
+      "name": "lastWeekTotal",
+      "type": "Double",
+      "description": "Total spending for previous Mon-Sun week"
     },
     {
       "name": "weekOverWeekChange",
       "type": "Double",
-      "description": "Percentage change: (thisWeekTotal - lastWeekTotal) / lastWeekTotal * 100. Negative means spending less."
+      "description": "Percentage change: (thisWeek - lastWeek) / lastWeek * 100"
     },
     {
-      "name": "dailyAverageThisMonth",
+      "name": "averageDailySpend",
       "type": "Double",
-      "description": "monthTotal divided by number of days elapsed in current month"
+      "description": "Mean daily spending over last 30 days with data"
     },
     {
-      "name": "topCategory",
+      "name": "currentStreak",
+      "type": "Int",
+      "description": "Consecutive days ending today where daily total <= daily budget"
+    },
+    {
+      "name": "longestStreak",
+      "type": "Int",
+      "description": "All-time longest under-budget streak"
+    },
+    {
+      "name": "noSpendDaysThisMonth",
+      "type": "Int",
+      "description": "Count of days this month with zero spending (past days only)"
+    },
+    {
+      "name": "topCategoryThisMonth",
       "type": "SpendingCategory?",
-      "description": "The category with the highest total spend in the current month"
-    },
-    {
-      "name": "monthlyChartData",
-      "type": "[(Date, Double)]",
-      "description": "Array of (date, dailyTotal) pairs for each day of the current month, used for bar chart rendering"
-    },
-    {
-      "name": "categoryBreakdown",
-      "type": "[(SpendingCategory, Double, Double)]",
-      "description": "For current month: each category with its total amount and percentage of monthTotal, sorted descending"
-    },
-    {
-      "name": "topMerchants",
-      "type": "[(String, Double, Int)]",
-      "description": "Top 5 merchants by total spend this month: (merchantName, totalAmount, transactionCount)"
-    },
-    {
-      "name": "projectedMonthlySpend",
-      "type": "Double",
-      "description": "dailyAverageThisMonth * total days in current month \u2014 projects end-of-month total at current pace"
-    },
-    {
-      "name": "insights",
-      "type": "[String]",
-      "description": "Up to 4 smart text insights: over/under budget alert, biggest category change vs last month, streak congratulation, projected monthly total warning"
-    },
-    {
-      "name": "recurringTotal",
-      "type": "Double",
-      "description": "Sum of all entries marked as recurring in the current month, representing fixed costs"
+      "description": "Category with highest total spending this month"
     }
   ],
   "domainLogic": {
     "dailyGoal": {
-      "description": "Daily spending budget \u2014 the target maximum amount to spend per day. Progress ring fills as spending approaches this limit. Green under 75%, yellow 75-100%, red over 100%.",
+      "description": "Daily spending budget the user aims to stay under. Shown as the budget ring target.",
       "defaultValue": "50.0"
     },
-    "streakDefinition": "A day counts toward the under-budget streak if the total spending for that day is less than or equal to the daily budget goal. Days with zero spending also count. The streak breaks on any day where spending exceeds the budget.",
-    "trendAnalysis": "Primary trend: compare current week's total spend to last week's total (weekOverWeekChange). Secondary: compare this month's daily average to last month's daily average. Tertiary: track per-category month-over-month changes to surface which categories are growing fastest.",
+    "streakDefinition": "A day counts toward the under-budget streak if that day's total spending is less than or equal to the daily budget goal. Days with zero spending count. The streak breaks when any day's total exceeds the budget. Only completed days (before today) plus today (if currently under) are counted.",
+    "trendAnalysis": "Primary: week-over-week total spending comparison. Secondary: 30-day rolling average daily spend. Category-level: identify which category had the largest absolute increase compared to same period last month. Daily budget adherence rate (% of days under budget in last 30 days).",
     "insights": [
-      "Budget status: 'You're $X under/over budget today' with contextual encouragement or warning",
-      "Category spike: 'Food & Dining is up 35% vs last month' when any category increases >20% month-over-month",
-      "Streak milestone: 'Nice! 7-day under-budget streak \ud83d\udd25' at 3, 7, 14, 30 day milestones",
-      "Projection alert: 'At this pace, you'll spend $X this month' when projectedMonthlySpend exceeds monthly budget (dailyGoal * days in month) by >10%",
-      "Top merchant: 'You've spent $X at [merchant] this month \u2014 your #1 spot' for awareness",
-      "Savings opportunity: 'Your lowest-spend day this week was [day] at $X \u2014 can you beat it?' to gamify frugality"
+      "Today's budget status with remaining amount or overage",
+      "Week-over-week spending change with percentage and direction",
+      "Top spending category this month with its share percentage",
+      "Number of no-spend days this month as a positive reinforcement metric",
+      "Biggest single expense this week with category and amount",
+      "Category with largest month-over-month increase as a spending alert",
+      "Budget adherence rate over last 30 days as a percentage"
     ]
   }
 }

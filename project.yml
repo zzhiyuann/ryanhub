@@ -33,8 +33,6 @@ targets:
         excludes:
           - "**/.DS_Store"
           - "**/DynamicModules/**/spec.json"
-          - "**/DynamicModules/MedicationTracker/**"
-          - "**/DynamicModules/SpendingTracker/**"
     dependencies:
       - package: SwiftTerm
       - package: swift-nio-ssh

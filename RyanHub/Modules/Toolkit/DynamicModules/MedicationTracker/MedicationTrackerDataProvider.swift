@@ -5,7 +5,7 @@ import Foundation
 enum MedicationTrackerDataProvider: ToolkitDataProvider {
     static let toolkitId = "medicationTracker"
     static let displayName = "Medication Tracker"
-    static let relevanceKeywords: [String] = ["medication", "medicine", "pill", "dose", "prescription", "adherence", "pharmacy", "supplement", "vitamin", "health"]
+    static let relevanceKeywords: [String] = ["medication", "medicine", "pill", "dose", "prescription", "pharmacy", "refill", "adherence", "schedule", "health"]
 
     private static var bridgeBaseURL: String {
         UserDefaults.standard.string(forKey: "ryanhub_server_url")

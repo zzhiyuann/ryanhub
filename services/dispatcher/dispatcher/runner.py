@@ -43,16 +43,50 @@ class AgentRunner:
         self,
         command: str = "claude",
         args: list[str] | None = None,
+        prompt_mode: str = "stdin",
         timeout: int = 1800,
         question_timeout: int = 600,
     ):
         self.command = command
         self.args = args or ["-p", "--dangerously-skip-permissions"]
+        self.prompt_mode = "arg" if prompt_mode == "arg" else "stdin"
         self.timeout = timeout
         self.question_timeout = question_timeout
         self._resolve_command()
         self._sidecar_proc = None
         self._sidecar_healthy = False
+
+    def _normalize_cli_output(self, out: str) -> str:
+        """Normalize non-Claude CLI output for chat delivery.
+
+        For OpenClaw JSON responses, extract the user-facing text payload and
+        drop verbose metadata.
+        """
+        if not out:
+            return out
+        if "openclaw" not in self.command.lower():
+            return out
+
+        try:
+            data = json.loads(out)
+        except Exception:
+            return out
+
+        payloads = data.get("payloads")
+        if not isinstance(payloads, list):
+            return out
+
+        texts: list[str] = []
+        for item in payloads:
+            if not isinstance(item, dict):
+                continue
+            text = item.get("text")
+            if isinstance(text, str) and text.strip():
+                texts.append(text.strip())
+
+        if texts:
+            return "\n\n".join(texts)
+        return out
 
     def _resolve_command(self):
         """Find the full path of the agent command."""
@@ -276,9 +310,12 @@ class AgentRunner:
             self.command, resume, session.cwd, session.sid[:8],
         )
 
+        cmd_to_run = list(cmd)
+        if not use_stream and self.prompt_mode == "arg":
+            cmd_to_run.append(prompt)
         try:
             proc = await asyncio.create_subprocess_exec(
-                *cmd,
+                *cmd_to_run,
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
@@ -354,15 +391,22 @@ class AgentRunner:
                 session.result = out
                 return out
             else:
-                stdout, stderr = await asyncio.wait_for(
-                    proc.communicate(input=prompt.encode()),
-                    timeout=self.timeout,
-                )
+                if self.prompt_mode == "arg":
+                    stdout, stderr = await asyncio.wait_for(
+                        proc.communicate(),
+                        timeout=self.timeout,
+                    )
+                else:
+                    stdout, stderr = await asyncio.wait_for(
+                        proc.communicate(input=prompt.encode()),
+                        timeout=self.timeout,
+                    )
                 out = stdout.decode(errors="replace").strip()
                 if not out and stderr:
                     err_text = stderr.decode(errors="replace").strip()
                     if err_text:
                         out = f"(stderr) {err_text[:800]}"
+                out = self._normalize_cli_output(out)
 
             session.status = "done" if proc.returncode == 0 else "failed"
             session.finished = time.time()

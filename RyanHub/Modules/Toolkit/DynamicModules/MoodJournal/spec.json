@@ -3,26 +3,26 @@
   "moduleName": "MoodJournal",
   "displayName": "Mood Journal",
   "shortName": "Mood",
-  "subtitle": "Track your emotional well-being",
+  "subtitle": "Track your emotional wellbeing",
   "icon": "face.smiling",
-  "iconColor": "hubPrimaryLight",
+  "iconColor": "hubAccentYellow",
   "relevanceKeywords": [
     "mood",
-    "journal",
     "emotion",
+    "journal",
     "feeling",
     "mental health",
     "wellbeing",
-    "diary",
     "check-in",
-    "happiness",
-    "anxiety"
+    "rating",
+    "reflection",
+    "diary"
   ],
   "navigationPattern": "tabbedSegmented",
-  "entryPattern": "inline",
+  "entryPattern": "fab+sheet",
   "dataFields": [
     {
-      "name": "moodRating",
+      "name": "rating",
       "type": "Int",
       "label": "Mood Rating",
       "control": "slider"
@@ -37,18 +37,12 @@
       "name": "energyLevel",
       "type": "Int",
       "label": "Energy Level",
-      "control": "slider"
+      "control": "stepper"
     },
     {
-      "name": "activities",
+      "name": "notes",
       "type": "String",
-      "label": "Activities",
-      "control": "text"
-    },
-    {
-      "name": "note",
-      "type": "String",
-      "label": "Notes",
+      "label": "Reflection Notes",
       "control": "text"
     }
   ],
@@ -57,44 +51,44 @@
       "name": "Emotion",
       "cases": [
         {
-          "name": "ecstatic",
-          "displayName": "Ecstatic",
-          "icon": "sparkles"
-        },
-        {
           "name": "happy",
           "displayName": "Happy",
-          "icon": "sun.max.fill"
-        },
-        {
-          "name": "grateful",
-          "displayName": "Grateful",
-          "icon": "heart.fill"
+          "icon": "face.smiling"
         },
         {
           "name": "calm",
           "displayName": "Calm",
-          "icon": "leaf.fill"
+          "icon": "leaf"
+        },
+        {
+          "name": "excited",
+          "displayName": "Excited",
+          "icon": "star"
+        },
+        {
+          "name": "grateful",
+          "displayName": "Grateful",
+          "icon": "heart"
         },
         {
           "name": "neutral",
           "displayName": "Neutral",
-          "icon": "circle.fill"
+          "icon": "face.dashed"
         },
         {
           "name": "anxious",
           "displayName": "Anxious",
-          "icon": "bolt.fill"
+          "icon": "bolt.heart"
         },
         {
           "name": "sad",
           "displayName": "Sad",
-          "icon": "cloud.rain.fill"
+          "icon": "cloud.rain"
         },
         {
           "name": "angry",
           "displayName": "Angry",
-          "icon": "flame.fill"
+          "icon": "flame"
         },
         {
           "name": "stressed",
@@ -102,151 +96,138 @@
           "icon": "waveform.path.ecg"
         },
         {
-          "name": "lonely",
-          "displayName": "Lonely",
-          "icon": "moon.fill"
+          "name": "tired",
+          "displayName": "Tired",
+          "icon": "moon.zzz"
         }
       ]
     }
   ],
   "views": [
     {
-      "name": "MoodJournalCheckInView",
-      "purpose": "Primary check-in screen. Shows a large animated emoji face that morphs based on the mood slider value (frown at 1, flat at 5, beaming at 10) with a background color gradient that shifts from deep red through amber to vibrant green. Below the face: a custom gradient slider (red\u2192yellow\u2192green) for 1-10 mood rating with haptic feedback on value changes. Then a horizontal scrollable row of emotion tag chips (pill-shaped buttons with SF Symbol + label, highlighted with hubPrimaryLight when selected). Energy level displayed as a 5-dot battery-style indicator where users tap dots to fill. Quick-tap activity bubbles in a flowing layout (exercise, work, social, family, sleep, nature, reading, music, cooking, travel) that toggle selection with a gentle scale animation. Collapsible text area for optional freeform notes. Large 'Save Check-In' button at bottom using HubButton style. If already checked in today, shows the existing entry in a review card with an 'Update' option instead of fresh entry.",
+      "name": "TodayView",
+      "purpose": "Daily check-in hub showing today's mood entries as colored cards, streak counter with flame icon, current mood face visualization that changes expression based on latest rating, and a motivational prompt if no check-in yet today",
       "components": [
         "MoodFaceView",
-        "GradientSlider",
-        "EmotionChipRow",
-        "EnergyDots",
-        "ActivityBubbles",
-        "NoteField"
+        "StreakBadge",
+        "EntryCard"
       ],
       "isTab": true,
-      "tabLabel": "Check In",
-      "tabIcon": "plus.circle.fill"
+      "tabLabel": "Today",
+      "tabIcon": "sun.max"
     },
     {
-      "name": "MoodJournalCalendarView",
-      "purpose": "Month calendar grid inspired by 'Year in Pixels' where each day cell is a rounded square color-coded by mood rating using a continuous gradient (deep red=1, orange=3, amber=5, lime=7, green=10, gray with dashed border=no entry). Swipe or arrow buttons for month-to-month navigation. Tapping a day cell expands it into a slide-up detail card showing that day's mood face, emotion chip, energy dots, activity tags, and note in a compact HubCard. Below the calendar grid: three summary stat cards in a horizontal row showing the month's average mood (with trend arrow vs previous month), total check-ins count, and most frequent emotion with its icon. The calendar provides an at-a-glance emotional landscape that makes weekly and monthly mood patterns immediately visible through color clustering.",
+      "name": "CalendarView",
+      "purpose": "Month grid calendar where each day cell is colored on a gradient from red (1) through yellow (5) to green (10) based on average mood rating. Tapping a day expands to show that day's entries. Empty days are gray. Includes month navigation arrows.",
       "components": [
-        "CalendarGrid",
-        "DayCell",
-        "DayDetailCard",
-        "MonthSummary"
+        "MoodCalendarGrid",
+        "DayDetailPopover"
       ],
       "isTab": true,
       "tabLabel": "Calendar",
       "tabIcon": "calendar"
     },
     {
-      "name": "MoodJournalTrendsView",
-      "purpose": "Insights and analytics screen. Top: streak badge showing current consecutive check-in days with a flame icon, plus longest streak record. Below: a smooth line chart plotting mood ratings over the last 30 days with a dashed trend line overlay and colored zones (green band for 8-10, yellow 5-7, red 1-4). Weekly comparison card showing this week's average vs last week with a prominent percentage change arrow (green up or red down). Mood distribution horizontal bar chart breaking entries into four ranges: Great (8-10), Good (6-7), Okay (4-5), Low (1-3) with proportional colored bars and percentages. Top emotions ranked list showing the 5 most logged emotions with their icons and frequency counts. Insight cards in a vertical stack with contextual observations like 'Your mood averages 7.4 on days you exercise vs 4.8 without' and 'Weekends score 1.5 points higher than weekdays'. Energy-mood correlation indicator showing whether high energy days correlate with better mood.",
+      "name": "TrendsView",
+      "purpose": "Mood analytics with a 30-day line chart of daily average ratings, weekly average comparison bar, emotion distribution pie/ring chart showing most frequent emotions, energy-mood correlation scatter, and computed insights like best day of week and longest streak",
       "components": [
-        "StreakBadge",
         "MoodLineChart",
-        "WeeklyComparison",
-        "MoodDistributionBars",
-        "EmotionRanking",
+        "EmotionBreakdown",
         "InsightCards"
       ],
       "isTab": true,
       "tabLabel": "Trends",
       "tabIcon": "chart.line.uptrend.xyaxis"
+    },
+    {
+      "name": "CheckInSheet",
+      "purpose": "Focused mood check-in experience: large animated face that changes expression as user drags the mood slider (1-10), emotion tag selector as horizontal scrollable chips, energy level stepper with battery icon, expandable text area for reflection notes, and save button",
+      "components": [
+        "AnimatedMoodFace",
+        "EmotionChipSelector",
+        "EnergySlider"
+      ],
+      "isTab": false,
+      "tabLabel": "",
+      "tabIcon": ""
     }
   ],
   "viewModelComputedProperties": [
     {
+      "name": "todayEntries",
+      "type": "[MoodJournalEntry]",
+      "description": "All entries logged today, sorted by most recent first"
+    },
+    {
+      "name": "hasCheckedInToday",
+      "type": "Bool",
+      "description": "Whether at least one mood entry exists for today"
+    },
+    {
       "name": "currentStreak",
       "type": "Int",
-      "description": "Consecutive calendar days with at least one mood entry counting backwards from today. Resets to 0 if yesterday has no entry."
+      "description": "Number of consecutive days with at least one check-in, counting back from today"
     },
     {
       "name": "longestStreak",
       "type": "Int",
-      "description": "All-time longest consecutive daily check-in streak ever achieved."
-    },
-    {
-      "name": "todayEntry",
-      "type": "MoodJournalEntry?",
-      "description": "Today's mood entry if it exists, nil if user has not checked in yet today."
+      "description": "All-time longest consecutive check-in streak"
     },
     {
       "name": "weeklyAverage",
       "type": "Double",
-      "description": "Mean mood rating for the current Monday-through-Sunday week. Returns 0 if no entries this week."
+      "description": "Average mood rating for the current calendar week (Mon-Sun)"
     },
     {
       "name": "previousWeekAverage",
       "type": "Double",
-      "description": "Mean mood rating for the previous Monday-through-Sunday week. Used for trend comparison."
+      "description": "Average mood rating for last week, used for week-over-week comparison"
     },
     {
       "name": "weeklyTrend",
       "type": "Double",
-      "description": "Percentage change from previous week average to current week: ((current - previous) / previous) * 100. Positive means improving."
+      "description": "Difference between weeklyAverage and previousWeekAverage, positive means improving"
     },
     {
-      "name": "monthEntries",
-      "type": "[MoodJournalEntry]",
-      "description": "All entries for the currently displayed month in the calendar view, sorted by date ascending."
+      "name": "monthlyMoodMap",
+      "type": "[Date: Double]",
+      "description": "Dictionary mapping each date in current month to its average mood rating for calendar heatmap coloring"
     },
     {
-      "name": "last30DaysEntries",
-      "type": "[MoodJournalEntry]",
-      "description": "Entries from the last 30 calendar days for the trend line chart, sorted chronologically."
+      "name": "emotionCounts",
+      "type": "[Emotion: Int]",
+      "description": "Frequency count of each emotion across all entries in the last 30 days"
     },
     {
-      "name": "moodDistribution",
-      "type": "[(range: String, count: Int, percentage: Double)]",
-      "description": "Categorizes all entries into four buckets: Great (8-10), Good (6-7), Okay (4-5), Low (1-3). Returns label, count, and percentage of total."
+      "name": "topEmotion",
+      "type": "Emotion?",
+      "description": "Most frequently logged emotion in the last 30 days"
     },
     {
-      "name": "topEmotions",
-      "type": "[(emotion: Emotion, count: Int)]",
-      "description": "All logged emotions ranked by frequency descending, limited to top 5 for display."
+      "name": "dailyAverages",
+      "type": "[(date: Date, average: Double)]",
+      "description": "Last 30 days of daily average mood ratings for the trend line chart"
     },
     {
-      "name": "moodFaceSymbol",
+      "name": "bestDayOfWeek",
       "type": "String",
-      "description": "SF Symbol name mapped from current slider value: sparkles (9-10), sun.max.fill (7-8), circle.fill (5-6), cloud.fill (3-4), cloud.rain.fill (1-2)."
-    },
-    {
-      "name": "moodColor",
-      "type": "Color",
-      "description": "Linearly interpolated color from the mood rating: red (1) \u2192 orange (3) \u2192 yellow (5) \u2192 lime (7) \u2192 green (10)."
-    },
-    {
-      "name": "totalEntries",
-      "type": "Int",
-      "description": "Total count of all mood entries ever recorded."
-    },
-    {
-      "name": "averageMoodAllTime",
-      "type": "Double",
-      "description": "All-time mean mood rating across every entry."
-    },
-    {
-      "name": "activityMoodCorrelations",
-      "type": "[(activity: String, averageMood: Double, entryCount: Int)]",
-      "description": "For each unique activity tag, computes the average mood rating on days that activity was logged. Sorted by average mood descending."
+      "description": "Day of the week with the highest average mood rating historically"
     }
   ],
   "domainLogic": {
     "dailyGoal": {
-      "description": "Complete at least one mood check-in per calendar day. Goal is binary \u2014 logged or not.",
+      "description": "Check in at least once per day to maintain streak",
       "defaultValue": "1 check-in per day"
     },
-    "streakDefinition": "A day is 'active' if it contains at least one MoodJournalEntry. The streak counts consecutive calendar days backwards from today. If today has no entry yet, the streak still holds until end of day. Missing a single day resets the streak to 0. Milestones at 7, 14, 30, 60, 90, 180, and 365 days trigger celebration badges.",
-    "trendAnalysis": "Primary metric: 7-day rolling average mood rating compared to the previous 7-day window, expressed as percentage change. Secondary: weekday average (Mon-Fri) vs weekend average (Sat-Sun) to detect work-life mood differential. Tertiary: Pearson correlation coefficient between energy level and mood rating over the last 30 days. Quarterly: month-over-month average mood comparison for long-term trajectory.",
+    "streakDefinition": "A day counts as active if it has at least one mood entry. Streak is consecutive active days ending at today (or yesterday if today has no entry yet).",
+    "trendAnalysis": "7-day rolling average mood compared to previous 7-day period. Show percentage change. Also track energy-mood correlation coefficient over 30 days.",
     "insights": [
-      "Weekly mood trend direction with percentage change and natural language summary (e.g., 'Your mood improved 12% this week')",
-      "Best and worst days of the week by average mood rating across all historical data",
-      "Most frequently logged emotion and whether it has shifted compared to the previous 30 days",
-      "Activity-mood correlations: average mood on days each activity was logged vs days without, highlighting activities with >1.0 point differential",
-      "Energy-mood correlation strength: whether high-energy days consistently produce better mood scores",
-      "Streak milestone celebrations with encouraging messages at 7, 14, 30, 60, 90, 365 day marks",
-      "Month-over-month average mood comparison showing trajectory over the last 3-6 months",
-      "Weekend vs weekday mood gap analysis identifying work-life balance signals"
+      "Week-over-week mood trend with arrow indicator (improving/declining/stable)",
+      "Best and worst day of the week based on historical averages",
+      "Most common emotion with percentage of total check-ins",
+      "Streak milestone celebrations (7 days, 30 days, 100 days)",
+      "Energy-mood correlation: whether high energy days correlate with better mood",
+      "Monthly mood summary comparing this month's average to last month"
     ]
   }
 }

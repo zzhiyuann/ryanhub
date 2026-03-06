@@ -3,11 +3,10 @@ import SwiftUI
 struct HydrationTrackerView: View {
     @Environment(\.colorScheme) private var colorScheme
     @State private var viewModel = HydrationTrackerViewModel()
-    @State private var selectedTab = 0
-    @State private var showAddSheet = false
 
     var body: some View {
-        VStack(spacing: 0) {
+        ScrollView {
+            VStack(spacing: HubLayout.sectionSpacing) {
             // Header
             HStack(spacing: 12) {
                 ZStack {
@@ -26,41 +25,11 @@ struct HydrationTrackerView: View {
             .padding(.horizontal, HubLayout.standardPadding)
             .padding(.bottom, 8)
 
-            // Tab picker
-            Picker("", selection: $selectedTab) {
-                    Text("Home").tag(0)
-                    Text("History").tag(1)
-                    Text("Analytics").tag(2)
+                HydrationTrackerTodayView(viewModel: viewModel)
             }
-            .pickerStyle(.segmented)
-            .padding(.horizontal, HubLayout.standardPadding)
-            .padding(.bottom, HubLayout.itemSpacing)
-
-            // Content
-            ZStack(alignment: .bottomTrailing) {
-                    if selectedTab == 0 {
-                        HydrationTrackerDashboardView(viewModel: viewModel)
-                    }
-                    if selectedTab == 1 {
-                        HydrationTrackerHistoryView(viewModel: viewModel)
-                    }
-                    if selectedTab == 2 {
-                        HydrationTrackerAnalyticsView(viewModel: viewModel)
-                    }
-
-                // FAB
-                QuickEntryFAB {
-                    showAddSheet = true
-                }
-                .padding(HubLayout.standardPadding)
-            }
+            .padding(.bottom, HubLayout.standardPadding)
         }
         .background(AdaptiveColors.background(for: colorScheme))
         .task { await viewModel.loadData() }
-        .sheet(isPresented: $showAddSheet) {
-            HydrationTrackerEntrySheet(viewModel: viewModel) {
-                showAddSheet = false
-            }
-        }
     }
 }

@@ -4,6 +4,7 @@ struct MoodJournalView: View {
     @Environment(\.colorScheme) private var colorScheme
     @State private var viewModel = MoodJournalViewModel()
     @State private var selectedTab = 0
+    @State private var showAddSheet = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -27,7 +28,7 @@ struct MoodJournalView: View {
 
             // Tab picker
             Picker("", selection: $selectedTab) {
-                    Text("Check In").tag(0)
+                    Text("Today").tag(0)
                     Text("Calendar").tag(1)
                     Text("Trends").tag(2)
             }
@@ -38,18 +39,28 @@ struct MoodJournalView: View {
             // Content
             ZStack(alignment: .bottomTrailing) {
                     if selectedTab == 0 {
-                        MoodJournalMoodJournalCheckInView(viewModel: viewModel)
+                        MoodJournalTodayView(viewModel: viewModel)
                     }
                     if selectedTab == 1 {
-                        MoodJournalMoodJournalCalendarView(viewModel: viewModel)
+                        MoodJournalCalendarView(viewModel: viewModel)
                     }
                     if selectedTab == 2 {
-                        MoodJournalMoodJournalTrendsView(viewModel: viewModel)
+                        MoodJournalTrendsView(viewModel: viewModel)
                     }
 
+                // FAB
+                QuickEntryFAB {
+                    showAddSheet = true
+                }
+                .padding(HubLayout.standardPadding)
             }
         }
         .background(AdaptiveColors.background(for: colorScheme))
         .task { await viewModel.loadData() }
+        .sheet(isPresented: $showAddSheet) {
+            MoodJournalCheckInSheet(viewModel: viewModel) {
+                showAddSheet = false
+            }
+        }
     }
 }

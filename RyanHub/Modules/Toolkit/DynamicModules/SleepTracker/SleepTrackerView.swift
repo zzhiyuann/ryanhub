@@ -4,7 +4,6 @@ struct SleepTrackerView: View {
     @Environment(\.colorScheme) private var colorScheme
     @State private var viewModel = SleepTrackerViewModel()
     @State private var selectedTab = 0
-    @State private var showAddSheet = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -14,7 +13,7 @@ struct SleepTrackerView: View {
                     Circle()
                         .fill(Color.hubPrimary.opacity(0.12))
                         .frame(width: 40, height: 40)
-                    Image(systemName: "moon.zzz.fill")
+                    Image(systemName: "moon.stars.fill")
                         .font(.system(size: 18, weight: .medium))
                         .foregroundStyle(Color.hubPrimary)
                 }
@@ -28,9 +27,9 @@ struct SleepTrackerView: View {
 
             // Tab picker
             Picker("", selection: $selectedTab) {
-                    Text("Home").tag(0)
-                    Text("History").tag(1)
-                    Text("Analytics").tag(2)
+                    Text("Log").tag(0)
+                    Text("Week").tag(1)
+                    Text("Trends").tag(2)
             }
             .pickerStyle(.segmented)
             .padding(.horizontal, HubLayout.standardPadding)
@@ -39,28 +38,18 @@ struct SleepTrackerView: View {
             // Content
             ZStack(alignment: .bottomTrailing) {
                     if selectedTab == 0 {
-                        SleepTrackerDashboardView(viewModel: viewModel)
+                        SleepTrackerTonightView(viewModel: viewModel)
                     }
                     if selectedTab == 1 {
-                        SleepTrackerHistoryView(viewModel: viewModel)
+                        SleepTrackerWeekView(viewModel: viewModel)
                     }
                     if selectedTab == 2 {
-                        SleepTrackerAnalyticsView(viewModel: viewModel)
+                        SleepTrackerTrendsView(viewModel: viewModel)
                     }
 
-                // FAB
-                QuickEntryFAB {
-                    showAddSheet = true
-                }
-                .padding(HubLayout.standardPadding)
             }
         }
         .background(AdaptiveColors.background(for: colorScheme))
         .task { await viewModel.loadData() }
-        .sheet(isPresented: $showAddSheet) {
-            SleepTrackerEntrySheet(viewModel: viewModel) {
-                showAddSheet = false
-            }
-        }
     }
 }
