@@ -1029,6 +1029,9 @@ struct TimelineEventRow: View {
         case .visit: return "building.2.fill"
         case .audio: return "waveform"
         case .photo:
+            if sensingMediaType == "video" {
+                return "video.fill"
+            }
             if let source = sensingSource, source.hasPrefix("rb_meta") {
                 return "eyeglasses"
             }
@@ -1083,11 +1086,11 @@ struct TimelineEventRow: View {
         case .visit: return "Visit"
         case .audio: return "Audio"
         case .photo:
+            let isVideo = sensingMediaType == "video"
             if let source = sensingSource, source.hasPrefix("rb_meta") {
-                let isVideo = sensingMediaType == "video"
                 return isVideo ? "RB Meta Video" : "RB Meta Photo"
             }
-            return "Photo"
+            return isVideo ? "Video" : "Photo"
         }
     }
 
@@ -1260,14 +1263,13 @@ struct TimelineEventRow: View {
                 return "Audio Segment"
             }
         case .photo:
-            if let source = event.payload["source"], source.hasPrefix("rb_meta") {
-                let isVideo = event.payload["mediaType"] == "video"
-                if isVideo, let dur = event.payload["duration"] {
-                    return "Video (\(dur)s)"
-                }
-                return isVideo ? "Video Capture" : "Photo Capture"
+            let isVideo = event.payload["mediaType"] == "video"
+            let isRBMeta = event.payload["source"]?.hasPrefix("rb_meta") == true
+            if isVideo {
+                let durStr = event.payload["duration"].map { " (\($0)s)" } ?? ""
+                return isRBMeta ? "RB Meta Video\(durStr)" : "Video\(durStr)"
             }
-            return "Photo"
+            return isRBMeta ? "RB Meta Photo" : "Photo"
         }
     }
 
