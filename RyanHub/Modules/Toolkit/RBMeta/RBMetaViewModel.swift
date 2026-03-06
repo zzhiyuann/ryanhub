@@ -65,6 +65,7 @@ final class RBMetaViewModel {
     private var errorListenerToken: AnyListenerToken?
     private var deviceMonitorTask: Task<Void, Never>?
     private var registrationTask: Task<Void, Never>?
+    private var autoImportTask: Task<Void, Never>?
 
     // iPhone camera
     private var cameraManager: RBMetaCameraManager?
@@ -74,6 +75,9 @@ final class RBMetaViewModel {
     private var photoDataListenerToken: AnyListenerToken?
     /// Interval between automatic snapshots saved to BOBO timeline (seconds).
     private static let snapshotInterval: TimeInterval = 30
+    /// While glasses are connected, periodically scan Photo Library for newly
+    /// synced RB Meta media and ingest into BOBO without manual import actions.
+    private static let autoImportInterval: TimeInterval = 20
 
     // MARK: - Lifecycle
 
@@ -87,8 +91,16 @@ final class RBMetaViewModel {
         rebuildStreamSession()
 
         deviceMonitorTask = Task { @MainActor in
+            var wasActive = false
             for await device in selector.activeDeviceStream() {
-                self.hasActiveDevice = device != nil
+                let isActive = device != nil
+                self.hasActiveDevice = isActive
+                if isActive && !wasActive {
+                    self.startAutoImportLoop()
+                } else if !isActive && wasActive {
+                    self.stopAutoImportLoop()
+                }
+                wasActive = isActive
             }
         }
 
@@ -379,6 +391,7 @@ final class RBMetaViewModel {
     func stopAll() async {
         stopGeminiSession()
         await stopStreaming()
+        stopAutoImportLoop()
     }
 
     // MARK: - Private
@@ -389,6 +402,27 @@ final class RBMetaViewModel {
         guard now.timeIntervalSince(lastVideoFrameTime) >= RBMetaConfig.videoFrameInterval else { return }
         lastVideoFrameTime = now
         geminiService.sendVideoFrame(image: image)
+    }
+
+    /// Starts a connection-scoped auto-import loop:
+    /// when glasses are connected, keep pulling newly synced RB Meta media
+    /// into BOBO so users do not need manual Meta AI import steps.
+    private func startAutoImportLoop() {
+        stopAutoImportLoop()
+        RBMetaMediaImporter.shared.importNewMedia()
+        autoImportTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            while !Task.isCancelled && self.hasActiveDevice {
+                try? await Task.sleep(nanoseconds: UInt64(Self.autoImportInterval * 1_000_000_000))
+                guard !Task.isCancelled, self.hasActiveDevice else { break }
+                RBMetaMediaImporter.shared.importNewMedia()
+            }
+        }
+    }
+
+    private func stopAutoImportLoop() {
+        autoImportTask?.cancel()
+        autoImportTask = nil
     }
 
     private func attachDATListeners() {

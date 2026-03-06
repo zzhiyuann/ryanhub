@@ -82,8 +82,10 @@ final class PhotoLibrarySensor: NSObject {
 
     // MARK: - Fetch & Process
 
-    /// Asset IDs already processed — shared with RBMetaMediaImporter to avoid duplicates.
-    private static let processedIDsKey = "rbmeta_imported_asset_ids"
+    /// Asset IDs already processed by PhotoLibrarySensor.
+    /// Kept separate from RBMeta importer so importer can still reclassify
+    /// previously ingested "camera" media as rb_meta when better evidence appears.
+    private static let processedIDsKey = "bobo_photo_sensor_processed_asset_ids"
 
     private var processedAssetIDs: Set<String> {
         get { Set(UserDefaults.standard.stringArray(forKey: Self.processedIDsKey) ?? []) }
@@ -184,6 +186,8 @@ final class PhotoLibrarySensor: NSObject {
                     timestamp: asset.creationDate ?? Date()
                 )
                 event.payload["source"] = source
+                event.payload["mediaType"] = "photo"
+                event.payload["assetId"] = asset.localIdentifier
                 self.onEvent?(event)
             }
 

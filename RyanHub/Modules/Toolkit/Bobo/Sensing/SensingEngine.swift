@@ -431,6 +431,20 @@ final class SensingEngine {
         }
     }
 
+    /// Reclassify a previously ingested media event by asset identifier.
+    /// Used when RBMeta importer obtains stronger attribution than initial
+    /// PhotoLibrarySensor classification.
+    @discardableResult
+    func reclassifyMediaEvent(assetId: String, merge payload: [String: String]) -> Bool {
+        guard let updatedID = dataStore.updateLatestEventPayload(assetId: assetId, merge: payload) else {
+            return false
+        }
+        if let index = recentEvents.firstIndex(where: { $0.id == updatedID }) {
+            recentEvents[index].payload.merge(payload) { _, new in new }
+        }
+        return true
+    }
+
     // MARK: - Sync
 
     /// Sync all pending events to the bridge server.

@@ -36,12 +36,12 @@ final class RBMetaMediaImporter {
     /// Set of event IDs already imported (persisted).
     private var importedAssetIDs: Set<String> {
         get {
-            Set(UserDefaults.standard.stringArray(forKey: "rbmeta_imported_asset_ids") ?? [])
+            Set(UserDefaults.standard.stringArray(forKey: "rbmeta_imported_asset_ids_v2") ?? [])
         }
         set {
             // Keep only recent entries to avoid unbounded growth
             let trimmed = Array(newValue.suffix(500))
-            UserDefaults.standard.set(trimmed, forKey: "rbmeta_imported_asset_ids")
+            UserDefaults.standard.set(trimmed, forKey: "rbmeta_imported_asset_ids_v2")
         }
     }
 
@@ -129,6 +129,22 @@ final class RBMetaMediaImporter {
     }
 
     private func importAsset(_ asset: PHAsset, mediaType: String) {
+        let durationStr = mediaType == "video" ? String(format: "%.0f", asset.duration) : nil
+        var reclassifyPayload: [String: String] = [
+            "source": "rb_meta",
+            "mediaType": mediaType,
+            "assetId": asset.localIdentifier
+        ]
+        if let durationStr {
+            reclassifyPayload["duration"] = durationStr
+        }
+
+        // If an event for this asset already exists (often first classified as "camera"),
+        // upgrade it in place instead of creating a duplicate timeline row.
+        if SensingEngine.shared.reclassifyMediaEvent(assetId: asset.localIdentifier, merge: reclassifyPayload) {
+            return
+        }
+
         let event = SensingEvent(
             timestamp: asset.creationDate ?? Date(),
             modality: .photo,
@@ -163,7 +179,7 @@ final class RBMetaMediaImporter {
             mutableEvent.payload["mediaType"] = mediaType
             mutableEvent.payload["assetId"] = asset.localIdentifier
             if mediaType == "video" {
-                mutableEvent.payload["duration"] = String(format: "%.0f", asset.duration)
+                mutableEvent.payload["duration"] = durationStr
             }
 
             Task { @MainActor in

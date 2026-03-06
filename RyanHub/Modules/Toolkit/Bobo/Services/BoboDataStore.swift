@@ -105,6 +105,24 @@ final class BoboDataStore {
         }
     }
 
+    /// Update the newest event matching a media assetId.
+    /// Returns updated event ID if found.
+    @discardableResult
+    func updateLatestEventPayload(assetId: String, merge newPayload: [String: String]) -> UUID? {
+        guard !assetId.isEmpty else { return nil }
+        for index in events.indices.reversed() {
+            if events[index].payload["assetId"] == assetId {
+                for (key, value) in newPayload {
+                    events[index].payload[key] = value
+                }
+                let id = events[index].id
+                persistToDisk()
+                return id
+            }
+        }
+        return nil
+    }
+
     /// Return all events for a given date (full 24-hour day).
     func events(for date: Date) -> [SensingEvent] {
         let calendar = Calendar.current
