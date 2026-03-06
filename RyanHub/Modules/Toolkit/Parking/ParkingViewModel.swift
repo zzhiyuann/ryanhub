@@ -68,7 +68,7 @@ final class ParkingViewModel {
     }
 
     /// Estimated "until" time for today's active parking.
-    /// Parses cron status timestamp + duration to compute end time.
+    /// Uses maxMinutes (preferred) or parses duration string to compute end time.
     var parkingUntilTime: String {
         guard let cron = lastCronStatus, cron.isToday,
               (cron.status == "purchased" || cron.status == "already_active") else {
@@ -77,36 +77,13 @@ final class ParkingViewModel {
         if cron.status == "already_active" {
             return "Manually purchased — duration unknown"
         }
-        guard let duration = cron.duration else {
+        guard let totalMinutes = cron.maxMinutes ?? Self.parseDurationMinutes(cron.duration) else {
             return "Until --:--"
         }
-        // Parse duration like "5 Hours, 27 Minutes"
-        var hours = 0
-        var minutes = 0
-        let parts = duration.lowercased().components(separatedBy: ",")
-        for part in parts {
-            let trimmed = part.trimmingCharacters(in: .whitespaces)
-            if trimmed.contains("hour") {
-                hours = Int(trimmed.components(separatedBy: " ").first ?? "") ?? 0
-            } else if trimmed.contains("minute") {
-                minutes = Int(trimmed.components(separatedBy: " ").first ?? "") ?? 0
-            }
+        guard let purchaseTime = Self.parseTimestamp(cron.timestamp) else {
+            return "Until --:--"
         }
-        // Parse purchase timestamp
-        let isoFormatter = ISO8601DateFormatter()
-        isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        guard let purchaseTime = isoFormatter.date(from: cron.timestamp) else {
-            // Try without fractional seconds
-            isoFormatter.formatOptions = [.withInternetDateTime]
-            guard let pt = isoFormatter.date(from: cron.timestamp) else {
-                return "Until --:--"
-            }
-            let endTime = pt.addingTimeInterval(TimeInterval(hours * 3600 + minutes * 60))
-            let tf = DateFormatter()
-            tf.dateFormat = "h:mm a"
-            return "Until \(tf.string(from: endTime))"
-        }
-        let endTime = purchaseTime.addingTimeInterval(TimeInterval(hours * 3600 + minutes * 60))
+        let endTime = purchaseTime.addingTimeInterval(TimeInterval(totalMinutes * 60))
         let tf = DateFormatter()
         tf.dateFormat = "h:mm a"
         return "Until \(tf.string(from: endTime))"
@@ -116,29 +93,11 @@ final class ParkingViewModel {
     var parkingTimeRemaining: (fraction: Double, label: String) {
         guard let cron = lastCronStatus, cron.isToday,
               (cron.status == "purchased" || cron.status == "already_active"),
-              let duration = cron.duration else {
+              let totalMinutes = cron.maxMinutes ?? Self.parseDurationMinutes(cron.duration) else {
             return (0, "--:--")
         }
-        var hours = 0
-        var minutes = 0
-        let parts = duration.lowercased().components(separatedBy: ",")
-        for part in parts {
-            let trimmed = part.trimmingCharacters(in: .whitespaces)
-            if trimmed.contains("hour") {
-                hours = Int(trimmed.components(separatedBy: " ").first ?? "") ?? 0
-            } else if trimmed.contains("minute") {
-                minutes = Int(trimmed.components(separatedBy: " ").first ?? "") ?? 0
-            }
-        }
-        let totalSeconds = Double(hours * 3600 + minutes * 60)
-        let isoFormatter = ISO8601DateFormatter()
-        isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        var purchaseTime = isoFormatter.date(from: cron.timestamp)
-        if purchaseTime == nil {
-            isoFormatter.formatOptions = [.withInternetDateTime]
-            purchaseTime = isoFormatter.date(from: cron.timestamp)
-        }
-        guard let start = purchaseTime else { return (0, "--:--") }
+        let totalSeconds = Double(totalMinutes * 60)
+        guard let start = Self.parseTimestamp(cron.timestamp) else { return (0, "--:--") }
         let elapsed = Date().timeIntervalSince(start)
         let remaining = max(0, totalSeconds - elapsed)
         let fraction = totalSeconds > 0 ? remaining / totalSeconds : 0
@@ -362,6 +321,56 @@ final class ParkingViewModel {
                 // Silent fail — data will reload on next open
             }
         }
+    }
+
+    // MARK: - Duration/Timestamp Helpers
+
+    /// Parse a duration string into total minutes.
+    /// Handles both formats: "5 Hours, 27 Minutes" (legacy) and "5h 27m" (new API).
+    static func parseDurationMinutes(_ duration: String?) -> Int? {
+        guard let duration, !duration.isEmpty else { return nil }
+        var hours = 0
+        var minutes = 0
+        let lower = duration.lowercased()
+
+        if lower.contains("hour") || lower.contains("minute") {
+            // Legacy format: "5 Hours, 27 Minutes"
+            let parts = lower.components(separatedBy: ",")
+            for part in parts {
+                let trimmed = part.trimmingCharacters(in: .whitespaces)
+                if trimmed.contains("hour") {
+                    hours = Int(trimmed.components(separatedBy: " ").first ?? "") ?? 0
+                } else if trimmed.contains("minute") {
+                    minutes = Int(trimmed.components(separatedBy: " ").first ?? "") ?? 0
+                }
+            }
+        } else if lower.contains("h") || lower.contains("m") {
+            // New format: "2h", "2h 3m", "45m"
+            let scanner = Scanner(string: lower)
+            while !scanner.isAtEnd {
+                if let num = scanner.scanInt() {
+                    if scanner.scanString("h") != nil {
+                        hours = num
+                    } else if scanner.scanString("m") != nil {
+                        minutes = num
+                    }
+                } else {
+                    _ = scanner.scanCharacter()
+                }
+            }
+        }
+
+        let total = hours * 60 + minutes
+        return total > 0 ? total : nil
+    }
+
+    /// Parse an ISO 8601 timestamp string into a Date.
+    static func parseTimestamp(_ timestamp: String) -> Date? {
+        let isoFormatter = ISO8601DateFormatter()
+        isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = isoFormatter.date(from: timestamp) { return date }
+        isoFormatter.formatOptions = [.withInternetDateTime]
+        return isoFormatter.date(from: timestamp)
     }
 
     // MARK: - Private

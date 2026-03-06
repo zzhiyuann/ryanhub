@@ -87,6 +87,7 @@ struct CronPurchaseStatus: Codable {
     let status: String  // "purchased", "already_active", "skipped", "price_too_high", "error", "login_failed"
     let price: Double?
     let duration: String?
+    let maxMinutes: Int?
     let zone: String?
     let vehicle: String?
     let reason: String?
