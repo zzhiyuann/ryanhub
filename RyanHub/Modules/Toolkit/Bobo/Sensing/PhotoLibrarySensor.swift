@@ -207,16 +207,10 @@ final class PhotoLibrarySensor: NSObject {
             let source = Self.classifySource(asset)
             Self.logAssetDetails(asset, mediaType: "video", classified: source)
 
-            // Only import RB Meta videos — skip iPhone camera recordings
-            guard source == "rb_meta" else {
-                updateHighWaterMark(asset)
-                continue
-            }
-
             // Mark as processed
             processedAssetIDs.insert(assetID)
 
-            // Get video thumbnail
+            // Get video thumbnail (same flow as photos — all videos go to timeline)
             imageManager.requestImage(
                 for: asset,
                 targetSize: thumbnailSize,
