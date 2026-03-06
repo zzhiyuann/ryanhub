@@ -106,6 +106,18 @@ final class PhotoLibrarySensor: NSObject {
         result.enumerateObjects { [weak self] asset, _, _ in
             guard let self else { return }
 
+            // Skip screenshots — they clutter the timeline
+            if asset.mediaSubtypes.contains(.photoScreenshot) {
+                self.updateHighWaterMark(asset)
+                return
+            }
+
+            // Skip RB Meta photos — handled by RBMetaMediaImporter
+            if RBMetaMediaImporter.isRBMetaAsset(asset) {
+                self.updateHighWaterMark(asset)
+                return
+            }
+
             imageManager.requestImage(
                 for: asset,
                 targetSize: thumbnailSize,
@@ -132,15 +144,18 @@ final class PhotoLibrarySensor: NSObject {
 
                 var mutableEvent = event
                 mutableEvent.payload["imageFileId"] = event.id.uuidString
-                mutableEvent.payload["source"] = "camera_roll"
+                mutableEvent.payload["source"] = "camera"
 
                 self.onEvent?(mutableEvent)
             }
 
-            // Update the high-water mark
-            if let date = asset.creationDate, date > (self.lastKnownPhotoDate ?? .distantPast) {
-                self.lastKnownPhotoDate = date
-            }
+            self.updateHighWaterMark(asset)
+        }
+    }
+
+    private func updateHighWaterMark(_ asset: PHAsset) {
+        if let date = asset.creationDate, date > (lastKnownPhotoDate ?? .distantPast) {
+            lastKnownPhotoDate = date
         }
     }
 }
