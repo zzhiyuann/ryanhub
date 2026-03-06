@@ -124,19 +124,28 @@ final class ChatViewModel {
         messages = ChatMessage.loadSaved()
         setupWebSocketCallbacks()
         setupBoNudgeObserver()
-        // Sync from bridge server (source of truth for cross-device sync)
+        // Sync from bridge server — merge missing messages without overwriting local state.
+        // Local messages are the source of truth; server adds cross-device messages only.
         Task { @MainActor [weak self] in
-            if let serverMessages = await ChatMessage.loadFromServer(), !serverMessages.isEmpty {
-                // Restore image data from disk for messages that have it
-                let restored = serverMessages.map { msg -> ChatMessage in
-                    var m = msg
-                    if m.hasImageOnDisk && m.imageBase64 == nil,
-                       let imageData = ChatMessage.loadImageFromDisk(messageId: m.id) {
-                        m.imageBase64 = imageData.base64EncodedString()
-                    }
-                    return m
+            guard let self else { return }
+            guard let serverMessages = await ChatMessage.loadFromServer(), !serverMessages.isEmpty else { return }
+
+            let localIds = Set(self.messages.map { $0.id })
+            let newFromServer = serverMessages.compactMap { msg -> ChatMessage? in
+                guard !localIds.contains(msg.id) else { return nil }
+                var m = msg
+                if m.hasImageOnDisk && m.imageBase64 == nil,
+                   let imageData = ChatMessage.loadImageFromDisk(messageId: m.id) {
+                    m.imageBase64 = imageData.base64EncodedString()
                 }
-                self?.messages = restored
+                return m
+            }
+
+            if !newFromServer.isEmpty {
+                self.messages.append(contentsOf: newFromServer)
+                self.messages.sort { $0.timestamp < $1.timestamp }
+                self.messageUpdateTrigger += 1
+                self.saveMessages()
             }
         }
     }

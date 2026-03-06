@@ -313,6 +313,7 @@
 		F44DF37E2E4D1C5BD5A73F73 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 335BA591A35FB41B6FD8EEC1 /* Localizable.strings */; };
 		F69C522701B2FFBE3A78C36A /* SectionHeader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9AE49953418A97242254CFD7 /* SectionHeader.swift */; };
 		F6B1EFA0D926B1805762F63C /* SleepTrackerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2D2F296C32C06D3413FAF76 /* SleepTrackerView.swift */; };
+		F8BC18C88ABAD43A0AC4E046 /* ChatMessageDedupeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01F84B40CC9017FE8F4E3CF5 /* ChatMessageDedupeTests.swift */; };
 		F8D8E97DE66120A10A1D9EE1 /* QueueManagerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF2B5DB752ACC5184B6FC043 /* QueueManagerView.swift */; };
 		F95BBF3494ADD11D3A7349CA /* SleepTrackerDataProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A95F37A517595C5CE6A5C246 /* SleepTrackerDataProvider.swift */; };
 		FA015F7393BFFBC8248F0063 /* FocusSessionViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75F056B1F39C388632A5ADDD /* FocusSessionViewModel.swift */; };
@@ -334,12 +335,20 @@
 			remoteGlobalIDString = 831AF517FB59A793FDC8C642;
 			remoteInfo = RyanHub;
 		};
+		CAC72BACD4C095EDB916B91D /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 752FE972FFC3AE333778E61F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 831AF517FB59A793FDC8C642;
+			remoteInfo = RyanHub;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
 		00F3D3CEB5C885DB56303AC2 /* CommuteTrackerHistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommuteTrackerHistoryView.swift; sourceTree = "<group>"; };
 		015FC29C471BB9F1ADDE4B45 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		018157EAD67FF3B71D0E78F5 /* PeopleJournalRegistration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeopleJournalRegistration.swift; sourceTree = "<group>"; };
+		01F84B40CC9017FE8F4E3CF5 /* ChatMessageDedupeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatMessageDedupeTests.swift; sourceTree = "<group>"; };
 		0229B085879D5A9966397DC4 /* PlantCareTrackerAnalyticsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlantCareTrackerAnalyticsView.swift; sourceTree = "<group>"; };
 		026DF5BE84A6E963CAEDFCFE /* FluentVocabularyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FluentVocabularyView.swift; sourceTree = "<group>"; };
 		02B32135574348B061C1369B /* CaffeineTrackerDataProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaffeineTrackerDataProvider.swift; sourceTree = "<group>"; };
@@ -446,6 +455,7 @@
 		5E978BD1BB5EA355B1D42A9A /* BatterySensor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatterySensor.swift; sourceTree = "<group>"; };
 		5F733B3A7BD2685EB41347E5 /* CrossModuleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CrossModuleTests.swift; sourceTree = "<group>"; };
 		5FC6F16E27429DFEA760C170 /* RyanHub.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = RyanHub.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		60DD977F52D12CCFD95F32A2 /* RyanHubTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = RyanHubTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		626C493A05270563EED2FD02 /* WiFiSensor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WiFiSensor.swift; sourceTree = "<group>"; };
 		633D50118AB44DC90EAA9CC2 /* SubscriptionTrackerModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubscriptionTrackerModels.swift; sourceTree = "<group>"; };
 		645114CF479B9006F7C2B90F /* TerminalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalView.swift; sourceTree = "<group>"; };
@@ -796,6 +806,7 @@
 			isa = PBXGroup;
 			children = (
 				5FC6F16E27429DFEA760C170 /* RyanHub.app */,
+				60DD977F52D12CCFD95F32A2 /* RyanHubTests.xctest */,
 				544DEFE89CD15A88D94AFAA8 /* RyanHubUITests.xctest */,
 				F9BA57189042FC27A8A1719A /* RyanHubWatch.app */,
 			);
@@ -849,6 +860,14 @@
 				E8910F5210CD277F57B58223 /* AppState.swift */,
 			);
 			path = Models;
+			sourceTree = "<group>";
+		};
+		4F2C695B2B19EEEF02D0240A /* RyanHubTests */ = {
+			isa = PBXGroup;
+			children = (
+				01F84B40CC9017FE8F4E3CF5 /* ChatMessageDedupeTests.swift */,
+			);
+			path = RyanHubTests;
 			sourceTree = "<group>";
 		};
 		4F98B8A543EFCC31A37902A3 /* Design */ = {
@@ -1262,6 +1281,7 @@
 			isa = PBXGroup;
 			children = (
 				E5E55C5892869A09E22D4DF6 /* RyanHub */,
+				4F2C695B2B19EEEF02D0240A /* RyanHubTests */,
 				7C593548F04C05E94E2AFA83 /* RyanHubUITests */,
 				FE7973D956540E47780D606D /* RyanHubWatch */,
 				7FD0F1F2B627851F674E44BB /* Frameworks */,
@@ -1499,6 +1519,24 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		033696E4726F39A0ADC91AD7 /* RyanHubTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 3AAFCD7AAE7811EA02FF82B6 /* Build configuration list for PBXNativeTarget "RyanHubTests" */;
+			buildPhases = (
+				6336CE5C824E805B706978D7 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				B1378D197DF884F0BCDB9CAA /* PBXTargetDependency */,
+			);
+			name = RyanHubTests;
+			packageProductDependencies = (
+			);
+			productName = RyanHubTests;
+			productReference = 60DD977F52D12CCFD95F32A2 /* RyanHubTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 		0748FE5F92B753BBF4FDC75A /* RyanHubUITests */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 697E58760067BA490B9C66DB /* Build configuration list for PBXNativeTarget "RyanHubUITests" */;
@@ -1568,6 +1606,10 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1600;
 				TargetAttributes = {
+					033696E4726F39A0ADC91AD7 = {
+						DevelopmentTeam = WRR5PDXKX3;
+						ProvisioningStyle = Automatic;
+					};
 					0748FE5F92B753BBF4FDC75A = {
 						DevelopmentTeam = WRR5PDXKX3;
 						ProvisioningStyle = Automatic;
@@ -1604,6 +1646,7 @@
 			projectRoot = "";
 			targets = (
 				831AF517FB59A793FDC8C642 /* RyanHub */,
+				033696E4726F39A0ADC91AD7 /* RyanHubTests */,
 				0748FE5F92B753BBF4FDC75A /* RyanHubUITests */,
 				E56D03F648E99D985E6C2A31 /* RyanHubWatch */,
 			);
@@ -1928,6 +1971,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		6336CE5C824E805B706978D7 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F8BC18C88ABAD43A0AC4E046 /* ChatMessageDedupeTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		DAACC265523E346C2B8D258C /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -1965,6 +2016,11 @@
 			isa = PBXTargetDependency;
 			target = 831AF517FB59A793FDC8C642 /* RyanHub */;
 			targetProxy = BD17C18DB3D8A71DF084BF6A /* PBXContainerItemProxy */;
+		};
+		B1378D197DF884F0BCDB9CAA /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 831AF517FB59A793FDC8C642 /* RyanHub */;
+			targetProxy = CAC72BACD4C095EDB916B91D /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -2086,6 +2142,44 @@
 				SKIP_INSTALL = YES;
 				TARGETED_DEVICE_FAMILY = 4;
 				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Release;
+		};
+		6A4C62E6EE03763C1EAB7AEF /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
+				CODE_SIGN_IDENTITY = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.zwang.ryanhub.RyanHubTests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/RyanHub.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/RyanHub";
+			};
+			name = Debug;
+		};
+		83B513FA3AD305B6D77BC83A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
+				CODE_SIGN_IDENTITY = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.zwang.ryanhub.RyanHubTests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/RyanHub.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/RyanHub";
 			};
 			name = Release;
 		};
@@ -2218,6 +2312,15 @@
 			buildConfigurations = (
 				8E124CC9AA8600772660D168 /* Debug */,
 				A135882304116BB241846D2F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		3AAFCD7AAE7811EA02FF82B6 /* Build configuration list for PBXNativeTarget "RyanHubTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				6A4C62E6EE03763C1EAB7AEF /* Debug */,
+				83B513FA3AD305B6D77BC83A /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

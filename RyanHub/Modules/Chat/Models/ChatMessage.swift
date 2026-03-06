@@ -208,8 +208,9 @@ extension ChatMessage {
             var resolved = msg
             if seenIds.contains(msg.id) {
                 let newId = "resp-\(msg.id)"
+                let finalId = seenIds.contains(newId) ? UUID().uuidString : newId
                 resolved = ChatMessage(
-                    id: seenIds.contains(newId) ? UUID().uuidString : newId,
+                    id: finalId,
                     content: msg.content,
                     role: msg.role,
                     timestamp: msg.timestamp,
@@ -219,6 +220,7 @@ extension ChatMessage {
                     voiceDuration: msg.voiceDuration,
                     hasImageOnDisk: msg.hasImageOnDisk
                 )
+                seenIds.insert(finalId)
             } else {
                 seenIds.insert(msg.id)
             }
