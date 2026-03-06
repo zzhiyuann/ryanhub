@@ -1429,6 +1429,7 @@ final class BoboViewModel {
             // Insert new nudges
             for nudgeData in result.nudges {
                 let nudge = Nudge(
+                    id: nudgeData.id.flatMap { UUID(uuidString: $0) } ?? UUID(),
                     content: nudgeData.content,
                     trigger: nudgeData.trigger ?? "sensing_analysis",
                     type: NudgeType(rawValue: nudgeData.type) ?? .insight,
@@ -2348,6 +2349,7 @@ private struct NudgeAnalysisResponse: Decodable {
 
 /// Individual nudge data from the server analysis response.
 private struct NudgeData: Decodable {
+    let id: String?
     let content: String
     let type: String
     let trigger: String?
