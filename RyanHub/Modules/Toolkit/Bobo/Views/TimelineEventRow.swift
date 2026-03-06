@@ -1012,6 +1012,30 @@ struct TimelineEventRow: View {
         return nil
     }
 
+    /// Whether this timeline media item is likely captured by Ray-Ban Meta.
+    /// Falls back to asset lookup for legacy events whose payload source was
+    /// previously classified as "camera".
+    private var isRBMetaSensingMedia: Bool {
+        guard case .sensing(let event) = item, event.modality == .photo else {
+            return false
+        }
+        return isRBMetaMediaEvent(event)
+    }
+
+    private func isRBMetaMediaEvent(_ event: SensingEvent) -> Bool {
+        if event.payload["source"]?.hasPrefix("rb_meta") == true {
+            return true
+        }
+        guard let assetId = event.payload["assetId"], !assetId.isEmpty else {
+            return false
+        }
+        let fetch = PHAsset.fetchAssets(withLocalIdentifiers: [assetId], options: nil)
+        guard let asset = fetch.firstObject else {
+            return false
+        }
+        return RBMetaMediaImporter.isRBMetaAsset(asset)
+    }
+
     private func modalityIcon(_ modality: SensingModality) -> String {
         switch modality {
         case .motion: return "figure.walk"
@@ -1037,7 +1061,7 @@ struct TimelineEventRow: View {
             if sensingMediaType == "video" {
                 return "video.fill"
             }
-            if let source = sensingSource, source.hasPrefix("rb_meta") {
+            if isRBMetaSensingMedia {
                 return "eyeglasses"
             }
             return "camera.fill"
@@ -1092,7 +1116,7 @@ struct TimelineEventRow: View {
         case .audio: return "Audio"
         case .photo:
             let isVideo = sensingMediaType == "video"
-            if let source = sensingSource, source.hasPrefix("rb_meta") {
+            if isRBMetaSensingMedia {
                 return isVideo ? "RB Meta Video" : "RB Meta Photo"
             }
             return isVideo ? "Video" : "Photo"
@@ -1269,7 +1293,7 @@ struct TimelineEventRow: View {
             }
         case .photo:
             let isVideo = event.payload["mediaType"] == "video"
-            let isRBMeta = event.payload["source"]?.hasPrefix("rb_meta") == true
+            let isRBMeta = isRBMetaMediaEvent(event)
             if isVideo {
                 let durStr = event.payload["duration"].map { " (\($0)s)" } ?? ""
                 return isRBMeta ? "RB Meta Video\(durStr)" : "Video\(durStr)"

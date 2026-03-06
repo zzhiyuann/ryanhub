@@ -1,6 +1,7 @@
 import Foundation
 import AVFoundation
 import HealthKit
+import Photos
 import UIKit
 import UserNotifications
 
@@ -2027,6 +2028,14 @@ final class BoboViewModel {
     private func timelineItemDisplay(_ item: TimelineItem) -> (type: String, detail: String) {
         switch item {
         case .sensing(let event):
+            if event.modality == .photo {
+                let isVideo = event.payload["mediaType"] == "video"
+                let isRBMeta = isRBMetaMediaEvent(event)
+                let type = isRBMeta
+                    ? (isVideo ? "RB Meta Video" : "RB Meta Photo")
+                    : (isVideo ? "Video" : "Photo")
+                return (type, sensingEventSummary(event))
+            }
             return (modalityDisplayName(event.modality), sensingEventSummary(event))
         case .narration(let narration):
             let type = narration.duration > 0 ? "Voice Narration" : "Text Narration"
@@ -2218,8 +2227,28 @@ final class BoboViewModel {
             default: return "Audio Segment"
             }
         case .photo:
-            return "Photo"
+            let isVideo = event.payload["mediaType"] == "video"
+            let isRBMeta = isRBMetaMediaEvent(event)
+            if isVideo {
+                let durStr = event.payload["duration"].map { " (\($0)s)" } ?? ""
+                return isRBMeta ? "RB Meta Video\(durStr)" : "Video\(durStr)"
+            }
+            return isRBMeta ? "RB Meta Photo" : "Photo"
         }
+    }
+
+    private func isRBMetaMediaEvent(_ event: SensingEvent) -> Bool {
+        if event.payload["source"]?.hasPrefix("rb_meta") == true {
+            return true
+        }
+        guard let assetId = event.payload["assetId"], !assetId.isEmpty else {
+            return false
+        }
+        let fetch = PHAsset.fetchAssets(withLocalIdentifiers: [assetId], options: nil)
+        guard let asset = fetch.firstObject else {
+            return false
+        }
+        return RBMetaMediaImporter.isRBMetaAsset(asset)
     }
 
     private func formatDuration(_ seconds: TimeInterval) -> String {
