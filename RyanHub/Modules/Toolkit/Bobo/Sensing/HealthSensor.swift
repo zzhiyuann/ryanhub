@@ -794,7 +794,6 @@ final class HealthSensor {
     }
 
     /// Fetch blood oxygen (SpO2) since last fetch (gap-aware).
-    /// Sorted newest-first, limit 1 to avoid duplicate entries per measurement.
     private func fetchBloodOxygen() {
         guard let type = HKQuantityType.quantityType(forIdentifier: .oxygenSaturation) else { return }
         let start = fetchStart(for: FetchKey.bloodOxygen)
@@ -805,11 +804,11 @@ final class HealthSensor {
         let query = HKSampleQuery(
             sampleType: type,
             predicate: predicate,
-            limit: 1,
+            limit: HKObjectQueryNoLimit,
             sortDescriptors: [sortDescriptor]
         ) { [weak self] _, samples, error in
             guard let self, let samples = samples as? [HKQuantitySample], error == nil else { return }
-            if let sample = samples.first {
+            for sample in samples {
                 let percentage = sample.quantity.doubleValue(for: HKUnit.percent()) * 100
                 let event = SensingEvent(
                     timestamp: sample.startDate,
