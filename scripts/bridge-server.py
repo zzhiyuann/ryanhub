@@ -3334,7 +3334,31 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
         )
 
 
+def _prune_old_sensing_data(days_to_keep=7):
+    """Remove sensing events older than N days to prevent unbounded growth."""
+    filepath = DATA_FILES.get("/popo/sensing")
+    if not filepath or not os.path.exists(filepath):
+        return
+    try:
+        with open(filepath, "r") as f:
+            data = json.loads(f.read() or "[]")
+        if not isinstance(data, list):
+            return
+        cutoff = datetime.now(_get_local_timezone()) - timedelta(days=days_to_keep)
+        before = len(data)
+        data = [e for e in data if isinstance(e, dict) and _record_timestamp_at_or_after(e, cutoff)]
+        if len(data) < before:
+            with open(filepath, "w") as f:
+                json.dump(data, f, ensure_ascii=False)
+            print(f"[Prune] Removed {before - len(data)} old sensing events (kept {len(data)} from last {days_to_keep} days)")
+    except Exception as e:
+        print(f"[Prune] Failed: {e}", file=sys.stderr)
+
+
 def main():
+    # Prune old sensing data on startup
+    _prune_old_sensing_data(days_to_keep=7)
+
     if not os.path.isfile(CLAUDE_PATH):
         print(f"Warning: claude CLI not found at {CLAUDE_PATH}", file=sys.stderr)
         print("Analysis endpoints will fail, but data endpoints will work.", file=sys.stderr)
