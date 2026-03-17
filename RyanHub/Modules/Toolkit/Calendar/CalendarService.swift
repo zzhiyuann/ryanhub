@@ -9,7 +9,7 @@ final class CalendarService {
 
     var bridgeBaseURL: String
 
-    nonisolated init(bridgeBaseURL: String = "http://localhost:18791") {
+    nonisolated init(bridgeBaseURL: String = "http://localhost:18793") {
         self.bridgeBaseURL = bridgeBaseURL
     }
 

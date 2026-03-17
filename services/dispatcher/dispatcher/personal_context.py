@@ -181,12 +181,12 @@ def _parking_context() -> str:
 def _calendar_context() -> str:
     return """[Calendar Data]
 READ — Get today's and upcoming events:
-curl -s http://localhost:18791/events/today
-curl -s http://localhost:18791/events/upcoming
-curl -s 'http://localhost:18791/events/date?date=YYYY-MM-DD'
+curl -s http://localhost:18793/events/today
+curl -s http://localhost:18793/events/upcoming
+curl -s 'http://localhost:18793/events/date?date=YYYY-MM-DD'
 
 WRITE — Create a new event:
-curl -s -X POST http://localhost:18791/events/create -H 'Content-Type: application/json' -d '{"summary":"Event Name","start":"2026-03-20T10:00:00","end":"2026-03-20T11:00:00","location":"optional","description":"optional"}'
+curl -s -X POST http://localhost:18793/events/create -H 'Content-Type: application/json' -d '{"summary":"Event Name","start":"2026-03-20T10:00:00","end":"2026-03-20T11:00:00","location":"optional","description":"optional"}'
 
 Actions: You can create, update, or delete Google Calendar events via the above endpoints.
 [End Calendar Data]"""

@@ -30,7 +30,7 @@ final class AppState {
     }
 
     /// Base URL for the calendar sync bridge server.
-    /// Defaults to the same host as the WebSocket server on port 18791.
+    /// Defaults to the same host as the WebSocket server on port 18793.
     var calendarSyncURL: String {
         didSet { UserDefaults.standard.set(calendarSyncURL, forKey: Keys.calendarSyncURL) }
     }
@@ -47,7 +47,7 @@ final class AppState {
     static let defaultFoodAnalysisURL = "http://100.89.67.80:18790"
 
     /// Default calendar sync bridge URL.
-    static let defaultCalendarSyncURL = "http://100.89.67.80:18791"
+    static let defaultCalendarSyncURL = "http://100.89.67.80:18793"
 
     /// Derive the food analysis URL from the WebSocket server URL.
     /// Extracts the host from the WS URL and uses port 18790 with http://.
@@ -59,12 +59,12 @@ final class AppState {
     }
 
     /// Derive the calendar sync URL from the WebSocket server URL.
-    /// Extracts the host from the WS URL and uses port 18791 with http://.
+    /// Extracts the host from the WS URL and uses port 18793 with http://.
     static func deriveCalendarSyncURL(from serverURL: String) -> String {
         guard let url = URL(string: serverURL), let host = url.host else {
             return defaultCalendarSyncURL
         }
-        return "http://\(host):18791"
+        return "http://\(host):18793"
     }
 
     // MARK: - Appearance

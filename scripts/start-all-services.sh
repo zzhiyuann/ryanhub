@@ -5,7 +5,7 @@
 # Starts/stops/checks all backend services that the app depends on:
 #   1. Dispatcher (WebSocket on port 8765) — Chat backend
 #   2. Bridge Server (HTTP on port 18790) — RyanHub bridge server
-#   3. Calendar Sync Server (HTTP on port 18791) — Google Calendar bridge
+#   3. Calendar Sync Server (HTTP on port 18793) — Google Calendar bridge
 #   4. Book Factory Server (HTTPS on port 3443 / HTTP on port 3000) — Book platform
 #
 # Usage:
@@ -45,7 +45,7 @@ FOOD_LOG="$LOG_DIR/food-analysis.log"
 
 # Calendar Sync Server
 CALENDAR_NAME="calendar-sync"
-CALENDAR_PORT=18791
+CALENDAR_PORT=18793
 CALENDAR_SCRIPT="$REPO_ROOT/scripts/calendar-sync-server.py"
 CALENDAR_PYTHON="/Users/zwang/Documents/gcal-mcp-server/.venv/bin/python3"
 CALENDAR_LOG="$LOG_DIR/calendar-sync.log"

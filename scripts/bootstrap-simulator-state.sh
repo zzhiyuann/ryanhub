@@ -94,7 +94,7 @@ def set_float_key(key: str, file_name: str) -> None:
 # Core connectivity defaults
 set_text_key("ryanhub_server_url", "ws://100.89.67.80:8765")
 set_text_key("ryanhub_food_analysis_url", "http://100.89.67.80:18790")
-set_text_key("ryanhub_calendar_sync_url", "http://100.89.67.80:18791")
+set_text_key("ryanhub_calendar_sync_url", "http://100.89.67.80:18793")
 set_bool_key("ryanhub_is_custom_food_analysis_url", False)
 set_bool_key("ryanhub_is_custom_calendar_sync_url", False)
 
