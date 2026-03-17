@@ -67,6 +67,7 @@ struct BoboView: View {
             viewModel.fetchHealthKitEvents {
                 viewModel.pushTimelineToServer()
             }
+            viewModel.fetchRemoteEventsIfNeeded()
         }
     }
 
