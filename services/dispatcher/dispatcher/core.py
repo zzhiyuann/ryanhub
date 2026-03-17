@@ -2568,6 +2568,32 @@ class Dispatcher:
             return f"Error:\n{error[:400]}...\n\nReply 'details' for full output."
         return f"Error:\n{error}"
 
+    async def _sync_chat_to_bridge(self, user_text: str, assistant_text: str, source: str = "ios"):
+        """Sync user + assistant messages to bridge server for cross-channel visibility.
+
+        Non-blocking background task. Silently fails if bridge server is unavailable.
+        """
+        import urllib.request
+        bridge = "http://localhost:18790"
+        for role, content in [("user", user_text), ("assistant", assistant_text)]:
+            try:
+                payload = json.dumps({
+                    "role": role,
+                    "content": content,
+                    "source": source,
+                }).encode()
+                req = urllib.request.Request(
+                    f"{bridge}/chat/messages/add",
+                    data=payload,
+                    headers={"Content-Type": "application/json"},
+                    method="POST",
+                )
+                await asyncio.to_thread(
+                    lambda: urllib.request.urlopen(req, timeout=3)
+                )
+            except Exception:
+                pass  # Silent failure — this is supplementary
+
     async def _capture_memory(self, conversation: str, project_name: str):
         """Extract facts from a completed conversation and store them in memory.
 
