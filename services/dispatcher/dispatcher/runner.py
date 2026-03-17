@@ -60,21 +60,40 @@ class AgentRunner:
         """Normalize non-Claude CLI output for chat delivery.
 
         For OpenClaw JSON responses, extract the user-facing text payload and
-        drop verbose metadata.
+        drop verbose metadata / ANSI log lines.
         """
         if not out:
             return out
         if "openclaw" not in self.command.lower():
             return out
 
-        try:
-            data = json.loads(out)
-        except Exception:
-            return out
+        # Strip ANSI log lines that precede the JSON (e.g. "[35m[plugins]...")
+        # Find the first '{' which starts the JSON object
+        json_start = out.find("{")
+        if json_start < 0:
+            # No JSON found — strip ANSI codes and return
+            import re
+            return re.sub(r'\x1b\[[0-9;]*m', '', out).strip()
 
+        json_text = out[json_start:]
+
+        try:
+            data = json.loads(json_text)
+        except Exception:
+            import re
+            return re.sub(r'\x1b\[[0-9;]*m', '', out).strip()
+
+        # OpenClaw wraps payloads under "result" key
         payloads = data.get("payloads")
         if not isinstance(payloads, list):
-            return out
+            result = data.get("result", {})
+            if isinstance(result, dict):
+                payloads = result.get("payloads")
+
+        if not isinstance(payloads, list):
+            # Fallback: try to find any text in the response
+            import re
+            return re.sub(r'\x1b\[[0-9;]*m', '', out).strip()
 
         texts: list[str] = []
         for item in payloads:
