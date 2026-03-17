@@ -1289,7 +1289,8 @@ def generate_nudges_llm(summary_text, timeout=20):
 
 def generate_nudges_rule_based(events, narrations, daily_summary=None):
     # type: (List[Dict], List[Dict], Optional[Dict]) -> List[Dict]
-    """Simple rule-based nudge generation as fallback when LLM is unavailable."""
+    """Rule-based nudge generation as fallback when LLM is unavailable.
+    Uses _evf/_evf_num helpers to handle both flat and nested event formats."""
     nudges = []  # type: List[Dict]
     now = datetime.now(_get_local_timezone())
 
@@ -1301,12 +1302,12 @@ def generate_nudges_rule_based(events, narrations, daily_summary=None):
         modality = ev.get("modality", ev.get("type", "unknown"))
         by_modality.setdefault(modality, []).append(ev)
 
-    # Rule 1: Sedentary for too long (>2 hours)
+    # Rule 1: Sedentary for too long
     motion_events = by_modality.get("motion", [])
     if motion_events:
         stationary = [e for e in motion_events if
-                      e.get("activity", e.get("data", {}).get("activity", ""))
-                      in ("stationary", "still", "sitting", "unknown")]
+                      _evf(e, "activityType", "activity", default="")
+                      in ("stationary", "still", "sitting")]
         if len(stationary) >= 2:
             first_ts = stationary[0].get("timestamp", "")
             last_ts = stationary[-1].get("timestamp", "")
@@ -1318,7 +1319,7 @@ def generate_nudges_rule_based(events, narrations, daily_summary=None):
                     if duration_min >= 120:
                         nudges.append({
                             "type": "reminder",
-                            "content": "You've been sedentary for about %.0f minutes. How about a quick stretch or a short walk? Your body will thank you! 🐱" % duration_min,
+                            "content": "You've been sedentary for about %.0f minutes. How about a quick stretch or a short walk?" % duration_min,
                             "trigger": "sedentary_duration",
                             "priority": "normal",
                             "relatedModalities": ["motion"]
@@ -1337,31 +1338,30 @@ def generate_nudges_rule_based(events, narrations, daily_summary=None):
     # Rule 2: Step count milestones
     step_events = by_modality.get("steps", by_modality.get("pedometer", []))
     if step_events:
-        total_steps = 0
+        max_steps = 0
         for ev in step_events:
-            count = ev.get("steps", ev.get("data", {}).get("steps", 0))
-            if isinstance(count, (int, float)):
-                total_steps += int(count)
-        if total_steps >= 10000:
+            count = int(_evf_num(ev, "steps", "count"))
+            max_steps = max(max_steps, count)
+        if max_steps >= 10000:
             nudges.append({
                 "type": "encouragement",
-                "content": "Amazing! %d steps today - you hit the 10K mark! Keep it up!" % total_steps,
+                "content": "Amazing! %d steps today — you hit the 10K mark!" % max_steps,
                 "trigger": "steps_milestone",
                 "priority": "normal",
                 "relatedModalities": ["steps"]
             })
-        elif total_steps >= 5000:
+        elif max_steps >= 5000:
             nudges.append({
                 "type": "encouragement",
-                "content": "%d steps so far today. Halfway to 10K - you're doing great!" % total_steps,
+                "content": "%d steps so far today. Halfway to 10K — you're doing great!" % max_steps,
                 "trigger": "steps_progress",
                 "priority": "normal",
                 "relatedModalities": ["steps"]
             })
-        elif now.hour >= 18 and total_steps < 3000:
+        elif now.hour >= 18 and 0 < max_steps < 3000:
             nudges.append({
                 "type": "reminder",
-                "content": "Only %d steps today and it's already evening. An after-dinner walk could help!" % total_steps,
+                "content": "Only %d steps today and it's already evening. An after-dinner walk could help!" % max_steps,
                 "trigger": "low_steps_evening",
                 "priority": "normal",
                 "relatedModalities": ["steps"]
@@ -1373,9 +1373,9 @@ def generate_nudges_rule_based(events, narrations, daily_summary=None):
         latest_hr = max(hr_events, key=lambda e: e.get("timestamp", ""), default=None)
         latest_motion = max(motion_events, key=lambda e: e.get("timestamp", ""), default=None)
         if latest_hr and latest_motion:
-            bpm = latest_hr.get("bpm", latest_hr.get("data", {}).get("bpm", 0))
-            activity = latest_motion.get("activity", latest_motion.get("data", {}).get("activity", ""))
-            if isinstance(bpm, (int, float)) and bpm > 100 and activity in ("stationary", "still", "sitting"):
+            bpm = _evf_num(latest_hr, "bpm")
+            activity = _evf(latest_motion, "activityType", "activity", default="")
+            if bpm > 100 and activity in ("stationary", "still", "sitting"):
                 nudges.append({
                     "type": "alert",
                     "content": "Your heart rate is %.0f bpm while you're stationary. Try some deep breathing to relax." % bpm,
@@ -1384,19 +1384,65 @@ def generate_nudges_rule_based(events, narrations, daily_summary=None):
                     "relatedModalities": ["heartRate", "motion"]
                 })
 
-    # Rule 4: Negative mood from narrations
+    # Rule 4: Low blood oxygen
+    spo2_events = by_modality.get("bloodOxygen", [])
+    if spo2_events:
+        latest = max(spo2_events, key=lambda e: e.get("timestamp", ""), default=None)
+        if latest:
+            spo2 = _evf_num(latest, "spo2")
+            if 0 < spo2 < 95:
+                nudges.append({
+                    "type": "alert",
+                    "content": "Blood oxygen at %.0f%% — that's a bit low. Consider taking some deep breaths and monitoring." % spo2,
+                    "trigger": "low_spo2",
+                    "priority": "high",
+                    "relatedModalities": ["bloodOxygen"]
+                })
+
+    # Rule 5: Sleep quality insight
+    sleep_events = by_modality.get("sleep", [])
+    if sleep_events:
+        total_sleep_sec = 0
+        for ev in sleep_events:
+            start_dt = _parse_iso_datetime(_evf(ev, "startDate", default=""), assume_local_if_naive=False)
+            end_dt = _parse_iso_datetime(_evf(ev, "endDate", default=""), assume_local_if_naive=False)
+            if start_dt and end_dt:
+                total_sleep_sec += max(0, (end_dt - start_dt).total_seconds())
+            else:
+                total_sleep_sec += _evf_num(ev, "duration")
+        hours = total_sleep_sec / 3600.0
+        if 0 < hours < 6:
+            nudges.append({
+                "type": "insight",
+                "content": "Only %.1f hours of sleep last night. Try to get to bed earlier tonight — your body needs recovery time." % hours,
+                "trigger": "low_sleep",
+                "priority": "normal",
+                "relatedModalities": ["sleep"]
+            })
+        elif hours >= 8:
+            nudges.append({
+                "type": "encouragement",
+                "content": "Great sleep — %.1f hours! You should feel well-rested today." % hours,
+                "trigger": "good_sleep",
+                "priority": "normal",
+                "relatedModalities": ["sleep"]
+            })
+
+    # Rule 6: Negative mood from narrations
     if narrations:
-        recent_narrations = narrations[-3:]  # Last 3
+        recent_narrations = narrations[-3:]
         negative_count = 0
         for nar in recent_narrations:
             if not isinstance(nar, dict):
                 continue
-            mood = nar.get("extractedMood", "")
+            mood = nar.get("extractedMood", nar.get("mood", ""))
             affect = nar.get("affectAnalysis", {})
             if mood in ("sadness", "anger", "fear", "disgust"):
                 negative_count += 1
-            elif isinstance(affect, dict) and affect.get("primary_emotion") in ("sadness", "anger", "fear", "disgust"):
-                negative_count += 1
+            elif isinstance(affect, dict):
+                primary = affect.get("primary_emotion", affect.get("primaryEmotion", ""))
+                if primary in ("sadness", "anger", "fear", "disgust"):
+                    negative_count += 1
         if negative_count >= 2:
             nudges.append({
                 "type": "insight",
@@ -1406,34 +1452,67 @@ def generate_nudges_rule_based(events, narrations, daily_summary=None):
                 "relatedModalities": ["narration"]
             })
 
-    # Rule 5: Low battery warning
+    # Rule 7: Low battery warning
     battery_events = by_modality.get("battery", [])
     if battery_events:
         latest = max(battery_events, key=lambda e: e.get("timestamp", ""), default=None)
         if latest:
-            level = latest.get("level", latest.get("data", {}).get("level"))
-            charging = latest.get("charging", latest.get("data", {}).get("isCharging", False))
-            if isinstance(level, (int, float)) and level <= 15 and not charging:
+            level = _evf_num(latest, "level")
+            charging = _evf(latest, "charging", "isCharging")
+            is_charging = str(charging).lower() in ("true", "1", "yes") if charging else False
+            if 0 < level <= 15 and not is_charging:
                 nudges.append({
                     "type": "alert",
-                    "content": "Battery at %d%% - you might want to charge soon so I can keep watching over you!" % int(level),
+                    "content": "Battery at %d%% — you might want to charge soon!" % int(level),
                     "trigger": "low_battery",
                     "priority": "high",
                     "relatedModalities": ["battery"]
                 })
 
-    # If no rules fired and we have data, generate a generic insight
+    # Rule 8: High noise exposure
+    noise_events = by_modality.get("noiseExposure", [])
+    if noise_events:
+        high_noise = [ev for ev in noise_events if _evf_num(ev, "decibels") >= 80]
+        if len(high_noise) >= 3:
+            nudges.append({
+                "type": "alert",
+                "content": "You've been exposed to noise above 80 dB for a while. Consider ear protection or moving somewhere quieter.",
+                "trigger": "high_noise_exposure",
+                "priority": "normal",
+                "relatedModalities": ["noiseExposure"]
+            })
+
+    # If no specific rules fired, generate a contextual summary nudge
     if not nudges and (events or narrations):
-        modalities = list(by_modality.keys())
+        # Build a brief status line from available data
+        parts = []
+        if step_events:
+            max_s = max(int(_evf_num(ev, "steps", "count")) for ev in step_events)
+            if max_s > 0:
+                parts.append("%d steps" % max_s)
+        if sleep_events:
+            total_sec = 0
+            for ev in sleep_events:
+                s = _parse_iso_datetime(_evf(ev, "startDate", default=""), assume_local_if_naive=False)
+                e = _parse_iso_datetime(_evf(ev, "endDate", default=""), assume_local_if_naive=False)
+                if s and e:
+                    total_sec += max(0, (e - s).total_seconds())
+            if total_sec > 0:
+                parts.append("%.1fh sleep" % (total_sec / 3600))
+        if motion_events:
+            latest_act = _evf(motion_events[-1], "activityType", "activity", default="")
+            if latest_act:
+                parts.append("currently %s" % latest_act)
+        summary = ", ".join(parts) if parts else "all systems active"
         nudges.append({
             "type": "insight",
-            "content": "I'm observing your %s data. Everything looks normal so far!" % ", ".join(modalities[:3]) if modalities else "I'm here watching over you. Send more sensing data so I can give you better insights!",
+            "content": "Status check: %s. Looking good so far!" % summary,
             "trigger": "general_observation",
             "priority": "normal",
-            "relatedModalities": modalities[:3] if modalities else []
+            "relatedModalities": list(by_modality.keys())[:3]
         })
 
-    return nudges[:3]  # Cap at 3 nudges
+    return nudges[:3]
 
 
 def store_generated_nudges(nudge_records):
