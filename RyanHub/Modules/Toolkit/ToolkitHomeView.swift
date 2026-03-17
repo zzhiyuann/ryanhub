@@ -15,6 +15,10 @@ struct ToolkitHomeView: View {
     @State private var pluginOrder: [ToolkitPlugin] = ToolkitPlugin.loadOrder()
     @Namespace private var menuAnimation
 
+    /// Cached BoboView to avoid re-creating BoboViewModel (and re-fetching
+    /// HealthKit) every time the user switches back to the Bobo tab.
+    @State private var cachedBoboView = BoboView()
+
     /// Whether any module (static or dynamic) is selected.
     private var hasSelection: Bool {
         selectedPlugin != nil || selectedDynamicModule != nil
@@ -102,7 +106,7 @@ struct ToolkitHomeView: View {
         case .health:
             HealthView()
         case .bobo:
-            BoboView()
+            cachedBoboView
         }
     }
 }
