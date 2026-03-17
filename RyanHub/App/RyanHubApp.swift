@@ -1,7 +1,6 @@
 import SwiftUI
 import UserNotifications
 import BackgroundTasks
-import HealthKit
 
 @main
 struct RyanHubApp: App {
@@ -100,89 +99,6 @@ struct RyanHubApp: App {
         Task {
             _ = await syncTask.result
             task.setTaskCompleted(success: true)
-        }
-    }
-
-    // MARK: - Background HealthKit Sync
-
-    /// Fetch recent HealthKit data and push to bridge server so chat queries
-    /// always have fresh data, even when the app is backgrounded.
-    @MainActor
-    private static func syncHealthKitToBridgeInBackground() async {
-        guard HKHealthStore.isHealthDataAvailable() else { return }
-        let store = HKHealthStore()
-        let calendar = Calendar.current
-        let now = Date()
-        let dayStart = calendar.startOfDay(for: now)
-        guard let dayEnd = calendar.date(byAdding: .day, value: 1, to: dayStart) else { return }
-        let predicate = HKQuery.predicateForSamples(withStart: dayStart, end: dayEnd, options: .strictStartDate)
-        let sort = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
-
-        var events: [SensingEvent] = []
-        let group = DispatchGroup()
-
-        // Heart rate (latest 50 for background — lightweight)
-        if let type = HKQuantityType.quantityType(forIdentifier: .heartRate) {
-            group.enter()
-            let q = HKSampleQuery(sampleType: type, predicate: predicate, limit: 50, sortDescriptors: [sort]) { _, samples, _ in
-                defer { group.leave() }
-                guard let samples = samples as? [HKQuantitySample] else { return }
-                for s in samples {
-                    let bpm = s.quantity.doubleValue(for: HKUnit(from: "count/min"))
-                    events.append(SensingEvent(timestamp: s.startDate, modality: .heartRate, payload: [
-                        "bpm": String(format: "%.0f", bpm),
-                        "source": s.sourceRevision.source.name,
-                    ]))
-                }
-            }
-            store.execute(q)
-        }
-
-        // Step count
-        if let type = HKQuantityType.quantityType(forIdentifier: .stepCount) {
-            group.enter()
-            let statsQuery = HKStatisticsQuery(
-                quantityType: type, quantitySamplePredicate: predicate, options: .cumulativeSum
-            ) { _, statistics, _ in
-                defer { group.leave() }
-                guard let sum = statistics?.sumQuantity() else { return }
-                let steps = Int(sum.doubleValue(for: HKUnit.count()))
-                guard steps > 0 else { return }
-                events.append(SensingEvent(timestamp: now, modality: .steps, payload: [
-                    "steps": "\(steps)", "source": "healthkit",
-                ]))
-            }
-            store.execute(statsQuery)
-        }
-
-        // Wait and sync to bridge
-        await withCheckedContinuation { cont in
-            DispatchQueue.global().async {
-                group.wait()
-                cont.resume()
-            }
-        }
-
-        guard !events.isEmpty else { return }
-
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        guard let url = URL(string: "\(bridgeBaseURL)/bobo/sensing"),
-              let body = try? encoder.encode(events) else { return }
-
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = body
-        request.timeoutInterval = 10
-
-        do {
-            let (_, response) = try await URLSession.shared.data(for: request)
-            if let http = response as? HTTPURLResponse, http.statusCode == 200 {
-                print("[BGSync] Pushed \(events.count) HealthKit events to bridge")
-            }
-        } catch {
-            print("[BGSync] HealthKit sync failed: \(error.localizedDescription)")
         }
     }
 
