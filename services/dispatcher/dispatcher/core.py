@@ -2238,11 +2238,22 @@ class Dispatcher:
         require_delivery_summary: bool = False,
     ) -> str:
         project = Path(cwd).name
+
+        # Server-side PersonalContext: inject module data (Bobo, Health, etc.)
+        # so both WebSocket and Telegram channels get identical context.
+        try:
+            personal_ctx = build_full_context()
+        except Exception as e:
+            log.warning("PersonalContext build failed: %s", e)
+            personal_ctx = ""
+
         prompt = (
             f"Working directory: {cwd}  (project: {project})\n\n"
             f"User context:\n{self.mem.text}\n\n"
-            f"User says: {text}\n\n"
         )
+        if personal_ctx:
+            prompt += f"{personal_ctx}\n\n"
+        prompt += f"User says: {text}\n\n"
 
         if attachments:
             prompt += "## Attached Files\n"
