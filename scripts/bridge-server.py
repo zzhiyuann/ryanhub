@@ -2437,6 +2437,72 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
         except (json.JSONDecodeError, IOError) as e:
             self._send_json(500, {"error": f"Failed to write timeline: {e}"})
 
+    def _serve_latest(self, types_filter=None):
+        # type: (Optional[str]) -> None
+        """Return the most recent event per modality from today's sensing data.
+
+        Optional ?types=heartRate,steps,bloodOxygen to filter specific modalities.
+        Much lighter than /bobo/day for quick "what's my current heart rate?" queries.
+        """
+        raw = _load_json_array(DATA_FILES["/popo/sensing"])
+        today_key = _local_date_string(datetime.now(_get_local_timezone()))
+
+        # Filter to today
+        today_events = [e for e in raw if isinstance(e, dict) and _record_matches_local_date(e, today_key)]
+
+        # Optional type filter
+        requested_types = None
+        if types_filter:
+            requested_types = set(t.strip() for t in types_filter.split(","))
+
+        # Find latest per modality
+        latest_by_type = {}  # type: Dict[str, Dict]
+        for event in today_events:
+            modality = event.get("modality", "")
+            if requested_types and modality not in requested_types:
+                continue
+            ts = event.get("timestamp", "")
+            if modality not in latest_by_type or ts > latest_by_type[modality].get("timestamp", ""):
+                latest_by_type[modality] = event
+
+        # Format output
+        items = []
+        for modality, event in sorted(latest_by_type.items()):
+            dt = _parse_iso_datetime(event.get("timestamp", ""), assume_local_if_naive=True)
+            local_time = dt.astimezone(_get_local_timezone()).strftime("%I:%M %p").lstrip("0") if dt else "?"
+            payload = event.get("payload", {}) if isinstance(event.get("payload"), dict) else {}
+
+            detail = ""
+            if modality == "heartRate":
+                detail = "%s BPM" % payload.get("bpm", "?")
+            elif modality == "steps":
+                detail = "%s steps" % payload.get("steps", "?")
+            elif modality == "bloodOxygen":
+                detail = "%s%% SpO2" % payload.get("spo2", "?")
+            elif modality == "hrv":
+                detail = "%s ms SDNN" % payload.get("sdnn", "?")
+            elif modality == "motion":
+                detail = payload.get("activityType", "?")
+            elif modality == "battery":
+                detail = "%s%%" % payload.get("level", "?")
+            elif modality == "location":
+                detail = payload.get("description") or payload.get("placeName") or payload.get("address") or "?"
+            else:
+                detail = str(list(payload.values())[:2]) if payload else "?"
+
+            items.append({
+                "type": modality,
+                "localTime": local_time,
+                "detail": detail,
+                "timestamp": event.get("timestamp", ""),
+            })
+
+        self._send_json(200, {
+            "date": today_key,
+            "count": len(items),
+            "items": items,
+        })
+
     def _serve_day_bundle(self, date_filter):
         # type: (Optional[str]) -> None
         """Serve a date-scoped BOBO day bundle for chat and external agents."""
