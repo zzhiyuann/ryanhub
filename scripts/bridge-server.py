@@ -1987,6 +1987,11 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
             self._write_timeline(today_only=True)
             return
 
+        # Chat message single-entry append (for cross-channel sync)
+        if path == "/chat/messages/add":
+            self._append_chat_message()
+            return
+
         # BoBo narration single-entry append (for chat agent)
         if path == "/popo/narrations/add":
             self._append_narration_entry()
