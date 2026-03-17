@@ -2048,6 +2048,8 @@ final class BoboViewModel {
 
     /// Push the processed timeline (same data the UI shows) to the bridge server
     /// so the chat agent can read clean, filtered data instead of raw sensing events.
+    /// Also pushes HealthKit events to popo_sensing.json so the /bobo/day endpoint
+    /// and nudge generation have access to the complete dataset.
     func pushTimelineToServer() {
         let items = timelineItems
         let summary = daySummary
@@ -2088,22 +2090,68 @@ final class BoboViewModel {
             "items": jsonItems,
         ]
 
-        guard let url = URL(string: "\(Self.bridgeBaseURL)/bobo/timeline"),
-              let body = try? JSONSerialization.data(withJSONObject: payload) else { return }
+        guard let body = try? JSONSerialization.data(withJSONObject: payload) else { return }
+
+        // Push to both /bobo/timeline (general snapshot) and /bobo/timeline/today
+        // so the chat agent always has fresh today data even if selectedDate != today.
+        let endpoints: [String]
+        if isSelectedDateToday {
+            endpoints = ["/bobo/timeline", "/bobo/timeline/today"]
+        } else {
+            endpoints = ["/bobo/timeline"]
+        }
+
+        for endpoint in endpoints {
+            guard let url = URL(string: "\(Self.bridgeBaseURL)\(endpoint)") else { continue }
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = body
+
+            Task.detached {
+                do {
+                    let (_, response) = try await URLSession.shared.data(for: request)
+                    if let http = response as? HTTPURLResponse, http.statusCode == 200 {
+                        print("[BoBo] Pushed processed timeline (\(items.count) items) to \(endpoint)")
+                    }
+                } catch {
+                    print("[BoBo] Failed to push timeline to \(endpoint): \(error.localizedDescription)")
+                }
+            }
+        }
+
+        // Also sync HealthKit events to popo_sensing.json so the /bobo/day endpoint
+        // and nudge generation have complete data (heart rate, etc. only come from
+        // direct HealthKit queries, not from the SensingEngine sync pipeline).
+        syncHealthKitEventsToBridge()
+    }
+
+    /// Sync today's HealthKit events to the bridge server's popo_sensing.json.
+    /// This ensures heart rate, HRV, and other HealthKit-only data is available
+    /// for the /bobo/day endpoint and nudge generation.
+    private func syncHealthKitEventsToBridge() {
+        let hkEvents = healthKitEvents
+        guard !hkEvents.isEmpty else { return }
+
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        guard let url = URL(string: "\(Self.bridgeBaseURL)/bobo/sensing"),
+              let body = try? encoder.encode(hkEvents) else { return }
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = body
+        request.timeoutInterval = 15
 
         Task.detached {
             do {
                 let (_, response) = try await URLSession.shared.data(for: request)
                 if let http = response as? HTTPURLResponse, http.statusCode == 200 {
-                    print("[BoBo] Pushed processed timeline (\(items.count) items) to bridge server")
+                    print("[BoBo] Synced \(hkEvents.count) HealthKit events to bridge")
                 }
             } catch {
-                print("[BoBo] Failed to push timeline: \(error.localizedDescription)")
+                // Silent failure — this is supplementary data
             }
         }
     }
