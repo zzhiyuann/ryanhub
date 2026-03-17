@@ -1942,6 +1942,9 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
             self._serve_timeline()
         elif path == "/popo/timeline/today":
             self._serve_timeline(today_only=True)
+        elif path == "/popo/latest":
+            query = parse_qs(parsed.query)
+            self._serve_latest(query.get("types", [None])[0])
         elif path == "/popo/day":
             query = parse_qs(parsed.query)
             self._serve_day_bundle(query.get("date", [None])[0])
