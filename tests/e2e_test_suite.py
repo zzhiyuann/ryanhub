@@ -1823,6 +1823,14 @@ TESTS = [
      "Should check post-meal activity levels",
      lambda r: (c(r, ["move", "meal", "after", "walk"]) or len(r) > 20, "cross_postmeal_movement")),
 
+    ("cross_bobo_health", "my blood oxygen during high-intensity exercise?",
+     "Should check SpO2 during intense workout",
+     lambda r: (c(r, ["oxygen", "spo2", "exercise", "intense"]) or len(r) > 20, "cross_spo2_high_intensity")),
+
+    ("cross_bobo_health", "correlation between deep sleep and next-day step count",
+     "Should analyze deep sleep vs activity",
+     lambda r: (c(r, ["deep", "sleep", "step"]) or len(r) > 20, "cross_deep_sleep_steps")),
+
     # =================================================================
     # 17. cross_calendar_parking (20 tests)
     # =================================================================
