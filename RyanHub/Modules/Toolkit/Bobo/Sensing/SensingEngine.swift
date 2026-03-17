@@ -1,5 +1,6 @@
 import Foundation
 import CoreMotion
+import UIKit
 
 // MARK: - Sensing Engine
 
