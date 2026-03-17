@@ -596,6 +596,13 @@ class Dispatcher:
         if result and result.strip():
             self.transcript.append(session.conv_id, "assistant", result)
 
+        # Cross-channel sync: write both messages to bridge server
+        # so Telegram-originated messages appear in iOS and vice versa
+        if result and result.strip():
+            asyncio.create_task(
+                self._sync_chat_to_bridge(text, result, source="ios")
+            )
+
         # Update WS session count
         self._update_ws_sessions()
 
