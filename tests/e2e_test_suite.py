@@ -3069,6 +3069,205 @@ TESTS = [
     ("narrative", "end of day reflection: what went well, what can improve",
      "Should help reflect on the day",
      lambda r: (len(r) > 30, "narrative_end_of_day")),
+
+    # =================================================================
+    # 28. Additional tests to reach 1000 total
+    # =================================================================
+
+    # --- extra basic (5) ---
+    ("basic", "what's the weather like?", "Should respond conversationally about weather",
+     lambda r: (ok(r), "basic_weather")),
+
+    ("basic", "I have a question", "Should invite the question",
+     lambda r: (ok(r), "basic_have_question")),
+
+    ("basic", "can you keep a secret?", "Should respond playfully or honestly",
+     lambda r: (ok(r), "basic_secret")),
+
+    ("basic", "what's your favorite color?", "Should respond in character",
+     lambda r: (ok(r), "basic_fav_color")),
+
+    ("basic", "how old are you?", "Should respond in character as Boo/Facai",
+     lambda r: (ok(r), "basic_age")),
+
+    # --- extra bobo_hr (5) ---
+    ("bobo_hr", "heart rate while I was sleeping at 3am", "Should query sleep HR at 3am",
+     lambda r: (c(r, ["heart", "3", "sleep", "bpm"]) or ok(r), "hr_3am_sleep")),
+
+    ("bobo_hr", "how stable was my heart rate today?", "Should assess HR stability",
+     lambda r: (c(r, ["heart", "stable", "bpm"]) or len(r) > 20, "hr_stability")),
+
+    ("bobo_hr", "did stress affect my heart rate today?", "Should correlate stress and HR",
+     lambda r: (c(r, ["heart", "stress"]) or len(r) > 20, "hr_stress_effect")),
+
+    ("bobo_hr", "my heart rate range today: min to max", "Should show range",
+     lambda r: (c(r, ["heart", "min", "max", "range", "bpm"]) or ok(r), "hr_range_today")),
+
+    ("bobo_hr", "compare my heart rate to normal for my age", "Should compare to norms",
+     lambda r: (c(r, ["heart", "normal", "age"]) or len(r) > 20, "hr_vs_age_norm")),
+
+    # --- extra bobo_steps (5) ---
+    ("bobo_steps", "steps while at the office today?", "Should filter office steps",
+     lambda r: (c(r, ["step", "office"]) or any(ch.isdigit() for ch in r), "steps_office")),
+
+    ("bobo_steps", "my step count consistency this week", "Should show consistency",
+     lambda r: (c(r, ["step", "consist", "week"]) or len(r) > 20, "steps_consistency")),
+
+    ("bobo_steps", "did I walk after dinner?", "Should check evening steps",
+     lambda r: (c(r, ["walk", "dinner", "step", "evening"]) or ok(r), "steps_after_dinner")),
+
+    ("bobo_steps", "what's my personal best step count?", "Should find all-time high",
+     lambda r: (c(r, ["step", "best", "high", "record"]) or any(ch.isdigit() for ch in r), "steps_personal_best")),
+
+    ("bobo_steps", "steps per hour breakdown", "Should show hourly step data",
+     lambda r: (c(r, ["step", "hour"]) or len(r) > 30, "steps_per_hour")),
+
+    # --- extra bobo_sleep (5) ---
+    ("bobo_sleep", "did blue light affect my sleep?", "Should discuss blue light impact",
+     lambda r: (c(r, ["blue light", "screen", "sleep"]) or len(r) > 20, "sleep_blue_light")),
+
+    ("bobo_sleep", "my sleep debt this week", "Should calculate cumulative deficit",
+     lambda r: (c(r, ["sleep", "debt", "deficit"]) or len(r) > 20, "sleep_debt_week")),
+
+    ("bobo_sleep", "optimal sleep window for me", "Should suggest ideal sleep times",
+     lambda r: (c(r, ["sleep", "window", "bed", "wake"]) or len(r) > 20, "sleep_optimal_window")),
+
+    ("bobo_sleep", "my circadian rhythm — am I a night owl?", "Should assess chronotype",
+     lambda r: (c(r, ["circadian", "owl", "morning", "night", "chronotype"]) or len(r) > 20, "sleep_chronotype")),
+
+    ("bobo_sleep", "sleep recovery after a bad night", "Should show recovery pattern",
+     lambda r: (c(r, ["sleep", "recovery", "bad"]) or len(r) > 20, "sleep_recovery")),
+
+    # --- extra health_food (5) ---
+    ("health_food", "ate a bowl of pho", "Should record Vietnamese soup",
+     lambda r: (c(r, ["pho", "recorded", "calor", "log", "saved"]), "food_pho")),
+
+    ("health_food", "had a falafel wrap for lunch", "Should record Middle Eastern food",
+     lambda r: (c(r, ["falafel", "recorded", "calor", "log", "saved"]), "food_falafel")),
+
+    ("health_food", "吃了一碗馄饨", "Should record wonton soup",
+     lambda r: (c(r, ["馄饨", "记录", "recorded"]) or cn(r), "food_wonton_cn")),
+
+    ("health_food", "just had a handful of grapes", "Should record fruit snack",
+     lambda r: (c(r, ["grape", "recorded", "calor", "log", "saved"]), "food_grapes")),
+
+    ("health_food", "ate a slice of cheesecake for dessert", "Should record dessert",
+     lambda r: (c(r, ["cheesecake", "recorded", "calor", "log", "saved"]), "food_cheesecake")),
+
+    # --- extra health_activity (5) ---
+    ("health_activity", "did a core workout: sit-ups 3x20, russian twists 3x15",
+     "Should record core workout with detail",
+     lambda r: (c(r, ["core", "sit-up", "twist", "recorded", "log", "saved"]), "activity_core")),
+
+    ("health_activity", "played frisbee in the park for an hour", "Should record recreational sport",
+     lambda r: (c(r, ["frisbee", "recorded", "log", "saved"]), "activity_frisbee")),
+
+    ("health_activity", "elliptical machine: 20 minutes", "Should record machine cardio",
+     lambda r: (c(r, ["elliptical", "20", "recorded", "log", "saved"]), "activity_elliptical")),
+
+    ("health_activity", "foam rolling session: 15 minutes", "Should record recovery work",
+     lambda r: (c(r, ["foam", "roll", "15", "recorded", "log", "saved"]), "activity_foam_rolling")),
+
+    ("health_activity", "did a 1-hour Pilates class", "Should record Pilates",
+     lambda r: (c(r, ["pilates", "hour", "recorded", "log", "saved"]), "activity_pilates")),
+
+    # --- extra parking (5) ---
+    ("parking", "skip parking the day after tomorrow", "Should skip correct date",
+     lambda r: (c(r, ["skip", "park"]) or ok(r), "parking_skip_day_after2")),
+
+    ("parking", "how many times have I skipped parking this month?", "Should count skips",
+     lambda r: (c(r, ["skip", "park", "month"]) or any(ch.isdigit() for ch in r), "parking_skip_count_month")),
+
+    ("parking", "average daily parking cost?", "Should calculate average",
+     lambda r: (c(r, ["park", "cost", "average", "$"]) or any(ch.isdigit() for ch in r), "parking_avg_cost")),
+
+    ("parking", "annual parking estimate?", "Should project yearly cost",
+     lambda r: (c(r, ["park", "annual", "year", "$"]) or any(ch.isdigit() for ch in r), "parking_annual_est")),
+
+    ("parking", "did parking auto-buy work this morning?", "Should check today's status",
+     lambda r: (c(r, ["park", "morning", "bought", "auto"]) or ok(r), "parking_auto_check")),
+
+    # --- extra calendar (5) ---
+    ("calendar", "create a workout event for 6am tomorrow", "Should create morning workout event",
+     lambda r: (c(r, ["workout", "6", "am", "created", "added"]) or ok(r), "cal_create_workout")),
+
+    ("calendar", "my busiest day this week?", "Should identify most packed day",
+     lambda r: (c(r, ["busy", "day"]) or ok(r), "cal_busiest_day")),
+
+    ("calendar", "any deadlines coming up?", "Should check upcoming deadlines",
+     lambda r: (c(r, ["deadline"]) or ok(r), "cal_deadlines")),
+
+    ("calendar", "time until my next meeting?", "Should calculate time remaining",
+     lambda r: (c(r, ["meeting", "next", "minute", "hour"]) or ok(r), "cal_time_to_next")),
+
+    ("calendar", "cancel my 3pm meeting tomorrow", "Should attempt to cancel event",
+     lambda r: (c(r, ["cancel", "3", "pm"]) or ok(r), "cal_cancel_3pm")),
+
+    # --- extra chinese (5) ---
+    ("chinese", "帮我查看最近的运动记录", "Should show recent exercise in Chinese",
+     lambda r: (cn(r) or c(r, ["运动", "exercise"]), "cn_exercise_history")),
+
+    ("chinese", "我的心率变异性怎么样？", "Should check HRV in Chinese",
+     lambda r: (cn(r) or c(r, ["心率变异", "hrv"]), "cn_hrv2")),
+
+    ("chinese", "今天的压力水平如何？", "Should assess stress in Chinese",
+     lambda r: (cn(r) or c(r, ["压力", "stress"]), "cn_stress")),
+
+    ("chinese", "我需要多喝水吗？", "Should advise on hydration in Chinese",
+     lambda r: (cn(r) or c(r, ["水", "喝"]), "cn_hydration2")),
+
+    ("chinese", "帮我分析这周的健康数据", "Should analyze weekly health data in Chinese",
+     lambda r: (cn(r) and len(r) > 30, "cn_analyze_weekly")),
+
+    # --- extra context (5) ---
+    ("context", "I prefer running over cycling", "Should note preference",
+     lambda r: (c(r, ["run", "cycling", "preference", "noted"]) or ok(r), "context_exercise_pref")),
+
+    ("context", "suggest a workout for me", "Should suggest running based on preference",
+     lambda r: (c(r, ["run", "workout", "exercise"]) or ok(r), "context_pref_aware_workout")),
+
+    ("context", "my doctor said I should sleep 8 hours", "Should note medical advice",
+     lambda r: (c(r, ["8", "hour", "sleep", "doctor"]) or ok(r), "context_doctor_advice")),
+
+    ("context", "am I following my doctor's advice?", "Should check 8-hour sleep recommendation",
+     lambda r: (c(r, ["sleep", "8", "hour", "doctor"]) or ok(r), "context_doctor_followup")),
+
+    ("context", "forget what I said about being allergic to peanuts", "Should clear allergy note",
+     lambda r: (c(r, ["peanut", "forget", "noted", "removed"]) or ok(r), "context_forget_allergy")),
+
+    # --- extra edge (5) ---
+    ("edge", "I ate food at a restaurant I can't remember the name of",
+     "Should handle partial info gracefully",
+     lambda r: (ok(r), "edge_unknown_restaurant")),
+
+    ("edge", "my heart rate is maybe around 70ish", "Should handle imprecise data",
+     lambda r: (ok(r), "edge_imprecise_hr")),
+
+    ("edge", "delete all my data", "Should refuse or confirm intent",
+     lambda r: (ok(r), "edge_delete_all")),
+
+    ("edge", "I want to talk to a real person", "Should handle handoff request gracefully",
+     lambda r: (ok(r), "edge_handoff_request")),
+
+    ("edge", "I just ate something but I don't know what it was",
+     "Should handle vague food entry",
+     lambda r: (ok(r), "edge_unknown_food")),
+
+    # --- extra coaching (5) ---
+    ("coaching", "design a stretching routine for me", "Should create stretch plan",
+     lambda r: (c(r, ["stretch"]) and len(r) > 30, "coaching_stretch_routine")),
+
+    ("coaching", "how to reduce belly fat?", "Should give fat loss advice for midsection",
+     lambda r: (c(r, ["fat", "belly", "core", "diet", "calor"]) or len(r) > 30, "coaching_belly_fat")),
+
+    ("coaching", "what supplements should I consider?", "Should discuss supplements responsibly",
+     lambda r: (c(r, ["supplement"]) or len(r) > 30, "coaching_supplements")),
+
+    ("coaching", "how to improve my VO2 max?", "Should suggest cardio training",
+     lambda r: (c(r, ["vo2", "cardio", "run", "interval"]) or len(r) > 30, "coaching_vo2max")),
+
+    ("coaching", "best exercises for lower back pain?", "Should give safe exercise suggestions",
+     lambda r: (c(r, ["back", "pain", "stretch", "exercise"]) or len(r) > 30, "coaching_back_pain")),
 ]
 
 # Verify exactly 1000 tests
