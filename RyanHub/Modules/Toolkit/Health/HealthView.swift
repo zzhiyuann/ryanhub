@@ -838,7 +838,7 @@ struct HealthView: View {
     // MARK: - Activity Rings Card
 
     /// Daily goals for ring progress calculation.
-    private static let stepGoal: Double = 10000
+    private static let stepGoal: Double = 8000
     private static let calorieGoal: Double = 500
     private static let activityMinuteGoal: Double = 30
 

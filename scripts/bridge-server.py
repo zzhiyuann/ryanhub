@@ -1342,18 +1342,18 @@ def generate_nudges_rule_based(events, narrations, daily_summary=None):
         for ev in step_events:
             count = int(_evf_num(ev, "steps", "count"))
             max_steps = max(max_steps, count)
-        if max_steps >= 10000:
+        if max_steps >= 8000:
             nudges.append({
                 "type": "encouragement",
-                "content": "Amazing! %d steps today — you hit the 10K mark!" % max_steps,
+                "content": "Amazing! %d steps today — you hit the 8K mark!" % max_steps,
                 "trigger": "steps_milestone",
                 "priority": "normal",
                 "relatedModalities": ["steps"]
             })
-        elif max_steps >= 5000:
+        elif max_steps >= 4000:
             nudges.append({
                 "type": "encouragement",
-                "content": "%d steps so far today. Halfway to 10K — you're doing great!" % max_steps,
+                "content": "%d steps so far today. Halfway to 8K — you're doing great!" % max_steps,
                 "trigger": "steps_progress",
                 "priority": "normal",
                 "relatedModalities": ["steps"]
