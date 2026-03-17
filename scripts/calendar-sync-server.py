@@ -33,7 +33,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 
-PORT = 18791
+PORT = 18793  # Moved from 18791 (now used by OpenClaw browser-control)
 HOST = "0.0.0.0"
 
 # Google Calendar API credentials (reuse from MCP server)
