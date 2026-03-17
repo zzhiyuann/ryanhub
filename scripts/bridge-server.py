@@ -2405,6 +2405,63 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
         except ValueError:
             self._send_json(400, {"error": "Invalid range. Use days=1..31 or start/end with YYYY-MM-DD, today, or yesterday."})
 
+    def _append_chat_message(self):
+        """Append a single chat message for cross-channel sync.
+
+        Accepts a JSON object with: role, content, and optionally source, id, timestamp.
+        Merges into chat_messages.json by id (upsert).
+        Used by the Dispatcher to sync messages from both iOS and Telegram channels."""
+        try:
+            content_length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(content_length)
+            entry = json.loads(body) if body else {}
+        except (json.JSONDecodeError, ValueError) as e:
+            self._send_json(400, {"error": f"Invalid body: {e}"})
+            return
+
+        if not isinstance(entry, dict):
+            self._send_json(400, {"error": "Expected a JSON object"})
+            return
+
+        if not entry.get("content") and not entry.get("text"):
+            self._send_json(400, {"error": "Missing required field: content"})
+            return
+
+        if "id" not in entry:
+            entry["id"] = str(uuid.uuid4()).upper()
+        if "timestamp" not in entry:
+            entry["timestamp"] = datetime.now(timezone.utc).isoformat()
+        entry.setdefault("role", "user")
+        entry.setdefault("source", "unknown")
+
+        filepath = DATA_FILES.get("/chat/messages")
+        if not filepath:
+            self._send_json(500, {"error": "Chat data path not configured"})
+            return
+
+        existing = []
+        if os.path.exists(filepath):
+            try:
+                with open(filepath, "r") as f:
+                    content = f.read()
+                existing = json.loads(content) if content.strip() else []
+            except (json.JSONDecodeError, IOError):
+                existing = []
+
+        # Merge by id (upsert)
+        merged = {}
+        for item in existing:
+            if isinstance(item, dict) and "id" in item:
+                merged[item["id"]] = item
+        merged[entry["id"]] = entry
+
+        try:
+            with open(filepath, "w") as f:
+                json.dump(list(merged.values()), f, ensure_ascii=False)
+            self._send_json(200, {"ok": True, "id": entry["id"]})
+        except IOError as e:
+            self._send_json(500, {"error": f"Failed to write: {e}"})
+
     def _append_narration_entry(self):
         """Append a single narration entry (for chat agent adding text diary).
 
