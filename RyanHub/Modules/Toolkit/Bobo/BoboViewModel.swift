@@ -1941,8 +1941,8 @@ final class BoboViewModel {
 
         // Wait for all queries to complete asynchronously (non-blocking).
         // Uses a detached task so the main thread stays free for UI rendering.
+        let dateForLog = selectedDate
         Task.detached {
-            // Use a continuation to bridge DispatchGroup → async
             await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
                 group.notify(queue: .global()) { cont.resume() }
             }
@@ -1951,7 +1951,7 @@ final class BoboViewModel {
                 self.healthKitEvents = allEvents
                 completion?()
             }
-            print("[BoBo] HealthKit direct query: fetched \(count) events for \(self.selectedDate)")
+            print("[BoBo] HealthKit direct query: fetched \(count) events for \(dateForLog)")
         }
     }
 
