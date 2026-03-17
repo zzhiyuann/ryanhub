@@ -212,7 +212,7 @@ final class HealthSensor {
     private func enableBackgroundDelivery() {
         guard let healthStore else { return }
         for type in Self.readTypes {
-            healthStore.enableBackgroundDelivery(for: type, frequency: .hourly) { success, error in
+            healthStore.enableBackgroundDelivery(for: type, frequency: .immediate) { success, error in
                 if !success {
                     print("[HealthSensor] Background delivery failed for \(type): \(error?.localizedDescription ?? "unknown")")
                 }

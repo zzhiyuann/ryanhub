@@ -1,6 +1,7 @@
 import SwiftUI
 import UserNotifications
 import BackgroundTasks
+import HealthKit
 
 @main
 struct RyanHubApp: App {
