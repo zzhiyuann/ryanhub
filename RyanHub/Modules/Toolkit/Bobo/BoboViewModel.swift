@@ -206,8 +206,22 @@ final class BoboViewModel {
     /// from direct Apple Health queries (healthKitEvents) — no intermediate caching.
     /// For motion data: Watch workouts take priority over phone CoreMotion during
     /// overlapping time periods, since wrist-worn sensors are more accurate.
+    /// Whether the selected date is beyond local retention and needs remote data.
+    private var isSelectedDateBeyondLocalRetention: Bool {
+        let cutoff = Date().addingTimeInterval(-Double(30) * 86400)
+        return selectedDate < cutoff
+    }
+
     var eventsForSelectedDate: [SensingEvent] {
         let calendar = Calendar.current
+
+        // For dates beyond local retention, use remote events fetched from bridge
+        if isSelectedDateBeyondLocalRetention {
+            return remoteEvents
+                .filter { calendar.isDate($0.timestamp, inSameDayAs: selectedDate) }
+                .sorted { $0.timestamp > $1.timestamp }
+        }
+
         // HealthKit data queried directly from Apple Health
         let healthData = healthKitEvents
             .filter { calendar.isDate($0.timestamp, inSameDayAs: selectedDate) }
