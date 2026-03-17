@@ -2573,11 +2573,12 @@ class Dispatcher:
 
         Non-blocking background task. Silently fails if bridge server is unavailable.
         """
+        import json as _json_mod
         import urllib.request as urlreq
         bridge = "http://localhost:18790"
         for role, content in [("user", user_text), ("assistant", assistant_text)]:
             try:
-                payload = json.dumps({
+                payload = _json_mod.dumps({
                     "role": role,
                     "content": content,
                     "source": source,
