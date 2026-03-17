@@ -79,7 +79,8 @@ struct RyanHubApp: App {
         }
     }
 
-    /// Handle a background sync task: backfill data and sync pending events.
+    /// Handle a background sync task: backfill data, sync pending events,
+    /// and push fresh HealthKit data to the bridge server.
     private static func handleBackgroundSync(task: BGAppRefreshTask) {
         // Schedule the next refresh before doing work
         scheduleBackgroundSync()
@@ -87,6 +88,8 @@ struct RyanHubApp: App {
         let syncTask = Task { @MainActor in
             let engine = SensingEngine.shared
             await engine.handleBackgroundWake()
+            // Push fresh HealthKit data to bridge so chat queries get current data
+            await syncHealthKitToBridgeInBackground()
             await generateNudgesInBackground()
         }
 
