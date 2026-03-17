@@ -17,6 +17,7 @@ from pathlib import Path
 from .classifier import classify_intent
 from .config import Config
 from .memory import Memory
+from .personal_context import build_full_context
 from .runner import AgentRunner
 from .session import Session, SessionManager
 from .telegram import TelegramClient
