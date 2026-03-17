@@ -1774,23 +1774,24 @@ final class BoboViewModel {
             store.execute(statsQuery)
         }
 
-        // Heart rate
+        // Heart rate — aggregate by 5-minute buckets, limit to 500 samples for speed
         if let type = HKQuantityType.quantityType(forIdentifier: .heartRate) {
             group.enter()
-            let q = HKSampleQuery(sampleType: type, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: [sort]) { _, samples, _ in
+            let q = HKSampleQuery(sampleType: type, predicate: predicate, limit: 500, sortDescriptors: [sort]) { _, samples, _ in
                 defer { group.leave() }
                 guard let samples = samples as? [HKQuantitySample] else { return }
-                // Group by calendar minute for aggregation
-                var minuteGroups: [Date: [Double]] = [:]
+                // Group by 5-minute buckets for a cleaner, faster timeline
+                var bucketGroups: [Date: [Double]] = [:]
                 for s in samples {
                     let bpm = s.quantity.doubleValue(for: HKUnit(from: "count/min"))
-                    let mc = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: s.startDate)
-                    let minuteStart = calendar.date(from: mc) ?? s.startDate
-                    minuteGroups[minuteStart, default: []].append(bpm)
+                    var dc = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: s.startDate)
+                    dc.minute = (dc.minute ?? 0) / 5 * 5 // Round to 5-minute bucket
+                    let bucketStart = calendar.date(from: dc) ?? s.startDate
+                    bucketGroups[bucketStart, default: []].append(bpm)
                 }
-                for (minute, bpms) in minuteGroups {
+                for (bucket, bpms) in bucketGroups {
                     let avg = bpms.reduce(0, +) / Double(bpms.count)
-                    allEvents.append(SensingEvent(timestamp: minute, modality: .heartRate, payload: [
+                    allEvents.append(SensingEvent(timestamp: bucket, modality: .heartRate, payload: [
                         "bpm": String(format: "%.0f", avg),
                         "min": String(format: "%.0f", bpms.min() ?? avg),
                         "max": String(format: "%.0f", bpms.max() ?? avg),
@@ -1923,10 +1924,10 @@ final class BoboViewModel {
             store.execute(q)
         }
 
-        // Noise exposure
+        // Noise exposure — limit samples for performance
         if let type = HKQuantityType.quantityType(forIdentifier: .environmentalAudioExposure) {
             group.enter()
-            let q = HKSampleQuery(sampleType: type, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: [sort]) { _, samples, _ in
+            let q = HKSampleQuery(sampleType: type, predicate: predicate, limit: 200, sortDescriptors: [sort]) { _, samples, _ in
                 defer { group.leave() }
                 guard let samples = samples as? [HKQuantitySample] else { return }
                 for s in samples {
