@@ -696,7 +696,10 @@ final class ChatViewModel {
     /// The context is only added to the wire content — the local ChatMessage
     /// stored in the UI always shows the original user text.
     static func buildContentWithContext(userText: String) -> String {
-        PersonalContext.buildContext(for: userText)
+        // PersonalContext is now injected server-side by the Dispatcher
+        // (personal_context.py) so both iOS and Telegram channels get
+        // identical context. No need to double-inject from the client.
+        return userText
     }
 
     /// Parse leading agent mention prefixes used for explicit routing.
