@@ -135,6 +135,13 @@ final class BoboViewModel {
     /// This bypasses the HealthSensor pipeline — HealthKit IS the source of truth.
     var healthKitEvents: [SensingEvent] = []
 
+    /// Events fetched from the bridge server for dates beyond local retention (~30 days).
+    /// When the user navigates to old dates, these fill in the gap.
+    var remoteEvents: [SensingEvent] = []
+
+    /// Whether a remote fetch is in progress.
+    private(set) var isLoadingRemoteData: Bool = false
+
     // MARK: - Text Diary State
 
     /// Text bound to the diary text input field.
