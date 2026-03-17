@@ -1772,6 +1772,72 @@ def _build_day_bundle(date_str):
             "source": "health_weight",
         })
 
+    # Aggregate high-frequency items by hour to keep response compact.
+    # Without this, heartRate alone can produce 700+ items (~150KB).
+    _AGGREGATE_TYPES = {"heartRate", "respiratoryRate", "noiseExposure",
+                        "basalEnergy", "activeEnergy", "bloodOxygen"}
+    aggregated = []
+    passthrough = []
+    hourly_buckets = {}  # type: Dict[tuple, list]  # (type, hour_key) -> list of items
+
+    for item in items:
+        if item.get("kind") == "sensing" and item.get("type") in _AGGREGATE_TYPES:
+            dt = _parse_iso_datetime(item.get("timestamp", ""), assume_local_if_naive=True)
+            if dt:
+                local_dt = dt.astimezone(_get_local_timezone())
+                hour_key = (item["type"], local_dt.strftime("%Y-%m-%d %H:00"))
+                hourly_buckets.setdefault(hour_key, []).append(item)
+            else:
+                passthrough.append(item)
+        else:
+            passthrough.append(item)
+
+    for (modality_type, hour_label), bucket_items in hourly_buckets.items():
+        # Extract numeric values from detail strings
+        values = []
+        for bi in bucket_items:
+            detail = bi.get("detail", "")
+            try:
+                val = float(detail.split()[0].replace(",", ""))
+                values.append(val)
+            except (ValueError, IndexError):
+                pass
+
+        if not values:
+            # Keep the most recent item as-is
+            passthrough.append(bucket_items[0])
+            continue
+
+        avg_val = sum(values) / len(values)
+        min_val = min(values)
+        max_val = max(values)
+        latest_item = bucket_items[0]  # already sorted newest-first
+
+        # Format detail based on modality
+        if modality_type == "heartRate":
+            detail = "%.0f BPM avg (%.0f-%.0f, %d readings)" % (avg_val, min_val, max_val, len(values))
+        elif modality_type in ("basalEnergy", "activeEnergy"):
+            detail = "%.0f kcal total (%d samples)" % (sum(values), len(values))
+        elif modality_type == "bloodOxygen":
+            detail = "%.1f%% avg (%.1f-%.1f%%)" % (avg_val, min_val, max_val)
+        elif modality_type == "respiratoryRate":
+            detail = "%.1f breaths/min avg" % avg_val
+        elif modality_type == "noiseExposure":
+            detail = "%.0f dB avg (%.0f-%.0f)" % (avg_val, min_val, max_val)
+        else:
+            detail = "%.1f avg (%d samples)" % (avg_val, len(values))
+
+        aggregated.append({
+            "timestamp": latest_item.get("timestamp", ""),
+            "localTime": hour_label.split()[-1][:5],
+            "kind": "sensing",
+            "type": modality_type,
+            "detail": detail,
+            "source": "popo_sensing",
+            "hourly": True,
+        })
+
+    items = passthrough + aggregated
     items.sort(key=lambda item: item.get("timestamp", ""), reverse=True)
 
     return {
