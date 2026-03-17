@@ -2286,8 +2286,17 @@ class Dispatcher:
             conv_id, max_chars=self.cfg.followup_history_max_chars,
         )
 
+        # Server-side PersonalContext
+        try:
+            personal_ctx = build_full_context()
+        except Exception as e:
+            log.warning("PersonalContext build failed: %s", e)
+            personal_ctx = ""
+
         prompt = f"Working directory: {cwd}  (project: {project})\n\n"
         prompt += f"User context:\n{self.mem.text}\n\n"
+        if personal_ctx:
+            prompt += f"{personal_ctx}\n\n"
 
         if history:
             prompt += (
