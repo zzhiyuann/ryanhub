@@ -869,6 +869,63 @@ final class BoboViewModel {
         }
     }
 
+    /// Fetch events from the bridge server for dates beyond local retention.
+    /// Called when the user navigates to a date older than 30 days.
+    func fetchRemoteEventsIfNeeded() {
+        let cutoff = Date().addingTimeInterval(-Double(30) * 86400)
+        guard selectedDate < cutoff else {
+            remoteEvents = []
+            return
+        }
+        guard !isLoadingRemoteData else { return }
+        isLoadingRemoteData = true
+
+        let dateStr = {
+            let f = DateFormatter()
+            f.dateFormat = "yyyy-MM-dd"
+            return f.string(from: self.selectedDate)
+        }()
+
+        Task {
+            defer { isLoadingRemoteData = false }
+            let endpoint = "\(Self.bridgeBaseURL)/bobo/day?date=\(dateStr)"
+            guard let url = URL(string: endpoint) else { return }
+
+            do {
+                let (data, response) = try await URLSession.shared.data(from: url)
+                guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { return }
+
+                struct DayBundle: Decodable {
+                    struct Item: Decodable {
+                        let timestamp: String?
+                        let kind: String?
+                        let type: String?
+                        let detail: String?
+                    }
+                    let items: [Item]?
+                }
+                let bundle = try JSONDecoder().decode(DayBundle.self, from: data)
+                let events = (bundle.items ?? []).compactMap { item -> SensingEvent? in
+                    guard item.kind == "sensing",
+                          let typeStr = item.type,
+                          let modality = SensingModality(rawValue: typeStr),
+                          let tsStr = item.timestamp else { return nil }
+
+                    let formatter = ISO8601DateFormatter()
+                    guard let ts = formatter.date(from: tsStr) else { return nil }
+                    return SensingEvent(timestamp: ts, modality: modality, payload: [
+                        "detail": item.detail ?? "",
+                        "source": "bridge_remote",
+                    ])
+                }
+                remoteEvents = events
+                print("[BoBo] Loaded \(events.count) remote events for \(dateStr)")
+            } catch {
+                print("[BoBo] Remote fetch failed for \(dateStr): \(error.localizedDescription)")
+            }
+        }
+    }
+
     /// Jump back to today.
     func goToToday() {
         selectedDate = Date()
