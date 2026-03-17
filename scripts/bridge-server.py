@@ -70,6 +70,9 @@ from urllib.parse import urlparse, parse_qs
 PORT = 18790
 HOST = "0.0.0.0"
 
+# User-configured wellness defaults (can be overridden per-process).
+STEP_COUNT_GOAL = int(os.environ.get("RYANHUB_STEP_GOAL", "8000"))
+
 # Locate the claude CLI binary
 CLAUDE_PATH = shutil.which("claude") or os.path.expanduser("~/.local/bin/claude")
 
@@ -1840,6 +1843,7 @@ def _build_day_bundle(date_str):
             "mealCalories": total_food_calories,
             "activityMinutes": total_activity_minutes,
             "activityCaloriesBurned": total_activity_calories,
+            "stepGoal": STEP_COUNT_GOAL,
         },
         "items": filtered_items,
     }
@@ -1881,6 +1885,7 @@ def _build_range_bundle(start_date_str, end_date_str, days_str):
         "mealCalories": 0,
         "activityMinutes": 0,
         "activityCaloriesBurned": 0,
+        "stepGoal": STEP_COUNT_GOAL,
     }
 
     cursor = start_day
