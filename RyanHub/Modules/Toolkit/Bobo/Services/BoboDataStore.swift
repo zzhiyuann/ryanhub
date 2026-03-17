@@ -58,6 +58,7 @@ final class BoboDataStore {
 
         loadFromDisk()
         migrateMotionToEpisodes()
+        trimOldSyncedFromDisk()
 
         // Diagnostic: count events per modality
         var modalityCounts: [String: Int] = [:]
