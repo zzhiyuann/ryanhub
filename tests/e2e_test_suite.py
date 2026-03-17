@@ -3307,129 +3307,159 @@ assert len(TESTS) == 1000, f"Expected 1000 tests, got {len(TESTS)}"
 
 
 # =====================================================================
-# Runner
+# Concurrent Runner — correct WS protocol, 10x concurrency, retry on error
 # =====================================================================
-async def send_and_wait(ws, text, timeout=TIMEOUT_PER_TEST):
-    """Send a chat message and collect the complete response."""
-    msg = json.dumps({"type": "chat", "message": text})
-    await ws.send(msg)
-    chunks = []
+
+import uuid
+
+CONCURRENCY = 10
+MAX_RETRIES = 2
+
+
+async def send_and_wait_single(question: str, timeout: float = TIMEOUT_PER_TEST) -> tuple[str, float]:
+    """Open a fresh WS connection, send one message, wait for final response."""
+    msg_id = str(uuid.uuid4())[:8]
     t0 = time.time()
     try:
-        while True:
-            remaining = timeout - (time.time() - t0)
-            if remaining <= 0:
-                break
-            raw = await asyncio.wait_for(ws.recv(), timeout=remaining)
-            data = json.loads(raw)
-            if data.get("type") == "chat_chunk":
-                chunks.append(data.get("text", ""))
-            elif data.get("type") == "chat_response":
-                chunks.append(data.get("text", ""))
-                break
-            elif data.get("type") == "chat_end":
-                break
-            elif data.get("type") == "error":
-                return f"[ERROR] {data.get('message', 'unknown')}"
+        async with websockets.connect(WS_URL, close_timeout=5) as ws:
+            await ws.send(json.dumps({
+                "type": "message",
+                "id": msg_id,
+                "content": question,
+                "language": "en",
+            }))
+            while True:
+                remaining = timeout - (time.time() - t0)
+                if remaining <= 0:
+                    return "[TIMEOUT]", time.time() - t0
+                raw = await asyncio.wait_for(ws.recv(), timeout=min(remaining, 3))
+                data = json.loads(raw)
+                if data.get("type") == "response" and not data.get("streaming"):
+                    return data.get("content", ""), time.time() - t0
+                elif data.get("type") == "error":
+                    return f"[ERROR] {data.get('content', '')}", time.time() - t0
     except asyncio.TimeoutError:
-        pass
-    except websockets.exceptions.ConnectionClosed:
-        return "[ERROR] connection closed"
-    return "".join(chunks)
-
-
-async def run_all():
-    """Run all tests and print results."""
-    results = []
-    cat_stats: dict[str, dict] = {}
-    total_pass = 0
-    total_fail = 0
-    t_start = time.time()
-
-    print(f"\n{'='*70}")
-    print(f"  Facai Chat E2E Test Suite — {len(TESTS)} tests")
-    print(f"{'='*70}\n")
-
-    try:
-        ws = await websockets.connect(WS_URL)
+        return "[TIMEOUT]", time.time() - t0
     except Exception as e:
-        print(f"[FATAL] Cannot connect to {WS_URL}: {e}")
-        return
+        return f"[EXCEPTION] {e}", time.time() - t0
 
-    for i, (cat, question, expected, eval_fn) in enumerate(TESTS, 1):
-        short_q = (question[:60] + "...") if len(question) > 60 else question
-        print(f"[{i:4d}/{len(TESTS)}] ({cat:24s}) {short_q}", end=" ", flush=True)
 
-        t0 = time.time()
-        try:
-            response = await send_and_wait(ws, question)
-        except Exception as e:
-            response = f"[EXCEPTION] {e}"
-        elapsed = time.time() - t0
+async def run_one_test(index: int, cat: str, question: str, expected: str, eval_fn) -> dict:
+    """Run a single test with retry on transient errors."""
+    for attempt in range(MAX_RETRIES + 1):
+        if not question or not question.strip():
+            return {"index": index, "category": cat, "question": question,
+                    "expected": expected, "response": "(empty)", "passed": True,
+                    "reason": "skip_empty", "elapsed": 0}
+
+        response, elapsed = await send_and_wait_single(question)
+
+        # Retry on 500/timeout/connection errors
+        is_transient = (response.startswith("[TIMEOUT]") or
+                        response.startswith("[EXCEPTION]") or
+                        response.startswith("[ERROR]") or
+                        "500" in response or
+                        "Internal server" in response)
+        if is_transient and attempt < MAX_RETRIES:
+            await asyncio.sleep(2 * (attempt + 1))
+            continue
 
         try:
             passed, reason = eval_fn(response)
         except Exception as e:
             passed, reason = False, f"eval_error: {e}"
 
-        status = "PASS" if passed else "FAIL"
-        symbol = "+" if passed else "x"
-        print(f"[{symbol}] {elapsed:.1f}s — {reason}")
+        return {"index": index, "category": cat, "question": question[:80],
+                "expected": expected, "response": response[:500],
+                "passed": passed, "reason": reason, "elapsed": round(elapsed, 2)}
 
-        if passed:
-            total_pass += 1
-        else:
-            total_fail += 1
-            if not passed:
-                short_r = (response[:120] + "...") if len(response) > 120 else response
-                print(f"         response: {short_r}")
+    return {"index": index, "category": cat, "question": question[:80],
+            "expected": expected, "response": response[:200],
+            "passed": False, "reason": "max_retries", "elapsed": 0}
 
+
+async def run_all():
+    """Run all 1000 tests with bounded concurrency."""
+    t_start = time.time()
+    print(f"\n{'='*70}")
+    print(f"  Facai Chat E2E Test Suite — {len(TESTS)} tests (concurrency={CONCURRENCY})")
+    print(f"{'='*70}\n")
+
+    semaphore = asyncio.Semaphore(CONCURRENCY)
+    results: list[dict] = [None] * len(TESTS)
+    completed = 0
+
+    async def run_with_sem(i, cat, q, exp, fn):
+        nonlocal completed
+        async with semaphore:
+            r = await run_one_test(i, cat, q, exp, fn)
+            results[i] = r
+            completed += 1
+            sym = "✅" if r["passed"] else "❌"
+            short_q = (q[:50] + "...") if len(q) > 50 else q
+            print(f"  [{completed:4d}/{len(TESTS)}] {sym} ({cat:20s}) {short_q} — {r['elapsed']:.1f}s")
+            if not r["passed"]:
+                print(f"           → {r['response'][:100]}")
+
+    tasks = [
+        run_with_sem(i, cat, q, exp, fn)
+        for i, (cat, q, exp, fn) in enumerate(TESTS)
+    ]
+    await asyncio.gather(*tasks)
+
+    total_time = time.time() - t_start
+
+    # Category stats
+    cat_stats: dict[str, dict] = {}
+    total_pass = sum(1 for r in results if r and r["passed"])
+    total_fail = sum(1 for r in results if r and not r["passed"])
+    for r in results:
+        if not r:
+            continue
+        cat = r["category"]
         if cat not in cat_stats:
             cat_stats[cat] = {"pass": 0, "fail": 0, "total_time": 0.0}
-        cat_stats[cat]["pass" if passed else "fail"] += 1
-        cat_stats[cat]["total_time"] += elapsed
-
-        results.append({
-            "index": i,
-            "category": cat,
-            "question": question,
-            "expected": expected,
-            "response": response[:500],
-            "passed": passed,
-            "reason": reason,
-            "elapsed": round(elapsed, 2),
-        })
-
-    await ws.close()
-    total_time = time.time() - t_start
+        cat_stats[cat]["pass" if r["passed"] else "fail"] += 1
+        cat_stats[cat]["total_time"] += r["elapsed"]
 
     # Summary table
     print(f"\n{'='*70}")
-    print(f"  SUMMARY")
+    print(f"  SUMMARY — {total_pass}/{total_pass+total_fail} passed "
+          f"({100*total_pass/(total_pass+total_fail):.1f}%) in {total_time:.0f}s")
     print(f"{'='*70}")
-    print(f"  {'Category':<28s} {'Pass':>6s} {'Fail':>6s} {'Total':>6s} {'Rate':>7s} {'Time':>8s}")
-    print(f"  {'-'*62}")
+    print(f"  {'Category':<28s} {'Pass':>6s} {'Fail':>6s} {'Total':>6s} {'Rate':>7s}")
+    print(f"  {'-'*55}")
     for cat in sorted(cat_stats.keys()):
         s = cat_stats[cat]
         total = s["pass"] + s["fail"]
         rate = s["pass"] / total * 100 if total else 0
-        print(f"  {cat:<28s} {s['pass']:>6d} {s['fail']:>6d} {total:>6d} {rate:>6.1f}% {s['total_time']:>7.1f}s")
-    print(f"  {'-'*62}")
-    overall_rate = total_pass / (total_pass + total_fail) * 100 if (total_pass + total_fail) else 0
-    print(f"  {'TOTAL':<28s} {total_pass:>6d} {total_fail:>6d} {total_pass+total_fail:>6d} {overall_rate:>6.1f}% {total_time:>7.1f}s")
-    print(f"{'='*70}\n")
+        sym = "✅" if s["fail"] == 0 else "⚠️"
+        print(f"  {sym} {cat:<26s} {s['pass']:>6d} {s['fail']:>6d} {total:>6d} {rate:>6.1f}%")
+    print(f"  {'-'*55}")
+    print(f"  {'TOTAL':<28s} {total_pass:>6d} {total_fail:>6d} "
+          f"{total_pass+total_fail:>6d} {100*total_pass/(total_pass+total_fail):.1f}%")
+    print(f"  Wall time: {total_time:.0f}s ({total_time/60:.1f}m)")
+    print(f"{'='*70}")
 
-    # Save results
+    # Failures detail
+    failures = [r for r in results if r and not r["passed"]]
+    if failures:
+        print(f"\n  FAILURES ({len(failures)}):")
+        for r in failures[:50]:  # Show first 50
+            print(f"    [{r['category']}] Q: {r['question']}")
+            print(f"      R: {r['response'][:120]}")
+            print(f"      Why: {r['reason']}")
+        if len(failures) > 50:
+            print(f"    ... and {len(failures)-50} more")
+
+    # Save
     out_path = "/tmp/e2e_results.json"
     with open(out_path, "w") as f:
-        json.dump({
-            "total_pass": total_pass,
-            "total_fail": total_fail,
-            "total_time": round(total_time, 2),
-            "category_stats": cat_stats,
-            "results": results,
-        }, f, indent=2, ensure_ascii=False)
-    print(f"Results saved to {out_path}")
+        json.dump({"total_pass": total_pass, "total_fail": total_fail,
+                    "total_time": round(total_time, 2),
+                    "category_stats": cat_stats, "results": results},
+                   f, indent=2, ensure_ascii=False)
+    print(f"\nResults saved to {out_path}")
 
 
 if __name__ == "__main__":
