@@ -23,6 +23,7 @@ log = logging.getLogger("openclaw-relay")
 OPENCLAW_CLI = shutil.which("openclaw") or "/opt/homebrew/bin/openclaw"
 DEFAULT_PORT = 8765
 AGENT_ID = "main"  # OpenClaw agent to route to
+SESSION_ID = "ryanhub-ios"  # Dedicated session to avoid lock conflicts with Telegram
 TIMEOUT_SECONDS = 600
 
 
@@ -77,6 +78,7 @@ async def _process_and_respond(ws, msg_id: str, content: str, language: str):
         cmd = [
             OPENCLAW_CLI, "agent",
             "--agent", AGENT_ID,
+            "--session-id", SESSION_ID,
             "--message", content,
             "--json",
             "--timeout", str(TIMEOUT_SECONDS),
