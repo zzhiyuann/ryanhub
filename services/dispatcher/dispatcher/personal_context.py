@@ -21,17 +21,31 @@ log = logging.getLogger(__name__)
 
 BRIDGE_URL = "http://localhost:18790"
 
+# Simple TTL cache for bridge server fetches (avoids hitting bridge on every message)
+_cache: dict[str, tuple[float, object]] = {}
+_CACHE_TTL = 30.0  # seconds
+
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
 def _fetch_json(path: str, timeout: float = 3.0):
-    """GET a JSON endpoint from the bridge server. Returns parsed data or None."""
+    """GET a JSON endpoint from the bridge server. Returns parsed data or None.
+    Results are cached for 30 seconds to avoid redundant HTTP calls."""
+    import time as _time
+    now = _time.time()
+    if path in _cache:
+        cached_at, cached_data = _cache[path]
+        if now - cached_at < _CACHE_TTL:
+            return cached_data
+
     try:
         req = urllib.request.Request(f"{BRIDGE_URL}{path}")
         with urllib.request.urlopen(req, timeout=timeout) as resp:
-            return json.loads(resp.read())
+            data = json.loads(resp.read())
+        _cache[path] = (now, data)
+        return data
     except Exception:
         return None
 
