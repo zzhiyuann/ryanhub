@@ -464,6 +464,7 @@ class WebSocketServer:
         If there are active clients when caching, immediately flush the
         pending queue so reconnected clients don't miss responses that
         completed while they were away (race condition fix).
+        Also triggers Telegram fallback notification when no clients are connected.
         """
         msg_type = data.get("type")
         is_final_response = msg_type == "response" and not data.get("streaming", False)
@@ -478,6 +479,9 @@ class WebSocketServer:
             # and the replay queue is still empty at replay time.
             if self._clients:
                 asyncio.create_task(self._flush_pending())
+            elif is_final_response and not self._clients:
+                # No WS clients connected — send via Telegram as fallback
+                asyncio.create_task(self._telegram_fallback(data))
 
     async def _flush_pending(self) -> None:
         """Send all pending deliveries to currently connected clients."""
