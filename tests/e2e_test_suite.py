@@ -3268,6 +3268,38 @@ TESTS = [
 
     ("coaching", "best exercises for lower back pain?", "Should give safe exercise suggestions",
      lambda r: (c(r, ["back", "pain", "stretch", "exercise"]) or len(r) > 30, "coaching_back_pain")),
+
+    # --- final 10 extra tests ---
+    ("bobo_summary", "health snapshot right now", "Should give instant overview",
+     lambda r: (len(r) > 30, "summary_snapshot_now")),
+
+    ("health_read", "am I in a caloric surplus or deficit?", "Should assess intake vs burn",
+     lambda r: (c(r, ["calor", "surplus", "deficit"]) or len(r) > 20, "health_read_surplus_deficit")),
+
+    ("temporal", "my health data from exactly one week ago", "Should query 7 days back",
+     lambda r: (ok(r) and len(r) > 15, "temporal_exact_one_week")),
+
+    ("proactive", "I've been eating too much sugar lately", "Should flag sugar pattern",
+     lambda r: (c(r, ["sugar", "cut", "reduc"]) or len(r) > 20, "proactive_high_sugar")),
+
+    ("narrative", "mood: neutral, just a normal day", "Should acknowledge neutral mood",
+     lambda r: (ok(r), "narrative_neutral_mood")),
+
+    ("cross_all", "compare my health data: this month vs last month holistically",
+     "Should do full month-over-month comparison",
+     lambda r: (len(r) > 60, "cross_all_mom_compare")),
+
+    ("accuracy", "how many calories does 30 min of running burn?", "Should estimate 250-400",
+     lambda r: (any(ch.isdigit() for ch in r) and c(r, ["calor"]), "accuracy_running_cal")),
+
+    ("chinese", "我最近的体重变化趋势", "Should show weight trend in Chinese",
+     lambda r: (cn(r) or c(r, ["体重", "趋势", "weight"]), "cn_weight_trend2")),
+
+    ("edge", "what if I told you I was a robot?", "Should respond playfully",
+     lambda r: (ok(r), "edge_user_is_robot")),
+
+    ("basic", "what's something you can't do?", "Should acknowledge limitations honestly",
+     lambda r: (len(r) > 15, "basic_limitations")),
 ]
 
 # Verify exactly 1000 tests
