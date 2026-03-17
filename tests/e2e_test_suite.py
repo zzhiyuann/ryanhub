@@ -3311,33 +3311,51 @@ assert len(TESTS) == 1000, f"Expected 1000 tests, got {len(TESTS)}"
 # =====================================================================
 
 import uuid
+import shutil
+import os
+import re
 
-CONCURRENCY = 2  # OpenClaw session lock limits true parallelism
+CONCURRENCY = 2
 MAX_RETRIES = 2
+OPENCLAW_CLI = shutil.which("openclaw") or "/opt/homebrew/bin/openclaw"
 
 
-async def send_and_wait_single(question: str, timeout: float = TIMEOUT_PER_TEST) -> tuple[str, float]:
-    """Open a fresh WS connection, send one message, wait for final response."""
-    msg_id = str(uuid.uuid4())[:8]
+async def send_and_wait_single(question: str, timeout: float = TIMEOUT_PER_TEST) -> tuple:
+    """Call openclaw agent CLI directly — embedded mode, no gateway contention."""
     t0 = time.time()
+    sid = f"e2e-{uuid.uuid4().hex[:8]}"
+    cmd = [
+        OPENCLAW_CLI, "agent", "--local",
+        "--agent", "main", "--session-id", sid,
+        "--json", "--timeout", "120", "--thinking", "off",
+        "--message", question,
+    ]
+    env = os.environ.copy()
+    for k in ("CLAUDE_CODE", "CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT"):
+        env.pop(k, None)
+
     try:
-        async with websockets.connect(WS_URL, close_timeout=5) as ws:
-            await ws.send(json.dumps({
-                "type": "message",
-                "id": msg_id,
-                "content": question,
-                "language": "en",
-            }))
-            while True:
-                remaining = timeout - (time.time() - t0)
-                if remaining <= 0:
-                    return "[TIMEOUT]", time.time() - t0
-                raw = await asyncio.wait_for(ws.recv(), timeout=min(remaining, 3))
-                data = json.loads(raw)
-                if data.get("type") == "response" and not data.get("streaming"):
-                    return data.get("content", ""), time.time() - t0
-                elif data.get("type") == "error":
-                    return f"[ERROR] {data.get('content', '')}", time.time() - t0
+        proc = await asyncio.create_subprocess_exec(
+            *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, env=env,
+        )
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+        raw = stdout.decode("utf-8", errors="replace")
+
+        # Extract text from OpenClaw JSON
+        json_start = raw.find("{")
+        if json_start >= 0:
+            try:
+                data = json.loads(raw[json_start:])
+                payloads = data.get("result", {}).get("payloads", data.get("payloads", []))
+                texts = [p["text"] for p in (payloads or []) if isinstance(p, dict) and p.get("text")]
+                if texts:
+                    return "\n\n".join(texts), time.time() - t0
+            except (json.JSONDecodeError, KeyError):
+                pass
+
+        clean = re.sub(r'\x1b\[[0-9;]*m', '', raw).strip()
+        return clean or "[EMPTY]", time.time() - t0
+
     except asyncio.TimeoutError:
         return "[TIMEOUT]", time.time() - t0
     except Exception as e:
