@@ -1925,10 +1925,30 @@ def _build_range_bundle(start_date_str, end_date_str, days_str):
 # HTTP Handler
 # ---------------------------------------------------------------------------
 
+_BRIDGE_AUTH_TOKEN = os.environ.get("BRIDGE_AUTH_TOKEN", "")
+
+
 class BridgeHandler(http.server.BaseHTTPRequestHandler):
     """HTTP request handler for all RyanHub bridge endpoints."""
 
+    def _check_auth(self) -> bool:
+        """Validate Authorization header if BRIDGE_AUTH_TOKEN is set.
+        Returns True if authorized (or no token configured)."""
+        if not _BRIDGE_AUTH_TOKEN:
+            return True  # No auth configured — open access
+        auth = self.headers.get("Authorization", "")
+        if auth == f"Bearer {_BRIDGE_AUTH_TOKEN}" or auth == _BRIDGE_AUTH_TOKEN:
+            return True
+        # Allow localhost without auth (bridge server queries itself)
+        client_ip = self.client_address[0]
+        if client_ip in ("127.0.0.1", "::1", "localhost"):
+            return True
+        self._send_json(401, {"error": "Unauthorized"})
+        return False
+
     def do_GET(self):
+        if not self._check_auth():
+            return
         parsed = urlparse(self.path)
         path = parsed.path
         # Alias /bobo/ → /popo/ after iOS module rename
