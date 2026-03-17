@@ -2593,8 +2593,9 @@ class Dispatcher:
                     urlreq.urlopen(req, timeout=3)
 
                 await asyncio.to_thread(_post)
-            except Exception:
-                pass  # Silent failure — this is supplementary
+                log.info("synced %s message to bridge (%d chars)", role, len(content))
+            except Exception as exc:
+                log.warning("bridge sync failed for %s: %s", role, exc)
 
     async def _capture_memory(self, conversation: str, project_name: str):
         """Extract facts from a completed conversation and store them in memory.
