@@ -1939,14 +1939,19 @@ final class BoboViewModel {
             store.execute(q)
         }
 
-        // Wait for all queries to complete, then update on main thread
-        DispatchQueue.global().async {
-            group.wait()
-            print("[BoBo] HealthKit direct query: fetched \(allEvents.count) events for \(self.selectedDate)")
-            Task { @MainActor in
+        // Wait for all queries to complete asynchronously (non-blocking).
+        // Uses a detached task so the main thread stays free for UI rendering.
+        Task.detached {
+            // Use a continuation to bridge DispatchGroup → async
+            await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
+                group.notify(queue: .global()) { cont.resume() }
+            }
+            let count = allEvents.count
+            await MainActor.run {
                 self.healthKitEvents = allEvents
                 completion?()
             }
+            print("[BoBo] HealthKit direct query: fetched \(count) events for \(self.selectedDate)")
         }
     }
 
