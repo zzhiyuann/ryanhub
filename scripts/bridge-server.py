@@ -1994,6 +1994,8 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
                 self._send_json(404, {"error": "Not found"})
 
     def do_POST(self):
+        if not self._check_auth():
+            return
         path = urlparse(self.path).path
         # Alias /bobo/ → /popo/ after iOS module rename
         if path.startswith("/bobo/"):
