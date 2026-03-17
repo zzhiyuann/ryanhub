@@ -293,6 +293,32 @@ final class BoboDataStore {
         }
     }
 
+    /// Number of days to keep on local device disk.
+    /// Older synced events are trimmed to free phone storage.
+    /// The bridge server retains all data permanently for on-demand loading.
+    private static let localRetentionDays: Int = 30
+
+    /// Remove events older than 30 days that have already been synced to the
+    /// bridge server. Unsyced events are never trimmed (to prevent data loss).
+    /// Runs once on init. The bridge server keeps full history — old data can
+    /// be fetched on-demand when the user navigates to past dates in the UI.
+    private func trimOldSyncedFromDisk() {
+        let cutoff = Date().addingTimeInterval(-Double(Self.localRetentionDays) * 86400)
+        let before = events.count
+        events.removeAll { event in
+            event.timestamp < cutoff && syncedEventIDs.contains(event.id)
+        }
+        let removed = before - events.count
+        if removed > 0 {
+            // Also clean up synced IDs for removed events
+            let currentIDs = Set(events.map(\.id))
+            syncedEventIDs = syncedEventIDs.intersection(currentIDs)
+            persistToDisk()
+            persistSyncedIDs()
+            print("[BoboDataStore] Trimmed \(removed) old synced events (>30 days) from local disk")
+        }
+    }
+
     /// Trim in-memory events if exceeding cap (keep newest).
     /// Does NOT write to disk — callers must persist first if needed.
     private func trimInMemoryOnly() {
