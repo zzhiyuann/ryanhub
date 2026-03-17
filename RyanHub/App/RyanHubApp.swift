@@ -89,8 +89,6 @@ struct RyanHubApp: App {
         let syncTask = Task { @MainActor in
             let engine = SensingEngine.shared
             await engine.handleBackgroundWake()
-            // Push fresh HealthKit data to bridge so chat queries get current data
-            await syncHealthKitToBridgeInBackground()
             await generateNudgesInBackground()
         }
 
