@@ -379,8 +379,11 @@ final class SensingEngine {
         dataStore.save(event)
         pendingEventCount = dataStore.pendingCount
 
-        // Trigger immediate sync if batch threshold reached
-        if pendingEventCount >= Self.batchSizeThreshold {
+        // Trigger immediate sync if batch threshold reached, or if app is
+        // in background (so HealthKit observer wake-ups push data to bridge
+        // immediately instead of waiting for 50 events).
+        let isBackground = UIApplication.shared.applicationState != .active
+        if pendingEventCount >= (isBackground ? 1 : Self.batchSizeThreshold) {
             Task { await syncPendingEvents() }
         }
     }
