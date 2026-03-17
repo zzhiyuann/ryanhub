@@ -483,6 +483,37 @@ class WebSocketServer:
                 # No WS clients connected — send via Telegram as fallback
                 asyncio.create_task(self._telegram_fallback(data))
 
+    async def _telegram_fallback(self, data: dict) -> None:
+        """Send a condensed notification to Telegram when iOS is disconnected.
+
+        Uses the Boo bot (@bofacaibot) to deliver a summary so the user
+        always gets notified even when the app is backgrounded/closed.
+        """
+        import urllib.request
+        content = data.get("content", "")
+        if not content or len(content) < 5:
+            return
+        # Truncate for Telegram (max 4096 chars)
+        if len(content) > 3000:
+            content = content[:3000] + "\n\n[truncated — open RyanHub for full response]"
+        bot_token = "7740709485:AAF35LkeavJ5-F4C6hcG5PC_7RdC9AeI8lI"
+        chat_id = 7542082932
+        try:
+            payload = json.dumps({
+                "chat_id": chat_id,
+                "text": f"📱 [RyanHub] Facai says:\n\n{content}",
+            }).encode()
+            req = urllib.request.Request(
+                f"https://api.telegram.org/bot{bot_token}/sendMessage",
+                data=payload,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            await asyncio.to_thread(lambda: urllib.request.urlopen(req, timeout=5))
+            log.info("ws telegram fallback sent (%d chars)", len(content))
+        except Exception as e:
+            log.debug("ws telegram fallback failed: %s", e)
+
     async def _flush_pending(self) -> None:
         """Send all pending deliveries to currently connected clients."""
         if not self._pending_deliveries or not self._clients:
