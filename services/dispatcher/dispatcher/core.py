@@ -2573,7 +2573,7 @@ class Dispatcher:
 
         Non-blocking background task. Silently fails if bridge server is unavailable.
         """
-        import urllib.request
+        import urllib.request as urlreq
         bridge = "http://localhost:18790"
         for role, content in [("user", user_text), ("assistant", assistant_text)]:
             try:
@@ -2582,15 +2582,17 @@ class Dispatcher:
                     "content": content,
                     "source": source,
                 }).encode()
-                req = urllib.request.Request(
-                    f"{bridge}/chat/messages/add",
-                    data=payload,
-                    headers={"Content-Type": "application/json"},
-                    method="POST",
-                )
-                await asyncio.to_thread(
-                    lambda: urllib.request.urlopen(req, timeout=3)
-                )
+
+                def _post(data=payload):
+                    req = urlreq.Request(
+                        f"{bridge}/chat/messages/add",
+                        data=data,
+                        headers={"Content-Type": "application/json"},
+                        method="POST",
+                    )
+                    urlreq.urlopen(req, timeout=3)
+
+                await asyncio.to_thread(_post)
             except Exception:
                 pass  # Silent failure — this is supplementary
 
