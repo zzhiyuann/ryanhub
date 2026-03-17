@@ -94,6 +94,21 @@ final class BoboDataStore {
         persistSyncedIDs()
     }
 
+    /// Delete a specific event from the local store and synced-id cache.
+    @discardableResult
+    func deleteEvent(id: UUID) -> Bool {
+        let originalCount = events.count
+        events.removeAll { $0.id == id }
+        syncedEventIDs.remove(id)
+
+        guard events.count != originalCount else { return false }
+
+        persistToDisk()
+        persistSyncedIDs()
+        trimInMemoryOnly()
+        return true
+    }
+
     /// Update an existing event's payload by ID. Used to enrich screen "on" events
     /// with on-duration when the corresponding "off" event arrives.
     func updateEventPayload(id: UUID, merge newPayload: [String: String]) {

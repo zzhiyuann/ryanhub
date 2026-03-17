@@ -3,13 +3,17 @@ import Foundation
 // MARK: - Dashboard API Response
 
 /// Top-level response from GET /api/mainlines
-struct DashboardResponse: Codable {
+struct DashboardResponse: Decodable {
     let lastUpdated: String?
     let mainlines: [DashboardMainline]
     let today: DashboardToday?
     let agentEvents: [DashboardAgentEvent]?
-    let nlQueue: [String]?
     let agents: [String: DashboardAgent]?
+
+    // Use custom decoding to skip unknown fields gracefully
+    enum CodingKeys: String, CodingKey {
+        case lastUpdated, mainlines, today, agentEvents, agents
+    }
 }
 
 // MARK: - Mainline
@@ -110,10 +114,14 @@ struct DashboardTodayItem: Codable, Identifiable {
 // MARK: - Agent Event
 
 struct DashboardAgentEvent: Codable, Identifiable {
-    var id: String { "\(agent)-\(timestamp)" }
+    let id: String
     let agent: String
-    let event: String
+    let action: String
+    let mainlineId: String?
+    let taskId: String?
+    let message: String?
     let timestamp: String
+    let reviewed: Bool?
 }
 
 // MARK: - Agent

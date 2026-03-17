@@ -958,6 +958,7 @@ final class BoboViewModel {
         }
 
         let duration = narrationDuration
+        let narrationTimestamp = recordingStartTime ?? Date()
         guard duration >= 1.0 else {
             // Too short, discard
             narrationState = .idle
@@ -975,7 +976,7 @@ final class BoboViewModel {
         // right away — before the async upload/analysis begins.
         let narration = Narration(
             id: narrationId,
-            timestamp: Date(),
+            timestamp: narrationTimestamp,
             transcript: "",
             duration: duration,
             audioFileRef: nil  // Will be set after upload
@@ -1608,6 +1609,89 @@ final class BoboViewModel {
         request.timeoutInterval = 30
 
         _ = try? await URLSession.shared.data(for: request)
+    }
+
+    private func saveFoodEntries() {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        if let data = try? encoder.encode(foodEntries) {
+            UserDefaults.standard.set(data, forKey: "ryanhub_health_food")
+        }
+    }
+
+    private func saveActivityEntries() {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        if let data = try? encoder.encode(activityEntries) {
+            UserDefaults.standard.set(data, forKey: "ryanhub_health_activity")
+        }
+    }
+
+    private func deleteRemoteItem(endpoint: String, id: UUID) async {
+        guard var components = URLComponents(string: "\(Self.bridgeBaseURL)\(endpoint)") else { return }
+        components.queryItems = [URLQueryItem(name: "id", value: id.uuidString)]
+        guard let url = components.url else { return }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        request.timeoutInterval = 30
+
+        do {
+            let (_, response) = try await URLSession.shared.data(for: request)
+            if let httpResponse = response as? HTTPURLResponse,
+               !(200..<300).contains(httpResponse.statusCode) {
+                print("[BoboVM] Server returned \(httpResponse.statusCode) for DELETE \(endpoint)")
+            }
+        } catch {
+            print("[BoboVM] Failed to delete \(id.uuidString) from \(endpoint): \(error.localizedDescription)")
+        }
+    }
+
+    func deleteTimelineItem(_ item: TimelineItem) async {
+        expandedItemIDs.remove(item.id)
+
+        switch item {
+        case .sensing(let event):
+            guard engine.deleteStoredEvent(id: event.id) else { return }
+            await deleteRemoteItem(endpoint: "/popo/sensing", id: event.id)
+
+        case .narration(let narration):
+            let originalCount = narrations.count
+            narrations.removeAll { $0.id == narration.id }
+            guard narrations.count != originalCount else { return }
+            saveNarrations()
+            await deleteRemoteItem(endpoint: "/popo/narrations", id: narration.id)
+
+        case .nudge(let nudge):
+            let originalCount = nudges.count
+            nudges.removeAll { $0.id == nudge.id }
+            guard nudges.count != originalCount else { return }
+            saveNudges()
+            await deleteRemoteItem(endpoint: "/popo/nudges", id: nudge.id)
+
+        case .meal(let food):
+            let originalCount = foodEntries.count
+            foodEntries.removeAll { $0.id == food.id }
+            guard foodEntries.count != originalCount else { return }
+            saveFoodEntries()
+            await deleteRemoteItem(endpoint: "/health-data/food", id: food.id)
+
+        case .activity(let activity):
+            let originalCount = activityEntries.count
+            activityEntries.removeAll { $0.id == activity.id }
+            guard activityEntries.count != originalCount else { return }
+            saveActivityEntries()
+            await deleteRemoteItem(endpoint: "/health-data/activity", id: activity.id)
+        }
+    }
+
+    func canDeleteTimelineItem(_ item: TimelineItem) -> Bool {
+        switch item {
+        case .sensing(let event):
+            return !Self.healthKitModalities.contains(event.modality)
+        case .narration, .nudge, .meal, .activity:
+            return true
+        }
     }
 
     // MARK: - Health Data Loading

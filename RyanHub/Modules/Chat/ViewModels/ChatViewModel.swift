@@ -214,8 +214,8 @@ final class ChatViewModel {
         let mentionRouting = Self.parseAgentMentionPrefix(from: text)
         let contentToSend = Self.buildContentWithContext(userText: mentionRouting.cleanText)
 
-        // Language code sent as metadata — dispatcher handles language matching.
-        let languageCode = (appState?.language ?? .english).rawValue
+        // Language is selected per message so replies follow the user's actual input.
+        let languageCode = Self.detectMessageLanguageCode(from: mentionRouting.cleanText)
 
         Task {
             do {
@@ -255,10 +255,8 @@ final class ChatViewModel {
         isTyping = true
         startProgressTimer()
 
-        let language = appState?.language ?? .english
-        let languageCode = language.rawValue
-
         let wireCaption = mentionRouting.cleanText
+        let languageCode = Self.detectMessageLanguageCode(from: wireCaption)
 
         Task {
             do {
@@ -383,16 +381,13 @@ final class ChatViewModel {
         isTyping = true
         startProgressTimer()
 
-        let language = appState?.language ?? .english
-        let languageCode = language.rawValue
-
         Task {
             do {
                 try await webSocket.sendVoiceMessage(
                     id: messageId,
                     audioBase64: base64,
                     duration: duration,
-                    language: languageCode
+                    language: nil
                 )
             } catch {
                 self.messageStatuses[messageId] = .failed(error.localizedDescription)
@@ -464,8 +459,8 @@ final class ChatViewModel {
         switch message.messageType {
         case .image:
             // Re-send image message
-            let languageCode = (appState?.language ?? .english).rawValue
             let wireCaption = message.content
+            let languageCode = Self.detectMessageLanguageCode(from: wireCaption)
             let messageId = message.id
             Task {
                 do {
@@ -483,8 +478,6 @@ final class ChatViewModel {
             return
         case .voice:
             // Re-send voice message
-            let language = appState?.language ?? .english
-            let languageCode = language.rawValue
             let messageId = message.id
             Task {
                 do {
@@ -492,7 +485,7 @@ final class ChatViewModel {
                         id: messageId,
                         audioBase64: message.voiceBase64 ?? "",
                         duration: message.voiceDuration ?? 0,
-                        language: languageCode
+                        language: nil
                     )
                 } catch {
                     self.messageStatuses[messageId] = .failed(error.localizedDescription)
@@ -504,7 +497,7 @@ final class ChatViewModel {
             let mentionRouting = Self.parseAgentMentionPrefix(from: message.content)
             contentToSend = Self.buildContentWithContext(userText: mentionRouting.cleanText)
             let messageId = message.id
-            let languageCode = (appState?.language ?? .english).rawValue
+            let languageCode = Self.detectMessageLanguageCode(from: mentionRouting.cleanText)
             Task {
                 do {
                     try await webSocket.sendMessage(
@@ -566,7 +559,7 @@ final class ChatViewModel {
         // Send as a regular new message
         let mentionRouting = Self.parseAgentMentionPrefix(from: trimmed)
         let contentToSend = Self.buildContentWithContext(userText: mentionRouting.cleanText)
-        let languageCode = (appState?.language ?? .english).rawValue
+        let languageCode = Self.detectMessageLanguageCode(from: mentionRouting.cleanText)
 
         Task {
             do {
@@ -729,6 +722,22 @@ final class ChatViewModel {
         return (text, nil)
     }
 
+    /// Detect the language of a single user message for reply localization.
+    /// Chinese characters force Chinese; otherwise default to English.
+    static func detectMessageLanguageCode(from text: String) -> String {
+        for scalar in text.unicodeScalars {
+            switch scalar.value {
+            case 0x4E00...0x9FFF, 0x3400...0x4DBF, 0x20000...0x2A6DF,
+                 0x2A700...0x2B73F, 0x2B740...0x2B81F, 0x2B820...0x2CEAF,
+                 0xF900...0xFAFF, 0x2F800...0x2FA1F:
+                return AppLanguage.chinese.rawValue
+            default:
+                continue
+            }
+        }
+        return AppLanguage.english.rawValue
+    }
+
     // MARK: - Private
 
     /// Append a message and notify the view.
@@ -872,6 +881,16 @@ final class ChatViewModel {
 
         // Find the original user message to auto-link the reply
         let userMessage = messages.first(where: { $0.id == id && $0.role == .user })
+        if userMessage == nil {
+            // Stale replay guard: after reconnect, the dispatcher can replay
+            // undelivered finals for old message IDs that this local timeline
+            // no longer contains. Dropping unmatched responses prevents random
+            // orphan bubbles like "NO" from appearing in chat.
+            messageStatuses.removeValue(forKey: id)
+            messageSendTimes.removeValue(forKey: id)
+            updateGlobalTypingState()
+            return
+        }
         let replyPreview = userMessage.map { Self.buildReplyPreview(for: $0) }
 
         if let existingIndex = messages.firstIndex(where: { $0.id == assistantId && $0.role == .assistant }) {

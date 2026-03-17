@@ -24,16 +24,8 @@ final class DashboardViewModel {
 
     // MARK: - Base URL
 
-    /// Derives the dashboard server URL from the app's configured server host.
-    /// Falls back to the Tailscale address.
+    /// Dashboard server URL via Tailscale.
     private var baseURL: String {
-        // Try to get the host from the existing server URL config
-        if let savedURL = UserDefaults.standard.string(forKey: "ryanhub_server_url"),
-           let url = URL(string: savedURL),
-           let host = url.host {
-            return "https://\(host)/dashboard"
-        }
-        // Fallback to Tailscale URL
         return "https://zhiyuans-imac.tail88572f.ts.net/dashboard"
     }
 
@@ -269,13 +261,12 @@ enum DashboardError: LocalizedError {
 
 // MARK: - SSL Trust Delegate
 
-/// Trusts all certificates for dashboard connections (Tailscale self-signed).
-final class DashboardTrustDelegate: NSObject, URLSessionDelegate, @unchecked Sendable {
+/// Trusts all certificates for dashboard connections (Tailscale).
+final class DashboardTrustDelegate: NSObject, URLSessionDelegate, URLSessionTaskDelegate, @unchecked Sendable {
     static let shared = DashboardTrustDelegate()
 
-    func urlSession(
-        _ session: URLSession,
-        didReceive challenge: URLAuthenticationChallenge,
+    private func handleChallenge(
+        _ challenge: URLAuthenticationChallenge,
         completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
     ) {
         if challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
@@ -284,5 +275,24 @@ final class DashboardTrustDelegate: NSObject, URLSessionDelegate, @unchecked Sen
         } else {
             completionHandler(.performDefaultHandling, nil)
         }
+    }
+
+    // Session-level
+    func urlSession(
+        _ session: URLSession,
+        didReceive challenge: URLAuthenticationChallenge,
+        completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+    ) {
+        handleChallenge(challenge, completionHandler: completionHandler)
+    }
+
+    // Task-level
+    func urlSession(
+        _ session: URLSession,
+        task: URLSessionTask,
+        didReceive challenge: URLAuthenticationChallenge,
+        completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+    ) {
+        handleChallenge(challenge, completionHandler: completionHandler)
     }
 }

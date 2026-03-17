@@ -13,6 +13,7 @@ struct TimelineEventRow: View {
     let isExpanded: Bool
     let isLast: Bool
     let onTap: () -> Void
+    let onDelete: (() -> Void)?
 
     var body: some View {
         Button(action: onTap) {
@@ -65,6 +66,13 @@ struct TimelineEventRow: View {
             }
         }
         .buttonStyle(.plain)
+        .contextMenu {
+            if let onDelete {
+                Button(role: .destructive, action: onDelete) {
+                    Label("Delete", systemImage: "trash")
+                }
+            }
+        }
     }
 
     // MARK: - Timeline Column

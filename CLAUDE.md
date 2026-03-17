@@ -195,3 +195,6 @@ Agents fail when they lack context. Every dispatch must include:
 - Multiple back-and-forths on the same issue = system/process failure, reflect on root cause
 - User having to repeat instructions = failure to internalize, write it down immediately
 - These learnings must be continuously updated based on experience and user feedback
+
+## Shared Context
+Read ~/.shared-agent-memory/CONTEXT.md for Ryan's identity, preferences, and current priorities.

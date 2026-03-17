@@ -494,6 +494,17 @@ final class SensingEngine {
         dataStore.events(for: date)
     }
 
+    /// Delete a stored sensing event from local cache and current UI state.
+    @discardableResult
+    func deleteStoredEvent(id: UUID) -> Bool {
+        let deleted = dataStore.deleteEvent(id: id)
+        guard deleted else { return false }
+
+        recentEvents.removeAll { $0.id == id }
+        pendingEventCount = dataStore.pendingCount
+        return true
+    }
+
     /// Return events filtered by modality.
     func events(for modality: SensingModality) -> [SensingEvent] {
         recentEvents.filter { $0.modality == modality }

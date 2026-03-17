@@ -41,6 +41,8 @@ Endpoints:
   POST     /popo/analyze — Behavioral analysis: generate proactive nudges from sensing data (LLM or rule-based)
   POST     /popo/location/enrich — Reverse geocode + semantic place enrichment
   POST     /popo/location/learn-place — Teach the system a named place
+  GET      /popo/day?date=... — Single-day BoBo bundle for date-aware queries
+  GET      /popo/range?days=7 or ?start=...&end=... — Multi-day BoBo summaries
   All GET endpoints support ?date=YYYY-MM-DD filtering.
 
 Usage:
@@ -102,6 +104,8 @@ DATA_FILES = {
 
 # Processed timeline snapshot (single JSON object, overwritten by iOS app)
 POPO_TIMELINE_FILE = os.path.join(BRIDGE_DATA_DIR, "popo_timeline.json")
+# Canonical current-day timeline snapshot for chat queries about "today/latest".
+POPO_TODAY_TIMELINE_FILE = os.path.join(BRIDGE_DATA_DIR, "popo_timeline_today.json")
 
 # POPO audio storage directory
 POPO_AUDIO_DIR = os.path.join(BRIDGE_DATA_DIR, "popo_audio")
@@ -664,7 +668,7 @@ def build_prompt(text, has_image):
     return FOOD_ANALYSIS_PROMPT_TEMPLATE.format(description=description)
 
 
-def run_claude_text(prompt: str) -> str:
+def run_claude_text(prompt: str, timeout: int = 60) -> str:
     """Run claude CLI with a text-only prompt."""
     env = os.environ.copy()
     env.pop("CLAUDE_CODE", None)
@@ -674,7 +678,7 @@ def run_claude_text(prompt: str) -> str:
         [CLAUDE_PATH, "-p", prompt, "--output-format", "json", "--model", "haiku"],
         capture_output=True,
         text=True,
-        timeout=60,
+        timeout=timeout,
         env=env,
     )
 
@@ -786,11 +790,107 @@ def _utc_to_local_str(ts_str):
     if not ts_str:
         return ts_str
     try:
-        dt = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
-        local_dt = dt.astimezone()  # Convert to system local timezone
+        dt = _parse_iso_datetime(ts_str, assume_local_if_naive=False)
+        if dt is None:
+            return ts_str[:16]
+        local_dt = dt.astimezone(_get_local_timezone())
         return local_dt.strftime("%Y-%m-%d %H:%M")
     except (ValueError, TypeError):
         return ts_str[:16]
+
+
+def _get_local_timezone():
+    # type: () -> timezone
+    """Return the server's local timezone."""
+    return datetime.now().astimezone().tzinfo or timezone.utc
+
+
+def _parse_iso_datetime(ts_str, assume_local_if_naive=True):
+    # type: (str, bool) -> Optional[datetime]
+    """Parse an ISO 8601 timestamp into an aware datetime.
+
+    Legacy bridge data sometimes stored naive local timestamps without an
+    explicit timezone. When `assume_local_if_naive` is true, interpret those
+    values in the server's local timezone so comparisons and display stay
+    stable across old/new records.
+    """
+    if not ts_str or not isinstance(ts_str, str):
+        return None
+
+    try:
+        dt = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+    if dt.tzinfo is None:
+        if assume_local_if_naive:
+            return dt.replace(tzinfo=_get_local_timezone())
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
+def _now_utc_iso():
+    # type: () -> str
+    """Return the current time as an ISO 8601 UTC timestamp."""
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _record_timestamp_at_or_after(record, cutoff):
+    # type: (Dict[str, Any], datetime) -> bool
+    """Return whether a record's timestamp is on/after the cutoff."""
+    if not isinstance(record, dict):
+        return False
+
+    dt = _parse_iso_datetime(record.get("timestamp", ""), assume_local_if_naive=True)
+    if dt is None:
+        return False
+    return dt >= cutoff
+
+
+def _local_date_string(dt):
+    # type: (datetime) -> str
+    """Format a datetime as YYYY-MM-DD in the server's local timezone."""
+    return dt.astimezone(_get_local_timezone()).strftime("%Y-%m-%d")
+
+
+def _record_matches_local_date(record, date_filter, field="timestamp"):
+    # type: (Dict[str, Any], str, str) -> bool
+    """Return whether a record belongs to the given local calendar day."""
+    if not isinstance(record, dict):
+        return False
+
+    value = record.get(field, "")
+    dt = _parse_iso_datetime(value, assume_local_if_naive=True)
+    if dt is None:
+        return False
+    return _local_date_string(dt) == date_filter
+
+
+def _sleep_record_matches_local_date(record, date_filter):
+    # type: (Dict[str, Any], str) -> bool
+    """Assign sleep samples to the local day of their end time (wake-up day)."""
+    if not isinstance(record, dict):
+        return False
+
+    payload = record.get("payload", {}) if isinstance(record.get("payload"), dict) else {}
+    end_dt = _parse_iso_datetime(payload.get("endDate", ""), assume_local_if_naive=False)
+    if end_dt is None:
+        return _record_matches_local_date(record, date_filter)
+    return _local_date_string(end_dt) == date_filter
+
+
+def _load_json_array(filepath):
+    # type: (str) -> List[Dict[str, Any]]
+    """Load a JSON array file, returning [] on errors or non-array content."""
+    if not filepath or not os.path.exists(filepath):
+        return []
+    try:
+        with open(filepath, "r") as f:
+            content = f.read()
+        data = json.loads(content) if content.strip() else []
+        return data if isinstance(data, list) else []
+    except (json.JSONDecodeError, IOError):
+        return []
 
 
 def _get_local_timezone_name():
@@ -813,14 +913,56 @@ def _get_local_timezone_name():
     return now.strftime("%Z (UTC%z)")
 
 
+def _evf(event, *fields, default=None):
+    # type: (dict, *str, Any) -> Any
+    """Extract a field from a sensing event, handling flat, nested (payload),
+    and legacy (data) formats. Tries each field name in order, checking
+    top-level, then payload, then data. Returns the first non-None match."""
+    for field in fields:
+        # Top-level (flat format from iOS generateNudges)
+        val = event.get(field)
+        if val is not None:
+            return val
+        # Nested payload (format from popo_sensing.json)
+        payload = event.get("payload")
+        if isinstance(payload, dict):
+            val = payload.get(field)
+            if val is not None:
+                return val
+        # Legacy nested data
+        data = event.get("data")
+        if isinstance(data, dict):
+            val = data.get(field)
+            if val is not None:
+                return val
+    return default
+
+
+def _evf_num(event, *fields, default=0):
+    # type: (dict, *str, float) -> float
+    """Like _evf but coerces the result to a number (int or float).
+    Handles string values from iOS payloads like '72' or '1234'."""
+    val = _evf(event, *fields, default=default)
+    if isinstance(val, (int, float)):
+        return val
+    if isinstance(val, str):
+        try:
+            return float(val)
+        except (ValueError, TypeError):
+            return default
+    return default
+
+
 def summarize_sensing_data(events, narrations, daily_summary=None):
     # type: (List[Dict], List[Dict], Optional[Dict]) -> str
     """Convert raw sensing events and narrations into a readable summary for the LLM.
 
     Groups events by modality and extracts key metrics for each.
+    Handles both flat dicts (from iOS generateNudges) and nested dicts
+    (from popo_sensing.json with payload sub-dict).
     All timestamps are converted from UTC to the server's local timezone."""
     lines = []  # type: List[str]
-    now = datetime.now()
+    now = datetime.now(_get_local_timezone())
     tz_name = _get_local_timezone_name()
     lines.append("=== Behavioral Data Summary ===")
     lines.append("Current time: %s (%s)" % (now.strftime("%Y-%m-%d %H:%M"), tz_name))
@@ -843,21 +985,18 @@ def summarize_sensing_data(events, narrations, daily_summary=None):
     motion_events = by_modality.get("motion", [])
     if motion_events:
         lines.append("[Motion]")
-        # Latest activity
         latest = max(motion_events, key=lambda e: e.get("timestamp", ""), default=None)
         if latest:
-            activity = latest.get("activity", latest.get("data", {}).get("activity", "unknown"))
-            confidence = latest.get("confidence", latest.get("data", {}).get("confidence", ""))
+            activity = _evf(latest, "activityType", "activity", default="unknown")
+            confidence = _evf(latest, "confidence", default="")
             lines.append("  Current activity: %s (confidence: %s)" % (activity, confidence))
-        # Count transitions
-        activities = [e.get("activity", e.get("data", {}).get("activity", "")) for e in motion_events]
+        activities = [_evf(e, "activityType", "activity", default="") for e in motion_events]
         transitions = sum(1 for i in range(1, len(activities)) if activities[i] != activities[i - 1])
         lines.append("  Activity transitions in period: %d" % transitions)
-        # Detect sedentary streaks
         stationary_events = [e for e in motion_events if
-                             e.get("activity", e.get("data", {}).get("activity", ""))
+                             _evf(e, "activityType", "activity", default="")
                              in ("stationary", "still", "sitting", "unknown")]
-        if stationary_events and len(stationary_events) > 0:
+        if stationary_events:
             first_ts = stationary_events[0].get("timestamp", "")
             last_ts = stationary_events[-1].get("timestamp", "")
             if first_ts and last_ts:
@@ -869,25 +1008,32 @@ def summarize_sensing_data(events, narrations, daily_summary=None):
                         lines.append("  Sedentary streak: ~%.0f minutes" % duration_min)
                 except (ValueError, TypeError):
                     pass
+        # Episode durations
+        for ev in motion_events:
+            dur = _evf_num(ev, "duration")
+            if dur > 0:
+                activity = _evf(ev, "activityType", "activity", default="?")
+                next_act = _evf(ev, "nextActivity", default="")
+                ts = _utc_to_local_str(ev.get("timestamp", ""))
+                dur_min = dur / 60
+                line = "  [%s] %s for %.0f min" % (ts, activity, dur_min)
+                if next_act:
+                    line += " → %s" % next_act
+                lines.append(line)
         lines.append("")
 
     # --- Steps ---
     step_events = by_modality.get("steps", by_modality.get("pedometer", []))
     if step_events:
         lines.append("[Steps]")
-        total_steps = 0
+        max_steps = 0
         for ev in step_events:
-            count = ev.get("steps", ev.get("data", {}).get("steps", 0))
-            if isinstance(count, (int, float)):
-                total_steps += int(count)
-        if total_steps > 0:
-            lines.append("  Total steps: %d" % total_steps)
+            count = _evf_num(ev, "steps", "count")
+            max_steps = max(max_steps, int(count))
+        if max_steps > 0:
+            lines.append("  Total steps: %d" % max_steps)
         else:
-            # Try to get the latest cumulative count
-            latest = max(step_events, key=lambda e: e.get("timestamp", ""), default=None)
-            if latest:
-                count = latest.get("steps", latest.get("data", {}).get("steps", 0))
-                lines.append("  Latest step count: %s" % count)
+            lines.append("  Step events: %d (no counts extracted)" % len(step_events))
         lines.append("")
 
     # --- Heart Rate ---
@@ -896,13 +1042,28 @@ def summarize_sensing_data(events, narrations, daily_summary=None):
         lines.append("[Heart Rate]")
         bpm_values = []
         for ev in hr_events:
-            bpm = ev.get("bpm", ev.get("data", {}).get("bpm"))
-            if isinstance(bpm, (int, float)):
+            bpm = _evf_num(ev, "bpm")
+            if bpm > 0:
                 bpm_values.append(bpm)
         if bpm_values:
             lines.append("  Latest: %.0f bpm" % bpm_values[-1])
             lines.append("  Range: %.0f - %.0f bpm" % (min(bpm_values), max(bpm_values)))
             lines.append("  Average: %.0f bpm" % (sum(bpm_values) / len(bpm_values)))
+            # Flag anomalies
+            anomalies = [ev for ev in hr_events if _evf(ev, "anomaly") == "true"]
+            if anomalies:
+                lines.append("  ⚠ %d anomaly readings detected" % len(anomalies))
+        lines.append("")
+
+    # --- HRV ---
+    hrv_events = by_modality.get("hrv", [])
+    if hrv_events:
+        lines.append("[Heart Rate Variability]")
+        sdnn_values = [_evf_num(ev, "sdnn") for ev in hrv_events]
+        sdnn_values = [v for v in sdnn_values if v > 0]
+        if sdnn_values:
+            lines.append("  Latest: %.1f ms SDNN" % sdnn_values[-1])
+            lines.append("  Range: %.1f - %.1f ms" % (min(sdnn_values), max(sdnn_values)))
         lines.append("")
 
     # --- Location ---
@@ -911,14 +1072,9 @@ def summarize_sensing_data(events, narrations, daily_summary=None):
         lines.append("[Location]")
         places = set()
         for ev in loc_events:
-            data = ev.get("data", {})
-            place = (
-                ev.get("placeName") or data.get("placeName")
-                or ev.get("semanticLabel") or data.get("semanticLabel")
-                or ev.get("place") or data.get("place")
-                or ev.get("semanticPlace") or data.get("semanticPlace")
-            )
-            if place:
+            place = (_evf(ev, "placeName") or _evf(ev, "semanticLabel")
+                     or _evf(ev, "description") or _evf(ev, "address"))
+            if place and place != "unknown":
                 places.add(place)
         if places:
             lines.append("  Places visited: %s" % ", ".join(sorted(places)))
@@ -930,32 +1086,91 @@ def summarize_sensing_data(events, narrations, daily_summary=None):
     screen_events = by_modality.get("screen", by_modality.get("screenTime", []))
     if screen_events:
         lines.append("[Screen]")
-        total_fg_sec = 0
+        on_events = [ev for ev in screen_events if _evf(ev, "state") == "on"
+                     or _evf(ev, "state") == "hourly_aggregate"]
+        total_on_sec = 0
         session_count = 0
-        for ev in screen_events:
-            fg = ev.get("foregroundDuration", ev.get("data", {}).get("foregroundDuration", 0))
-            if isinstance(fg, (int, float)):
-                total_fg_sec += fg
-            if ev.get("event", ev.get("data", {}).get("event")) in ("foreground", "unlock"):
-                session_count += 1
-        lines.append("  Total foreground time: %.0f min" % (total_fg_sec / 60.0))
-        if session_count:
-            lines.append("  Sessions: %d" % session_count)
+        for ev in on_events:
+            on_dur = _evf_num(ev, "onDuration", "totalDuration")
+            if on_dur > 0:
+                total_on_sec += on_dur
+            count = _evf_num(ev, "count", default=1)
+            session_count += int(count)
+        if total_on_sec > 0:
+            lines.append("  Total screen time: %.0f min" % (total_on_sec / 60.0))
+        if session_count > 0:
+            lines.append("  Screen opens: %d" % session_count)
         lines.append("")
 
     # --- Sleep ---
     sleep_events = by_modality.get("sleep", [])
     if sleep_events:
         lines.append("[Sleep]")
-        latest = max(sleep_events, key=lambda e: e.get("timestamp", ""), default=None)
-        if latest:
-            duration = latest.get("duration", latest.get("data", {}).get("duration"))
-            quality = latest.get("quality", latest.get("data", {}).get("quality"))
-            if duration:
-                hours = duration / 3600.0 if isinstance(duration, (int, float)) else 0
-                lines.append("  Last night: %.1f hours" % hours)
-            if quality:
-                lines.append("  Quality: %s" % quality)
+        total_sleep_sec = 0
+        stages = {}  # type: Dict[str, float]
+        for ev in sleep_events:
+            stage = _evf(ev, "stage", "state", "value", default="unknown")
+            start_dt = _parse_iso_datetime(_evf(ev, "startDate", default=""), assume_local_if_naive=False)
+            end_dt = _parse_iso_datetime(_evf(ev, "endDate", default=""), assume_local_if_naive=False)
+            if start_dt and end_dt:
+                seconds = max(0.0, (end_dt - start_dt).total_seconds())
+            else:
+                seconds = _evf_num(ev, "duration")
+            total_sleep_sec += seconds
+            stages[stage] = stages.get(stage, 0) + seconds
+        hours = total_sleep_sec / 3600.0
+        lines.append("  Total sleep: %.1f hours" % hours)
+        for stage, secs in sorted(stages.items(), key=lambda x: -x[1]):
+            if secs > 0:
+                lines.append("    %s: %.0f min" % (stage, secs / 60.0))
+        lines.append("")
+
+    # --- Energy ---
+    for modality_key, label in [("activeEnergy", "Active Energy"), ("basalEnergy", "Resting Energy")]:
+        energy_events = by_modality.get(modality_key, [])
+        if energy_events:
+            lines.append("[%s]" % label)
+            total_kcal = sum(_evf_num(ev, "kcal") for ev in energy_events)
+            if total_kcal > 0:
+                lines.append("  Total: %.0f kcal" % total_kcal)
+            lines.append("")
+
+    # --- Blood Oxygen ---
+    spo2_events = by_modality.get("bloodOxygen", [])
+    if spo2_events:
+        lines.append("[Blood Oxygen]")
+        values = [_evf_num(ev, "spo2") for ev in spo2_events]
+        values = [v for v in values if v > 0]
+        if values:
+            lines.append("  Latest: %.0f%%" % values[-1])
+            lines.append("  Range: %.0f - %.0f%%" % (min(values), max(values)))
+            low = [v for v in values if v < 95]
+            if low:
+                lines.append("  ⚠ %d readings below 95%%" % len(low))
+        lines.append("")
+
+    # --- Respiratory Rate ---
+    resp_events = by_modality.get("respiratoryRate", [])
+    if resp_events:
+        lines.append("[Respiratory Rate]")
+        values = [_evf_num(ev, "breathsPerMin") for ev in resp_events]
+        values = [v for v in values if v > 0]
+        if values:
+            lines.append("  Latest: %.1f breaths/min" % values[-1])
+        lines.append("")
+
+    # --- Noise ---
+    noise_events = by_modality.get("noiseExposure", [])
+    if noise_events:
+        lines.append("[Noise Exposure]")
+        values = [_evf_num(ev, "decibels") for ev in noise_events]
+        values = [v for v in values if v > 0]
+        if values:
+            lines.append("  Latest: %.0f dB" % values[-1])
+            lines.append("  Range: %.0f - %.0f dB" % (min(values), max(values)))
+            loud = [v for v in values if v >= 80]
+            if loud:
+                lines.append("  ⚠ %d readings above 80 dB" % len(loud))
         lines.append("")
 
     # --- Battery ---
@@ -964,17 +1179,37 @@ def summarize_sensing_data(events, narrations, daily_summary=None):
         lines.append("[Battery]")
         latest = max(battery_events, key=lambda e: e.get("timestamp", ""), default=None)
         if latest:
-            level = latest.get("level", latest.get("data", {}).get("level"))
-            charging = latest.get("charging", latest.get("data", {}).get("isCharging"))
-            if level is not None:
-                lines.append("  Level: %s%%" % level)
+            level = _evf_num(latest, "level")
+            charging = _evf(latest, "charging", "isCharging")
+            if level > 0:
+                lines.append("  Level: %.0f%%" % level)
             if charging is not None:
-                lines.append("  Charging: %s" % ("yes" if charging else "no"))
+                is_charging = str(charging).lower() in ("true", "1", "yes")
+                lines.append("  Charging: %s" % ("yes" if is_charging else "no"))
+        lines.append("")
+
+    # --- Workout ---
+    workout_events = by_modality.get("workout", [])
+    if workout_events:
+        lines.append("[Workouts]")
+        for ev in workout_events:
+            wtype = _evf(ev, "type", default="unknown")
+            dur = _evf_num(ev, "duration")
+            cal = _evf_num(ev, "calories")
+            ts = _utc_to_local_str(ev.get("timestamp", ""))
+            parts = [wtype]
+            if dur > 0:
+                parts.append("%.0f min" % (dur / 60))
+            if cal > 0:
+                parts.append("%.0f kcal" % cal)
+            lines.append("  [%s] %s" % (ts, " — ".join(parts)))
         lines.append("")
 
     # --- Any other modalities ---
     known = {"motion", "steps", "pedometer", "heartRate", "heart_rate",
-             "location", "screen", "screenTime", "sleep", "battery"}
+             "location", "screen", "screenTime", "sleep", "battery",
+             "hrv", "activeEnergy", "basalEnergy", "bloodOxygen",
+             "respiratoryRate", "noiseExposure", "workout"}
     for modality, evts in by_modality.items():
         if modality not in known and evts:
             lines.append("[%s]" % modality.capitalize())
@@ -988,7 +1223,7 @@ def summarize_sensing_data(events, narrations, daily_summary=None):
             if not isinstance(nar, dict):
                 continue
             transcript = nar.get("transcript", "")
-            mood = nar.get("extractedMood", "")
+            mood = nar.get("extractedMood", nar.get("mood", ""))
             affect = nar.get("affectAnalysis", {})
             ts = _utc_to_local_str(nar.get("timestamp", ""))
             if transcript:
@@ -996,7 +1231,7 @@ def summarize_sensing_data(events, narrations, daily_summary=None):
                 if mood:
                     lines.append("    Mood: %s" % mood)
                 elif affect and isinstance(affect, dict):
-                    primary = affect.get("primary_emotion", "")
+                    primary = affect.get("primary_emotion", affect.get("primaryEmotion", ""))
                     if primary:
                         lines.append("    Emotion: %s" % primary)
         lines.append("")
@@ -1012,13 +1247,13 @@ def summarize_sensing_data(events, narrations, daily_summary=None):
     return "\n".join(lines)
 
 
-def generate_nudges_llm(summary_text):
+def generate_nudges_llm(summary_text, timeout=20):
     # type: (str) -> Optional[List[Dict]]
     """Generate nudges using Claude CLI (Max Plan). Returns list of nudge dicts or None on failure."""
     full_prompt = BEHAVIORAL_ANALYSIS_SYSTEM_PROMPT + "\n\n" + summary_text
 
     try:
-        raw_output = run_claude_text(full_prompt)
+        raw_output = run_claude_text(full_prompt, timeout=timeout)
 
         # Parse the claude CLI JSON output to get the result text
         try:
@@ -1056,7 +1291,7 @@ def generate_nudges_rule_based(events, narrations, daily_summary=None):
     # type: (List[Dict], List[Dict], Optional[Dict]) -> List[Dict]
     """Simple rule-based nudge generation as fallback when LLM is unavailable."""
     nudges = []  # type: List[Dict]
-    now = datetime.now()
+    now = datetime.now(_get_local_timezone())
 
     # Group events by modality
     by_modality = {}  # type: Dict[str, List[Dict]]
@@ -1234,6 +1469,332 @@ def store_generated_nudges(nudge_records):
         print("[Analyze] Failed to store nudges: %s" % e, file=sys.stderr)
 
 
+def _parse_requested_local_date(date_str):
+    # type: (Optional[str]) -> datetime
+    """Parse a local calendar day. Supports YYYY-MM-DD, today, and yesterday."""
+    if not date_str:
+        return datetime.now(_get_local_timezone()).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+
+    normalized = str(date_str).strip().lower()
+    local_tz = _get_local_timezone()
+    base_day = datetime.now(local_tz).replace(hour=0, minute=0, second=0, microsecond=0)
+    if normalized == "today":
+        return base_day
+    if normalized == "yesterday":
+        return base_day - timedelta(days=1)
+
+    parsed = datetime.strptime(normalized, "%Y-%m-%d")
+    return parsed.replace(tzinfo=local_tz)
+
+
+def _build_day_bundle(date_str):
+    # type: (str) -> Dict[str, Any]
+    """Build a date-scoped timeline bundle from server data files."""
+    target_day = _parse_requested_local_date(date_str)
+    target_key = target_day.strftime("%Y-%m-%d")
+
+    raw_sensing = _load_json_array(DATA_FILES["/popo/sensing"])
+    sensing = []
+    seen_sleep_keys = set()  # type: set
+    for item in raw_sensing:
+        if not isinstance(item, dict):
+            continue
+        modality = item.get("modality")
+        if modality == "sleep":
+            if not _sleep_record_matches_local_date(item, target_key):
+                continue
+            payload = item.get("payload", {}) if isinstance(item.get("payload"), dict) else {}
+            sleep_key = (
+                payload.get("stage", ""),
+                payload.get("startDate", ""),
+                payload.get("endDate", ""),
+            )
+            if sleep_key in seen_sleep_keys:
+                continue
+            seen_sleep_keys.add(sleep_key)
+            sensing.append(item)
+            continue
+
+        if _record_matches_local_date(item, target_key):
+            sensing.append(item)
+    narrations = [
+        item for item in _load_json_array(DATA_FILES["/popo/narrations"])
+        if _record_matches_local_date(item, target_key)
+    ]
+    nudges = [
+        item for item in _load_json_array(DATA_FILES["/popo/nudges"])
+        if _record_matches_local_date(item, target_key)
+    ]
+    food = [
+        item for item in _load_json_array(DATA_FILES["/health-data/food"])
+        if _record_matches_local_date(item, target_key, field="date")
+    ]
+    activities = [
+        item for item in _load_json_array(DATA_FILES["/health-data/activity"])
+        if _record_matches_local_date(item, target_key, field="date")
+    ]
+    weights = [
+        item for item in _load_json_array(DATA_FILES["/health-data/weight"])
+        if _record_matches_local_date(item, target_key, field="date")
+    ]
+
+    items = []  # type: List[Dict[str, Any]]
+    total_steps = 0
+    sleep_segments = 0
+    total_sleep_hours = 0.0
+    total_food_calories = 0
+    total_activity_minutes = 0
+    total_activity_calories = 0
+
+    for event in sensing:
+        dt = _parse_iso_datetime(event.get("timestamp", ""), assume_local_if_naive=True)
+        if dt is None:
+            continue
+        local_dt = dt.astimezone(_get_local_timezone())
+        modality = event.get("modality", "sensing")
+        payload = event.get("payload", {}) if isinstance(event.get("payload"), dict) else {}
+
+        detail = ""
+        if modality == "steps":
+            steps = payload.get("steps")
+            if isinstance(steps, str) and steps.isdigit():
+                total_steps = max(total_steps, int(steps))
+            detail = str(steps or payload.get("count") or "")
+        elif modality == "sleep":
+            sleep_segments += 1
+            start_dt = _parse_iso_datetime(payload.get("startDate", ""), assume_local_if_naive=False)
+            end_dt = _parse_iso_datetime(payload.get("endDate", ""), assume_local_if_naive=False)
+            if start_dt and end_dt:
+                seconds = max(0.0, (end_dt - start_dt).total_seconds())
+            else:
+                duration = payload.get("duration")
+                try:
+                    seconds = float(duration) if duration is not None else 0.0
+                except (TypeError, ValueError):
+                    seconds = 0.0
+            total_sleep_hours += seconds / 3600.0
+            stage = payload.get("stage") or payload.get("state") or payload.get("value") or ""
+            if seconds > 0:
+                minutes = int(round(seconds / 60.0))
+                detail = "%s (%d min)" % (stage, minutes)
+            else:
+                detail = stage
+        elif modality == "heartRate":
+            detail = "%s BPM" % payload.get("bpm", "?")
+        elif modality == "motion":
+            detail = payload.get("activityType") or payload.get("activity") or ""
+        elif modality == "location":
+            detail = (
+                payload.get("description")
+                or payload.get("semanticLabel")
+                or payload.get("placeName")
+                or ""
+            )
+        elif modality == "screen":
+            detail = payload.get("state") or payload.get("event") or ""
+        else:
+            for key in ("summary", "value", "status", "description"):
+                if payload.get(key):
+                    detail = str(payload[key])
+                    break
+
+        items.append({
+            "timestamp": dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "localTime": local_dt.strftime("%I:%M %p").lstrip("0"),
+            "kind": "sensing",
+            "type": modality,
+            "detail": detail,
+            "source": "popo_sensing",
+        })
+
+    for narration in narrations:
+        dt = _parse_iso_datetime(narration.get("timestamp", ""), assume_local_if_naive=True)
+        if dt is None:
+            continue
+        local_dt = dt.astimezone(_get_local_timezone())
+        transcript = narration.get("transcript", "")
+        items.append({
+            "timestamp": dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "localTime": local_dt.strftime("%I:%M %p").lstrip("0"),
+            "kind": "narration",
+            "type": "voice" if narration.get("duration", 0) else "text",
+            "detail": transcript,
+            "source": "popo_narrations",
+        })
+
+    for nudge in nudges:
+        dt = _parse_iso_datetime(nudge.get("timestamp", ""), assume_local_if_naive=True)
+        if dt is None:
+            continue
+        local_dt = dt.astimezone(_get_local_timezone())
+        items.append({
+            "timestamp": dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "localTime": local_dt.strftime("%I:%M %p").lstrip("0"),
+            "kind": "nudge",
+            "type": nudge.get("type", "insight"),
+            "detail": nudge.get("content", ""),
+            "trigger": nudge.get("trigger", ""),
+            "source": "popo_nudges",
+        })
+
+    for meal in food:
+        dt = _parse_iso_datetime(meal.get("date", ""), assume_local_if_naive=True)
+        if dt is None:
+            continue
+        local_dt = dt.astimezone(_get_local_timezone())
+        calories = meal.get("calories")
+        if isinstance(calories, int):
+            total_food_calories += calories
+        items.append({
+            "timestamp": dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "localTime": local_dt.strftime("%I:%M %p").lstrip("0"),
+            "kind": "meal",
+            "type": meal.get("mealType", "meal"),
+            "detail": meal.get("description", ""),
+            "calories": calories,
+            "source": "health_food",
+        })
+
+    for activity in activities:
+        dt = _parse_iso_datetime(activity.get("date", ""), assume_local_if_naive=True)
+        if dt is None:
+            continue
+        local_dt = dt.astimezone(_get_local_timezone())
+        duration = activity.get("duration")
+        calories = activity.get("caloriesBurned")
+        if isinstance(duration, int):
+            total_activity_minutes += duration
+        if isinstance(calories, int):
+            total_activity_calories += calories
+        items.append({
+            "timestamp": dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "localTime": local_dt.strftime("%I:%M %p").lstrip("0"),
+            "kind": "activity",
+            "type": activity.get("type", "activity"),
+            "detail": activity.get("aiSummary") or activity.get("note") or "",
+            "duration": duration,
+            "caloriesBurned": calories,
+            "source": "health_activity",
+        })
+
+    for weight in weights:
+        dt = _parse_iso_datetime(weight.get("date", ""), assume_local_if_naive=True)
+        if dt is None:
+            continue
+        local_dt = dt.astimezone(_get_local_timezone())
+        items.append({
+            "timestamp": dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "localTime": local_dt.strftime("%I:%M %p").lstrip("0"),
+            "kind": "weight",
+            "type": "weight",
+            "detail": "%s kg" % weight.get("weight", ""),
+            "source": "health_weight",
+        })
+
+    items.sort(key=lambda item: item.get("timestamp", ""), reverse=True)
+
+    return {
+        "date": target_key,
+        "timezone": _get_local_timezone_name(),
+        "isToday": target_key == _local_date_string(datetime.now(_get_local_timezone())),
+        "counts": {
+            "sensing": len(sensing),
+            "narrations": len(narrations),
+            "nudges": len(nudges),
+            "meals": len(food),
+            "activities": len(activities),
+            "weights": len(weights),
+        },
+        "summary": {
+            "totalSteps": total_steps,
+            "sleepSegments": sleep_segments,
+            "sleepHours": round(total_sleep_hours, 2),
+            "mealCalories": total_food_calories,
+            "activityMinutes": total_activity_minutes,
+            "activityCaloriesBurned": total_activity_calories,
+        },
+        "items": items,
+    }
+
+
+def _build_range_bundle(start_date_str, end_date_str, days_str):
+    # type: (Optional[str], Optional[str], Optional[str]) -> Dict[str, Any]
+    """Build a compact multi-day BOBO range bundle for trend analysis."""
+    local_tz = _get_local_timezone()
+    today = datetime.now(local_tz).replace(hour=0, minute=0, second=0, microsecond=0)
+
+    if days_str:
+        days = int(str(days_str).strip())
+        if days < 1 or days > 31:
+            raise ValueError("days must be between 1 and 31")
+        end_day = _parse_requested_local_date(end_date_str) if end_date_str else today
+        start_day = end_day - timedelta(days=days - 1)
+    else:
+        start_day = _parse_requested_local_date(start_date_str) if start_date_str else today - timedelta(days=6)
+        end_day = _parse_requested_local_date(end_date_str) if end_date_str else today
+
+    if start_day > end_day:
+        start_day, end_day = end_day, start_day
+
+    span_days = (end_day - start_day).days + 1
+    if span_days > 31:
+        raise ValueError("range too large")
+
+    days = []
+    totals = {
+        "sensing": 0,
+        "narrations": 0,
+        "nudges": 0,
+        "meals": 0,
+        "activities": 0,
+        "weights": 0,
+        "totalSteps": 0,
+        "sleepHours": 0.0,
+        "mealCalories": 0,
+        "activityMinutes": 0,
+        "activityCaloriesBurned": 0,
+    }
+
+    cursor = start_day
+    while cursor <= end_day:
+        date_key = cursor.strftime("%Y-%m-%d")
+        bundle = _build_day_bundle(date_key)
+        days.append({
+            "date": bundle["date"],
+            "isToday": bundle["isToday"],
+            "counts": bundle["counts"],
+            "summary": bundle["summary"],
+        })
+        totals["sensing"] += bundle["counts"]["sensing"]
+        totals["narrations"] += bundle["counts"]["narrations"]
+        totals["nudges"] += bundle["counts"]["nudges"]
+        totals["meals"] += bundle["counts"]["meals"]
+        totals["activities"] += bundle["counts"]["activities"]
+        totals["weights"] += bundle["counts"]["weights"]
+        totals["totalSteps"] += bundle["summary"]["totalSteps"]
+        totals["sleepHours"] += bundle["summary"]["sleepHours"]
+        totals["mealCalories"] += bundle["summary"]["mealCalories"]
+        totals["activityMinutes"] += bundle["summary"]["activityMinutes"]
+        totals["activityCaloriesBurned"] += bundle["summary"]["activityCaloriesBurned"]
+        cursor += timedelta(days=1)
+
+    return {
+        "startDate": start_day.strftime("%Y-%m-%d"),
+        "endDate": end_day.strftime("%Y-%m-%d"),
+        "timezone": _get_local_timezone_name(),
+        "dayCount": span_days,
+        "totals": {
+            **totals,
+            "sleepHours": round(totals["sleepHours"], 2),
+            "averageSleepHours": round(totals["sleepHours"] / span_days, 2),
+            "averageSteps": round(totals["totalSteps"] / span_days, 1),
+        },
+        "days": days,
+    }
+
+
 # ---------------------------------------------------------------------------
 # HTTP Handler
 # ---------------------------------------------------------------------------
@@ -1253,6 +1814,18 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
             self._serve_parking_file(path)
         elif path == "/popo/timeline":
             self._serve_timeline()
+        elif path == "/popo/timeline/today":
+            self._serve_timeline(today_only=True)
+        elif path == "/popo/day":
+            query = parse_qs(parsed.query)
+            self._serve_day_bundle(query.get("date", [None])[0])
+        elif path == "/popo/range":
+            query = parse_qs(parsed.query)
+            self._serve_range_bundle(
+                query.get("start", [None])[0],
+                query.get("end", [None])[0],
+                query.get("days", [None])[0],
+            )
         elif path.startswith("/popo/audio/"):
             self._serve_audio_file(path)
         elif path in DATA_FILES and path.startswith("/popo/"):
@@ -1331,6 +1904,9 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
         if path == "/popo/timeline":
             self._write_timeline()
             return
+        if path == "/popo/timeline/today":
+            self._write_timeline(today_only=True)
+            return
 
         # BoBo narration single-entry append (for chat agent)
         if path == "/popo/narrations/add":
@@ -1377,9 +1953,14 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
         path = parsed.path
         if path in DATA_FILES:
             filepath = DATA_FILES[path]
-            if os.path.exists(filepath):
-                os.remove(filepath)
-            self._send_json(200, {"ok": True})
+            query = parse_qs(parsed.query)
+            entry_id = query.get("id", [None])[0]
+            if entry_id:
+                self._delete_data_entry(filepath, entry_id, path)
+            else:
+                if os.path.exists(filepath):
+                    os.remove(filepath)
+                self._send_json(200, {"ok": True})
         else:
             # Dynamic module data: DELETE /modules/<id>/data?id=<entry_id>
             module_match = re.match(r'^/modules/([a-zA-Z0-9_-]+)/data$', path)
@@ -1677,30 +2258,68 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
         except IOError as e:
             self._send_json(500, {"error": f"Failed to write: {e}"})
 
-    def _serve_timeline(self):
-        """Serve the processed timeline snapshot (same data the phone UI shows)."""
-        if not os.path.exists(POPO_TIMELINE_FILE):
+    def _delete_data_entry(self, filepath, entry_id, path):
+        """Delete a specific entry by id from a built-in data file."""
+        if not entry_id:
+            self._send_json(400, {"error": "Missing 'id' query parameter"})
+            return
+
+        lock = _narrations_file_lock if path == "/popo/narrations" else None
+        if lock:
+            lock.acquire()
+
+        try:
+            self._delete_module_entry(filepath, entry_id)
+        finally:
+            if lock:
+                lock.release()
+
+    def _serve_timeline(self, today_only=False):
+        # type: (bool) -> None
+        """Serve a processed timeline snapshot from the iOS app."""
+        timeline_file = POPO_TODAY_TIMELINE_FILE if today_only else POPO_TIMELINE_FILE
+        if not os.path.exists(timeline_file):
             self._send_json(200, {"date": "", "totalEvents": 0, "summary": {}, "items": []})
             return
         try:
-            with open(POPO_TIMELINE_FILE, "r") as f:
+            with open(timeline_file, "r") as f:
                 data = json.load(f)
             self._send_json(200, data)
         except (IOError, json.JSONDecodeError) as e:
             self._send_json(500, {"error": f"Failed to read timeline: {e}"})
 
-    def _write_timeline(self):
-        """Store the processed timeline snapshot from the iOS app."""
+    def _write_timeline(self, today_only=False):
+        # type: (bool) -> None
+        """Store a processed timeline snapshot from the iOS app."""
         try:
             length = int(self.headers.get("Content-Length", 0))
             body = self.rfile.read(length) if length else b""
             data = json.loads(body) if body else {}
-            with open(POPO_TIMELINE_FILE, "w") as f:
+            timeline_file = POPO_TODAY_TIMELINE_FILE if today_only else POPO_TIMELINE_FILE
+            with open(timeline_file, "w") as f:
                 json.dump(data, f, ensure_ascii=False)
             count = len(data.get("items", []))
             self._send_json(200, {"ok": True, "items": count})
         except (json.JSONDecodeError, IOError) as e:
             self._send_json(500, {"error": f"Failed to write timeline: {e}"})
+
+    def _serve_day_bundle(self, date_filter):
+        # type: (Optional[str]) -> None
+        """Serve a date-scoped BOBO day bundle for chat and external agents."""
+        try:
+            bundle = _build_day_bundle(date_filter)
+            self._send_json(200, bundle)
+        except ValueError:
+            self._send_json(400, {"error": "Invalid date. Use YYYY-MM-DD, today, or yesterday."})
+
+    def _serve_range_bundle(self, start_date, end_date, days):
+        # type: (Optional[str], Optional[str], Optional[str]) -> None
+        """Serve a compact multi-day BOBO range bundle."""
+        try:
+            bundle = _build_range_bundle(start_date, end_date, days)
+            self._send_json(200, bundle)
+        except ValueError:
+            self._send_json(400, {"error": "Invalid range. Use days=1..31 or start/end with YYYY-MM-DD, today, or yesterday."})
 
     def _append_narration_entry(self):
         """Append a single narration entry (for chat agent adding text diary).
@@ -1770,16 +2389,7 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
         """Serve a POPO JSON data file, optionally filtered by date.
         date_filter should be 'YYYY-MM-DD' or None for all data."""
         filepath = DATA_FILES[path]
-        if not os.path.exists(filepath):
-            self._send_json(200, [])
-            return
-        try:
-            with open(filepath, "r") as f:
-                content = f.read()
-            data = json.loads(content) if content.strip() else []
-        except (json.JSONDecodeError, IOError):
-            self._send_json(200, [])
-            return
+        data = _load_json_array(filepath)
 
         if date_filter and isinstance(data, list):
             # For daily-summary, match on the 'date' field directly
@@ -1789,11 +2399,11 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
                     if isinstance(item, dict) and item.get("date", "") == date_filter
                 ]
             else:
-                # For other POPO data, match date portion of 'timestamp'
+                # For other POPO data, match the record's local calendar day.
                 data = [
                     item for item in data
                     if isinstance(item, dict)
-                    and item.get("timestamp", "")[:10] == date_filter
+                    and _record_matches_local_date(item, date_filter)
                 ]
 
         self._send_json(200, data)
@@ -2082,23 +2692,17 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
         method_used = "none"
         raw_nudges = None
 
-        raw_nudges = generate_nudges_llm(summary_text)
-        if raw_nudges is None:
-            error_msg = "LLM nudge generation failed — check API key, network, or model availability"
-            print("[Analyze] ERROR: %s" % error_msg, file=sys.stderr)
-            self._send_json(500, {
-                "ok": False,
-                "error": error_msg,
-                "nudges": [],
-                "method": "llm_failed"
-            })
-            return
-
-        method_used = "llm"
-        print("[Analyze] Generated %d nudges via LLM" % len(raw_nudges))
+        raw_nudges = generate_nudges_llm(summary_text, timeout=20)
+        if raw_nudges:
+            method_used = "llm"
+            print("[Analyze] Generated %d nudges via LLM" % len(raw_nudges))
+        else:
+            raw_nudges = generate_nudges_rule_based(sensing_events, narrations, daily_summary)
+            method_used = "rule_based_fallback"
+            print("[Analyze] Falling back to rule-based nudges (%d)" % len(raw_nudges))
 
         # Step 3: Normalize nudge records (add id, timestamp, validate fields)
-        now_iso = datetime.now().isoformat()
+        now_iso = _now_utc_iso()
         nudge_records = []
         for raw in raw_nudges:
             if not isinstance(raw, dict):
@@ -2168,9 +2772,8 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
                     content = f.read()
                 all_events = json.loads(content) if content.strip() else []
                 # Filter to last 6 hours
-                cutoff = (datetime.now() - timedelta(hours=6)).isoformat()
-                events = [e for e in all_events
-                          if isinstance(e, dict) and e.get("timestamp", "") >= cutoff]
+                cutoff = datetime.now(_get_local_timezone()) - timedelta(hours=6)
+                events = [e for e in all_events if _record_timestamp_at_or_after(e, cutoff)]
             except (json.JSONDecodeError, IOError):
                 events = []
 
@@ -2182,9 +2785,10 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
                 with open(narrations_file, "r") as f:
                     content = f.read()
                 all_narrations = json.loads(content) if content.strip() else []
-                cutoff = datetime.now().replace(hour=0, minute=0, second=0).isoformat()
-                narrations = [n for n in all_narrations
-                              if isinstance(n, dict) and n.get("timestamp", "") >= cutoff]
+                cutoff = datetime.now(_get_local_timezone()).replace(
+                    hour=0, minute=0, second=0, microsecond=0
+                )
+                narrations = [n for n in all_narrations if _record_timestamp_at_or_after(n, cutoff)]
             except (json.JSONDecodeError, IOError):
                 narrations = []
 
@@ -2197,14 +2801,16 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
 
         # Summarize and generate
         summary_text = summarize_sensing_data(events, narrations)
-        raw_nudges = generate_nudges_llm(summary_text)
+        raw_nudges = generate_nudges_llm(summary_text, timeout=20)
+        if not raw_nudges:
+            raw_nudges = generate_nudges_rule_based(events, narrations)
 
         if raw_nudges is None:
             self._send_json(500, {"ok": False, "error": "LLM generation failed", "nudges": []})
             return
 
         # Normalize nudge records
-        now_iso = datetime.now().isoformat()
+        now_iso = _now_utc_iso()
         nudge_records = []
         for raw in raw_nudges:
             if not isinstance(raw, dict):

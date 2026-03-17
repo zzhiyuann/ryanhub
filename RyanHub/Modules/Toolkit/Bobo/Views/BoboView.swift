@@ -816,12 +816,18 @@ struct BoboView: View {
                             TimelineEventRow(
                                 item: item,
                                 isExpanded: viewModel.isExpanded(item.id),
-                                isLast: index == displayedItems.count - 1
-                            ) {
-                                withAnimation(.easeInOut(duration: 0.25)) {
-                                    viewModel.toggleExpanded(item.id)
-                                }
-                            }
+                                isLast: index == displayedItems.count - 1,
+                                onTap: {
+                                    withAnimation(.easeInOut(duration: 0.25)) {
+                                        viewModel.toggleExpanded(item.id)
+                                    }
+                                },
+                                onDelete: viewModel.canDeleteTimelineItem(item) ? {
+                                    Task {
+                                        await viewModel.deleteTimelineItem(item)
+                                    }
+                                } : nil
+                            )
                         }
 
                         // Show expand/collapse button at bottom
