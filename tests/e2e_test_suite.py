@@ -3312,7 +3312,7 @@ assert len(TESTS) == 1000, f"Expected 1000 tests, got {len(TESTS)}"
 
 import uuid
 
-CONCURRENCY = 10
+CONCURRENCY = 2  # OpenClaw session lock limits true parallelism
 MAX_RETRIES = 2
 
 
