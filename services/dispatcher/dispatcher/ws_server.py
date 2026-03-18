@@ -95,14 +95,23 @@ class WebSocketServer:
         self._status_task = asyncio.create_task(self._status_loop())
 
     def _load_pending(self) -> list[dict]:
-        """Load pending deliveries from disk."""
+        """Load pending deliveries from disk, discarding stale entries (>1 hour old)."""
         try:
             if os.path.exists(self._pending_file):
                 with open(self._pending_file) as f:
                     data = json.load(f)
                 if isinstance(data, list) and data:
-                    log.info("ws loaded %d pending deliveries from disk", len(data))
-                    return data
+                    now = time.time()
+                    fresh = [m for m in data if now - m.get("_cached_at", 0) < 3600]
+                    stale = len(data) - len(fresh)
+                    if stale:
+                        log.info("ws discarded %d stale pending deliveries (>1h old)", stale)
+                    if fresh:
+                        log.info("ws loaded %d pending deliveries from disk", len(fresh))
+                        return fresh
+                    # All stale — clean up the file
+                    with open(self._pending_file, "w") as f:
+                        json.dump([], f)
         except Exception:
             pass
         return []

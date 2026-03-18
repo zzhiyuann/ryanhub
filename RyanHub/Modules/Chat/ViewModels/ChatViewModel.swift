@@ -186,11 +186,14 @@ final class ChatViewModel {
                 let id: String?
                 let content: String?
                 let streaming: Bool?
+                let _cached_at: Double?  // Unix timestamp when cached
             }
 
             let pending = try JSONDecoder().decode([PendingMessage].self, from: data)
+            let now = Date().timeIntervalSince1970
             let finalMessages = pending.filter {
                 $0.type == "response" && $0.streaming != true && ($0.content?.count ?? 0) > 0
+                && (now - ($0._cached_at ?? 0)) < 3600  // Discard messages older than 1 hour
             }
 
             guard !finalMessages.isEmpty else { return }
