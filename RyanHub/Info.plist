@@ -73,6 +73,7 @@
 		<string>location</string>
 		<string>bluetooth-peripheral</string>
 		<string>external-accessory</string>
+		<string>remote-notification</string>
 	</array>
 	<key>UILaunchScreen</key>
 	<dict/>

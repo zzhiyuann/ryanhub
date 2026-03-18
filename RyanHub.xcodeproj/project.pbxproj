@@ -56,6 +56,7 @@
 		320EEB1892A753AAC4847694 /* RBMetaConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A20E1358762BB1BE3F59FB6 /* RBMetaConfig.swift */; };
 		3863910D12EFCFE24D9A5A72 /* BoboSyncService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F6ECAD7269E24A080B34009 /* BoboSyncService.swift */; };
 		38F5CB5339702AC59E0870D6 /* FSRSEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E4A5CD0A7843CDB46CDAD37 /* FSRSEngine.swift */; };
+		3D1EABEA01940BA684E511BF /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82EC951E5862301CFCF9E99B /* AppDelegate.swift */; };
 		3EDBD73EDECB8C6B20874C04 /* FluentSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BB6AD55A1E11D383B6345C4 /* FluentSettingsView.swift */; };
 		40C6530DBEB36CA6844D3A87 /* ParkingDataProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8D7E3DA7975CCD073CD370A /* ParkingDataProvider.swift */; };
 		42EDE13EB53D476C3A41B114 /* CrossModuleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F733B3A7BD2685EB41347E5 /* CrossModuleTests.swift */; };
@@ -338,6 +339,7 @@
 		81B02F6A093A666AE0A51583 /* BoboView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoboView.swift; sourceTree = "<group>"; };
 		81D3F7C68E9D35452E29DAA8 /* MoodJournalRegistration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoodJournalRegistration.swift; sourceTree = "<group>"; };
 		81F0DF5E5DEFA8CD0DCB2B5D /* FluentDataProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FluentDataProvider.swift; sourceTree = "<group>"; };
+		82EC951E5862301CFCF9E99B /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		8324A0F5B9279548ED9454E9 /* DailySummaryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailySummaryView.swift; sourceTree = "<group>"; };
 		834BECFA48894B5E6684F1DF /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		84686D528D7CC4E2483C1304 /* PersonalContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalContext.swift; sourceTree = "<group>"; };
@@ -884,6 +886,7 @@
 		CE5CBCFA91B8C983B8347046 /* App */ = {
 			isa = PBXGroup;
 			children = (
+				82EC951E5862301CFCF9E99B /* AppDelegate.swift */,
 				D9C923C9AB5D8E6D4D5D079B /* ContentView.swift */,
 				AD94D3E0824640F6802F86A4 /* RyanHubApp.swift */,
 			);
@@ -1211,6 +1214,7 @@
 			files = (
 				10CF7B83FD089B1778C6637C /* APIClient.swift in Sources */,
 				EFA4E510EB23E1D04D758FD1 /* AccessibilityID.swift in Sources */,
+				3D1EABEA01940BA684E511BF /* AppDelegate.swift in Sources */,
 				92BBAE3CC8E7627980533EF9 /* AppState.swift in Sources */,
 				008880036391E1E208A2E09D /* AudioPlayerView.swift in Sources */,
 				E88867AC68FF45A6A6A139D4 /* AudioPlayerViewModel.swift in Sources */,
