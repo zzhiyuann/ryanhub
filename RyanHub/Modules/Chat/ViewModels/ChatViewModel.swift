@@ -118,19 +118,28 @@ final class ChatViewModel {
         messages = ChatMessage.loadSaved()
         setupWebSocketCallbacks()
         setupBoNudgeObserver()
-        // Sync from bridge server (source of truth for cross-device sync)
+        // Merge from bridge server — add messages from other channels (Telegram)
+        // that aren't in local storage. Local is source of truth for deletions:
+        // if a message was deleted locally, don't restore it from the server.
         Task { @MainActor [weak self] in
+            guard let self else { return }
             if let serverMessages = await ChatMessage.loadFromServer(), !serverMessages.isEmpty {
-                // Restore image data from disk for messages that have it
-                let restored = serverMessages.map { msg -> ChatMessage in
-                    var m = msg
-                    if m.hasImageOnDisk && m.imageBase64 == nil,
-                       let imageData = ChatMessage.loadImageFromDisk(messageId: m.id) {
-                        m.imageBase64 = imageData.base64EncodedString()
+                let localIDs = Set(self.messages.map(\.id))
+                let newFromServer = serverMessages.filter { !localIDs.contains($0.id) }
+                if !newFromServer.isEmpty {
+                    // Restore image data from disk for new messages
+                    let restored = newFromServer.map { msg -> ChatMessage in
+                        var m = msg
+                        if m.hasImageOnDisk && m.imageBase64 == nil,
+                           let imageData = ChatMessage.loadImageFromDisk(messageId: m.id) {
+                            m.imageBase64 = imageData.base64EncodedString()
+                        }
+                        return m
                     }
-                    return m
+                    self.messages.append(contentsOf: restored)
+                    self.messages.sort { $0.timestamp < $1.timestamp }
+                    self.saveMessages()
                 }
-                self?.messages = restored
             }
         }
     }
