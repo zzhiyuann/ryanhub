@@ -129,7 +129,11 @@ final class CalendarService {
 
     // MARK: - Private
 
-    private let decoder: JSONDecoder = {
+    func makeDecoder() -> JSONDecoder { Self.sharedDecoder }
+
+    private let decoder: JSONDecoder = sharedDecoder
+
+    private static let sharedDecoder: JSONDecoder = {
         let d = JSONDecoder()
         d.dateDecodingStrategy = .custom { decoder in
             let container = try decoder.singleValueContainer()
