@@ -4,6 +4,7 @@ import BackgroundTasks
 
 @main
 struct RyanHubApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @State private var appState = AppState()
     @State private var notificationManager = NotificationManager()
     @Environment(\.scenePhase) private var scenePhase
