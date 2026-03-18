@@ -788,13 +788,18 @@ final class BoboViewModel {
             startHealthKitRefreshTimer()
         }
 
-        // Load narrations, nudges, and health data from local storage
+        // Load local data synchronously (fast UserDefaults reads)
         loadNarrations()
         loadNudges()
         loadFoodEntries()
         loadActivityEntries()
 
-        // Fetch HealthKit data directly from Apple Health
+        // Defer HealthKit fetch — it's slow (500ms-2s) and blocks the main thread
+        // Will be triggered by BoboView's .task modifier instead
+    }
+
+    /// Called from BoboView.task to fetch HealthKit data off the init path.
+    func deferredHealthKitSetup() {
         requestHealthKitAuthAndFetch()
     }
 
