@@ -49,6 +49,11 @@ struct BoboView: View {
             UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
         }
         .background(AdaptiveColors.background(for: colorScheme))
+        .task {
+            // Deferred HealthKit setup — moved out of BoboViewModel.init() to avoid
+            // blocking the main thread when ToolkitHomeView is first created
+            viewModel.deferredHealthKitSetup()
+        }
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active {
                 // Resume all sensors — backfills motion/pedometer/HealthKit gaps
