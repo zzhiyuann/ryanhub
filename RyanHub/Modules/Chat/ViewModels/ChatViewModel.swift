@@ -673,6 +673,7 @@ final class ChatViewModel {
     // MARK: - Message Deletion
 
     /// Delete a message from the chat history, cleaning up any associated disk resources.
+    /// Also syncs the current message list to the bridge server so the deletion persists.
     func deleteMessage(_ message: ChatMessage) {
         withAnimation(.easeOut(duration: 0.25)) {
             messages.removeAll { $0.id == message.id }
@@ -682,6 +683,10 @@ final class ChatViewModel {
         }
         saveMessages()
         messageUpdateTrigger += 1
+        // Sync to bridge so deleted messages don't reappear from server
+        Task {
+            await ChatMessage.saveToServer(messages)
+        }
     }
 
     // MARK: - Slash Commands
