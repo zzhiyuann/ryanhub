@@ -122,10 +122,11 @@ final class CalendarViewModel {
 
     // MARK: - Actions
 
-    /// Sync events from Google Calendar via the bridge server.
+    /// Sync events from Apple Calendar via the bridge server.
     func syncEvents() async {
         isLoading = true
         syncState = .syncing
+        print("[Calendar] Syncing from: \(service.bridgeBaseURL)")
 
         do {
             let calendar = Calendar.current
@@ -146,6 +147,7 @@ final class CalendarViewModel {
             syncState = .synced
             saveCachedEvents()
         } catch {
+            print("[Calendar] Sync failed: \(error)")
             syncState = .error(error.localizedDescription)
         }
 
