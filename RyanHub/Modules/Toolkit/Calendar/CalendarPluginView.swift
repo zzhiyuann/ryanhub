@@ -929,50 +929,7 @@ struct CalendarPluginView: View {
         )
     }
 
-    // MARK: - Command Input Bar
-
-    private var commandInputBar: some View {
-        VStack(spacing: 0) {
-            // Top border
-            AdaptiveColors.border(for: colorScheme)
-                .frame(height: 0.5)
-
-            HStack(spacing: 10) {
-                Image(systemName: "sparkles")
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundStyle(Color.hubPrimary)
-
-                TextField("Add event or ask about schedule...", text: $viewModel.commandText)
-                    .font(.system(size: 15))
-                    .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
-                    .focused($isInputFocused)
-                    .submitLabel(.send)
-                    .onSubmit {
-                        Task { await viewModel.processCommand() }
-                    }
-
-                if !viewModel.commandText.isEmpty || viewModel.isProcessingCommand {
-                    Button {
-                        Task { await viewModel.processCommand() }
-                    } label: {
-                        if viewModel.isProcessingCommand {
-                            ProgressView()
-                                .tint(Color.hubPrimary)
-                                .frame(width: 28, height: 28)
-                        } else {
-                            Image(systemName: "arrow.up.circle.fill")
-                                .font(.system(size: 28))
-                                .foregroundStyle(Color.hubPrimary)
-                        }
-                    }
-                    .disabled(viewModel.isProcessingCommand || viewModel.commandText.trimmingCharacters(in: .whitespaces).isEmpty)
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            .background(.ultraThinMaterial)
-        }
-    }
+    // Command input bar removed — replaced by sparkle button + sheet
 
     // MARK: - Date Helpers
 
