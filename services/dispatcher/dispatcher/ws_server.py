@@ -78,9 +78,9 @@ class WebSocketServer:
         self._status_task: asyncio.Task | None = None
         self._active_sessions_count: int = 0
         # Cache of final responses that failed to deliver (client disconnected).
-        # List of dicts: {"type": "response", "id": msg_id, "content": ..., "streaming": False, "ts": ...}
-        # Replayed to the next client that connects. Single-user app so no keying needed.
-        self._pending_deliveries: list[dict] = []
+        # Persisted to disk so messages survive dispatcher restart.
+        self._pending_file = os.path.expanduser("~/.ryanhub-data/pending_deliveries.json")
+        self._pending_deliveries: list[dict] = self._load_pending()
 
     async def start(self) -> None:
         """Start the WebSocket server."""

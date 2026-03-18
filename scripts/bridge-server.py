@@ -2235,6 +2235,22 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
             self._register_apns_token()
             return
 
+        # APNs push (called by dispatcher when WebSocket is disconnected)
+        if path == "/apns/push":
+            try:
+                content_length = int(self.headers.get("Content-Length", 0))
+                body = self.rfile.read(content_length)
+                data = json.loads(body) if body else {}
+            except (json.JSONDecodeError, ValueError):
+                self._send_json(400, {"error": "Invalid body"})
+                return
+            title = data.get("title", "Facai")
+            body_text = data.get("body", "New message")
+            extra = data.get("data")
+            ok = send_apns_push(title, body_text, extra)
+            self._send_json(200, {"sent": ok})
+            return
+
         # APNs test push (for debugging)
         if path == "/apns/test":
             ok = send_apns_push("Test", "Push notification is working!")
