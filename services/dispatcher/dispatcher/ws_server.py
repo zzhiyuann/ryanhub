@@ -568,6 +568,7 @@ class WebSocketServer:
             return
         pending = list(self._pending_deliveries)
         self._pending_deliveries.clear()
+        self._save_pending()
         log.info("ws flushing %d pending deliveries to %d active clients", len(pending), len(self._clients))
         for msg in pending:
             await self.broadcast(msg)
