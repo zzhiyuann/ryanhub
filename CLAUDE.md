@@ -97,7 +97,7 @@ python3.13 -m venv .venv
 |---------|------|----------|-------------|
 | Dispatcher | 8765 | WebSocket | Chat backend for AI tab |
 | Bridge Server | 18790 | HTTP | RyanHub bridge server (analysis, health data, chat, parking) |
-| Calendar Sync | 18793 | HTTP | Google Calendar bridge (direct API + AI agent) |
+| Calendar Sync | 18793 | HTTP | Apple Calendar bridge (EventKit via compiled Swift helper) |
 | Book Factory | 3443 / 3000 | HTTPS / HTTP | Book platform API + web UI |
 
 ## Design System (MUST follow for all UI work)
@@ -153,7 +153,7 @@ The Toolkit tab uses a macOS-style menu bar (not NavigationStack push/pop) for s
 - Food Analysis: `AnalyzedFoodItem.id` uses `name` — duplicate ID collision risk
 - WebSocketClient: `@Observable` mutated from non-MainActor methods
 - Voice messages: No playback (waveform is display-only)
-- CalendarViewModel: Requires calendar-sync-server.py running on port 18793 for real data
+- CalendarViewModel: Requires calendar-sync-server.py running on port 18793 (uses Apple Calendar via compiled calendar-helper Swift binary)
 
 ## Agent Coordination — Leadership Learnings (continuously updated)
 
