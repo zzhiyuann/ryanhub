@@ -551,9 +551,11 @@ final class SensingEngine {
     func handleBackgroundWake() async {
         print("[SensingEngine] Background wake — backfilling data, taking snapshots, and syncing")
 
-        // Determine the backfill window: from last sync (or 1 hour ago) to now
+        // Backfill window: at least 2 hours, or from last sync — whichever is earlier.
+        // This ensures motion gaps are filled even if BGTask runs infrequently.
         let now = Date()
-        let backfillStart = lastSyncTime ?? now.addingTimeInterval(-3600)
+        let twoHoursAgo = now.addingTimeInterval(-7200)
+        let backfillStart = min(lastSyncTime ?? twoHoursAgo, twoHoursAgo)
 
         // Backfill pedometer data
         await backfillPedometerData(from: backfillStart, to: now)
