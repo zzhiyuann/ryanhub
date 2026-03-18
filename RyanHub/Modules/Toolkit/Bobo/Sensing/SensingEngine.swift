@@ -304,11 +304,27 @@ final class SensingEngine {
         NotificationCenter.default.removeObserver(self, name: .watchDidBecomeReachable, object: nil)
     }
 
-    /// Resume the health sensor on foreground return. Re-fetches all HealthKit data
-    /// from the last fetch timestamp to now, filling any gaps from background suspension.
-    func resumeHealthSensor() {
+    /// Resume all sensors on foreground return. Backfills motion/pedometer gaps
+    /// and re-fetches HealthKit data from the last fetch timestamp to now.
+    func resumeOnForeground() {
         guard isRunning else { return }
+
+        // Backfill motion data for the gap period while app was suspended
+        let now = Date()
+        let backfillStart = lastSyncTime ?? now.addingTimeInterval(-3600)
+        Task {
+            await backfillMotionActivity(from: backfillStart, to: now)
+            await backfillPedometerData(from: backfillStart, to: now)
+            // Sync any new events to bridge
+            await syncPendingEvents()
+        }
+
+        // Re-fetch HealthKit data
         healthSensor.resume()
+
+        // One-shot ambient snapshots
+        batterySensor.checkNow()
+        locationSensor.checkNow()
     }
 
     /// Check for new photos taken while the app was in the background.
