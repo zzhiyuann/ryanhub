@@ -111,10 +111,19 @@ final class ParkingViewModel {
     // MARK: - Init
 
     init() {
-        loadSkipDates()
-        loadCronStatus()
-        loadPurchaseHistory()
-        updateTodayStatus()
+        loadAll()
+    }
+
+    /// Load all data and update status after everything is fetched.
+    private func loadAll() {
+        Task {
+            await withTaskGroup(of: Void.self) { group in
+                group.addTask { await self.fetchSkipDates() }
+                group.addTask { await self.fetchCronStatus() }
+                group.addTask { await self.fetchPurchaseHistory() }
+            }
+            updateTodayStatus()
+        }
     }
 
     // MARK: - Actions
@@ -283,21 +292,24 @@ final class ParkingViewModel {
 
     /// Load skip dates from the bridge server.
     func loadSkipDates() {
-        Task {
-            do {
-                let url = URL(string: "\(bridgeBaseURL)/parking/skip-dates")!
-                let (data, _) = try await URLSession.shared.data(from: url)
-                let content = String(data: data, encoding: .utf8) ?? ""
-                let formatter = DateFormatter()
-                formatter.dateFormat = "yyyy-MM-dd"
-                skipDates = content.components(separatedBy: .newlines)
-                    .map { $0.trimmingCharacters(in: .whitespaces) }
-                    .filter { !$0.isEmpty }
-                    .compactMap { formatter.date(from: $0) }
-                    .map { ParkingSkipEntry(date: $0) }
-            } catch {
-                skipDates = []
-            }
+        Task { await fetchSkipDates() }
+    }
+
+    /// Fetch skip dates (async, for use in TaskGroup).
+    private func fetchSkipDates() async {
+        do {
+            let url = URL(string: "\(bridgeBaseURL)/parking/skip-dates")!
+            let (data, _) = try await URLSession.shared.data(from: url)
+            let content = String(data: data, encoding: .utf8) ?? ""
+            let formatter = DateFormatter()
+            formatter.dateFormat = "yyyy-MM-dd"
+            skipDates = content.components(separatedBy: .newlines)
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+                .filter { !$0.isEmpty }
+                .compactMap { formatter.date(from: $0) }
+                .map { ParkingSkipEntry(date: $0) }
+        } catch {
+            skipDates = []
         }
     }
 
