@@ -88,6 +88,7 @@ struct CalendarPluginView: View {
             Spacer()
 
             Button {
+                updateServiceURL()
                 Task { await viewModel.syncEvents() }
             } label: {
                 if viewModel.isLoading {
