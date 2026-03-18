@@ -540,6 +540,8 @@ struct CalendarPluginView: View {
 
     // MARK: - Today Section
 
+    @State private var showEndedEvents = false
+
     private var todaySection: some View {
         VStack(alignment: .leading, spacing: HubLayout.itemSpacing) {
             calendarSectionHeader(
@@ -548,22 +550,62 @@ struct CalendarPluginView: View {
                 trailing: formattedToday
             )
 
-            if viewModel.todayEvents.isEmpty {
+            if viewModel.todayEvents.isEmpty && viewModel.todayEndedEvents.isEmpty {
                 emptyDayCard(
                     message: "Your day is wide open",
                     subtitle: "Enjoy the free time or add something new",
                     icon: "sun.min.fill"
                 )
-            } else {
-                ForEach(viewModel.todayEvents) { event in
-                    Button { viewModel.selectEvent(event) } label: {
-                        eventCard(event)
+            } else if viewModel.todayEvents.isEmpty && !viewModel.todayEndedEvents.isEmpty {
+                emptyDayCard(
+                    message: "All done for today",
+                    subtitle: "\(viewModel.todayEndedEvents.count) event\(viewModel.todayEndedEvents.count == 1 ? "" : "s") completed",
+                    icon: "checkmark.circle.fill"
+                )
+            }
+
+            // Upcoming/ongoing events
+            ForEach(viewModel.todayEvents) { event in
+                Button { viewModel.selectEvent(event) } label: {
+                    eventCard(event)
+                }
+                .contextMenu {
+                    Button(role: .destructive) {
+                        viewModel.confirmDeleteEvent(event)
+                    } label: {
+                        Label("Delete Event", systemImage: "trash")
                     }
-                    .contextMenu {
-                        Button(role: .destructive) {
-                            viewModel.confirmDeleteEvent(event)
-                        } label: {
-                            Label("Delete Event", systemImage: "trash")
+                }
+            }
+
+            // Collapsed ended events
+            if !viewModel.todayEndedEvents.isEmpty {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        showEndedEvents.toggle()
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: showEndedEvents ? "chevron.down" : "chevron.right")
+                            .font(.system(size: 10, weight: .semibold))
+                        Text("\(viewModel.todayEndedEvents.count) earlier event\(viewModel.todayEndedEvents.count == 1 ? "" : "s")")
+                            .font(.system(size: 12, weight: .medium))
+                    }
+                    .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme).opacity(0.6))
+                    .padding(.vertical, 4)
+                }
+
+                if showEndedEvents {
+                    ForEach(viewModel.todayEndedEvents) { event in
+                        Button { viewModel.selectEvent(event) } label: {
+                            eventCard(event)
+                        }
+                        .contextMenu {
+                            Button(role: .destructive) {
+                                viewModel.confirmDeleteEvent(event)
+                            } label: {
+                                Label("Delete Event", systemImage: "trash")
+                            }
                         }
                     }
                 }
