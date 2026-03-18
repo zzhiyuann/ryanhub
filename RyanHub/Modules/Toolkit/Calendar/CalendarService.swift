@@ -9,8 +9,16 @@ final class CalendarService {
 
     var bridgeBaseURL: String
 
-    nonisolated init(bridgeBaseURL: String = "http://localhost:18793") {
-        self.bridgeBaseURL = bridgeBaseURL
+    nonisolated init(bridgeBaseURL: String? = nil) {
+        if let url = bridgeBaseURL {
+            self.bridgeBaseURL = url
+        } else if let serverURL = UserDefaults.standard.string(forKey: "ryanhub_server_url"),
+                  let host = URL(string: serverURL)?.host {
+            self.bridgeBaseURL = "http://\(host):18793"
+        } else {
+            // Same Tailscale IP as AppState.defaultFoodAnalysisURL but port 18793
+            self.bridgeBaseURL = "http://100.89.67.80:18793"
+        }
     }
 
     // MARK: - Public API
