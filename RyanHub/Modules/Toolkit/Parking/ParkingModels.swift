@@ -93,6 +93,30 @@ struct CronPurchaseStatus: Codable {
     let reason: String?
     let limit: Double?
 
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        timestamp = try container.decode(String.self, forKey: .timestamp)
+        date = try container.decode(String.self, forKey: .date)
+        status = try container.decode(String.self, forKey: .status)
+        price = try container.decodeIfPresent(Double.self, forKey: .price)
+        maxMinutes = try container.decodeIfPresent(Int.self, forKey: .maxMinutes)
+        zone = try container.decodeIfPresent(String.self, forKey: .zone)
+        vehicle = try container.decodeIfPresent(String.self, forKey: .vehicle)
+        reason = try container.decodeIfPresent(String.self, forKey: .reason)
+        limit = try container.decodeIfPresent(Double.self, forKey: .limit)
+
+        // duration can be String or Int (minutes) in the JSON
+        if let str = try? container.decodeIfPresent(String.self, forKey: .duration) {
+            duration = str
+        } else if let minutes = try? container.decodeIfPresent(Int.self, forKey: .duration) {
+            let h = minutes / 60
+            let m = minutes % 60
+            duration = m > 0 ? "\(h)h \(m)m" : "\(h)h"
+        } else {
+            duration = nil
+        }
+    }
+
     /// Whether this status is from today.
     var isToday: Bool {
         let formatter = DateFormatter()

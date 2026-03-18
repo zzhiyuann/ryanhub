@@ -280,7 +280,14 @@ final class ParkingViewModel {
         return formatter.string(from: calendarDisplayedMonth)
     }
 
-    // MARK: - Data Persistence (HTTP API via bridge server)
+    // MARK: - Data Persistence (HTTP API via bridge server + local cache)
+
+    /// Cache keys for UserDefaults.
+    private enum CacheKey {
+        static let cronStatus = "parking_cache_cronStatus"
+        static let purchaseHistory = "parking_cache_purchaseHistory"
+        static let skipDates = "parking_cache_skipDates"
+    }
 
     /// Base URL for the bridge server (same as food analysis server).
     private var bridgeBaseURL: String {
@@ -288,6 +295,40 @@ final class ParkingViewModel {
             .flatMap { URL(string: $0)?.host }
             .map { "http://\($0):18790" }
             ?? AppState.defaultFoodAnalysisURL
+    }
+
+    /// Load cached data from UserDefaults (called before network fetch).
+    private func loadFromCache() {
+        let defaults = UserDefaults.standard
+        if let data = defaults.data(forKey: CacheKey.cronStatus) {
+            lastCronStatus = try? JSONDecoder().decode(CronPurchaseStatus.self, from: data)
+        }
+        if let data = defaults.data(forKey: CacheKey.purchaseHistory) {
+            purchaseHistory = (try? JSONDecoder().decode([CronPurchaseStatus].self, from: data)) ?? []
+        }
+        if let str = defaults.string(forKey: CacheKey.skipDates) {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "yyyy-MM-dd"
+            skipDates = str.components(separatedBy: "\n")
+                .filter { !$0.isEmpty }
+                .compactMap { formatter.date(from: $0) }
+                .map { ParkingSkipEntry(date: $0) }
+        }
+    }
+
+    /// Save data to local cache.
+    private func saveToCache() {
+        let defaults = UserDefaults.standard
+        if let cron = lastCronStatus, let data = try? JSONEncoder().encode(cron) {
+            defaults.set(data, forKey: CacheKey.cronStatus)
+        }
+        if !purchaseHistory.isEmpty, let data = try? JSONEncoder().encode(purchaseHistory) {
+            defaults.set(data, forKey: CacheKey.purchaseHistory)
+        }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        let skipStr = skipDates.map { formatter.string(from: $0.date) }.joined(separator: "\n")
+        defaults.set(skipStr, forKey: CacheKey.skipDates)
     }
 
     /// Load skip dates from the bridge server.
