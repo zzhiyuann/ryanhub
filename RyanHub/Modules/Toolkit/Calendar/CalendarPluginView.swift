@@ -102,26 +102,40 @@ struct CalendarPluginView: View {
 
                 Spacer()
 
-                // Sync button with integrated status
+                // Action buttons
                 VStack(alignment: .trailing, spacing: 4) {
-                    Button {
-                        updateServiceURL()
-                        viewModel.isLoading = false
-                        Task { await viewModel.syncEvents() }
-                    } label: {
-                        if viewModel.isLoading {
-                            ProgressView()
-                                .tint(Color.hubPrimary)
+                    HStack(spacing: 8) {
+                        // AI command button
+                        Button { showCommandSheet = true } label: {
+                            Image(systemName: "sparkles")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(Color.hubPrimary)
                                 .frame(width: 36, height: 36)
                                 .background(
                                     Circle()
                                         .fill(Color.hubPrimary.opacity(0.1))
                                 )
-                        } else {
-                            Image(systemName: "arrow.clockwise")
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundStyle(Color.hubPrimary)
-                                .frame(width: 36, height: 36)
+                        }
+
+                        // Sync button
+                        Button {
+                            updateServiceURL()
+                            viewModel.isLoading = false
+                            Task { await viewModel.syncEvents() }
+                        } label: {
+                            if viewModel.isLoading {
+                                ProgressView()
+                                    .tint(Color.hubPrimary)
+                                    .frame(width: 36, height: 36)
+                                    .background(
+                                        Circle()
+                                            .fill(Color.hubPrimary.opacity(0.1))
+                                    )
+                            } else {
+                                Image(systemName: "arrow.clockwise")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundStyle(Color.hubPrimary)
+                                    .frame(width: 36, height: 36)
                                 .background(
                                     Circle()
                                         .fill(Color.hubPrimary.opacity(0.1))
