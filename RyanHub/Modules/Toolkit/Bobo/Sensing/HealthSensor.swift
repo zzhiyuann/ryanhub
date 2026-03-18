@@ -172,7 +172,21 @@ final class HealthSensor {
     /// long the app was in the background.
     func resume() {
         guard isRunning else { return }
-        print("[HealthSensor] Resuming — backfilling gap data")
+        // Reset all lastFetch timestamps to 24h ago so we backfill any gap
+        // from background suspension / app kill. Without this, fetchStart()
+        // returns the stale lastFetch time and misses data written while
+        // the app was suspended.
+        let backfillStart = Date().addingTimeInterval(-86400)
+        let backfillTs = backfillStart.timeIntervalSince1970
+        for key in [FetchKey.heartRate, FetchKey.hrv, FetchKey.sleep,
+                    FetchKey.workout, FetchKey.activeEnergy, FetchKey.basalEnergy,
+                    FetchKey.respiratoryRate, FetchKey.bloodOxygen, FetchKey.noiseExposure] {
+            let current = UserDefaults.standard.double(forKey: key)
+            if current > 0 && current < backfillTs {
+                UserDefaults.standard.set(backfillTs, forKey: key)
+            }
+        }
+        print("[HealthSensor] Resuming — reset lastFetch to 24h ago, backfilling")
         fetchRecentSamples()
     }
 
