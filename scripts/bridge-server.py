@@ -2209,6 +2209,9 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
             path = "/popo/" + path[len("/bobo/"):]
         if path == "/health":
             self._send_json(200, {"status": "ok"})
+        elif path.startswith("/calendar/"):
+            self._proxy_calendar(parsed)
+            return
         elif path in PARKING_FILES:
             self._serve_parking_file(path)
         elif path == "/popo/timeline":
