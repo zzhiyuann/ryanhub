@@ -58,6 +58,13 @@ final class LocationSensor: NSObject {
         locationManager.stopMonitoringVisits()
     }
 
+    /// Request a single location update. Useful for periodic "where am I" snapshots
+    /// when significant-change monitoring hasn't fired (user hasn't moved 500m+).
+    func checkNow() {
+        guard isRunning else { return }
+        locationManager.requestLocation()
+    }
+
     // MARK: - Private
 
     /// Begin significant location change monitoring and visit monitoring.
