@@ -30,9 +30,17 @@ final class CalendarViewModel {
 
     // MARK: - Computed: Filtered Event Lists
 
+    /// Today's upcoming/ongoing events (ended events are filtered out).
     var todayEvents: [CalendarEvent] {
         let calendar = Calendar.current
-        return allEvents.filter { calendar.isDateInToday($0.startTime) }
+        return allEvents.filter { calendar.isDateInToday($0.startTime) && !$0.hasEnded }
+            .sorted { $0.startTime < $1.startTime }
+    }
+
+    /// Today's already-ended events (collapsed section).
+    var todayEndedEvents: [CalendarEvent] {
+        let calendar = Calendar.current
+        return allEvents.filter { calendar.isDateInToday($0.startTime) && $0.hasEnded }
             .sorted { $0.startTime < $1.startTime }
     }
 
