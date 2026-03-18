@@ -202,9 +202,9 @@ final class ChatViewModel {
                 if messages.contains(where: { $0.id == respId && $0.content == content }) {
                     continue // Already have this message
                 }
-                // Update existing streaming message or create new one
-                if let idx = messages.firstIndex(where: { $0.id == respId }) {
-                    messages[idx].content = content
+                // Create new message if we don't already have it
+                if messages.contains(where: { $0.id == respId }) {
+                    continue // Already have this response
                 } else {
                     let assistantMsg = ChatMessage(
                         id: respId,
