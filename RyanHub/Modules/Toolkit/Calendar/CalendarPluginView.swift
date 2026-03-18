@@ -89,6 +89,8 @@ struct CalendarPluginView: View {
 
             Button {
                 updateServiceURL()
+                // Force reset loading state in case it's stuck
+                viewModel.isLoading = false
                 Task { await viewModel.syncEvents() }
             } label: {
                 if viewModel.isLoading {
@@ -102,7 +104,6 @@ struct CalendarPluginView: View {
                         .frame(width: 32, height: 32)
                 }
             }
-            .disabled(viewModel.isLoading)
         }
     }
 
