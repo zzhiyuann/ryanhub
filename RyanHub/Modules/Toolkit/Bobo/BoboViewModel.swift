@@ -1896,10 +1896,15 @@ final class BoboViewModel {
             store.execute(q)
         }
 
-        // Sleep
+        // Sleep — extend query window to previous day 6 PM to catch cross-midnight sleep.
+        // HealthKit stores individual sleep segments, not "sessions". A night's sleep
+        // starting at 11 PM on day N has segments with startDate on day N, which would
+        // be missed by a strict dayStart→dayEnd predicate for day N+1.
         if let type = HKCategoryType.categoryType(forIdentifier: .sleepAnalysis) {
             group.enter()
-            let q = HKSampleQuery(sampleType: type, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: [sort]) { _, samples, _ in
+            let sleepStart = calendar.date(byAdding: .hour, value: -6, to: dayStart) ?? dayStart
+            let sleepPredicate = HKQuery.predicateForSamples(withStart: sleepStart, end: dayEnd, options: .strictStartDate)
+            let q = HKSampleQuery(sampleType: type, predicate: sleepPredicate, limit: HKObjectQueryNoLimit, sortDescriptors: [sort]) { _, samples, _ in
                 defer { group.leave() }
                 guard let samples = samples as? [HKCategorySample] else { return }
                 let formatter = ISO8601DateFormatter()
