@@ -2230,6 +2230,17 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
         if path.startswith("/bobo/"):
             path = "/popo/" + path[len("/bobo/"):]
 
+        # APNs device token registration
+        if path == "/apns/register":
+            self._register_apns_token()
+            return
+
+        # APNs test push (for debugging)
+        if path == "/apns/test":
+            ok = send_apns_push("Test", "Push notification is working!")
+            self._send_json(200, {"sent": ok})
+            return
+
         # Parking skip-dates write
         if path == "/parking/skip-dates":
             self._write_parking_skip_dates()
