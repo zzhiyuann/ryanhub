@@ -3044,8 +3044,8 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
 
     def _handle_nudge_check(self):
         """Generate nudges server-side if >2 hours since last generation.
-        Reads stored sensing data from popo_sensing.json.
-        Used by iOS background sync task."""
+        Uses the full /bobo/day bundle for today to give the LLM complete context.
+        Used by iOS background sync task and proactive heartbeat."""
         timestamp_file = os.path.join(BRIDGE_DATA_DIR, "popo_last_nudge_gen.txt")
 
         # Check if enough time has passed since last generation
@@ -3063,45 +3063,52 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
                                   "seconds_until_next": int(7200 - elapsed)})
             return
 
-        # Load today's sensing events
-        sensing_file = DATA_FILES.get("/popo/sensing")
-        events = []
-        if sensing_file and os.path.exists(sensing_file):
-            try:
-                with open(sensing_file, "r") as f:
-                    content = f.read()
-                all_events = json.loads(content) if content.strip() else []
-                # Filter to last 6 hours
-                cutoff = datetime.now(_get_local_timezone()) - timedelta(hours=6)
-                events = [e for e in all_events if _record_timestamp_at_or_after(e, cutoff)]
-            except (json.JSONDecodeError, IOError):
-                events = []
+        # Use the full day bundle — same data the user sees in the timeline.
+        # This gives the LLM complete context: sensing + food + activity + sleep + narrations.
+        try:
+            day_bundle = _build_day_bundle("today")
+        except Exception:
+            day_bundle = None
 
-        # Load today's narrations
-        narrations_file = DATA_FILES.get("/popo/narrations")
-        narrations = []
-        if narrations_file and os.path.exists(narrations_file):
-            try:
-                with open(narrations_file, "r") as f:
-                    content = f.read()
-                all_narrations = json.loads(content) if content.strip() else []
-                cutoff = datetime.now(_get_local_timezone()).replace(
-                    hour=0, minute=0, second=0, microsecond=0
-                )
-                narrations = [n for n in all_narrations if _record_timestamp_at_or_after(n, cutoff)]
-            except (json.JSONDecodeError, IOError):
-                narrations = []
-
-        if not events and not narrations:
+        if not day_bundle or day_bundle.get("counts", {}).get("sensing", 0) == 0:
             self._send_json(200, {"ok": True, "nudges": [], "skipped": True,
                                   "reason": "no_data"})
             return
 
-        print("[NudgeCheck] Processing %d events, %d narrations" % (len(events), len(narrations)))
+        # Build a rich summary from the day bundle
+        summary_parts = []
+        summary_parts.append("=== Today's Full Day Bundle ===")
+        summary_parts.append("Date: %s | Timezone: %s" % (day_bundle.get("date"), day_bundle.get("timezone")))
+        summary_parts.append("Counts: %s" % json.dumps(day_bundle.get("counts", {})))
+        summary_parts.append("Summary: %s" % json.dumps(day_bundle.get("summary", {})))
+        summary_parts.append("")
 
-        # Summarize and generate
-        summary_text = summarize_sensing_data(events, narrations)
-        raw_nudges = generate_nudges_llm(summary_text, timeout=20)
+        # Include timeline items (already filtered/deduped by _build_day_bundle)
+        items = day_bundle.get("items", [])
+        summary_parts.append("Timeline (%d items, newest first):" % len(items))
+        for item in items[:150]:  # Cap at 150 most recent for token efficiency
+            ts = item.get("localTime", "?")
+            kind = item.get("kind", "?")
+            itype = item.get("type", "?")
+            detail = item.get("detail", "")
+            if kind == "sensing":
+                summary_parts.append("  [%s] %s: %s" % (ts, itype, detail))
+            elif kind == "meal":
+                cal = item.get("calories", "?")
+                summary_parts.append("  [%s] MEAL (%s): %s (%s cal)" % (ts, itype, detail, cal))
+            elif kind == "activity":
+                dur = item.get("duration", "?")
+                cal = item.get("caloriesBurned", "?")
+                summary_parts.append("  [%s] ACTIVITY (%s): %s (%s min, %s cal)" % (ts, itype, detail, dur, cal))
+            elif kind == "narration":
+                summary_parts.append("  [%s] DIARY: %s" % (ts, detail[:100]))
+            elif kind == "weight":
+                summary_parts.append("  [%s] WEIGHT: %s" % (ts, detail))
+
+        summary_text = "\n".join(summary_parts)
+        print("[NudgeCheck] Processing day bundle: %d items, summary %d chars" % (len(items), len(summary_text)))
+
+        raw_nudges = generate_nudges_llm(summary_text, timeout=30)
         if not raw_nudges:
             raw_nudges = generate_nudges_rule_based(events, narrations)
 
