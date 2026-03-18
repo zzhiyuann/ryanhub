@@ -609,13 +609,11 @@ struct CalendarPluginView: View {
         return formatter.string(from: tomorrow)
     }
 
-    /// Ensure the calendar service URL points to the Mac, not localhost.
+    /// Set the calendar service URL to use the bridge server proxy.
     private func updateServiceURL() {
-        var url = appState.calendarSyncURL
-        if url.contains("localhost") || url.contains("127.0.0.1") {
-            url = "http://100.89.67.80:18793"
-            appState.calendarSyncURL = url
-        }
+        // Route through bridge server (:18790/calendar/*) which is proven reachable
+        let bridgeHost = URL(string: appState.foodAnalysisURL)?.host ?? "100.89.67.80"
+        let url = "http://\(bridgeHost):18790/calendar"
         viewModel.service.bridgeBaseURL = url
     }
 }

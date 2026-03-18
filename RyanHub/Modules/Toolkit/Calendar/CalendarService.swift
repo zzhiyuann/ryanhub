@@ -9,15 +9,14 @@ final class CalendarService {
 
     var bridgeBaseURL: String
 
+    /// Calendar requests now proxy through the bridge server (:18790/calendar/*)
+    /// to avoid port reachability issues from iPhone.
     nonisolated init(bridgeBaseURL: String? = nil) {
         if let url = bridgeBaseURL {
             self.bridgeBaseURL = url
-        } else if let serverURL = UserDefaults.standard.string(forKey: "ryanhub_server_url"),
-                  let host = URL(string: serverURL)?.host {
-            self.bridgeBaseURL = "http://\(host):18793"
         } else {
-            // Same Tailscale IP as AppState.defaultFoodAnalysisURL but port 18793
-            self.bridgeBaseURL = "http://100.89.67.80:18793"
+            // Use bridge server as proxy — guaranteed reachable from iPhone
+            self.bridgeBaseURL = AppState.defaultFoodAnalysisURL + "/calendar"
         }
     }
 
