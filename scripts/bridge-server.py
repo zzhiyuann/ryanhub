@@ -2257,6 +2257,11 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
             self._send_json(200, {"sent": ok})
             return
 
+        # Pending chat messages (undelivered by dispatcher)
+        if path == "/chat/pending":
+            self._handle_pending_messages()
+            return
+
         # Parking skip-dates write
         if path == "/parking/skip-dates":
             self._write_parking_skip_dates()
