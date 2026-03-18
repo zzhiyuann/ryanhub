@@ -1424,7 +1424,20 @@ final class BoboViewModel {
     func generateNudges() async {
         guard !isGeneratingNudges else { return }
         isGeneratingNudges = true
-        defer { isGeneratingNudges = false }
+
+        // Request background execution time so the nudge generation completes
+        // even if the user switches away from the app mid-request.
+        var bgTaskID: UIBackgroundTaskIdentifier = .invalid
+        bgTaskID = UIApplication.shared.beginBackgroundTask(withName: "nudge-gen") {
+            UIApplication.shared.endBackgroundTask(bgTaskID)
+            bgTaskID = .invalid
+        }
+        defer {
+            isGeneratingNudges = false
+            if bgTaskID != .invalid {
+                UIApplication.shared.endBackgroundTask(bgTaskID)
+            }
+        }
 
         let endpoint = "\(Self.bridgeBaseURL)/bobo/analyze"
         guard let url = URL(string: endpoint) else { return }
