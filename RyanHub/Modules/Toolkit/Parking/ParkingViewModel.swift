@@ -470,28 +470,37 @@ final class ParkingViewModel {
     /// Load the last cron job status from the bridge server.
     func loadCronStatus() {
         Task {
-            do {
-                let url = URL(string: "\(bridgeBaseURL)/parking/last-status")!
-                let (data, _) = try await URLSession.shared.data(from: url)
-                guard !data.isEmpty else { lastCronStatus = nil; return }
-                lastCronStatus = try JSONDecoder().decode(CronPurchaseStatus.self, from: data)
-            } catch {
-                lastCronStatus = nil
-            }
+            await fetchCronStatus()
+            updateTodayStatus()
+        }
+    }
+
+    /// Fetch cron status (async, for use in TaskGroup).
+    private func fetchCronStatus() async {
+        do {
+            let url = URL(string: "\(bridgeBaseURL)/parking/last-status")!
+            let (data, _) = try await URLSession.shared.data(from: url)
+            guard !data.isEmpty else { lastCronStatus = nil; return }
+            lastCronStatus = try JSONDecoder().decode(CronPurchaseStatus.self, from: data)
+        } catch {
+            lastCronStatus = nil
         }
     }
 
     /// Load purchase history from the bridge server.
     private func loadPurchaseHistory() {
-        Task {
-            do {
-                let url = URL(string: "\(bridgeBaseURL)/parking/purchase-history")!
-                let (data, _) = try await URLSession.shared.data(from: url)
-                guard !data.isEmpty else { purchaseHistory = []; return }
-                purchaseHistory = try JSONDecoder().decode([CronPurchaseStatus].self, from: data)
-            } catch {
-                purchaseHistory = []
-            }
+        Task { await fetchPurchaseHistory() }
+    }
+
+    /// Fetch purchase history (async, for use in TaskGroup).
+    private func fetchPurchaseHistory() async {
+        do {
+            let url = URL(string: "\(bridgeBaseURL)/parking/purchase-history")!
+            let (data, _) = try await URLSession.shared.data(from: url)
+            guard !data.isEmpty else { purchaseHistory = []; return }
+            purchaseHistory = try JSONDecoder().decode([CronPurchaseStatus].self, from: data)
+        } catch {
+            purchaseHistory = []
         }
     }
 
