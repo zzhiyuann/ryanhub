@@ -607,6 +607,16 @@ struct CalendarPluginView: View {
         formatter.dateFormat = "EEEE, MMM d"
         return formatter.string(from: tomorrow)
     }
+
+    /// Ensure the calendar service URL points to the Mac, not localhost.
+    private func updateServiceURL() {
+        var url = appState.calendarSyncURL
+        if url.contains("localhost") || url.contains("127.0.0.1") {
+            url = "http://100.89.67.80:18793"
+            appState.calendarSyncURL = url
+        }
+        viewModel.service.bridgeBaseURL = url
+    }
 }
 
 // MARK: - Event Detail View
