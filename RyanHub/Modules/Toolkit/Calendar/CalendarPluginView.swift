@@ -10,33 +10,28 @@ struct CalendarPluginView: View {
     @State private var viewModel = CalendarViewModel()
     @FocusState private var isInputFocused: Bool
 
+    @State private var showCommandSheet = false
+
     var body: some View {
-        VStack(spacing: 0) {
-            // Scrollable content
-            ScrollView {
-                VStack(spacing: HubLayout.sectionSpacing) {
-                    dateHeader
+        ScrollView {
+            VStack(spacing: HubLayout.sectionSpacing) {
+                dateHeader
 
-                    if !viewModel.hasSynced && !viewModel.hasAnyEvents {
-                        emptyStateView
-                    } else {
-                        countdownSection
-                        weekOverviewSection
-                        agentResponseSection
-                        todaySection
-                        tomorrowSection
-                        thisWeekSection
-                    }
+                if !viewModel.hasSynced && !viewModel.hasAnyEvents {
+                    emptyStateView
+                } else {
+                    countdownSection
+                    weekOverviewSection
+                    agentResponseSection
+                    todaySection
+                    tomorrowSection
+                    thisWeekSection
                 }
-                .padding(HubLayout.standardPadding)
             }
-            .scrollDismissesKeyboard(.interactively)
-            .refreshable {
-                await viewModel.syncEvents()
-            }
-
-            // Fixed bottom input bar
-            commandInputBar
+            .padding(HubLayout.standardPadding)
+        }
+        .refreshable {
+            await viewModel.syncEvents()
         }
         .background(AdaptiveColors.background(for: colorScheme))
         .alert("Delete Event", isPresented: $viewModel.showDeleteConfirmation) {
@@ -61,6 +56,11 @@ struct CalendarPluginView: View {
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
             }
+        }
+        .sheet(isPresented: $showCommandSheet) {
+            CalendarCommandSheet(viewModel: viewModel, colorScheme: colorScheme)
+                .presentationDetents([.height(200)])
+                .presentationDragIndicator(.visible)
         }
         .onAppear {
             updateServiceURL()
