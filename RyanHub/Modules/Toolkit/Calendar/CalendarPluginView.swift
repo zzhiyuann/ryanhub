@@ -1213,6 +1213,85 @@ struct EventDetailView: View {
     }
 }
 
+// MARK: - Calendar Command Sheet
+
+/// A compact sheet for entering AI calendar commands.
+struct CalendarCommandSheet: View {
+    let viewModel: CalendarViewModel
+    let colorScheme: ColorScheme
+    @Environment(\.dismiss) private var dismiss
+    @FocusState private var isFocused: Bool
+    @State private var commandText = ""
+
+    var body: some View {
+        VStack(spacing: 16) {
+            HStack {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundStyle(Color.hubPrimary)
+                Text("Calendar AI")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
+                Spacer()
+                Button {
+                    dismiss()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 22))
+                        .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme).opacity(0.4))
+                }
+            }
+
+            HStack(spacing: 10) {
+                TextField("e.g. Add lunch with Laura tomorrow at noon", text: $commandText)
+                    .font(.system(size: 15))
+                    .focused($isFocused)
+                    .submitLabel(.send)
+                    .onSubmit { send() }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(AdaptiveColors.surfaceSecondary(for: colorScheme))
+                    )
+
+                Button(action: send) {
+                    if viewModel.isProcessingCommand {
+                        ProgressView()
+                            .tint(.white)
+                            .frame(width: 40, height: 40)
+                    } else {
+                        Image(systemName: "arrow.up")
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundStyle(.white)
+                            .frame(width: 40, height: 40)
+                    }
+                }
+                .background(
+                    Circle()
+                        .fill(commandText.trimmingCharacters(in: .whitespaces).isEmpty
+                              ? Color.hubPrimary.opacity(0.4)
+                              : Color.hubPrimary)
+                )
+                .clipShape(Circle())
+                .disabled(commandText.trimmingCharacters(in: .whitespaces).isEmpty || viewModel.isProcessingCommand)
+            }
+        }
+        .padding(20)
+        .background(AdaptiveColors.surface(for: colorScheme))
+        .onAppear { isFocused = true }
+    }
+
+    private func send() {
+        let text = commandText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        viewModel.commandText = text
+        commandText = ""
+        dismiss()
+        Task { await viewModel.processCommand() }
+    }
+}
+
 // MARK: - Preview
 
 #Preview {
