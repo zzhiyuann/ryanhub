@@ -161,10 +161,80 @@ final class ChatViewModel {
     }
 
     /// Called when the app returns to foreground. Re-establishes connection
-    /// if it was lost while suspended in the background.
+    /// if it was lost while suspended in the background. Also fetches any
+    /// messages that were delivered while the app was backgrounded/killed.
     func ensureConnected() {
         webSocket.reconnectIfNeeded()
         startStatePolling()
+        // Fetch any pending messages that were cached server-side
+        Task { await fetchPendingMessages() }
+    }
+
+    /// Fetch undelivered messages from the bridge server's pending queue.
+    /// These are messages the dispatcher cached when the WebSocket was disconnected.
+    private func fetchPendingMessages() async {
+        let baseURL = Self.bridgeBaseURL
+        guard let url = URL(string: "\(baseURL)/chat/pending") else { return }
+
+        do {
+            let (data, response) = try await URLSession.shared.data(from: url)
+            guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { return }
+            guard !data.isEmpty else { return }
+
+            struct PendingMessage: Decodable {
+                let type: String?
+                let id: String?
+                let content: String?
+                let streaming: Bool?
+            }
+
+            let pending = try JSONDecoder().decode([PendingMessage].self, from: data)
+            let finalMessages = pending.filter {
+                $0.type == "response" && $0.streaming != true && ($0.content?.count ?? 0) > 0
+            }
+
+            guard !finalMessages.isEmpty else { return }
+
+            // Apply each pending message to the conversation
+            for msg in finalMessages {
+                guard let msgId = msg.id, let content = msg.content else { continue }
+                let respId = "resp-\(msgId)"
+                if messages.contains(where: { $0.id == respId && $0.content == content }) {
+                    continue // Already have this message
+                }
+                // Update existing streaming message or create new one
+                if let idx = messages.firstIndex(where: { $0.id == respId }) {
+                    messages[idx].content = content
+                } else {
+                    let assistantMsg = ChatMessage(id: respId, content: content, role: .assistant)
+                    messages.append(assistantMsg)
+                }
+                messageStatuses[msgId] = .done
+            }
+
+            saveMessages()
+
+            // ACK the pending messages so they're cleared server-side
+            var ackRequest = URLRequest(url: url)
+            ackRequest.httpMethod = "POST"
+            ackRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            ackRequest.httpBody = Data("{\"action\":\"ack\"}".utf8)
+            _ = try? await URLSession.shared.data(for: ackRequest)
+
+            // Post local notification if not on chat tab
+            if let last = finalMessages.last, let content = last.content {
+                sendLocalNotificationIfNeeded(content: content, messageId: last.id ?? "pending")
+            }
+        } catch {
+            // Silent — will retry on next foreground
+        }
+    }
+
+    private static var bridgeBaseURL: String {
+        UserDefaults.standard.string(forKey: "ryanhub_server_url")
+            .flatMap { URL(string: $0)?.host }
+            .map { "http://\($0):18790" }
+            ?? AppState.defaultFoodAnalysisURL
     }
 
     /// Send the current input text (and any pending image) as a message.
