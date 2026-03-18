@@ -47,7 +47,7 @@ FOOD_LOG="$LOG_DIR/food-analysis.log"
 CALENDAR_NAME="calendar-sync"
 CALENDAR_PORT=18793
 CALENDAR_SCRIPT="$REPO_ROOT/scripts/calendar-sync-server.py"
-CALENDAR_PYTHON="/Users/zwang/Documents/gcal-mcp-server/.venv/bin/python3"
+CALENDAR_PYTHON="/usr/bin/python3"
 CALENDAR_LOG="$LOG_DIR/calendar-sync.log"
 
 # Book Factory Server

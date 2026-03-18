@@ -7,7 +7,7 @@ A standalone server that processes audio and returns:
 - Speaker diarization (via pyannote.audio, MPS accelerated)
 - Speaker identification (via SpeechBrain ECAPA-TDNN embeddings)
 
-HTTP Endpoints (port 18793):
+HTTP Endpoints (port 18795):
   POST /process       — Full pipeline: transcribe + diarize + identify speakers
   POST /transcribe    — Transcription only (mlx-whisper)
   POST /diarize       — Diarization only (pyannote)
@@ -17,8 +17,8 @@ HTTP Endpoints (port 18793):
   DELETE /profiles/<name> — Remove a speaker profile
   GET  /health        — Health check
 
-WebSocket Endpoint (port 18794):
-  ws://host:18794/ws/stream — Real-time streaming with VAD + hybrid pipeline
+WebSocket Endpoint (port 18796):
+  ws://host:18796/ws/stream — Real-time streaming with VAD + hybrid pipeline
 """
 
 import asyncio
@@ -59,8 +59,8 @@ PROFILES_DIR.mkdir(parents=True, exist_ok=True)
 
 # Config
 HOST = "0.0.0.0"
-PORT = 18793
-WS_PORT = 18794
+PORT = 18795
+WS_PORT = 18796
 WHISPER_MODEL = "mlx-community/whisper-large-v3-mlx"
 SIMILARITY_THRESHOLD = 0.25  # Cosine similarity threshold for speaker ID
 SAMPLE_RATE = 16000
