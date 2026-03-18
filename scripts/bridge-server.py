@@ -2571,11 +2571,42 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
             elif modality == "motion":
                 detail = payload.get("activityType", "?")
             elif modality == "battery":
-                detail = "%s%%" % payload.get("level", "?")
+                level = payload.get("level", "?")
+                charging = payload.get("charging", payload.get("isCharging", ""))
+                detail = "%s%%%s" % (level, " (charging)" if str(charging).lower() in ("true", "1") else "")
             elif modality == "location":
                 detail = payload.get("description") or payload.get("placeName") or payload.get("address") or "?"
+            elif modality == "respiratoryRate":
+                detail = "%s breaths/min" % payload.get("breathsPerMin", "?")
+            elif modality == "noiseExposure":
+                detail = "%s dB" % payload.get("decibels", "?")
+            elif modality == "activeEnergy":
+                kcal = payload.get("kcal", "?")
+                label = payload.get("hourLabel", "")
+                detail = "%s kcal active%s" % (kcal, (" (%s)" % label) if label else "")
+            elif modality == "basalEnergy":
+                kcal = payload.get("kcal", "?")
+                label = payload.get("hourLabel", "")
+                detail = "%s kcal resting%s" % (kcal, (" (%s)" % label) if label else "")
+            elif modality == "sleep":
+                stage = payload.get("stage", "?")
+                detail = stage
+            elif modality == "screen":
+                detail = payload.get("state", "?")
+            elif modality == "wifi":
+                detail = payload.get("ssid", "?")
+            elif modality == "bluetooth":
+                detail = "%s devices" % payload.get("deviceCount", "?")
+            elif modality == "workout":
+                detail = "%s — %ss, %s kcal" % (payload.get("type", "?"), payload.get("duration", "?"), payload.get("calories", "?"))
             else:
-                detail = str(list(payload.values())[:2]) if payload else "?"
+                # Fallback: show first meaningful payload value
+                for key in ("summary", "value", "status", "description", "detail"):
+                    if payload.get(key):
+                        detail = str(payload[key])
+                        break
+                if not detail:
+                    detail = "?"
 
             items.append({
                 "type": modality,
