@@ -136,10 +136,11 @@ struct CalendarPluginView: View {
                                     .font(.system(size: 14, weight: .semibold))
                                     .foregroundStyle(Color.hubPrimary)
                                     .frame(width: 36, height: 36)
-                                .background(
-                                    Circle()
-                                        .fill(Color.hubPrimary.opacity(0.1))
-                                )
+                                    .background(
+                                        Circle()
+                                            .fill(Color.hubPrimary.opacity(0.1))
+                                    )
+                            }
                         }
                     }
 
