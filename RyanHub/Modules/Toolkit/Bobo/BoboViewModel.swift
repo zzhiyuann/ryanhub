@@ -1841,7 +1841,7 @@ final class BoboViewModel {
                 let steps = Int(sum.doubleValue(for: HKUnit.count()))
                 guard steps > 0 else { return }
                 allEvents.append(SensingEvent(
-                    timestamp: dayStart,
+                    timestamp: now,  // Use current time, not dayStart, so /bobo/latest shows a recent timestamp
                     modality: .steps,
                     payload: [
                         "steps": "\(steps)",

@@ -1051,15 +1051,39 @@ def _record_matches_local_date(record, date_filter, field="timestamp"):
 
 def _sleep_record_matches_local_date(record, date_filter):
     # type: (Dict[str, Any], str) -> bool
-    """Assign sleep samples to the local day of their end time (wake-up day)."""
+    """Assign sleep samples to the local day they 'belong' to.
+
+    Sleep is typically a cross-midnight event. A segment that starts at 11 PM
+    on day N and ends at 11:30 PM on day N belongs to the night of N→N+1.
+    We assign a segment to day N+1 (wake-up day) if its endDate is on N+1,
+    OR if its startDate is after 6 PM on day N (evening before).
+    """
     if not isinstance(record, dict):
         return False
 
     payload = record.get("payload", {}) if isinstance(record.get("payload"), dict) else {}
     end_dt = _parse_iso_datetime(payload.get("endDate", ""), assume_local_if_naive=False)
-    if end_dt is None:
+    start_dt = _parse_iso_datetime(payload.get("startDate", ""), assume_local_if_naive=False)
+
+    if end_dt is not None:
+        if _local_date_string(end_dt) == date_filter:
+            return True
+
+    # Also match segments from the previous evening (after 6 PM) that belong
+    # to this night's sleep. E.g., for date_filter="2026-03-18", include
+    # segments starting 2026-03-17 18:00+.
+    if start_dt is not None:
+        local_start = start_dt.astimezone(_get_local_timezone())
+        if local_start.hour >= 18:
+            # This is an evening segment — assign to the next day
+            next_day = (local_start + timedelta(days=1)).strftime("%Y-%m-%d")
+            if next_day == date_filter:
+                return True
+
+    if end_dt is None and start_dt is None:
         return _record_matches_local_date(record, date_filter)
-    return _local_date_string(end_dt) == date_filter
+
+    return False
 
 
 def _load_json_array(filepath):
