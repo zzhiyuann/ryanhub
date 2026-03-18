@@ -549,6 +549,7 @@ final class SensingEngine {
         batterySensor.checkNow()
         wifiSensor.checkNow()
         bluetoothSensor.quickScan(duration: 5)
+        locationSensor.checkNow()
 
         // Small delay to let the BT quick scan complete before syncing
         try? await Task.sleep(nanoseconds: 6_000_000_000)
