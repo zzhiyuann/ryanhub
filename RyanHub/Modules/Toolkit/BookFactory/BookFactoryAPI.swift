@@ -46,8 +46,8 @@ final class BookFactoryAPI: @unchecked Sendable {
     private let session: URLSession
     private let decoder: JSONDecoder
 
-    /// Default Book Factory server URL (Tailscale IP)
-    static let defaultBaseURL = "https://100.89.67.80:3443"
+    /// Default Book Factory server URL (Tailscale IP, HTTP to avoid self-signed cert issues)
+    static let defaultBaseURL = "http://100.89.67.80:3000"
 
     init(baseURL: String? = nil, authToken: String? = nil) {
         let storedURL = UserDefaults.standard.string(forKey: "bookfactory_server_url") ?? ""
