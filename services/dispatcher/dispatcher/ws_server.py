@@ -480,8 +480,33 @@ class WebSocketServer:
             if self._clients:
                 asyncio.create_task(self._flush_pending())
             elif is_final_response and not self._clients:
-                # No WS clients connected — send via Telegram as fallback
+                # No WS clients connected — send via APNs push + Telegram fallback
+                asyncio.create_task(self._apns_push(data))
                 asyncio.create_task(self._telegram_fallback(data))
+
+    async def _apns_push(self, data: dict) -> None:
+        """Send APNs push notification via bridge server when iOS is disconnected."""
+        import urllib.request
+        content = data.get("content", "")
+        if not content or len(content) < 5:
+            return
+        preview = content[:150].replace("\n", " ")
+        try:
+            payload = json.dumps({
+                "title": "Facai",
+                "body": preview,
+                "data": {"destination": "chat", "messageId": data.get("id", "")},
+            }).encode()
+            req = urllib.request.Request(
+                "http://127.0.0.1:18790/apns/push",
+                data=payload,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            await asyncio.to_thread(lambda: urllib.request.urlopen(req, timeout=10))
+            log.info("ws APNs push sent via bridge server")
+        except Exception as e:
+            log.debug("ws APNs push failed: %s", e)
 
     async def _telegram_fallback(self, data: dict) -> None:
         """Send a condensed notification to Telegram when iOS is disconnected.
