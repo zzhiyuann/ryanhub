@@ -118,11 +118,17 @@ class AgentRunner:
                                 texts.append(text.strip())
                     if texts:
                         return "\n\n".join(texts)
+                    # Empty payloads = model returned nothing useful
+                    return "(no response from agent)"
             except (json.JSONDecodeError, ValueError):
                 pass
 
         # Fallback: strip all OpenClaw noise and return whatever's left
-        return self._strip_openclaw_noise(out) or "(no response)"
+        cleaned = self._strip_openclaw_noise(out)
+        # Don't return raw JSON as chat content
+        if cleaned.startswith("{") or cleaned.startswith("["):
+            return "(no response from agent)"
+        return cleaned or "(no response from agent)"
 
     def _resolve_command(self):
         """Find the full path of the agent command."""
