@@ -53,6 +53,7 @@ final class BookFactoryAPI: @unchecked Sendable {
         let storedURL = UserDefaults.standard.string(forKey: "bookfactory_server_url") ?? ""
         self.baseURL = baseURL ?? (storedURL.isEmpty ? Self.defaultBaseURL : storedURL)
 
+        // Auth is optional — server falls back to first user when no token
         let storedToken = UserDefaults.standard.string(forKey: "bookfactory_auth_token")
         self.authToken = authToken ?? storedToken
 
