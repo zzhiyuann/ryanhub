@@ -206,7 +206,14 @@ final class ChatViewModel {
                 if let idx = messages.firstIndex(where: { $0.id == respId }) {
                     messages[idx].content = content
                 } else {
-                    let assistantMsg = ChatMessage(id: respId, content: content, role: .assistant)
+                    let assistantMsg = ChatMessage(
+                        id: respId,
+                        content: content,
+                        role: .assistant,
+                        timestamp: Date(),
+                        isStreaming: false,
+                        hasImageOnDisk: false
+                    )
                     messages.append(assistantMsg)
                 }
                 messageStatuses[msgId] = .done
