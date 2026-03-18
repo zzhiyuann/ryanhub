@@ -1029,22 +1029,9 @@ struct EventDetailView: View {
                 VStack(alignment: .leading, spacing: 24) {
                     // Header with color accent
                     VStack(alignment: .leading, spacing: 12) {
-                        // Calendar color bar
-                        RoundedRectangle(cornerRadius: 3)
-                            .fill(
-                                LinearGradient(
-                                    colors: [event.resolvedColor, event.resolvedColor.opacity(0.5)],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                            .frame(height: 4)
-                            .padding(.horizontal, -HubLayout.standardPadding)
-
                         Text(event.title)
                             .font(.system(size: 26, weight: .bold))
-                            .foregroundStyle(AdaptiveColors.textPrimary(for: colorScheme))
-                            .padding(.top, 4)
+                            .foregroundStyle(event.resolvedColor)
 
                         if let calName = event.calendarName {
                             Text(calName)
