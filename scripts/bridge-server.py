@@ -3528,6 +3528,23 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
             f.write("\n".join(dates) + "\n" if dates else "")
         self._send_json(200, {"ok": True, "count": len(dates)})
 
+    def _register_apns_token(self):
+        try:
+            content_length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(content_length)
+            data = json.loads(body) if body else {}
+        except (json.JSONDecodeError, ValueError) as e:
+            self._send_json(400, {"error": f"Invalid body: {e}"})
+            return
+        token = data.get("token", "").strip()
+        if not token:
+            self._send_json(400, {"error": "Missing token"})
+            return
+        with open(APNS_TOKEN_FILE, "w") as f:
+            f.write(token)
+        print(f"[APNs] Registered device token: {token[:16]}...")
+        self._send_json(200, {"ok": True})
+
     # -----------------------------------------------------------------------
     # Analysis endpoints
     # -----------------------------------------------------------------------
