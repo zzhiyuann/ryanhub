@@ -111,18 +111,24 @@ final class ParkingViewModel {
     // MARK: - Init
 
     init() {
-        loadAll()
+        // Show cached data instantly, then refresh from server
+        loadFromCache()
+        updateTodayStatus()
+        refreshFromServer()
     }
 
-    /// Load all data and update status after everything is fetched.
-    private func loadAll() {
+    /// Fetch all data from server and update status.
+    private func refreshFromServer() {
         Task {
+            isLoading = true
             await withTaskGroup(of: Void.self) { group in
                 group.addTask { await self.fetchSkipDates() }
                 group.addTask { await self.fetchCronStatus() }
                 group.addTask { await self.fetchPurchaseHistory() }
             }
             updateTodayStatus()
+            saveToCache()
+            isLoading = false
         }
     }
 
