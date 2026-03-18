@@ -121,9 +121,10 @@ Process the user's request using these tools.
 IMPORTANT RULES:
 1. If the user mentions a person and you have their contact info above, use it.
 2. If the user provides NEW contact info, include a memory_update in your response.
-3. For creating events, use the default calendar unless specified.
+3. DEFAULT CALENDAR: Use the Exchange "Calendar" (source=Exchange, the Outlook/virginia.edu calendar) unless the user specifies otherwise. The calendarId for Exchange Calendar is "3234BBFF-1189-4413-B5A4-DF7A8412309B".
 4. Default duration is 60 minutes unless specified.
 5. Always use America/New_York timezone.
+6. If the user says "personal calendar" or "Google calendar", use "Zhiyuan Wang 1" (source=Google). If they say "home" or "iCloud", use "Home" (source=iCloud).
 
 After completing the action, respond with ONLY a JSON object:
 {{
