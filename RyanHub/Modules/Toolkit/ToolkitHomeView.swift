@@ -48,10 +48,7 @@ struct ToolkitHomeView: View {
                           let descriptor = DynamicModuleRegistry.shared.modules[moduleId] {
                     descriptor.viewBuilder()
                         .id(moduleId)
-                        .transition(.asymmetric(
-                            insertion: .opacity.combined(with: .move(edge: .trailing)),
-                            removal: .opacity.combined(with: .move(edge: .leading))
-                        ))
+                        .transition(.opacity)
                 } else {
                     ToolkitDesktopGrid(
                         selectedPlugin: $selectedPlugin,
@@ -61,8 +58,8 @@ struct ToolkitHomeView: View {
                     .transition(.opacity.combined(with: .scale(scale: 0.98)))
                 }
             }
-            .animation(.easeInOut(duration: 0.3), value: selectedPlugin)
-            .animation(.easeInOut(duration: 0.3), value: selectedDynamicModule)
+            .animation(.easeOut(duration: 0.15), value: selectedPlugin)
+            .animation(.easeOut(duration: 0.15), value: selectedDynamicModule)
         }
         .background(AdaptiveColors.background(for: colorScheme))
         .onAppear {
