@@ -2210,6 +2210,18 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
             query = parse_qs(parsed.query)
             date_filter = query.get("date", [None])[0]
             self._serve_popo_data(path, date_filter)
+        elif path == "/chat/pending":
+            # GET pending messages — read from dispatcher's pending file
+            pending_file = os.path.expanduser("~/.ryanhub-data/pending_deliveries.json")
+            if os.path.exists(pending_file):
+                try:
+                    with open(pending_file) as f:
+                        pending = json.load(f)
+                    self._send_json(200, pending if isinstance(pending, list) else [])
+                except Exception:
+                    self._send_json(200, [])
+            else:
+                self._send_json(200, [])
         elif path in DATA_FILES:
             self._serve_data_file(path)
         else:
@@ -3548,6 +3560,28 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
         with open(filepath, "w") as f:
             f.write("\n".join(dates) + "\n" if dates else "")
         self._send_json(200, {"ok": True, "count": len(dates)})
+
+    def _handle_pending_messages(self):
+        """POST /chat/pending — ACK (clear) pending messages after iOS receives them."""
+        try:
+            content_length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(content_length)
+            data = json.loads(body) if body else {}
+        except (json.JSONDecodeError, ValueError):
+            self._send_json(400, {"error": "Invalid body"})
+            return
+        action = data.get("action", "ack")
+        pending_file = os.path.expanduser("~/.ryanhub-data/pending_deliveries.json")
+        if action == "ack":
+            # Clear pending messages after iOS confirms receipt
+            try:
+                with open(pending_file, "w") as f:
+                    json.dump([], f)
+                self._send_json(200, {"ok": True, "cleared": True})
+            except Exception as e:
+                self._send_json(500, {"error": str(e)})
+        else:
+            self._send_json(400, {"error": f"Unknown action: {action}"})
 
     def _register_apns_token(self):
         try:
