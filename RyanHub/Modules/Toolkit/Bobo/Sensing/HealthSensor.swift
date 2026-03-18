@@ -579,15 +579,22 @@ final class HealthSensor {
         ) { [weak self] _, samples, error in
             guard let self, let samples = samples as? [HKCategorySample], error == nil else { return }
             let formatter = ISO8601DateFormatter()
+            // Dedup by (stage, startDate, endDate) to avoid re-sending the same segments
+            // on every fetch cycle (sleep data is 24h lookback, so overlap is expected).
+            var seen = Set<String>()
             for sample in samples {
                 let stage = Self.sleepStageString(from: sample.value)
+                let startStr = formatter.string(from: sample.startDate)
+                let endStr = formatter.string(from: sample.endDate)
+                let key = "\(stage)|\(startStr)|\(endStr)"
+                guard seen.insert(key).inserted else { continue }
                 let event = SensingEvent(
                     timestamp: sample.startDate,
                     modality: .sleep,
                     payload: [
                         "stage": stage,
-                        "startDate": formatter.string(from: sample.startDate),
-                        "endDate": formatter.string(from: sample.endDate),
+                        "startDate": startStr,
+                        "endDate": endStr,
                         "source": sample.sourceRevision.source.name
                     ]
                 )
