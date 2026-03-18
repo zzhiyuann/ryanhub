@@ -126,7 +126,11 @@ final class CalendarViewModel {
     func syncEvents() async {
         isLoading = true
         syncState = .syncing
-        print("[Calendar] Syncing from: \(service.bridgeBaseURL)")
+
+        // Debug: send a beacon to bridge server so we can verify this code runs
+        if let debugURL = URL(string: "http://100.89.67.80:18790/health") {
+            _ = try? await URLSession.shared.data(from: debugURL)
+        }
 
         do {
             let calendar = Calendar.current
