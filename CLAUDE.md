@@ -31,7 +31,8 @@ ryanhub/
 ├── scripts/
 │   ├── start-all-services.sh        # Master service manager (start|stop|status|restart)
 │   ├── bridge-server.py             # RyanHub bridge server (HTTP :18790)
-│   ├── calendar-sync-server.py     # Google Calendar bridge (HTTP :18793)
+│   ├── calendar-sync-server.py     # Apple Calendar bridge (HTTP :18793)
+│   ├── calendar-helper.swift       # EventKit CLI helper (compiled to calendar-helper binary)
 │   └── calendar-agent-memory.json  # Calendar agent persistent memory
 ├── project.yml                      # XcodeGen project spec
 ├── CLAUDE.md                        # This file
