@@ -93,6 +93,28 @@ class WebSocketServer:
         # Start periodic status broadcast
         self._status_task = asyncio.create_task(self._status_loop())
 
+    def _load_pending(self) -> list[dict]:
+        """Load pending deliveries from disk."""
+        try:
+            if os.path.exists(self._pending_file):
+                with open(self._pending_file) as f:
+                    data = json.load(f)
+                if isinstance(data, list) and data:
+                    log.info("ws loaded %d pending deliveries from disk", len(data))
+                    return data
+        except Exception:
+            pass
+        return []
+
+    def _save_pending(self) -> None:
+        """Persist pending deliveries to disk."""
+        try:
+            os.makedirs(os.path.dirname(self._pending_file), exist_ok=True)
+            with open(self._pending_file, "w") as f:
+                json.dump(self._pending_deliveries, f, ensure_ascii=False)
+        except Exception as e:
+            log.debug("ws failed to save pending deliveries: %s", e)
+
     async def stop(self) -> None:
         """Stop the WebSocket server and disconnect all clients."""
         if self._status_task:
@@ -473,6 +495,7 @@ class WebSocketServer:
         if is_final_response or is_error or is_question:
             data["_cached_at"] = time.time()
             self._pending_deliveries.append(data)
+            self._save_pending()
             log.info("ws cached undelivered %s (id=%s) for replay", msg_type, data.get("id", "?")[:8])
             # Immediately try to flush to any connected clients — this closes
             # the race window where a client reconnects before the task finishes
