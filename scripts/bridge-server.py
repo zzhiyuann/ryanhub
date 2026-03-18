@@ -3626,6 +3626,51 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
         else:
             self._send_json(400, {"error": f"Unknown action: {action}"})
 
+    def _proxy_calendar(self, parsed):
+        """Proxy GET requests to the calendar sync server on localhost:18793.
+        /calendar/calendars -> localhost:18793/calendars
+        /calendar/events?... -> localhost:18793/events?...
+        /calendar/health -> localhost:18793/health
+        """
+        import urllib.request
+        # Strip /calendar prefix
+        sub_path = parsed.path[len("/calendar"):]
+        query = f"?{parsed.query}" if parsed.query else ""
+        target = f"http://127.0.0.1:18793{sub_path}{query}"
+        try:
+            req = urllib.request.Request(target, method="GET")
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                data = resp.read()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            self.wfile.write(data)
+        except Exception as e:
+            self._send_json(502, {"error": f"Calendar server error: {e}"})
+
+    def _proxy_calendar_post(self, path):
+        """Proxy POST/PUT/DELETE to calendar sync server."""
+        import urllib.request
+        sub_path = path[len("/calendar"):]
+        target = f"http://127.0.0.1:18793{sub_path}"
+        try:
+            content_length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(content_length) if content_length else b""
+            req = urllib.request.Request(
+                target, data=body, method=self.command,
+                headers={"Content-Type": "application/json"},
+            )
+            with urllib.request.urlopen(req, timeout=90) as resp:
+                data = resp.read()
+            self.send_response(resp.status)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            self.wfile.write(data)
+        except Exception as e:
+            self._send_json(502, {"error": f"Calendar server error: {e}"})
+
     def _register_apns_token(self):
         try:
             content_length = int(self.headers.get("Content-Length", 0))
