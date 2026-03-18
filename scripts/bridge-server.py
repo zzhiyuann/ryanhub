@@ -193,7 +193,7 @@ def _make_apns_jwt_manual():
         return None
 
 
-def send_apns_push(title: str, body: str, data: dict | None = None):
+def send_apns_push(title: str, body: str, data: Optional[Dict] = None):
     """Send a push notification via APNs HTTP/2.
 
     Falls back to curl if httpx/h2 not available.
