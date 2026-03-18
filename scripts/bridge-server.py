@@ -1863,10 +1863,6 @@ def _build_day_bundle(date_str):
         kind = item.get("kind", "")
         mtype = item.get("type", "")
 
-        # Skip raw step events (shown in summary only)
-        if kind == "sensing" and mtype == "steps":
-            continue
-
         # Apply time-window dedup for high-frequency sensing types
         if kind == "sensing" and mtype in _TIME_WINDOW:
             window = _TIME_WINDOW[mtype]
