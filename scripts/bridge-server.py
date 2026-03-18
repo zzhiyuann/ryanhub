@@ -2556,6 +2556,17 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
             self._send_json(400, {"error": "Expected a JSON object, not an array"})
             return
 
+        # Validate required fields per endpoint type
+        _REQUIRED = {
+            "/health-data/food": ["description"],
+            "/health-data/weight": ["weight"],
+            "/health-data/activity": ["type"],
+        }
+        missing = [f for f in _REQUIRED.get(data_path, []) if not entry.get(f)]
+        if missing:
+            self._send_json(400, {"error": "Missing required: %s" % ", ".join(missing)})
+            return
+
         # Auto-generate id if missing
         if "id" not in entry:
             import uuid
