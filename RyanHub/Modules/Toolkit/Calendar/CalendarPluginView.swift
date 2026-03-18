@@ -812,12 +812,13 @@ struct CalendarPluginView: View {
                             .foregroundStyle(AdaptiveColors.textSecondary(for: colorScheme))
                         }
 
-                        // Location
+                        // Location / Meeting link
                         if let location = event.location, !location.isEmpty {
                             HStack(spacing: 3) {
-                                Image(systemName: "mappin.circle.fill")
+                                let isLink = location.hasPrefix("http")
+                                Image(systemName: isLink ? "video.fill" : "mappin.circle.fill")
                                     .font(.system(size: 9, weight: .medium))
-                                Text(location)
+                                Text(isLink ? "Join Meeting" : location)
                                     .font(.system(size: 11, weight: .medium))
                                     .lineLimit(1)
                             }
