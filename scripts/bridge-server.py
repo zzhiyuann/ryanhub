@@ -88,6 +88,170 @@ PARKING_FILES = {
 }
 
 # ---------------------------------------------------------------------------
+# APNs Push Notifications
+# ---------------------------------------------------------------------------
+
+APNS_DIR = os.path.expanduser("~/.ryanhub-data/apns")
+os.makedirs(APNS_DIR, exist_ok=True)
+APNS_TOKEN_FILE = os.path.join(APNS_DIR, "device_token.txt")
+APNS_KEY_FILE = os.path.join(APNS_DIR, "AuthKey.p8")
+APNS_KEY_ID = None  # Set after reading from key file
+APNS_TEAM_ID = "WRR5PDXKX3"
+APNS_BUNDLE_ID = "com.zwang.ryanhub.RyanHub"
+APNS_USE_SANDBOX = True  # Set False for production
+
+
+def _load_apns_key_id():
+    """Try to load APNs key ID from config file."""
+    cfg = os.path.join(APNS_DIR, "config.json")
+    if os.path.exists(cfg):
+        try:
+            with open(cfg) as f:
+                return json.load(f).get("key_id")
+        except Exception:
+            pass
+    return None
+
+
+APNS_KEY_ID = _load_apns_key_id()
+
+# JWT cache for APNs
+_apns_jwt_cache = {"token": None, "expires": 0}
+
+
+def _get_apns_jwt():
+    """Generate (or reuse cached) JWT for APNs authentication."""
+    now = time.time()
+    if _apns_jwt_cache["token"] and _apns_jwt_cache["expires"] > now:
+        return _apns_jwt_cache["token"]
+
+    if not os.path.exists(APNS_KEY_FILE) or not APNS_KEY_ID:
+        return None
+
+    try:
+        import jwt  # PyJWT
+    except ImportError:
+        # Fallback: manual JWT construction
+        return _make_apns_jwt_manual()
+
+    with open(APNS_KEY_FILE) as f:
+        key = f.read()
+
+    payload = {"iss": APNS_TEAM_ID, "iat": int(now)}
+    token = jwt.encode(payload, key, algorithm="ES256", headers={"kid": APNS_KEY_ID})
+    _apns_jwt_cache["token"] = token
+    _apns_jwt_cache["expires"] = now + 3500  # Refresh before 1h expiry
+    return token
+
+
+def _make_apns_jwt_manual():
+    """Create APNs JWT without PyJWT, using openssl CLI."""
+    now = int(time.time())
+    header = base64.urlsafe_b64encode(json.dumps(
+        {"alg": "ES256", "kid": APNS_KEY_ID}, separators=(",", ":")
+    ).encode()).rstrip(b"=").decode()
+    payload = base64.urlsafe_b64encode(json.dumps(
+        {"iss": APNS_TEAM_ID, "iat": now}, separators=(",", ":")
+    ).encode()).rstrip(b"=").decode()
+    signing_input = f"{header}.{payload}"
+
+    try:
+        result = subprocess.run(
+            ["openssl", "dgst", "-sha256", "-sign", APNS_KEY_FILE],
+            input=signing_input.encode(),
+            capture_output=True,
+            timeout=5,
+        )
+        if result.returncode != 0:
+            return None
+        # Convert DER signature to raw r||s
+        der = result.stdout
+        # Parse DER SEQUENCE { INTEGER r, INTEGER s }
+        if der[0] != 0x30:
+            return None
+        idx = 2
+        if der[1] & 0x80:
+            idx += (der[1] & 0x7F)
+        # r
+        assert der[idx] == 0x02
+        r_len = der[idx + 1]
+        r = der[idx + 2:idx + 2 + r_len]
+        idx += 2 + r_len
+        # s
+        assert der[idx] == 0x02
+        s_len = der[idx + 1]
+        s = der[idx + 2:idx + 2 + s_len]
+        # Pad/trim to 32 bytes each
+        r = r[-32:].rjust(32, b"\x00")
+        s = s[-32:].rjust(32, b"\x00")
+        sig = base64.urlsafe_b64encode(r + s).rstrip(b"=").decode()
+        token = f"{signing_input}.{sig}"
+        _apns_jwt_cache["token"] = token
+        _apns_jwt_cache["expires"] = time.time() + 3500
+        return token
+    except Exception:
+        return None
+
+
+def send_apns_push(title: str, body: str, data: dict | None = None):
+    """Send a push notification via APNs HTTP/2.
+
+    Falls back to curl if httpx/h2 not available.
+    """
+    if not os.path.exists(APNS_TOKEN_FILE):
+        return False
+    with open(APNS_TOKEN_FILE) as f:
+        device_token = f.read().strip()
+    if not device_token:
+        return False
+
+    jwt_token = _get_apns_jwt()
+    if not jwt_token:
+        return False
+
+    host = "api.sandbox.push.apple.com" if APNS_USE_SANDBOX else "api.push.apple.com"
+    url = f"https://{host}/3/device/{device_token}"
+
+    payload = {
+        "aps": {
+            "alert": {"title": title, "body": body[:200]},
+            "sound": "default",
+            "badge": 1,
+        }
+    }
+    if data:
+        payload["data"] = data
+
+    payload_bytes = json.dumps(payload, ensure_ascii=False).encode()
+
+    # Use curl with HTTP/2 (always available on macOS)
+    try:
+        result = subprocess.run(
+            [
+                "curl", "-s", "--http2",
+                "-H", f"authorization: bearer {jwt_token}",
+                "-H", f"apns-topic: {APNS_BUNDLE_ID}",
+                "-H", "apns-push-type: alert",
+                "-H", "apns-priority: 10",
+                "-d", payload_bytes.decode(),
+                url,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if result.returncode == 0 and (not result.stdout or '"reason"' not in result.stdout):
+            print(f"[APNs] Push sent: {title}")
+            return True
+        else:
+            print(f"[APNs] Push failed: {result.stdout}")
+            return False
+    except Exception as e:
+        print(f"[APNs] Push error: {e}")
+        return False
+
+
+# ---------------------------------------------------------------------------
 # Server-side data storage (health + chat)
 # ---------------------------------------------------------------------------
 
