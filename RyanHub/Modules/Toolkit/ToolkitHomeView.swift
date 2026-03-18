@@ -43,10 +43,7 @@ struct ToolkitHomeView: View {
                 if let plugin = selectedPlugin {
                     toolContent(for: plugin)
                         .id(plugin)
-                        .transition(.asymmetric(
-                            insertion: .opacity.combined(with: .move(edge: .trailing)),
-                            removal: .opacity.combined(with: .move(edge: .leading))
-                        ))
+                        .transition(.opacity)
                 } else if let moduleId = selectedDynamicModule,
                           let descriptor = DynamicModuleRegistry.shared.modules[moduleId] {
                     descriptor.viewBuilder()
