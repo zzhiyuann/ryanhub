@@ -124,38 +124,54 @@ final class CalendarViewModel {
 
     /// Sync events from Apple Calendar via the bridge server.
     func syncEvents() async {
+        // Guard against re-entry but with a safety timeout
+        guard !isLoading else { return }
         isLoading = true
         syncState = .syncing
 
-        // Debug: send a beacon to bridge server so we can verify this code runs
-        if let debugURL = URL(string: "http://100.89.67.80:18790/health") {
-            _ = try? await URLSession.shared.data(from: debugURL)
-        }
+        defer { isLoading = false }
 
         do {
             let calendar = Calendar.current
             let startOfToday = calendar.startOfDay(for: Date())
             guard let endOfWeek = calendar.date(byAdding: .day, value: 8, to: startOfToday) else {
                 syncState = .error("Failed to compute date range")
-                isLoading = false
                 return
             }
 
-            // Fetch calendars and events in parallel
-            async let calendarsFetch = service.fetchCalendars()
-            async let eventsFetch = service.fetchEvents(start: startOfToday, end: endOfWeek)
+            print("[Calendar] Fetching from \(service.bridgeBaseURL)...")
 
-            calendars = try await calendarsFetch
-            allEvents = try await eventsFetch
+            // Fetch with a short timeout to avoid hanging forever
+            let config = URLSessionConfiguration.default
+            config.timeoutIntervalForRequest = 10
+            config.timeoutIntervalForResource = 15
+            let session = URLSession(configuration: config)
+
+            let calendarsURL = URL(string: "\(service.bridgeBaseURL)/calendars")!
+            let (calData, _) = try await session.data(from: calendarsURL)
+
+            let decoder = service.makeDecoder()
+            calendars = try decoder.decode([CalendarInfo].self, from: calData)
+
+            let iso = ISO8601DateFormatter()
+            iso.formatOptions = [.withInternetDateTime]
+            iso.timeZone = TimeZone(identifier: "America/New_York")
+            var comps = URLComponents(string: "\(service.bridgeBaseURL)/events")!
+            comps.queryItems = [
+                URLQueryItem(name: "start", value: iso.string(from: startOfToday)),
+                URLQueryItem(name: "end", value: iso.string(from: endOfWeek)),
+            ]
+            let (evData, _) = try await session.data(from: comps.url!)
+            allEvents = try decoder.decode([CalendarEvent].self, from: evData)
+
             lastSyncTime = Date()
             syncState = .synced
             saveCachedEvents()
+            print("[Calendar] Synced: \(calendars.count) calendars, \(allEvents.count) events")
         } catch {
             print("[Calendar] Sync failed: \(error)")
             syncState = .error(error.localizedDescription)
         }
-
-        isLoading = false
     }
 
     /// Process a natural language command via the AI agent.
