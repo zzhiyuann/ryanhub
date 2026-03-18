@@ -56,6 +56,35 @@ class AgentRunner:
         self._sidecar_proc = None
         self._sidecar_healthy = False
 
+    _OPENCLAW_NOISE_RE = None
+
+    @classmethod
+    def _strip_openclaw_noise(cls, text: str) -> str:
+        """Remove ANSI codes AND OpenClaw diagnostic log lines from output."""
+        import re
+        if cls._OPENCLAW_NOISE_RE is None:
+            cls._OPENCLAW_NOISE_RE = re.compile(
+                r'\x1b\[[0-9;]*m'           # ANSI escape codes
+                r'|^\[plugins\].*$'          # [plugins] log lines
+                r'|^\[gateway\].*$'          # [gateway] log lines
+                r'|^\[agent/embedded\].*$'   # [agent/embedded] log lines
+                r'|^\[diagnostic\].*$'       # [diagnostic] log lines
+                r'|^\[telegram[^\]]*\].*$'   # [telegram...] log lines
+                r'|^\[model-fallback[^\]]*\].*$'  # [model-fallback] log lines
+                r'|^\[health-monitor\].*$'   # [health-monitor] log lines
+                r'|^\[ws\].*$'               # [ws] log lines
+                r'|^Gateway agent failed.*$' # Gateway fallback notice
+                r'|^Gateway target:.*$'
+                r'|^Source:.*$'
+                r'|^Config:.*$'
+                r'|^Bind:.*$',
+                re.MULTILINE,
+            )
+        cleaned = cls._OPENCLAW_NOISE_RE.sub('', text)
+        # Collapse multiple blank lines
+        cleaned = re.sub(r'\n{3,}', '\n\n', cleaned).strip()
+        return cleaned
+
     def _normalize_cli_output(self, out: str) -> str:
         """Normalize non-Claude CLI output for chat delivery.
 
@@ -67,45 +96,33 @@ class AgentRunner:
         if "openclaw" not in self.command.lower():
             return out
 
-        # Strip ANSI log lines that precede the JSON (e.g. "[35m[plugins]...")
-        # Find the first '{' which starts the JSON object
+        # Try to find and parse the JSON response
         json_start = out.find("{")
-        if json_start < 0:
-            # No JSON found — strip ANSI codes and return
-            import re
-            return re.sub(r'\x1b\[[0-9;]*m', '', out).strip()
+        if json_start >= 0:
+            json_text = out[json_start:]
+            try:
+                data = json.loads(json_text)
+                # OpenClaw wraps payloads under "result" key
+                payloads = data.get("payloads")
+                if not isinstance(payloads, list):
+                    result = data.get("result", {})
+                    if isinstance(result, dict):
+                        payloads = result.get("payloads")
 
-        json_text = out[json_start:]
+                if isinstance(payloads, list):
+                    texts: list[str] = []
+                    for item in payloads:
+                        if isinstance(item, dict):
+                            text = item.get("text")
+                            if isinstance(text, str) and text.strip():
+                                texts.append(text.strip())
+                    if texts:
+                        return "\n\n".join(texts)
+            except (json.JSONDecodeError, ValueError):
+                pass
 
-        try:
-            data = json.loads(json_text)
-        except Exception:
-            import re
-            return re.sub(r'\x1b\[[0-9;]*m', '', out).strip()
-
-        # OpenClaw wraps payloads under "result" key
-        payloads = data.get("payloads")
-        if not isinstance(payloads, list):
-            result = data.get("result", {})
-            if isinstance(result, dict):
-                payloads = result.get("payloads")
-
-        if not isinstance(payloads, list):
-            # Fallback: try to find any text in the response
-            import re
-            return re.sub(r'\x1b\[[0-9;]*m', '', out).strip()
-
-        texts: list[str] = []
-        for item in payloads:
-            if not isinstance(item, dict):
-                continue
-            text = item.get("text")
-            if isinstance(text, str) and text.strip():
-                texts.append(text.strip())
-
-        if texts:
-            return "\n\n".join(texts)
-        return out
+        # Fallback: strip all OpenClaw noise and return whatever's left
+        return self._strip_openclaw_noise(out) or "(no response)"
 
     def _resolve_command(self):
         """Find the full path of the agent command."""
