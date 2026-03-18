@@ -1704,8 +1704,44 @@ def _build_day_bundle(date_str):
             )
         elif modality == "screen":
             detail = payload.get("state") or payload.get("event") or ""
+        elif modality == "bloodOxygen":
+            detail = "%s%% SpO2" % payload.get("spo2", "?")
+        elif modality == "hrv":
+            detail = "%s ms SDNN" % payload.get("sdnn", "?")
+        elif modality == "respiratoryRate":
+            detail = "%s breaths/min" % payload.get("breathsPerMin", "?")
+        elif modality == "noiseExposure":
+            detail = "%s dB" % payload.get("decibels", "?")
+        elif modality == "activeEnergy":
+            kcal = payload.get("kcal", "?")
+            label = payload.get("hourLabel", "")
+            detail = "%s kcal%s" % (kcal, (" (%s)" % label) if label else "")
+        elif modality == "basalEnergy":
+            kcal = payload.get("kcal", "?")
+            label = payload.get("hourLabel", "")
+            detail = "%s kcal resting%s" % (kcal, (" (%s)" % label) if label else "")
+        elif modality == "workout":
+            wtype = payload.get("type", "workout")
+            dur = payload.get("duration", "?")
+            cal = payload.get("calories", "?")
+            detail = "%s — %ss, %s kcal" % (wtype, dur, cal)
+        elif modality == "battery":
+            detail = "%s%%" % payload.get("level", "?")
+            if payload.get("charging") == "true" or payload.get("isCharging") == "true":
+                detail += " (charging)"
+        elif modality == "wifi":
+            detail = payload.get("ssid", "?")
+        elif modality == "bluetooth":
+            detail = "%s devices" % payload.get("deviceCount", "?")
+        elif modality == "visit":
+            detail = payload.get("description") or payload.get("placeName") or "?"
+        elif modality == "audio":
+            detail = payload.get("text", payload.get("status", ""))[:80]
+        elif modality == "photo":
+            detail = "Photo" if payload.get("mediaType") != "video" else "Video"
         else:
-            for key in ("summary", "value", "status", "description"):
+            # Generic fallback — try common keys
+            for key in ("summary", "value", "status", "description", "detail"):
                 if payload.get(key):
                     detail = str(payload[key])
                     break
