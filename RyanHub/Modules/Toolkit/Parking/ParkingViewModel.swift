@@ -343,6 +343,7 @@ final class ParkingViewModel {
     }
 
     /// Fetch skip dates (async, for use in TaskGroup).
+    /// On network error, preserves existing data (from cache).
     private func fetchSkipDates() async {
         do {
             let url = URL(string: "\(bridgeBaseURL)/parking/skip-dates")!
@@ -356,7 +357,7 @@ final class ParkingViewModel {
                 .compactMap { formatter.date(from: $0) }
                 .map { ParkingSkipEntry(date: $0) }
         } catch {
-            skipDates = []
+            // Keep existing data (from cache) on network error
         }
     }
 
@@ -523,14 +524,15 @@ final class ParkingViewModel {
     }
 
     /// Fetch cron status (async, for use in TaskGroup).
+    /// On network error, preserves existing data (from cache).
     private func fetchCronStatus() async {
         do {
             let url = URL(string: "\(bridgeBaseURL)/parking/last-status")!
             let (data, _) = try await URLSession.shared.data(from: url)
-            guard !data.isEmpty else { lastCronStatus = nil; return }
+            guard !data.isEmpty else { return }
             lastCronStatus = try JSONDecoder().decode(CronPurchaseStatus.self, from: data)
         } catch {
-            lastCronStatus = nil
+            // Keep existing data (from cache) on network error
         }
     }
 
@@ -540,14 +542,15 @@ final class ParkingViewModel {
     }
 
     /// Fetch purchase history (async, for use in TaskGroup).
+    /// On network error, preserves existing data (from cache).
     private func fetchPurchaseHistory() async {
         do {
             let url = URL(string: "\(bridgeBaseURL)/parking/purchase-history")!
             let (data, _) = try await URLSession.shared.data(from: url)
-            guard !data.isEmpty else { purchaseHistory = []; return }
+            guard !data.isEmpty else { return }
             purchaseHistory = try JSONDecoder().decode([CronPurchaseStatus].self, from: data)
         } catch {
-            purchaseHistory = []
+            // Keep existing data (from cache) on network error
         }
     }
 
