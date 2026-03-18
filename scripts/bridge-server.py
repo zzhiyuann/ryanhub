@@ -2269,6 +2269,11 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
         if path.startswith("/bobo/"):
             path = "/popo/" + path[len("/bobo/"):]
 
+        # Calendar proxy (POST for /agent, /events create)
+        if path.startswith("/calendar/"):
+            self._proxy_calendar_post(path)
+            return
+
         # APNs device token registration
         if path == "/apns/register":
             self._register_apns_token()
