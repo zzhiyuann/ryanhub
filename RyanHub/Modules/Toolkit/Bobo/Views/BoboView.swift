@@ -51,6 +51,8 @@ struct BoboView: View {
         .background(AdaptiveColors.background(for: colorScheme))
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active {
+                // Resume all sensors — backfills motion/pedometer/HealthKit gaps
+                viewModel.engine.resumeOnForeground()
                 viewModel.refreshHealthData {
                     viewModel.pushTimelineToServer()
                 }
