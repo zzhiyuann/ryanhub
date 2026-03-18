@@ -1061,17 +1061,35 @@ struct EventDetailView: View {
 
                         if let location = event.location, !location.isEmpty {
                             VStack(alignment: .leading, spacing: 8) {
-                                detailRow(icon: "mappin.and.ellipse", title: "Location", value: location)
-                                if let url = event.mapsURL {
-                                    Link(destination: url) {
+                                // Check if location is a URL (meeting link)
+                                if let meetingURL = URL(string: location),
+                                   let scheme = meetingURL.scheme,
+                                   scheme.hasPrefix("http") {
+                                    detailRow(icon: "video.fill", title: "Meeting Link", value: "")
+                                    Link(destination: meetingURL) {
                                         HStack(spacing: 4) {
-                                            Image(systemName: "map.fill")
+                                            Image(systemName: "link")
                                                 .font(.system(size: 12, weight: .medium))
-                                            Text("Open in Maps")
-                                                .font(.system(size: 13, weight: .semibold))
+                                            Text(location)
+                                                .font(.system(size: 13, weight: .medium))
+                                                .lineLimit(1)
                                         }
                                         .foregroundStyle(Color.hubPrimary)
                                         .padding(.leading, 36)
+                                    }
+                                } else {
+                                    detailRow(icon: "mappin.and.ellipse", title: "Location", value: location)
+                                    if let url = event.mapsURL {
+                                        Link(destination: url) {
+                                            HStack(spacing: 4) {
+                                                Image(systemName: "map.fill")
+                                                    .font(.system(size: 12, weight: .medium))
+                                                Text("Open in Maps")
+                                                    .font(.system(size: 13, weight: .semibold))
+                                            }
+                                            .foregroundStyle(Color.hubPrimary)
+                                            .padding(.leading, 36)
+                                        }
                                     }
                                 }
                             }
