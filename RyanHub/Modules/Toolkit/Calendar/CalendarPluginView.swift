@@ -64,7 +64,14 @@ struct CalendarPluginView: View {
             }
         }
         .task {
-            viewModel.service.bridgeBaseURL = appState.calendarSyncURL
+            // Fix stale localhost URLs — iPhone can't reach localhost on the Mac
+            var url = appState.calendarSyncURL
+            if url.contains("localhost") || url.contains("127.0.0.1") {
+                url = "http://100.89.67.80:18793"
+                appState.calendarSyncURL = url
+            }
+            viewModel.service.bridgeBaseURL = url
+            print("[Calendar] Syncing from: \(url)")
             await viewModel.syncEvents()
         }
     }
