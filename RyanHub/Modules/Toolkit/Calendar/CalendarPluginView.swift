@@ -571,12 +571,6 @@ struct CalendarPluginView: View {
                     subtitle: "Enjoy the free time or add something new",
                     icon: "sun.min.fill"
                 )
-            } else if viewModel.todayEvents.isEmpty && !viewModel.todayEndedEvents.isEmpty {
-                emptyDayCard(
-                    message: "All done for today",
-                    subtitle: "\(viewModel.todayEndedEvents.count) event\(viewModel.todayEndedEvents.count == 1 ? "" : "s") completed",
-                    icon: "checkmark.circle.fill"
-                )
             }
 
             // Upcoming/ongoing events
