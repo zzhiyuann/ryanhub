@@ -1503,12 +1503,18 @@ def generate_nudges_rule_based(events, narrations, daily_summary=None):
 
     # If no specific rules fired, generate a contextual summary nudge
     if not nudges and (events or narrations):
-        # Build a brief status line from available data
+        # No specific rule fired — generate a data-grounded observation
+        now = datetime.now(_get_local_timezone())
         parts = []
         if step_events:
             max_s = max(int(_evf_num(ev, "steps", "count")) for ev in step_events)
             if max_s > 0:
-                parts.append("%d steps" % max_s)
+                if max_s < 3000 and now.hour >= 14:
+                    parts.append("Only %d steps by %s — try a 10-min walk to boost your NEAT" % (max_s, now.strftime("%I %p")))
+                elif max_s >= 8000:
+                    parts.append("%d steps — strong movement day" % max_s)
+                else:
+                    parts.append("%d steps so far" % max_s)
         if sleep_events:
             total_sec = 0
             for ev in sleep_events:
@@ -1516,17 +1522,23 @@ def generate_nudges_rule_based(events, narrations, daily_summary=None):
                 e = _parse_iso_datetime(_evf(ev, "endDate", default=""), assume_local_if_naive=False)
                 if s and e:
                     total_sec += max(0, (e - s).total_seconds())
-            if total_sec > 0:
-                parts.append("%.1fh sleep" % (total_sec / 3600))
+            hours = total_sec / 3600
+            if hours > 0:
+                if hours < 6:
+                    parts.append("%.1fh sleep — below the 7h threshold for metabolic health" % hours)
+                else:
+                    parts.append("%.1fh sleep" % hours)
         if motion_events:
-            latest_act = _evf(motion_events[-1], "activityType", "activity", default="")
-            if latest_act:
-                parts.append("currently %s" % latest_act)
-        summary = ", ".join(parts) if parts else "all systems active"
+            # Check for prolonged sedentary
+            stationary = [e for e in motion_events if _evf(e, "activityType", "activity", default="") in ("stationary", "still")]
+            if len(stationary) > len(motion_events) * 0.7:
+                parts.append("mostly sedentary today — prolonged sitting (>90 min) reduces executive function and NEAT")
+
+        content = ". ".join(parts) if parts else "Data is flowing but no notable patterns yet"
         nudges.append({
             "type": "insight",
-            "content": "Status check: %s. Looking good so far!" % summary,
-            "trigger": "general_observation",
+            "content": content,
+            "trigger": "behavioral_observation",
             "priority": "normal",
             "relatedModalities": list(by_modality.keys())[:3]
         })
