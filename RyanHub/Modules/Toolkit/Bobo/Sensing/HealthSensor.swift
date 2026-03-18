@@ -562,7 +562,11 @@ final class HealthSensor {
     /// Fetch sleep analysis since last fetch (gap-aware).
     private func fetchSleep() {
         guard let sleepType = HKCategoryType.categoryType(forIdentifier: .sleepAnalysis) else { return }
-        let start = fetchStart(for: FetchKey.sleep)
+        // Sleep data is often backfilled by HealthKit hours after the actual sleep.
+        // Always look back at least 24h to catch the full night, regardless of lastFetch.
+        let normalStart = fetchStart(for: FetchKey.sleep)
+        let minStart = Date().addingTimeInterval(-86400) // 24h ago
+        let start = min(normalStart, minStart)
         let predicate = HKQuery.predicateForSamples(withStart: start, end: Date(), options: .strictStartDate)
         let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
 
