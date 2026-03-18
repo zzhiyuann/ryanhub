@@ -139,31 +139,12 @@ final class CalendarViewModel {
                 return
             }
 
-            print("[Calendar] Fetching from \(service.bridgeBaseURL)...")
+            // Fetch calendars and events in parallel
+            async let calendarsFetch = service.fetchCalendars()
+            async let eventsFetch = service.fetchEvents(start: startOfToday, end: endOfWeek)
 
-            // Fetch with a short timeout to avoid hanging forever
-            let config = URLSessionConfiguration.default
-            config.timeoutIntervalForRequest = 10
-            config.timeoutIntervalForResource = 15
-            let session = URLSession(configuration: config)
-
-            let calendarsURL = URL(string: "\(service.bridgeBaseURL)/calendars")!
-            let (calData, _) = try await session.data(from: calendarsURL)
-
-            let decoder = service.makeDecoder()
-            calendars = try decoder.decode([CalendarInfo].self, from: calData)
-
-            let iso = ISO8601DateFormatter()
-            iso.formatOptions = [.withInternetDateTime]
-            iso.timeZone = TimeZone(identifier: "America/New_York")
-            var comps = URLComponents(string: "\(service.bridgeBaseURL)/events")!
-            comps.queryItems = [
-                URLQueryItem(name: "start", value: iso.string(from: startOfToday)),
-                URLQueryItem(name: "end", value: iso.string(from: endOfWeek)),
-            ]
-            let (evData, _) = try await session.data(from: comps.url!)
-            allEvents = try decoder.decode([CalendarEvent].self, from: evData)
-
+            calendars = try await calendarsFetch
+            allEvents = try await eventsFetch
             lastSyncTime = Date()
             syncState = .synced
             saveCachedEvents()
