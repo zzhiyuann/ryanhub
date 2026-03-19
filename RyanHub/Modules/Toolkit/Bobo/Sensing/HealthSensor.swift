@@ -877,6 +877,7 @@ final class HealthSensor {
         ) { [weak self] _, samples, error in
             guard let self, let samples = samples as? [HKQuantitySample], error == nil else { return }
             for sample in samples {
+                guard self.shouldEmit(modality: "noiseExposure", timestamp: sample.startDate) else { continue }
                 let decibels = sample.quantity.doubleValue(for: HKUnit.decibelAWeightedSoundPressureLevel())
                 let event = SensingEvent(
                     timestamp: sample.startDate,
