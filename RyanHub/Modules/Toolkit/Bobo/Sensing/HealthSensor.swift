@@ -568,6 +568,7 @@ final class HealthSensor {
         ) { [weak self] _, samples, error in
             guard let self, let samples = samples as? [HKQuantitySample], error == nil else { return }
             for sample in samples {
+                guard self.shouldEmit(modality: "hrv", timestamp: sample.startDate) else { continue }
                 let sdnn = sample.quantity.doubleValue(for: HKUnit.secondUnit(with: .milli))
                 let event = SensingEvent(
                     timestamp: sample.startDate,
