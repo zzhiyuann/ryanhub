@@ -847,6 +847,7 @@ final class HealthSensor {
         ) { [weak self] _, samples, error in
             guard let self, let samples = samples as? [HKQuantitySample], error == nil else { return }
             for sample in samples {
+                guard self.shouldEmit(modality: "bloodOxygen", timestamp: sample.startDate) else { continue }
                 let percentage = sample.quantity.doubleValue(for: HKUnit.percent()) * 100
                 let event = SensingEvent(
                     timestamp: sample.startDate,
