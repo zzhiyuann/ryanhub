@@ -1407,15 +1407,15 @@ class Dispatcher:
             return {"kind": "file", "media_type": media_type, "path": tmp}
 
     _whisper_model = None  # class-level cache to avoid reloading on every message
+    _WHISPER_MODEL_NAME = "mlx-community/whisper-small-mlx"
 
     async def _transcribe_audio(self, audio_path: str) -> str | None:
-        """Transcribe audio using OpenAI Whisper locally — fast, no API cost."""
+        """Transcribe audio using mlx-whisper (Apple Silicon optimized) — fast, no API cost."""
         def _run_whisper():
-            import whisper
-            if Dispatcher._whisper_model is None:
-                Dispatcher._whisper_model = whisper.load_model("turbo")
-            result = Dispatcher._whisper_model.transcribe(
+            import mlx_whisper
+            result = mlx_whisper.transcribe(
                 audio_path,
+                path_or_hf_repo=Dispatcher._WHISPER_MODEL_NAME,
                 language=None,
                 initial_prompt="Voice message about programming, code, and project management.",
                 condition_on_previous_text=False,

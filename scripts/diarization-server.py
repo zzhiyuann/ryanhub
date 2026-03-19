@@ -61,7 +61,7 @@ PROFILES_DIR.mkdir(parents=True, exist_ok=True)
 HOST = "0.0.0.0"
 PORT = 18795
 WS_PORT = 18796
-WHISPER_MODEL = "mlx-community/whisper-large-v3-mlx"
+WHISPER_MODEL = "mlx-community/whisper-small-mlx"
 SIMILARITY_THRESHOLD = 0.25  # Cosine similarity threshold for speaker ID
 SAMPLE_RATE = 16000
 
