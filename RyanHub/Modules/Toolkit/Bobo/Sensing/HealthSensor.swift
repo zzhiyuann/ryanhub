@@ -23,6 +23,17 @@ final class HealthSensor {
     /// Timer that periodically flushes aggregation buffers and refetches gap data.
     private var periodicFlushTimer: Timer?
 
+    /// Tracks timestamps of events already emitted, keyed by "modality|timestamp".
+    /// Prevents re-emitting the same HealthKit sample on every fetch cycle.
+    private var emittedEventKeys: Set<String> = []
+
+    /// Check if an event has already been emitted; if not, mark it as emitted.
+    /// Returns true if this is a NEW event that should be emitted.
+    private func shouldEmit(modality: String, timestamp: Date) -> Bool {
+        let key = "\(modality)|\(Int(timestamp.timeIntervalSince1970))"
+        return emittedEventKeys.insert(key).inserted
+    }
+
     /// Interval for periodic buffer flush and gap refetch (2 minutes).
     private static let periodicFlushInterval: TimeInterval = 120
 

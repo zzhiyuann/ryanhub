@@ -2409,9 +2409,21 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
         else:
             self._handle_food_analysis(data)
 
+    def do_PUT(self):
+        if not self._check_auth():
+            return
+        path = urlparse(self.path).path
+        if path.startswith("/calendar/"):
+            self._proxy_calendar_post(path)
+            return
+        self._send_json(404, {"error": "Not found"})
+
     def do_DELETE(self):
         parsed = urlparse(self.path)
         path = parsed.path
+        if path.startswith("/calendar/"):
+            self._proxy_calendar_post(path)
+            return
         if path in DATA_FILES:
             filepath = DATA_FILES[path]
             query = parse_qs(parsed.query)
