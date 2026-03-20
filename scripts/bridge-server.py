@@ -843,7 +843,7 @@ def run_claude_text(prompt: str, timeout: int = 60) -> str:
 
     result = subprocess.run(
         [CLAUDE_PATH, "-p", prompt, "--output-format", "json", "--model", "haiku",
-         "--mcp-config", "{}", "--strict-mcp-config", "--no-chrome"],
+         "--mcp-config", '{"mcpServers":{}}', "--strict-mcp-config", "--no-chrome"],
         capture_output=True,
         text=True,
         timeout=timeout,
@@ -877,7 +877,7 @@ def run_claude_with_image(prompt: str, image_path: str) -> str:
             "haiku",
             "--allowedTools",
             "Read",
-            "--mcp-config", "{}", "--strict-mcp-config", "--no-chrome",
+            "--mcp-config", '{"mcpServers":{}}', "--strict-mcp-config", "--no-chrome",
         ],
         capture_output=True,
         text=True,
