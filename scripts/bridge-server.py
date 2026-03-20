@@ -3448,7 +3448,10 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
 
         raw_nudges = generate_nudges_llm(summary_text, timeout=30)
         if not raw_nudges:
-            raw_nudges = generate_nudges_rule_based(events, narrations)
+            # Extract events and narrations from day bundle items for rule-based fallback
+            sensing_events = [i for i in items if i.get("kind") == "sensing"]
+            narration_items = [i for i in items if i.get("kind") == "narration"]
+            raw_nudges = generate_nudges_rule_based(sensing_events, narration_items)
 
         if raw_nudges is None:
             self._send_json(500, {"ok": False, "error": "LLM generation failed", "nudges": []})
