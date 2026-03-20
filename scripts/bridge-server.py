@@ -842,7 +842,8 @@ def run_claude_text(prompt: str, timeout: int = 60) -> str:
     env.pop("CLAUDECODE", None)
 
     result = subprocess.run(
-        [CLAUDE_PATH, "-p", prompt, "--output-format", "json", "--model", "haiku"],
+        [CLAUDE_PATH, "-p", prompt, "--output-format", "json", "--model", "haiku",
+         "--mcp-config", "{}", "--strict-mcp-config", "--no-chrome"],
         capture_output=True,
         text=True,
         timeout=timeout,
@@ -876,10 +877,11 @@ def run_claude_with_image(prompt: str, image_path: str) -> str:
             "haiku",
             "--allowedTools",
             "Read",
+            "--mcp-config", "{}", "--strict-mcp-config", "--no-chrome",
         ],
         capture_output=True,
         text=True,
-        timeout=90,
+        timeout=120,
         env=env,
     )
 
@@ -1454,7 +1456,7 @@ def summarize_sensing_data(events, narrations, daily_summary=None):
     return "\n".join(lines)
 
 
-def generate_nudges_llm(summary_text, timeout=20):
+def generate_nudges_llm(summary_text, timeout=120):
     # type: (str) -> Optional[List[Dict]]
     """Generate nudges using Claude CLI (Max Plan). Returns list of nudge dicts or None on failure."""
     full_prompt = BEHAVIORAL_ANALYSIS_SYSTEM_PROMPT + "\n\n" + summary_text
@@ -3330,7 +3332,7 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
         method_used = "none"
         raw_nudges = None
 
-        raw_nudges = generate_nudges_llm(summary_text, timeout=20)
+        raw_nudges = generate_nudges_llm(summary_text)
         if raw_nudges:
             method_used = "llm"
             print("[Analyze] Generated %d nudges via LLM" % len(raw_nudges))
@@ -3446,7 +3448,7 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
         summary_text = "\n".join(summary_parts)
         print("[NudgeCheck] Processing day bundle: %d items, summary %d chars" % (len(items), len(summary_text)))
 
-        raw_nudges = generate_nudges_llm(summary_text, timeout=30)
+        raw_nudges = generate_nudges_llm(summary_text)
         if not raw_nudges:
             # Extract events and narrations from day bundle items for rule-based fallback
             sensing_events = [i for i in items if i.get("kind") == "sensing"]
