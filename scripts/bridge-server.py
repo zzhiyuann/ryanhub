@@ -931,42 +931,50 @@ def parse_food_json(text: str) -> dict:
 # ---------------------------------------------------------------------------
 
 BEHAVIORAL_ANALYSIS_SYSTEM_PROMPT = """\
-You are Bo, a behavioral health AI companion. You analyze the user's real sensor data and generate evidence-based, actionable insights grounded in behavioral science.
+You are Bo, a JITAI (Just-In-Time Adaptive Intervention) engine. You analyze real-time sensor data to infer the user's behavioral, mental, and physical states, then generate targeted nudges/interventions.
 
-Your user is: Zhiyuan Wang, PhD student at UVA, starting at Meta Reality Labs in May. He tracks health for fat loss (baseline 92+ kg, goal ~75 kg). He wears an Apple Watch and has full HealthKit integration.
+User: Zhiyuan Wang, PhD student at UVA → Meta Reality Labs in May. Fat loss goal (92+ kg → ~75 kg). Wears Apple Watch with full HealthKit.
 
 IMPORTANT: All timestamps are in the user's LOCAL timezone. Current local time is in the summary header.
 
-## Analysis Framework
+## State Inference Framework
 
-Apply these behavioral science principles when analyzing data:
+From the sensor data, infer these states before generating nudges:
 
-1. **Circadian alignment** — Is sleep/wake timing consistent? Late-night screen use disrupts melatonin. Morning sunlight exposure improves sleep quality.
-2. **Energy balance** — Compare active calories burned vs food intake (if available). Sedentary hours reduce NEAT (non-exercise activity thermogenesis).
-3. **Heart rate variability (HRV)** — Low HRV indicates stress/poor recovery. Trend matters more than single readings. Post-sleep HRV is most reliable.
-4. **Activity patterns** — Prolonged sedentary bouts (>90 min) increase cardiometabolic risk regardless of exercise. Movement breaks restore executive function (Cognitive Restoration Theory).
-5. **Sleep architecture** — Deep sleep is critical for physical recovery, REM for cognitive consolidation. <6h total sleep impairs glucose metabolism and increases cortisol.
-6. **Behavioral momentum** — Reinforce small wins to build habit chains (BJ Fogg's Tiny Habits). Don't lecture; nudge toward the next small step.
-7. **Recovery signals** — Resting HR trend, blood oxygen during sleep, respiratory rate changes indicate overtraining or illness onset.
+1. **Physical state** — Activity level (sedentary/light/moderate/vigorous), energy expenditure vs intake, fatigue signals (elevated resting HR, low HRV), recovery status (sleep quality, SpO2 trends)
+2. **Behavioral state** — Routine adherence (circadian alignment, meal timing), habit momentum (step streaks, consistency), screen/device usage patterns
+3. **Mental/Affective state** — Stress indicators (HRV depression, elevated HR at rest), mood signals from narrations/diary entries, cognitive load hints (late-night activity, fragmented sleep)
+
+## Nudge Types (generate ONLY types you are asked to generate)
+
+- **alert**: Immediate health concern requiring attention. Inferred from physiological anomalies (NOT hardcoded thresholds — consider context, trends, and the user's baseline). Examples: unusual HR pattern given activity context, concerning SpO2 trend, signs of overtraining or illness onset.
+- **reminder**: Time-sensitive behavioral prompt based on inferred state. Examples: prolonged inferred sedentary state needs movement, inferred stress state needs a break, behavioral momentum opportunity (good time for a walk based on routine).
+- **insight**: Pattern/trend observation connecting multiple data streams. Explains what the data reveals about the user's state and why it matters. Always grounded in behavioral science.
+- **encouragement**: Data-backed positive reinforcement. Acknowledge specific achievements with numbers.
 
 ## Output Rules
 
-Generate 1-3 insights. Each MUST:
-- Reference SPECIFIC data points with numbers and times ("Your HR was 92 BPM at 2:30 PM while stationary — that's elevated")
-- Explain WHY it matters using behavioral science ("Prolonged sitting reduces NEAT by ~300 cal/day")
-- Suggest ONE concrete action ("Try a 5-min walk now — even brief movement resets the sedentary counter")
-- Be concise (2-3 sentences max per insight)
+For each nudge:
+- State the INFERRED STATE first, then the intervention ("You appear to be in a prolonged sedentary state based on X — ...")
+- Reference SPECIFIC data points with numbers and times
+- Explain WHY it matters (behavioral science, physiology)
+- Suggest ONE concrete, actionable next step
+- 2-3 sentences max per nudge
 
-Do NOT generate generic "everything looks good" messages. If data is genuinely unremarkable, find ONE specific improvement opportunity.
+Generate ONLY nudges where the data genuinely warrants intervention. If nothing notable, return an empty array []. Do NOT force generic observations.
 
-Types:
-- insight: Pattern observation grounded in data
-- reminder: Time-sensitive behavioral prompt
-- encouragement: Data-backed positive reinforcement (with numbers)
-- alert: Health concern with specific threshold crossed
-
-Return ONLY a JSON array. Each object: { "type", "content", "trigger", "priority" ("normal"|"high"), "relatedModalities" (list) }
+Return ONLY a JSON array. Each object: { "type", "content", "trigger" (short snake_case label), "priority" ("normal"|"high"), "relatedModalities" (list) }
 No markdown, no explanation outside the JSON."""
+
+
+# Prompt suffix for background nudge-check (tells LLM which types are due)
+NUDGE_CHECK_TYPE_INSTRUCTIONS = """\
+
+## Active Nudge Types for This Check
+
+Generate ONLY these types (others are on cooldown): %s
+
+For each active type, generate 0-1 nudges based on whether the data warrants it. Return [] if nothing notable."""
 
 
 def _utc_to_local_str(ts_str):
@@ -3475,14 +3483,27 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
     # -----------------------------------------------------------------------
 
     def _handle_nudge_check(self):
-        """Generate nudges server-side with independent tracks per type.
-        Each type has its own cooldown and generation logic:
-        - alert: 5-min cooldown, rule-based (fast threshold checks)
-        - reminder: 30-min cooldown, rule-based (condition-based)
-        - insight: 2-hour cooldown, LLM-based with rule-based fallback
-        Used by iOS background sync task and proactive heartbeat."""
+        """Generate AI-powered JITAI nudges with independent cooldowns per type.
+        All types are LLM-generated (no hardcoded rules). One LLM call per check,
+        prompt scoped to only the types whose cooldown has elapsed.
+        Cooldowns: alert=30min, reminder=2h, insight=4h."""
 
-        # Load day bundle once (shared by all tracks)
+        # Determine which types are due
+        COOLDOWNS = {"alert": 1800, "reminder": 7200, "insight": 14400}  # 30min, 2h, 4h
+        active_types = []
+        skipped_types = []
+        for ntype, cooldown in COOLDOWNS.items():
+            if _nudge_cooldown_elapsed(ntype, cooldown):
+                active_types.append(ntype)
+            else:
+                skipped_types.append(ntype)
+
+        if not active_types:
+            self._send_json(200, {"ok": True, "nudges": [], "skipped": True,
+                                  "skipped_types": skipped_types})
+            return
+
+        # Load day bundle
         try:
             day_bundle = _build_day_bundle("today")
         except Exception:
@@ -3493,56 +3514,68 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
                                   "reason": "no_data"})
             return
 
-        items = day_bundle.get("items", [])
-        sensing_events = [i for i in items if i.get("kind") == "sensing"]
-        narration_items = [i for i in items if i.get("kind") == "narration"]
+        # Single LLM call with type-scoped prompt
+        summary_text = _build_nudge_summary(day_bundle)
+        type_instruction = NUDGE_CHECK_TYPE_INSTRUCTIONS % ", ".join(active_types)
+        full_prompt = BEHAVIORAL_ANALYSIS_SYSTEM_PROMPT + type_instruction + "\n\n" + summary_text
 
-        all_nudges = []
-        skipped_types = []
+        print("[NudgeCheck] Active types: %s | Summary: %d chars" % (active_types, len(summary_text)))
 
-        # --- Alerts (5-min cooldown, rule-based) ---
-        if _nudge_cooldown_elapsed("alert", 300):
-            alert_nudges = generate_alerts_rule_based(sensing_events)
-            if alert_nudges:
-                all_nudges.extend(alert_nudges)
-                _nudge_cooldown_update("alert")
-                print("[NudgeCheck] Generated %d alerts" % len(alert_nudges))
-        else:
-            skipped_types.append("alert")
+        try:
+            raw_output = run_claude_text(full_prompt, timeout=120)
+            try:
+                cli_result = json.loads(raw_output)
+                response_text = cli_result.get("result", raw_output)
+            except (json.JSONDecodeError, TypeError):
+                response_text = raw_output
 
-        # --- Reminders (30-min cooldown, rule-based) ---
-        if _nudge_cooldown_elapsed("reminder", 1800):
-            reminder_nudges = generate_reminders_rule_based(sensing_events, narration_items)
-            if reminder_nudges:
-                all_nudges.extend(reminder_nudges)
-                _nudge_cooldown_update("reminder")
-                print("[NudgeCheck] Generated %d reminders" % len(reminder_nudges))
-        else:
-            skipped_types.append("reminder")
+            response_text = response_text.strip()
+            if response_text.startswith("```json"):
+                response_text = response_text[7:]
+            elif response_text.startswith("```"):
+                response_text = response_text[3:]
+            if response_text.endswith("```"):
+                response_text = response_text[:-3]
+            response_text = response_text.strip()
 
-        # --- Insights (2-hour cooldown, LLM with rule-based fallback) ---
-        if _nudge_cooldown_elapsed("insight", 7200):
-            summary_text = _build_nudge_summary(day_bundle)
-            print("[NudgeCheck] Generating insights from %d items, %d chars summary" % (len(items), len(summary_text)))
-            insight_nudges = generate_nudges_llm(summary_text)
-            if insight_nudges:
-                print("[NudgeCheck] Generated %d insights via LLM" % len(insight_nudges))
-            else:
-                insight_nudges = generate_insights_rule_based(sensing_events, narration_items)
-                print("[NudgeCheck] LLM failed, generated %d insights via rules" % len(insight_nudges))
-            if insight_nudges:
-                all_nudges.extend(insight_nudges)
-            _nudge_cooldown_update("insight")
-        else:
-            skipped_types.append("insight")
+            raw_nudges = json.loads(response_text)
+            if isinstance(raw_nudges, dict) and "nudges" in raw_nudges:
+                raw_nudges = raw_nudges["nudges"]
+            if not isinstance(raw_nudges, list):
+                raw_nudges = []
+
+            print("[NudgeCheck] LLM generated %d nudges" % len(raw_nudges))
+        except Exception as e:
+            print("[NudgeCheck] LLM failed: %s" % e, file=sys.stderr)
+            # Fallback: use rule-based for whatever types are active
+            items = day_bundle.get("items", [])
+            sensing = [i for i in items if i.get("kind") == "sensing"]
+            narrations = [i for i in items if i.get("kind") == "narration"]
+            raw_nudges = []
+            if "alert" in active_types:
+                raw_nudges.extend(generate_alerts_rule_based(sensing))
+            if "reminder" in active_types:
+                raw_nudges.extend(generate_reminders_rule_based(sensing, narrations))
+            if "insight" in active_types:
+                raw_nudges.extend(generate_insights_rule_based(sensing, narrations))
+            print("[NudgeCheck] Rule-based fallback: %d nudges" % len(raw_nudges))
+
+        # Filter to only active types (LLM might generate types we didn't ask for)
+        allowed_types = set(active_types) | {"encouragement"}  # encouragement can come with any type
+        raw_nudges = [n for n in raw_nudges if isinstance(n, dict) and n.get("type") in allowed_types]
 
         # Normalize + store
-        nudge_records = _normalize_nudge_records(all_nudges)
+        nudge_records = _normalize_nudge_records(raw_nudges)
         if nudge_records:
             store_generated_nudges(nudge_records)
 
-        print("[NudgeCheck] Total: %d nudges, skipped: %s" % (len(nudge_records), skipped_types or "none"))
-        self._send_json(200, {"ok": True, "nudges": nudge_records, "skipped_types": skipped_types})
+        # Update cooldowns for types that were checked
+        for ntype in active_types:
+            _nudge_cooldown_update(ntype)
+
+        print("[NudgeCheck] Stored %d nudges, skipped: %s" % (len(nudge_records), skipped_types or "none"))
+        self._send_json(200, {"ok": True, "nudges": nudge_records,
+                              "active_types": active_types, "skipped_types": skipped_types})
 
     # -----------------------------------------------------------------------
     # Location enrichment endpoints
